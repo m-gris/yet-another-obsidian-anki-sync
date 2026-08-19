@@ -97,6 +97,35 @@ class MainTest extends munit.FunSuite:
     assertEquals(code, ExitCode(2))
   }
 
+  /** The OTHER way the check can fail, and a separate branch of the gate.
+    *
+    * Anki answers, correctly, with a refusal — a collection that is not open, say. That is
+    * neither a mismatch nor an unreachable server, and it took a second surviving mutant to
+    * notice the gate's branch for it had no test: the previous one exercised the unreachable
+    * path only, and the two are different lines of code.
+    */
+  test("a probe REFUSED by Anki also refuses the run, without running the body") {
+    val refusing = Client.fromHttpApp(
+      HttpApp[IO](_ =>
+        IO.pure(
+          org.http4s
+            .Response[IO](org.http4s.Status.Ok)
+            .withEntity("""{"result": null, "error": "collection is not open"}""")
+        )
+      )
+    )
+    var bodyRan = false
+    val code = Main
+      .verifyThen(
+        AnkiConnectClient[IO](refusing, Uri.unsafeFromString("http://localhost:8765")),
+        "POC-test",
+      )(_ => IO { bodyRan = true; ExitCode.Success })
+      .unsafeRunSync()
+
+    assert(!bodyRan, "the body ran although Anki refused to say which collection was open")
+    assertEquals(code, ExitCode(2))
+  }
+
   test("a matching profile runs the body and returns its exit code") {
     val (_, anki) = fixture(profile = "POC-test")
     var bodyRan   = false
