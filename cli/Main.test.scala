@@ -7,7 +7,7 @@ import obsidiananki.anki.*
 import obsidiananki.extract.{VaultFile, VaultWalker}
 import obsidiananki.model.*
 import obsidiananki.plan.*
-import org.http4s.Uri
+import org.http4s.{HttpApp, Uri}
 import org.http4s.client.Client
 
 /** The shell, tested — including the guardrail, which had none.
@@ -65,6 +65,35 @@ class MainTest extends munit.FunSuite:
       .unsafeRunSync()
 
     assert(!bodyRan, "the body ran against a collection the person did not name")
+    assertEquals(code, ExitCode(2))
+  }
+
+  /** EVERY non-confirming outcome must refuse, not just a mismatch.
+    *
+    * Added because a mutant that let `CouldNotAsk` through SURVIVED the first version of this
+    * file: only the mismatch case was covered. That is the worse half to leave untested — a
+    * mismatch means the guard worked and said no, whereas a failed check means the guard did
+    * not run at all, and failing open there is indistinguishable from having no guard.
+    */
+  test("a profile check that FAILS also refuses, without running the body") {
+    val check = Main.classifyProfile("POC-test", Right(Left(AnkiError.Remote("getActiveProfile", "boom"))))
+    assertEquals(
+      check,
+      Main.ProfileCheck.CouldNotAsk("POC-test", AnkiError.Remote("getActiveProfile", "boom")),
+    )
+
+    // A server that answers nothing at all, so the probe fails in the effect rather than
+    // returning a refusal — "cannot reach Anki", a different fact from a mismatch.
+    var bodyRan = false
+    val dead    = Client.fromHttpApp(HttpApp[IO](_ => IO.raiseError(RuntimeException("no socket"))))
+    val code = Main
+      .verifyThen(
+        AnkiConnectClient[IO](dead, Uri.unsafeFromString("http://localhost:8765")),
+        "POC-test",
+      )(_ => IO { bodyRan = true; ExitCode.Success })
+      .unsafeRunSync()
+
+    assert(!bodyRan, "the body ran although the profile could not be verified")
     assertEquals(code, ExitCode(2))
   }
 
@@ -242,6 +271,45 @@ class MainTest extends munit.FunSuite:
       code(Main.SyncOutcome.AbortedDuringExecution(AnkiError.Remote("addNote", "x"))),
       ExitCode.Success,
       "a run that aborted mid-write reported success",
+    )
+  }
+
+  /** WHAT THE PERSON READS, which had no test at all.
+    *
+    * Added because a mutant that broke `describeSyncOutcome` outright SURVIVED the first
+    * version of this file. The exit code was covered and the prose was not, so the tool could
+    * have printed nothing — or the wrong thing — while exiting correctly. Someone acting on
+    * what is on screen rather than on an exit code is the normal case, not the exceptional one.
+    */
+  test("each way a run can end says on screen what happened to the collection") {
+    val empty = Plan(Vector.empty, OrphanInference.Computed, Vector.empty)
+    def lines(o: Main.SyncOutcome) = Main.describeSyncOutcome(o).mkString("\n")
+
+    val couldNotObserve = lines(Main.SyncOutcome.CouldNotObserve(AnkiError.Remote("notesInfo", "boom")))
+    assert(couldNotObserve.nonEmpty, "a run that could not read the collection printed nothing")
+    assert(couldNotObserve.contains("boom"), s"Anki's own words were dropped:\n$couldNotObserve")
+
+    assert(lines(Main.SyncOutcome.RefusedInconsistent(Vector.empty)).nonEmpty, "a refusal printed nothing")
+    assert(
+      lines(Main.SyncOutcome.AbortedDuringExecution(AnkiError.Remote("addNote", "boom"))).nonEmpty,
+      "a run that aborted mid-write printed nothing",
+    )
+
+    // The case that must never read as success.
+    val failure = ExecutionFailure(
+      SyncAction.Flag(
+        CardKey(
+          NoteId.fromFrontmatter("n1").toOption.get,
+          HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText("A").toOption.get)),
+        ),
+        AnkiNoteId(1L),
+      ),
+      AnkiError.Remote("addTags", "refused"),
+    )
+    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, Vector(failure)))
+    assert(
+      partlyFailed.toUpperCase.contains("FAIL"),
+      s"a run whose actions failed does not say so on screen:\n$partlyFailed",
     )
   }
 
