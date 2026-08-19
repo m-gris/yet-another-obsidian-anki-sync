@@ -54,6 +54,21 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   private def command(action: String, params: Json): Result[Unit] =
     call[Json](action, params).subflatMap(AnkiConnect.expectNoResult(action, _))
 
+  /** Which collection is actually open, so the `--profile` argument can be checked against
+    * reality rather than trusted.
+    *
+    * DELIBERATELY NOT `loadProfile`. Switching profiles would make the argument a command,
+    * and a command that closes whatever collection the person currently has open — mid
+    * review, possibly — is a side effect nobody asked for. As an assertion it is strictly
+    * stronger: the run cannot reach the wrong collection even when the wrong name is passed,
+    * because the name has to match what Anki already has open.
+    *
+    * NOT part of [[Anki]]: the algebra is about cards, and "which collection am I talking to"
+    * is a property of the connection. [[InMemoryAnki]] has no meaningful answer to give.
+    */
+  def activeProfile: Result[String] =
+    call[String]("getActiveProfile", Json.obj())
+
   // ---------------------------------------------------------------- note types ----
 
   def noteTypeNames: Result[Vector[String]] =

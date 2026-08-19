@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{DeckPath, NewNote, ObservedNote}
-import obsidiananki.model.{CardKey, CardSpec, OwnedTag}
+import obsidiananki.model.{CardKey, CardSpec, OwnedTag, TagCodec}
 
 /** What Anki currently holds, as the planner needs to see it.
   *
@@ -85,6 +85,30 @@ object Planner:
       .getInstance("SHA-256")
       .digest(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8))
     digest.take(8).map("%02x".format(_)).mkString
+
+  /** Build the note a `Create` will write.
+    *
+    * BOTH OWNED TAGS ARE PRESENT FROM THE MOMENT THE NOTE EXISTS, which is why this is a
+    * function rather than a create-then-tag sequence. `NewNote` requires a non-empty tag
+    * vector precisely so that a note without its `src::` identity cannot be constructed: such
+    * a note is not merely unmatched but UNENUMERABLE — invisible to the key lookup, the
+    * reconciler and prune, permanently, with no later call able to find it and repair it.
+    *
+    * The `sha::` hash goes on at creation for the same reason it is written last on update:
+    * a note whose content is written without its hash would be rewritten on the next run,
+    * which is wasteful but safe, whereas the reverse is not.
+    *
+    * `plan` still takes this as a parameter rather than calling it directly, so a test can
+    * substitute one — but this is the definition the tool actually uses, and it lives here
+    * rather than in the shell because it is a decision about identity, not about wiring.
+    */
+  def newNoteFor(sourced: SourcedSpec, deck: DeckPath, sha: String): NewNote =
+    NewNote(
+      noteType = sourced.spec.noteTypeName,
+      deck = deck,
+      fields = sourced.spec.fields,
+      tags = NonEmptyVector.of(TagCodec.encode(sourced.key), OwnedTag.sha(sha)),
+    )
 
   /** Reject a key derived by more than one source, before anything is written.
     *

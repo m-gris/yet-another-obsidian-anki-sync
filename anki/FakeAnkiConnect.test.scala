@@ -37,6 +37,7 @@ object FakeAnkiConnect:
   )
 
   final class State:
+    var profile: String         = "claude-POC-test"
     var notes: Map[Long, Note]  = Map.empty
     var decks: Set[String]      = Set("Default")
     var cardDeck: Map[Long, String] = Map.empty
@@ -78,6 +79,9 @@ object FakeAnkiConnect:
   private def dispatch(state: State, action: String, params: Json): Json =
     val p = params.hcursor
     action match
+
+      case "getActiveProfile" =>
+        ok(state.profile.asJson)
 
       case "modelNames" =>
         ok(state.notes.values.map(_.model).toVector.distinct.sorted.asJson)
