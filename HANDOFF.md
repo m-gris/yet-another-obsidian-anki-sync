@@ -54,12 +54,49 @@ Try it: `scala-cli run <tool dir> -- inspect <tool dir>/dummy-vault` → 43 card
 
 ## Your next task: the AnkiConnect interpreter
 
-Implement `Anki[F]` over HTTP against `localhost:8765`. **Four constraints, all verified live — do not rediscover them the hard way:**
+Implement `Anki[F]` over HTTP against `localhost:8765`. **Four hazards, all verified live.** Two are MITIGATED — behaviours you must implement correctly. Two are ELIMINATED — and their entries say what **not** to build, because defending a path that no longer exists is dead code that reads as diligence.
 
-1. **Use `updateNote`, NEVER `updateNoteFields`.** `updateNoteFields` accepts a `tags` parameter and **silently discards it** — `error: null`, clean exit. Using it would update content while the `sha::` hash stayed stale, so every later sync would read the old hash, conclude nothing changed, and skip that card **forever**.
-2. **Tags go inline on create AND on retype.** `addNote` takes them inline. `updateNoteModel` **wipes all tags unless you pass them in the same call** — leaving a note with no `src::` tag, which is not merely unmatched but *unenumerable*: invisible to lookup, reconciler and prune, permanently.
-3. **A single broken card poisons a whole batch read.** `updateNoteModel` maps fields but not templates, so a retype can leave an orphaned card pointing at a template that no longer exists. `cardsInfo` on it errors — and **one such card makes the entire batch return null**. The reconciler depends on that bulk read. Needs handling and probably a pre-check.
-4. **AnkiConnect emits unescaped control characters.** Rendered question/answer HTML contains raw `\x00-\x1f`, which strict JSON parsers reject (jq refuses outright; circe will too). Tolerate it on the read path.
+1. **MITIGATED — write surgically: `updateNoteFields(fields)` → `removeTags(oldSha)` → `addTags(newSha)`.**
+
+   _Superseded 2026-08-19. This entry previously read "Use `updateNote`, NEVER `updateNoteFields`". That is now wrong and actively dangerous — follow the ordering above instead._
+
+   Both halves of the original finding hold: `updateNoteFields` **silently discards** its `tags` parameter (`error: null`, clean exit), and `updateNote` writes both. But `updateNote` **replaces the entire tag set**, verified live:
+
+   ```
+   initial            [leech, marc-put-this-here, src::t1]
+   tags=[ours only] → [sha::dead, src::t1]      ← foreign tags DESTROYED
+   no tags key      → preserved
+   tags=[]          → []                         ← note becomes unenumerable
+   ```
+
+   `leech` is applied by Anki's own scheduler. Writing the whole tag set would make destroying it **mandatory on every update**, on the happy path — worse than the bug it closes.
+
+   Surgical never writes the whole tag set, so it is *structurally incapable* of clobbering a foreign tag. And every interruption self-heals:
+
+   - interrupted after fields → old sha still present → next sync sees a mismatch → retries
+   - interrupted after `removeTags` → no sha at all → treated as changed → retries
+
+   **Fields first, sha last.** The inverse ordering — sha first — strands the note permanently: it holds old content under the new hash, the planner computes `markdown hash == recorded hash`, emits no `Update`, and nothing ever reports it. That inversion was live in `Executor` and is fixed in `717d899`; the ordering is now covered by a test that asserts on the **fields stored in Anki**, never on the next plan being empty — because in the broken state the next plan *is* empty.
+
+   Residual, hence MITIGATED not ELIMINATED: a stale observation can leave two `sha::` tags. More than one `sha::` reads as "cannot claim unchanged", so the note is rewritten and the extra is cleared. Converges rather than being prevented.
+2. **MITIGATED — tags go inline on create AND on retype.** `addNote` takes them inline. `updateNoteModel` **wipes all tags unless you pass them in the same call** — leaving a note with no `src::` tag, which is not merely unmatched but *unenumerable*: invisible to lookup, reconciler and prune, permanently.
+3. **ELIMINATED — never call `cardsInfo`. Do not build the pre-check.**
+
+   _Superseded 2026-08-19. This entry previously read "a single broken card poisons a whole batch read… needs handling and probably a pre-check."_
+
+   The finding was real but mis-scoped. Poisoning is a **`cardsInfo` property, not a batch-read property** — `notesInfo` is not poisoned. And `cardsInfo` need never be called at all: `cardsOf` comes from `notesInfo`'s own `cards` array (zero extra calls), and `deckOf` from `getDecks`.
+
+   The reconciler's bulk read is `notesInfo`, so it was never exposed. Eliminated by not making the call, which is why **the pre-check must not be built** — it would be dead code defending a path that no longer exists.
+
+4. **ELIMINATED — same root cause. Do not build the sanitiser.**
+
+   _Superseded 2026-08-19. This entry previously read "AnkiConnect emits unescaped control characters… tolerate it on the read path."_
+
+   The raw `\x00-\x1f` appears in **rendered question/answer HTML**, which only `cardsInfo` returns. With `cardsInfo` never called, the bytes never reach the decoder.
+
+   One thing from this hazard **does** carry, and it is the important half: **AnkiConnect reported the failure correctly** — `error` non-null, `result` null. The wire was never silent. Any silence would be entirely ours, in reading `null` as empty. So the envelope decodes to a sum type and there is **no `result.getOrElse(Vector.empty)` anywhere**.
+
+   Keep the *could-not-enumerate* distinction regardless of this specific hazard dying: it guards a class of failure, not an instance.
 
 Also settled: **scheduling survives a retype** (interval/reps/queue unchanged), so `Retype` need not be delete-and-recreate. And `allowDuplicate: true` is genuinely honoured — without it every concept's *second* descriptor would be rejected as a first-field duplicate.
 
