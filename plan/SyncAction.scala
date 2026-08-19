@@ -20,9 +20,18 @@ enum Change:
   /** The rendered fields differ, together with the content hash of the new value.
     *
     * The hash travels with the fields because the two must be written together and IN THAT
-    * ORDER — hash first. An interruption after the fields but before the hash would leave a
-    * stale hash claiming the note is already correct, and every later run would skip it
-    * silently and permanently.
+    * ORDER — FIELDS FIRST, HASH LAST. An interruption between them then leaves new content
+    * under a stale hash, which the next run sees as a difference and simply writes again.
+    *
+    * THE REVERSE IS THE TRAP: writing the hash first leaves OLD content under the NEW hash,
+    * and [[Planner]] decides "nothing to do" by comparing exactly those two — so the note is
+    * skipped by every later run, silently and permanently.
+    *
+    * _Corrected 2026-08-19._ This comment previously prescribed "hash first" and blamed the
+    * permanent skip on the ordering that in fact prevents it. That inversion was live in
+    * `Executor` and is fixed in `717d899`; the comment outlived the fix, in the file a reader
+    * opens to learn what this case means. `ExecutorInterruptionTest` is what holds the code
+    * right; nothing but review holds this sentence right.
     */
   case FieldsChanged(fields: Vector[(String, String)], newSha: String)
 
@@ -61,6 +70,14 @@ enum SyncAction:
     *
     * Derivable ONLY from a complete scan. A partial scan cannot produce this case because
     * the data needed to justify it was never gathered.
+    *
+    * WHAT THIS DOES TODAY IS WRITE A TAG, AND NOTHING ELSE. The card stays in the daily
+    * review rotation, so a card whose source heading is gone goes on being asked. Marc ruled
+    * on 2026-08-19 that such a card should also be SUSPENDED — Anki's own mechanism, keeping
+    * the card's deck and its entire scheduling state while removing it from the queue — and
+    * that is not built: [[obsidiananki.anki.Anki]] has no suspend operation yet. Recorded
+    * here because the gap is invisible from the case's name, and because the manual
+    * reconciliation of a rename is only worth anything if the card is still there to reclaim.
     */
   case Flag(key: CardKey, noteId: AnkiNoteId)
 
@@ -80,8 +97,11 @@ enum SyncAction:
   // should be implemented or guarded, not deleted. That rule protects a design still on the
   // way in. Cut is not ahead — nothing in v0 will ever produce this, so it had no owner.
   //
-  // The reconciliation it was for now happens by hand, which is lossless because an orphan is
-  // SUSPENDED rather than deleted and keeps its whole review history. What was learned while
+  // The reconciliation it was for now happens by hand. That is lossless once an orphan is
+  // SUSPENDED rather than merely tagged — which is the ruling of 2026-08-19 and is NOT YET
+  // BUILT: `Flag` still only writes a tag, so an orphaned card remains in the daily review
+  // rotation today. Nothing is deleted either way, so no history is lost meanwhile. What was
+  // learned while
   // exploring detection is recorded in the design document under "Deliberately deferred" —
   // notably that candidates are confined to the cards sharing one note id, and that the
   // vault's git history is the input to any semantic approach rather than an alternative.

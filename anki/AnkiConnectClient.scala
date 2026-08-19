@@ -59,9 +59,13 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
     *
     * DELIBERATELY NOT `loadProfile`. Switching profiles would make the argument a command,
     * and a command that closes whatever collection the person currently has open — mid
-    * review, possibly — is a side effect nobody asked for. As an assertion it is strictly
-    * stronger: the run cannot reach the wrong collection even when the wrong name is passed,
-    * because the name has to match what Anki already has open.
+    * review, possibly — is a side effect nobody asked for. As an assertion it is stronger:
+    * passing the wrong name does not take the run to that collection, it stops the run.
+    *
+    * THE GUARANTEE IS "CHECKED ONCE, AT THE START OF THE RUN", and no more than that. A
+    * profile switched inside Anki while the run is in flight is not detected. An earlier
+    * version of this comment claimed the run "cannot reach the wrong collection", which
+    * overstates it in exactly the direction that would stop someone looking for the gap.
     *
     * NOT part of [[Anki]]: the algebra is about cards, and "which collection am I talking to"
     * is a property of the connection. [[InMemoryAnki]] has no meaningful answer to give.
