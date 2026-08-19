@@ -93,6 +93,8 @@ object Extractor:
   private def describe(e: SpecError): String = e match
     case SpecError.EmptyBody(p)              => s"empty body at '$p'"
     case SpecError.ClozeWithoutDeletions(p)  => s"cloze section with no ==highlight== at '$p'"
+    case SpecError.AmbiguousClozeDeletion(p, t) =>
+      s"two unlabelled '==$t==' highlights at '$p' cannot be told apart — label them, e.g. ==1|$t=="
     case SpecError.TableWithoutTable(p)      => s"table marker with no table at '$p'"
     case SpecError.TableWithoutDescriptors(p) =>
       s"table at '$p' has a concept column but no descriptor columns, so it yields no cards"
@@ -132,7 +134,7 @@ object Extractor:
           val concept = ancestorTitles.lastOption.getOrElse(fileName)
           Right(Vector(CardSpec.ThreeField(key, concept, title, body, directions) -> RowSource.heading))
 
-        case Marker.Cloze => Left(SpecError.ClozeWithoutDeletions(where))
+        case Marker.Cloze => Cloze.fromSection(key, section).map(c => Vector(c -> RowSource.heading))
         case Marker.Table => Tables.fromSection(key, section)
     yield spec
 

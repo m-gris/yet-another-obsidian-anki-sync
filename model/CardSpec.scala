@@ -27,13 +27,31 @@ object Body:
 
   extension (b: Body) def value: String = b
 
-/** One `==highlight==` inside a cloze section.
+/** How a deletion is identified across edits.
   *
-  * `ordinal` is the `cN` number Anki will use. It is assigned by DELETION TEXT and carried
-  * here rather than derived from position: Anki schedules each `cN` card independently, so
-  * renumbering on edit would move review history between cards.
+  * RULED. The two forms differ in exactly one respect — whether the key survives an edit to
+  * the deletion's own text — and the author chooses per highlight.
   */
-final case class ClozeDeletion(ordinal: Int, text: String)
+enum ClozeGroup:
+  /** `==2|text==`. Keyed by the author-written group id, so the TEXT MAY CHANGE FREELY and
+    * the card keeps its review history. Several highlights may share one label, and they
+    * then blank together as a single card.
+    */
+  case Labelled(label: Int)
+
+  /** `==text==`. Its own group of one, keyed by its own text — so editing the text, even to
+    * fix a typo, retires the key: the card starts over and the old one is flagged as an
+    * orphan, visible in the prune list. Accepted rather than worked around; labelling is
+    * how an author buys stability when a card's history matters.
+    */
+  case Unlabelled(text: String)
+
+/** One cloze deletion group within a section.
+  *
+  * `ordinal` is the `cN` number Anki will use. Anki schedules each `cN` independently, so
+  * a number that moved between runs would move review history between cards.
+  */
+final case class ClozeDeletion(ordinal: Int, group: ClozeGroup, texts: Vector[String])
 
 /** Why a marked heading could not produce a spec. */
 enum SpecError:
@@ -51,6 +69,15 @@ enum SpecError:
     * whose text has no deletion, so this must fail here rather than at the API boundary.
     */
   case ClozeWithoutDeletions(headingPath: String)
+
+  /** Two UNLABELLED highlights with identical text in one section.
+    *
+    * "A ==quorum== is a majority. Any two ==quorum== sets intersect." — separate groups by
+    * rule, identical text, and nothing but POSITION to tell them apart. Refused, with the
+    * remedy named: label them. A positional tiebreak would reintroduce exactly the hazard
+    * the design rejects, for the case nobody would think to test.
+    */
+  case AmbiguousClozeDeletion(headingPath: String, text: String)
 
   /** A `#flashcard/table` section with no table in its body. */
   case TableWithoutTable(headingPath: String)

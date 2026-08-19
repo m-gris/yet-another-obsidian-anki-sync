@@ -468,3 +468,97 @@ class ExtractorTest extends munit.FunSuite:
     assert(lines.forall(_ > 0), s"line numbers not resolved: $lines")
     assertEquals(lines.distinct.size, 2, s"identical heading names reported the SAME line: $lines")
   }
+
+  // ================================================ cloze ====
+
+  def clozeOf(n: ExtractedNote, path: String): CardSpec.Cloze =
+    specFor(n, path).spec match
+      case c: CardSpec.Cloze => c
+      case other             => fail(s"expected a Cloze spec, got $other")
+
+  test("one cloze SECTION becomes one note holding all its deletions") {
+    val note = extract(
+      "# Bones\n\nx\n\n## Long bone #flashcard/cloze\n\nThe ==diaphysis== and the ==epiphysis==.\n"
+    )
+    assertEquals(note.specs.size, 1, "a cloze section must yield ONE note, not one per highlight")
+    assertEquals(clozeOf(note, "bones / long bone").deletions.length, 2)
+  }
+
+  /** UNLABELLED: its own group of one, numbered in order of first appearance. */
+  test("unlabelled highlights each form their own group") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==a== and the ==b==.\n")
+    val ds   = clozeOf(note, "b / l").deletions.toVector
+    assertEquals(ds.map(_.ordinal), Vector(1, 2))
+    assertEquals(ds.map(_.group), Vector(ClozeGroup.Unlabelled("a"), ClozeGroup.Unlabelled("b")))
+  }
+
+  /** LABELLED: several highlights sharing a label are ONE group and blank together. */
+  test("highlights sharing a label form ONE group with one card") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\n==1|alpha== then ==2|beta== then ==1|gamma==.\n"
+    )
+    val ds = clozeOf(note, "b / l").deletions.toVector
+    assertEquals(ds.size, 2, s"expected two groups, got ${ds.map(_.group)}")
+    assertEquals(ds.map(_.ordinal).sorted, Vector(1, 2))
+    val groupOne = ds.find(_.ordinal == 1).getOrElse(fail("no group 1"))
+    assertEquals(groupOne.texts, Vector("alpha", "gamma"))
+  }
+
+  /** THE POINT OF LABELLING. The group id is the key, so the text may change freely and the
+    * card keeps its history — whereas an unlabelled deletion is keyed by its own text.
+    */
+  test("a labelled group's identity SURVIVES a text edit; an unlabelled one does not") {
+    def groupsOf(body: String) =
+      clozeOf(extract(s"# B\n\nx\n\n## L #flashcard/cloze\n\n$body\n"), "b / l").deletions.toVector
+        .map(_.group)
+
+    // Labelled: fixing a typo leaves the group untouched.
+    assertEquals(groupsOf("The ==1|Mercurey== orbits."), groupsOf("The ==1|Mercury== orbits."))
+    // Unlabelled: the same fix retires the key. Accepted, and visible.
+    assertNotEquals(groupsOf("The ==Mercurey== orbits."), groupsOf("The ==Mercury== orbits."))
+  }
+
+  test("an unlabelled group never takes a number a label has claimed") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\n==1|a== and ==b== and ==2|c==.\n")
+    val ds   = clozeOf(note, "b / l").deletions.toVector
+    assertEquals(ds.map(_.ordinal).sorted, Vector(1, 2, 3), s"numbers collided: ${ds.map(_.ordinal)}")
+  }
+
+  /** Separate groups by rule, identical text, and nothing but POSITION to tell them apart.
+    * Refused with the remedy named, rather than tie-broken positionally.
+    */
+  test("two IDENTICAL unlabelled highlights are refused, with the remedy named") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==quorum== is a majority. Any two ==quorum== sets meet.\n"
+    )
+    assertEquals(note.specs, Vector.empty)
+    val reason = note.failures.collectFirst { case BuildFailure.KeyKnown(_, _, r) => r }
+    assert(reason.exists(_.contains("label them")), s"remedy not named: $reason")
+  }
+
+  test("identical text is fine when the duplicates are LABELLED into one group") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==1|quorum== is a majority. Two ==1|quorum== sets meet.\n"
+    )
+    assertEquals(note.specs.size, 1)
+    assertEquals(clozeOf(note, "b / l").deletions.length, 1)
+  }
+
+  test("a cloze section with no highlight at all is reported") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nJust prose, nothing marked.\n")
+    assertEquals(note.specs, Vector.empty)
+    assert(note.failures.nonEmpty)
+  }
+
+  test("a literal ==highlight== inside a code span is NOT a deletion") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nWrite `==x==` to mark one. The ==real== one counts.\n"
+    )
+    val ds = clozeOf(note, "b / l").deletions.toVector
+    assertEquals(ds.map(_.group), Vector(ClozeGroup.Unlabelled("real")))
+  }
+
+  test("a cloze note carries the whole section text, not just the deletions") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==femur== is a bone.\n")
+    assertEquals(clozeOf(note, "b / l").text.value, "The femur is a bone.")
+  }

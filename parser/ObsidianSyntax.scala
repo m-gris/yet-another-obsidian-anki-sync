@@ -61,8 +61,26 @@ object ObsidianSyntax:
     type Self = TaskListMarker
     def withOptions(newOptions: Options): TaskListMarker = copy(options = newOptions)
 
-  /** Text of a `==highlight==`, the cloze deletion marker. */
-  case class Highlighted(content: Seq[Span], options: Options = Options.empty)
+  /** A `==highlight==`, the cloze deletion marker, with its optional GROUP LABEL.
+    *
+    * `==text==`   -> Highlighted(None, …)      its own group of one
+    * `==2|text==` -> Highlighted(Some(2), …)   part of group 2
+    *
+    * LABELLING IS HOW AN AUTHOR BUYS STABILITY. An unlabelled deletion is keyed by its own
+    * text, so editing the text — even to fix a typo — retires the key and the card starts
+    * over. A labelled one is keyed by its group, which the author controls, so the text can
+    * change freely and the card keeps its review history. Two characters, and the trade is
+    * visible in the source rather than hidden in the tool.
+    *
+    * Grouping also lets one sentence hold several INDEPENDENT deletions that blank together
+    * — ten highlights forming groups of 3, 3 and 4 — which no per-highlight scheme can say.
+    *
+    * KNOWN CONSTRAINT: the pipe collides with a markdown table row, so `| ==1|x== |` breaks
+    * the table. Acceptable only because cloze inside a table cell is not in the design —
+    * tables are their own card kind. If cloze-in-tables is ever wanted, this syntax must be
+    * revisited rather than patched around.
+    */
+  case class Highlighted(group: Option[Int], content: Seq[Span], options: Options = Options.empty)
       extends Span
       with SpanContainer:
     type Self = Highlighted
@@ -143,8 +161,30 @@ object ObsidianSyntax:
   val highlightParser: SpanParserBuilder =
     SpanParserBuilder.recursive { recParsers =>
       ("==" ~> recParsers.recursiveSpans(delimitedBy("==").failOn('\n')))
-        .map(spans => Highlighted(spans))
+        .map { spans =>
+          val (group, rest) = splitGroupLabel(spans)
+          Highlighted(group, rest)
+        }
     }
+
+  /** Peel a leading `N|` off a highlight's content.
+    *
+    * DIGITS ONLY, deliberately. A general label would make `==a|b==` ambiguous — is `a` a
+    * group or is the text literally `a|b`? Restricting to digits keeps the ambiguity to
+    * text that genuinely begins with a number followed by a pipe, which is vanishingly rare
+    * and, unlike the general case, obvious when it happens.
+    */
+  private def splitGroupLabel(spans: Seq[Span]): (Option[Int], Seq[Span]) =
+    spans.headOption match
+      case Some(Text(content, opts)) =>
+        val LabelPrefix = """^(\d+)\|(.*)$""".r
+        content match
+          case LabelPrefix(digits, remainder) =>
+            digits.toIntOption match
+              case Some(n) => (Some(n), Text(remainder, opts) +: spans.tail)
+              case None    => (None, spans)
+          case _ => (None, spans)
+      case _ => (None, spans)
 
   /** The Obsidian-dialect span parsers on their own. Prefer [[markupParser]] — this is
     * exposed only for tests that want to isolate the dialect from the rest of the config.

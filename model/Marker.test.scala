@@ -130,7 +130,7 @@ class MarkerTest extends munit.FunSuite:
     )
     assertEquals(
       CardSpec
-        .Cloze(k, body("text"), NonEmptyVector.of(ClozeDeletion(1, "x")))
+        .Cloze(k, body("text"), NonEmptyVector.of(ClozeDeletion(1, ClozeGroup.Unlabelled("x"), Vector("x"))))
         .noteTypeName,
       NoteTypes.Cloze,
     )
