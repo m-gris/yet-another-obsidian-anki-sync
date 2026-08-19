@@ -126,11 +126,6 @@ object Executor:
       case SyncAction.Unflag(key, noteId) =>
         anki.removeTags(Vector(noteId), Vector(OwnedTag.orphaned(key)))
 
-      case SyncAction.Relink(_, _, _) =>
-        // A proposal for a human, never an operation. Reported, not performed. Unlike
-        // Retype this is not "unimplemented" — performing it is not the intent.
-        F.unit
-
   /** Replace whichever tag currently occupies one of OUR prefixes, leaving every other tag
     * alone.
     *

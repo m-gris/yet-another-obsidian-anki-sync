@@ -40,13 +40,13 @@ This is the sharpest of the four, because the failure mode is **silent success**
 
 This question should be the first item of the live-Anki phase, because the ADT's shape depends on the answer.
 
-### 3. `Relink` is a proposal, not an action
+### 3. ~~`Relink` is a proposal, not an action~~ — WITHDRAWN 2026-08-19
 
-```
-Relink(orphanKey, orphanNoteId, candidateKey, confidence)
-```
+This section proposed a `Relink(orphanKey, orphanNoteId, candidateKey, confidence)` case: a rename detected heuristically, reported as a pairing for a human to confirm and never performed, on the argument already accepted for flag-then-prune — *a heuristic must not drive an irreversible operation.* That argument still stands. What has gone is the heuristic it was guarding.
 
-A rename is detected heuristically — a key in Anki that nothing claims, a key in markdown that nothing matches — and an *undetected* rename is structurally indistinguishable from a deletion plus an unrelated creation. The pairing rule is therefore a heuristic, and the argument already accepted for flag-then-prune applies unchanged: **a heuristic must not drive an irreversible operation.** So the run reports a proposed pairing for a human to confirm; it never performs one.
+**Marc cut automatic rename detection from v0** on 2026-08-19, judging it a subsystem rather than a feature. With nothing to produce a proposal, the case had no owner, and it was removed from the code the same day. Note that the case as implemented never carried the `confidence` field this section specifies — it was written with three fields and the drift went unnoticed, which is its own small illustration of why a proposed shape is not a design document.
+
+An orphan is now **suspended** rather than left in rotation, so reconciling a rename by hand is lossless: the card keeps its full review history and restoring the heading restores the card. See *Deletion* and *Deliberately deferred* in [`../srs-obsidian-anki/CARD-MODEL.md`](../srs-obsidian-anki/CARD-MODEL.md), which is the ratified record and carries what was learned while exploring detection.
 
 ### 4. `Unflag` closes the orphan set's first hole
 
@@ -86,9 +86,11 @@ Two orderings matter, and both are the same hazard in different clothes: a run i
 
 **On create** — the identity tag must be written by the call that *creates* the note, never afterwards. `addNote` accepts tags inline. A note created without its `src::` tag is not merely unmatched, it is **unenumerable**: invisible to the key lookup, to the reconciler, and to prune, permanently.
 
-**On update** — write the new `sha::` **before** the fields, not after. If fields are written first and the run dies before the hash is updated, the next run reads a stale hash, concludes "no change", and skips the note silently and permanently. Reversing the order means an interruption causes a *redundant update* on the next run, which is harmless.
+**On update** — write the fields **first** and the new `sha::` **last**. If the hash is written first and the run dies before the fields, the note holds its OLD content under the NEW hash; the next run compares the markdown's hash against the tag, finds them equal, and skips the note — silently and permanently. Writing fields first means an interruption leaves new content under a stale hash, which the next run sees as a difference and simply writes again: a *redundant update*, which is harmless because the write is idempotent.
 
-The principle generalises: when an interruption must leave the system in one of two wrong states, choose the one that causes work to be redone rather than the one that causes work to be believed done.
+> ⚠️ _Corrected 2026-08-19._ **This section previously prescribed the exact opposite** — "write the new `sha::` **before** the fields" — and gave the argument above in reverse, attributing the permanent-skip disaster to the ordering that in fact prevents it. That prescription was implemented, shipped, and is fixed in commit `717d899`. It was caught by a property that interrupts an update after each write and checks that a later run still brings the note to the content the markdown asks for. Note that the property asserts on **the fields stored in Anki**, never on the next plan being empty: in the broken state the plan *is* empty, so the obvious assertion passes while the note sits stale forever.
+
+The principle generalises, and it was never the part that was wrong: when an interruption must leave the system in one of two wrong states, choose the one that causes work to be redone rather than the one that causes work to be believed done.
 
 ### What is deliberately not in the model
 
@@ -102,11 +104,11 @@ The principle generalises: when an interruption must leave the system in one of 
 
 The specified action model `Create | Update | Move | Flag` conflates **what differs** with **what call to make**, and that single conflation accounts for most of its gaps. Separating the two makes `Move` a *change* rather than an action, so `Update` carries a non-empty set of changes — fields, deck, tags — and "edited and moved" becomes expressible without a special case. Non-emptiness matters because the `sha::` hash decides "nothing to do" before any call, so a no-op update is not a conclusion the reconciler can legitimately reach.
 
-Three cases are added. `Retype` exists because a marker change alters the note type without altering the key, and `Basic` versus `Basic (and reversed)` share field names — so the update *succeeds*, reports success, and the requested reverse card never exists. Silent success is this project's signature failure and deserves its own case. Whether `Retype` is an ordinary action or a confirm-required one depends on an AnkiConnect capability that has not been verified and is deliberately not guessed. `Relink` is modelled as a reported proposal rather than a performed action, on the argument already accepted for flag-then-prune: a heuristic must not drive an irreversible operation. `Unflag` clears an `orphaned::` tag from a key that has reappeared, without which the flag set only grows and the prune list a human reviews becomes untrustworthy.
+Three cases were added, of which two survive. `Retype` exists because a marker change alters the note type without altering the key, and `Basic` versus `Basic (and reversed)` share field names — so the update *succeeds*, reports success, and the requested reverse card never exists. Silent success is this project's signature failure and deserves its own case. Whether `Retype` is an ordinary action or a confirm-required one depends on an AnkiConnect capability that has not been verified and is deliberately not guessed. `Unflag` clears an `orphaned::` tag from a key that has reappeared, without which the flag set only grows and the prune list a human reviews becomes untrustworthy. **`Relink` was withdrawn on 2026-08-19** when automatic rename detection was cut from v0: the argument for making it a proposal rather than an action was sound, but with no heuristic left to guard, the case had no owner. A rename is now reconciled by hand, losslessly, because an orphan is suspended rather than left in rotation.
 
 The structural idea is `VaultScan = CompleteScan | PartialScan`, with `Flag` derivable **only** from a complete scan. "In Anki, not in markdown" is a valid inference only if the scan was total; a partial scan still yields sound per-key creates and updates but no orphan set at all. This makes the precondition impossible to forget and answers a question the design never asked — when one file fails to parse, sync the rest, flag nothing, report.
 
-Three constraints govern execution. The tool owns only the `src::`, `sha::` and `orphaned::` prefixes and must preserve every other tag, so `TagsChanged` means *our* tags differ. Deck is a per-card property while identity is per-note, so a deck change must fan out to the note's cards. And write ordering is pessimistic by design: the identity tag is written by the call that creates the note, and a new hash is written *before* the fields it describes — so that an interrupted run redoes work rather than believing work was done.
+Three constraints govern execution. The tool owns only the `src::`, `sha::` and `orphaned::` prefixes and must preserve every other tag, so `TagsChanged` means *our* tags differ. Deck is a per-card property while identity is per-note, so a deck change must fan out to the note's cards. And write ordering is pessimistic by design: the identity tag is written by the call that creates the note, and a new hash is written *after* the fields it describes — so that an interrupted run redoes work rather than believing work was done. _Corrected 2026-08-19: this said "before" until commit `717d899`, which is the ordering that causes the permanent silent skip rather than preventing it._
 
 ---
 
@@ -116,8 +118,8 @@ The action model splits **what differs** from **what call to make**; `Move` was 
 
 `Retype` becomes its own case because a marker change alters the note type but not the key, and the failing update *succeeds silently* — the requested reverse card simply never exists.
 
-`Relink` is a reported proposal rather than a performed action, and `Unflag` clears a stale orphan tag, without which the human-reviewed prune list only ever grows.
+`Unflag` clears a stale orphan tag, without which the human-reviewed prune list only ever grows. `Relink` was a reported proposal rather than a performed action; it was **withdrawn on 2026-08-19** with the rest of automatic rename detection, and a rename is now reconciled by hand — losslessly, because an orphan is suspended rather than deleted.
 
 `Flag` is derivable only from a `CompleteScan`, so a partial run cannot mass-flag orphans — one unparseable file means sync the rest, flag nothing, report.
 
-The tool owns only its own tag prefixes, deck changes fan out from notes to cards, and hashes are written before the fields they describe so an interruption redoes work rather than believing work done.
+The tool owns only its own tag prefixes, deck changes fan out from notes to cards, and hashes are written **after** the fields they describe so an interruption redoes work rather than believing work done — this document said "before" until 2026-08-19, which is the ordering that causes the failure rather than preventing it.

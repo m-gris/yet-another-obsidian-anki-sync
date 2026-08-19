@@ -421,7 +421,6 @@ class PlannerTest extends munit.FunSuite:
         case SyncAction.Flag(k, _)      => k
         case SyncAction.Unflag(k, _)    => k
         case SyncAction.Retype(k, _, _, _) => k
-        case SyncAction.Relink(k, _, _) => k
       })),
       "an already-applied action was scheduled again",
     )

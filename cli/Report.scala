@@ -75,7 +75,6 @@ object Report:
     case _: SyncAction.Retype => "retype (NOT APPLIED — unimplemented)"
     case _: SyncAction.Flag   => "flag as orphaned"
     case _: SyncAction.Unflag => "clear orphan flag"
-    case _: SyncAction.Relink => "relink proposal (needs confirmation)"
 
   private def describeFailure(f: BuildFailure): String = f match
     case BuildFailure.KeyKnown(key, source, reason) =>

@@ -27,7 +27,7 @@ Every existing Obsidian→Anki bridge matches lines with regular expressions and
 
 **The concept comes from the note's H1 or filename**, or the nearest ancestor heading in multi-topic files. The description is the whole section body — prose, lists, formulae — which is why headings beat an inline one-line form, and which leaves the `::` family unused entirely, so no delimiter ever competes with Dataview inline fields.
 
-**Identity is derived, not written.** The key is `(frontmatter id, heading path)` — the chain of ancestor headings, not just the marked one, since a bare heading name is not unique within a file — extended with row and column for tables — built from text already present. The binding to an Anki note is stored *in Anki*, as a `src::` tag, because a derived artifact can carry bookkeeping that a source file should not. Nothing generated enters the markdown, and the marker count stays at zero regardless of how many cards a note holds. The sync never deletes: absent cards are flagged, and an explicit `prune` command removes them once reviewed, because an undetected rename would otherwise be indistinguishable from a deletion. A local sidecar is a cache, rebuildable from those tags. Renaming a heading breaks its key, but detectably — a relink prompt rather than a duplicate.
+**Identity is derived, not written.** The key is `(frontmatter id, heading path)` — the chain of ancestor headings, not just the marked one, since a bare heading name is not unique within a file — extended with row and column for tables — built from text already present. The binding to an Anki note is stored *in Anki*, as a `src::` tag, because a derived artifact can carry bookkeeping that a source file should not. Nothing generated enters the markdown, and the marker count stays at zero regardless of how many cards a note holds. The sync never deletes: absent cards are suspended in place and flagged, and an explicit `prune` command removes them once reviewed, because an undetected rename is indistinguishable from a deletion. A local sidecar is a cache, rebuildable from those tags. Renaming a heading breaks its key: the old card is suspended and reported with its review history intact, and pairing it with the renamed one is done by hand — automatic rename detection is **not built**. _Amended 2026-08-19._
 
 **Decks mirror folder paths** under a root prefix, with the file deliberately *not* a deck level; otherwise every concept becomes its own two-card deck. Decks are filing only. Study scope comes from filtered decks over tags, and introduction order from new-card position — conflating the three is what sank the earlier design.
 
@@ -163,7 +163,9 @@ This matters because the marked heading alone is *not unique within a file*, and
 ### Definition #flashcard/3way     ← would key identically
 ```
 
-Two different cards, one key. And unlike the rename case below, that collision is **silent** — the second card would simply overwrite the first's Anki note. Keying on the full path removes it, generalises to arbitrary heading depth, and matches how table keys already extend with row and column.
+Two different cards, one key — the second would simply overwrite the first's Anki note. Keying on the full path removes it, generalises to arbitrary heading depth, and matches how table keys already extend with row and column.
+
+_Amended 2026-08-19. This previously said the collision was **silent**, in contrast to the rename case. It is no longer either: the reconciler refuses to plan when two sources derive one key, and — since 2026-08-19 — when two **Anki notes** claim one key, which had been collapsing silently in the opposite direction and making the losing note invisible to every later run. Those checks are a backstop, not a substitute. Full-path keying removes the collision; a check only reports it._
 
 **The binding is stored in Anki**, as a tag on each note: `src::{id}::{heading path}`. Anki is a derived artifact, so bookkeeping there costs nothing — which is precisely the objection that applies to putting it in the source.
 
@@ -185,17 +187,21 @@ A local sidecar mapping keys to Anki note ids is a **cache**, not an oracle. Del
 
 **Sync becomes:** read markdown → compute keys → query Anki for `src::` tags → match updates, unmatched creates, and anything in Anki with no markdown counterpart is **flagged, never deleted by the sync**.
 
-**What breaks:** renaming a heading, or moving it under a different ancestor, changes its key. This is detectable rather than silent — Anki holds the expected key, markdown holds a new one, and nothing else claims either — so it surfaces as a relink prompt. Failing loudly is the requirement; never failing is not on offer.
+**What breaks:** renaming a heading, or moving it under a different ancestor, changes its key. This is visible rather than silent — Anki holds the expected key, markdown holds a new one, and nothing else claims either — so it surfaces as an orphaned card: suspended, tagged and listed in the report, next to the newly created one. Failing loudly is the requirement; never failing is not on offer.
+
+_Amended 2026-08-19. This previously ended "so it surfaces as a relink prompt". Pairing an orphan with its renamed counterpart automatically is **not built**, and was cut from v0 — see *Deletion*. Reconciliation is manual, and suspension is what makes it worth doing: the card keeps its full review history, so restoring the heading restores the card intact rather than starting it over._
 
 `id:` in frontmatter becomes load-bearing. It is an existing convention, not a new tax, but deleting one orphans that note's cards.
 
 ### Deletion
 
-**Decided 2026-08-18.** The sync itself never deletes. A section that disappears from the markdown leaves its Anki note in place, tagged `orphaned::`. A separate, explicit `prune` command lists those notes and deletes them only when asked.
+**Decided 2026-08-18. Extended 2026-08-19.** The sync itself never deletes. A section that disappears from the markdown leaves its Anki note in place, **suspended** and tagged `orphaned::`, and the run reports what it suspended. A separate, explicit `prune` command lists those notes and deletes them only when asked.
 
-The reason is that **deletion and rename detection interact**, and the interaction is where history gets lost silently.
+**Suspension, not relocation.** _Decided 2026-08-19._ A tag alone was too quiet: the card stayed in the daily review rotation, so a card whose source heading no longer exists went on being asked, and the only sign was a tag nobody reads. Suspension is Anki's own mechanism for exactly this — the card keeps its deck, its interval and its whole scheduling state, and simply leaves the queue until unsuspended. Moving orphans into a holding deck was considered and rejected: decks mirror **folders** while the identity tag encodes the **heading path**, so once a heading is gone the original folder is not recomputable and the card's current deck is the only surviving record of it. Any mirrored path would be a copy of that record, going stale the moment folders are reorganised.
 
-Renaming a heading changes its key, and the tool detects that heuristically — Anki holds a key nothing claims, markdown holds a key nothing matches. If the sync deleted on absence, an *undetected* rename would be indistinguishable from a delete followed by a create: the card's scheduling history destroyed, a fresh card in its place, no signal. Delete-on-absence is therefore only as safe as the rename heuristic, and a heuristic is not a foundation for irreversible operations.
+The reason the sync never deletes is that **deletion and rename detection interact**, and the interaction is where history gets lost silently.
+
+Renaming a heading changes its key: Anki holds a key nothing claims, markdown holds a key nothing matches. _Amended 2026-08-19: this previously said "and the tool detects that heuristically". **It does not.** Automatic rename detection was cut from v0 — see *Deliberately deferred* — so every rename is an undetected one._ That makes the argument stronger rather than weaker: if the sync deleted on absence, a rename would be indistinguishable from a delete followed by a create — the card's scheduling history destroyed, a fresh card in its place, no signal. Delete-on-absence is only as safe as a rename heuristic, and there is no heuristic at all, let alone one fit to justify an irreversible operation.
 
 Flag-then-prune gets the same tidiness without that bet. Nothing is destroyed except on request, after the list has been seen.
 
@@ -281,7 +287,8 @@ Not rejected — out of scope until the basic path is in daily use:
 - **The emergent typed-edge graph** (`kind-of`, `part-of`) and anything derived from it
 - **Structure cards** generated from the map
 - **Ordered-list progressive disclosure**
-- **Automatic deletion.** Sync only ever flags; a separate explicit `prune` command removes flagged notes after the list has been reviewed — see *Deletion*
+- **Automatic deletion.** Sync only ever suspends and flags; a separate explicit `prune` command removes flagged notes after the list has been reviewed — see *Deletion*
+- **Automatic rename detection.** _Cut 2026-08-19, having been assumed by earlier drafts of this document._ Judged a subsystem rather than a feature: the approaches explored were note-id scoping, deterministic analysis of the vault's git history, a language model reading those diffs, similarity ranking into review buckets, Anki-side evidence, author-maintained per-heading identifiers, an explicit `relink` command, and the interaction and safety questions around confirming a match. Two findings worth keeping: the key's `(frontmatter id, heading path)` shape means candidates are confined to the **cards sharing one note id**, never a collection-wide search; and the vault's git history is the *input* to any semantic approach rather than an alternative to it, since a renamed heading is a one-line diff — a record of the edit, not an inference from two strings. Until it exists, a rename is reconciled by hand, which suspension makes lossless
 
 ### v0
 

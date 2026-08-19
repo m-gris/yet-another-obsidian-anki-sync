@@ -71,12 +71,20 @@ enum SyncAction:
     */
   case Unflag(key: CardKey, noteId: AnkiNoteId)
 
-  /** A proposed pairing between an orphan and an unmatched key, for a human to confirm.
-    *
-    * Deliberately a PROPOSAL. Rename detection is heuristic, and a heuristic must not drive
-    * an irreversible operation — the same argument that made deletion flag-then-prune.
-    */
-  case Relink(orphanKey: CardKey, orphanNoteId: AnkiNoteId, candidate: CardKey)
+  // A `Relink` case sat here: a proposed pairing between an orphan and an unmatched key, for
+  // a human to confirm. REMOVED 2026-08-19, when automatic rename detection was cut from v0
+  // as a subsystem in its own right rather than a feature.
+  //
+  // Removed rather than kept-and-guarded, which is the usual remedy here: this project holds
+  // that a type may be designed AHEAD of its implementation, and that an unconnected type
+  // should be implemented or guarded, not deleted. That rule protects a design still on the
+  // way in. Cut is not ahead — nothing in v0 will ever produce this, so it had no owner.
+  //
+  // The reconciliation it was for now happens by hand, which is lossless because an orphan is
+  // SUSPENDED rather than deleted and keeps its whole review history. What was learned while
+  // exploring detection is recorded in the design document under "Deliberately deferred" —
+  // notably that candidates are confined to the cards sharing one note id, and that the
+  // vault's git history is the input to any semantic approach rather than an alternative.
 
 /** Why a plan could not be produced. Nothing is written when any of these is present. */
 enum PlanError:

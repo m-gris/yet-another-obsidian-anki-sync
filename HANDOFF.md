@@ -33,28 +33,28 @@ Long messages must go via `--file`; the shell has an alias-guard hook that block
 
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
-`scala-cli test <tool dir>` runs everything. **204 tests, 0 failures, 0 warnings** as of `bb2c8f1`.
+`scala-cli test <tool dir>` runs everything. **247 tests, 0 failures, 0 warnings** as of 2026-08-19.
 
 ---
 
 ## State: what is done
 
-Everything except the AnkiConnect interpreter.
+Everything except wiring the interpreter into the `sync` command.
 
 - `parser/ObsidianSyntax.scala` — Obsidian dialect (wikilinks, embeds, highlights, task-list rejection) and **the canonical `markupParser`**. Build parsers only from there.
 - `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (the six markers), `CardSpec` (the six card shapes).
-- `anki/` — the `Anki[F]` algebra and `InMemoryAnki`, a working fake that **enforces Anki's real constraints**.
+- `anki/` — the `Anki[F]` algebra; `InMemoryAnki`, a working fake that **enforces Anki's real constraints**; and, since 2026-08-19, `AnkiConnectClient` over http4s/Ember plus `FakeAnkiConnect`, an in-process fake AnkiConnect **server** that reproduces the traps rather than the happy path.
 - `plan/` — `VaultScan`, `SyncAction`, `Planner`, `Executor`/`Observer`.
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
-- `cli/` — `inspect` works; `sync` fails loudly as unimplemented.
+- `cli/` — `inspect` works; `sync` still fails loudly as unimplemented, because the interpreter is written but **not yet wired to it**.
 
 Try it: `scala-cli run <tool dir> -- inspect <tool dir>/dummy-vault` → 43 cards, 1 expected failure, 3 deliberate duplicate keys, exit 2.
 
 ---
 
-## Your next task: the AnkiConnect interpreter
+## The AnkiConnect interpreter, and the four hazards it encodes
 
-Implement `Anki[F]` over HTTP against `localhost:8765`. **Four hazards, all verified live.** Two are MITIGATED — behaviours you must implement correctly. Two are ELIMINATED — and their entries say what **not** to build, because defending a path that no longer exists is dead code that reads as diligence.
+_Built 2026-08-19 (`47c3ad4`, hardened in `7981a95`) — this section is no longer a task, but every constraint below still governs any change to it._ `Anki[F]` over HTTP against `localhost:8765`. **Four hazards, all verified live.** Two are MITIGATED — behaviours you must implement correctly. Two are ELIMINATED — and their entries say what **not** to build, because defending a path that no longer exists is dead code that reads as diligence.
 
 1. **MITIGATED — write surgically: `updateNoteFields(fields)` → `removeTags(oldSha)` → `addTags(newSha)`.**
 
@@ -150,7 +150,8 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
 - **B5 heading segment.** Extracted text, marker-stripped, NFC + case-folded + internal whitespace collapsed. Deliberate equalities: `**CAP**` == `CAP`, `Costs` == `costs`, `a  b` == `a b`. Whitespace collapses because a markdown *formatter* would otherwise silently orphan cards.
 - **B6 section body.** Own prose only, stopping at the next heading of any level — **plus a hard error on an empty body**. Without the second half, `2way` silently produces one card where it promised two.
 - **B7 duplicates.** `allowDuplicate: true`, field order Concept/Descriptor/Description. We own identity via `src::`; Anki's first-field checksum is a competing mechanism that would fight ours.
-- **Deletion.** The sync **never deletes**. Orphans are tagged `orphaned::`; a separate explicit `prune` command removes them after a human sees the list.
+- **Deletion.** The sync **never deletes**. Orphans are **suspended in place** and tagged `orphaned::`, and the run reports what it suspended; a separate explicit `prune` command removes them after a human sees the list. _Suspension added 2026-08-19: a tag alone left the card in the daily review rotation, so a card whose source heading was gone kept being asked with only a tag nobody reads to show for it. A holding deck was considered and rejected — decks mirror folders while the identity tag encodes the heading path, so once a heading is gone the original folder is unrecoverable and the card's current deck is its only record._
+- **Rename detection is CUT from v0**, ruled 2026-08-19 — a subsystem, not a feature. A rename therefore surfaces as an orphan plus an unrelated create, reconciled by hand, which is lossless precisely because the orphan is suspended rather than deleted. The `Relink` case was removed the same day; what was learned is recorded in `CARD-MODEL.md` under *Deliberately deferred*.
 - **Cloze grouping.** `==text==` is its own group keyed by its text (fragile); `==2|text==` joins group 2 keyed by the group (stable — text may change freely and the card keeps its history). **The label IS the cloze number.** Two *unlabelled* highlights with identical text are refused, with the remedy named. Digits only, to keep `==a|b==` unambiguous.
 - **Task lists are rejected by name**, not supported. Parsing is **strict** — lenient mode is off, and turning it back on would re-arm the mechanism that hid the wikilink bug.
 
@@ -186,8 +187,9 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
 
 ## Open items
 
-1. **The AnkiConnect interpreter** — the only unimplemented piece of v0, with the four constraints above.
-2. **The `prune` command** — small, reads `orphaned::` tags. v0-adjacent.
-3. **Rename detection has no algorithm.** An orphan plus an unmatched key is structurally identical to an unrelated delete plus create. `Relink` exists in the ADT as a *proposal for a human*, never performed — but nothing produces one yet.
-4. **Repair-in-place of an existing note type is untested.** The live checks *created* a correct note type on a clean profile rather than repairing the defective one in `POC-test`, which still has the back-side template defect.
-5. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.
+1. **Wire the interpreter into `sync`.** The interpreter exists and is tested; `Main` still routes `sync` to a loud refusal. This is the last piece of v0.
+2. **Suspend orphans.** Ruled 2026-08-19 and **not yet built**: `Anki[F]` has no `suspend`/`unsuspend` operation, so this is new algebra plus `InMemoryAnki` plus the `AnkiConnect` actions (verified present: `suspend`, `unsuspend`, `suspended`, `areSuspended`). Note the return trip — `Unflag` must unsuspend, and unlike a deck move it does not come free from the existing deck-difference logic.
+3. **Check field names before writing.** `AnkiError.UnknownField` is raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, so the two interpreters of one algebra disagree about the contract. It cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note. Needs a preflight using `noteTypeNames`/`fieldNames`, once per note type.
+4. **The `prune` command** — reads `orphaned::` tags. v0-adjacent.
+5. **Repair-in-place of an existing note type is untested.** The live checks *created* a correct note type on a clean profile rather than repairing the defective one in `POC-test`, which still has the back-side template defect.
+6. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.
