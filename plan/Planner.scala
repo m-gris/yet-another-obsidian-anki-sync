@@ -118,74 +118,79 @@ object Planner:
     // BOTH SIDES ARE CHECKED BEFORE EITHER IS REPORTED, so one run tells the author
     // everything that needs fixing rather than revealing the Anki-side collision only after
     // the markdown-side one has been dealt with.
+    //
+    // MATCHED RATHER THAN UNWRAPPED WITH A DEFAULT, which matters more than it looks. Reading
+    // the map out with `getOrElse(Map.empty)` under a comment saying the guard above makes it
+    // safe would leave that safety resting on a sentence: an early return added later, or the
+    // guard reordered, and the default yields an EMPTY observed collection instead of failing.
+    // Every key would then miss, every card would become a Create, and the next sync would
+    // duplicate the entire collection — the worst outcome this design can reach. Matching
+    // makes the impossible case impossible to write rather than merely commented against.
     val duplicates = checkUnique(scan.specs)
-    val collisions = observed.byKey.left.getOrElse(Vector.empty)
-    val blocking   = duplicates ++ collisions
 
-    if blocking.nonEmpty then Left(blocking)
-    else
-      // Safe by the check above: byKey is Right whenever no collisions were reported.
-      val byKey = observed.byKey.getOrElse(Map.empty)
+    observed.byKey match
+      case Left(collisions)                => Left(duplicates ++ collisions)
+      case Right(_) if duplicates.nonEmpty => Left(duplicates)
+      case Right(byKey) =>
+        val perSpec = scan.specs.flatMap { sourced =>
+          val key  = sourced.key
+          val sha  = contentHash(sourced.spec)
+          val deck = deckOf(key)
 
-      val perSpec = scan.specs.flatMap { sourced =>
-        val key  = sourced.key
-        val sha  = contentHash(sourced.spec)
-        val deck = deckOf(key)
+          byKey.get(key) match
+            case None =>
+              Vector(SyncAction.Create(key, newNoteOf(sourced, deck, sha)))
 
-        byKey.get(key) match
-          case None =>
-            Vector(SyncAction.Create(key, newNoteOf(sourced, deck, sha)))
+            case Some(existing) =>
+              // The marker changed the note type. NOT an Update: an ordinary field write
+              // succeeds against a same-shaped note type and the requested card never
+              // appears — silent success, which is the failure this case exists to prevent.
+              if existing.note.noteType != sourced.spec.noteTypeName then
+                Vector(
+                  SyncAction.Retype(key, existing.note.id, existing.note.noteType, sourced.spec.noteTypeName)
+                )
+              else
+                val fieldsDiffer = !existing.recordedSha.contains(sha)
+                val deckDiffers  = !existing.deck.contains(deck)
 
-          case Some(existing) =>
-            // The marker changed the note type. NOT an Update: an ordinary field write
-            // succeeds against a same-shaped note type and the requested card never
-            // appears — silent success, which is the failure this case exists to prevent.
-            if existing.note.noteType != sourced.spec.noteTypeName then
-              Vector(
-                SyncAction.Retype(key, existing.note.id, existing.note.noteType, sourced.spec.noteTypeName)
-              )
-            else
-              val fieldsDiffer = !existing.recordedSha.contains(sha)
-              val deckDiffers  = !existing.deck.contains(deck)
+                val changes = Vector(
+                  Option.when(fieldsDiffer)(Change.FieldsChanged(sourced.spec.fields, sha)),
+                  Option.when(deckDiffers)(Change.DeckChanged(existing.deck, deck)),
+                ).flatten
 
-              val changes = Vector(
-                Option.when(fieldsDiffer)(Change.FieldsChanged(sourced.spec.fields, sha)),
-                Option.when(deckDiffers)(Change.DeckChanged(existing.deck, deck)),
-              ).flatten
+                // A key that is present again must have any stale orphan flag cleared, or the
+                // flag set only grows and the prune list a human reviews becomes untrustworthy.
+                val unflag =
+                  Option.when(existing.isFlaggedOrphan)(SyncAction.Unflag(key, existing.note.id))
 
-              // A key that is present again must have any stale orphan flag cleared, or the
-              // flag set only grows and the prune list a human reviews becomes untrustworthy.
-              val unflag =
-                Option.when(existing.isFlaggedOrphan)(SyncAction.Unflag(key, existing.note.id))
+                val update = NonEmptyVector
+                  .fromVector(changes)
+                  .map(SyncAction.Update(key, existing.note.id, _))
 
-              val update = NonEmptyVector
-                .fromVector(changes)
-                .map(SyncAction.Update(key, existing.note.id, _))
+                unflag.toVector ++ update.toVector
+        }
 
-              unflag.toVector ++ update.toVector
-      }
+        // ORPHANS. "Present in Anki, absent from markdown" is sound only if the markdown side
+        // was seen in full AND every key it owns is accounted for.
+        val (orphanActions, inference) =
+          if !scan.canInferOrphans then
+            (
+              Vector.empty,
+              OrphanInference.SuppressedIncompleteScan(
+                "at least one file could not be read, so absence from the markdown proves nothing"
+              ),
+            )
+          else
+            // Built AND failed-but-keyed. A card that merely failed to build is not absent
+            // from the markdown — it is present and broken, and flagging it would send a live
+            // card to the prune list.
+            val accountedFor = scan.builtKeys ++ scan.failedKeys
+            val suppressed   = scan.suppressedNoteIds
+            val orphans = observed.notes.filter { card =>
+              !accountedFor.contains(card.key) &&
+              !suppressed.contains(card.key.noteId) &&
+              !card.isFlaggedOrphan
+            }
+            (orphans.map(c => SyncAction.Flag(c.key, c.note.id)), OrphanInference.Computed)
 
-      // ORPHANS. "Present in Anki, absent from markdown" is sound only if the markdown side
-      // was seen in full AND every key it owns is accounted for.
-      val (orphanActions, inference) =
-        if !scan.canInferOrphans then
-          (
-            Vector.empty,
-            OrphanInference.SuppressedIncompleteScan(
-              "at least one file could not be read, so absence from the markdown proves nothing"
-            ),
-          )
-        else
-          // Built AND failed-but-keyed. A card that merely failed to build is not absent
-          // from the markdown — it is present and broken, and flagging it would send a live
-          // card to the prune list.
-          val accountedFor = scan.builtKeys ++ scan.failedKeys
-          val suppressed   = scan.suppressedNoteIds
-          val orphans = observed.notes.filter { card =>
-            !accountedFor.contains(card.key) &&
-            !suppressed.contains(card.key.noteId) &&
-            !card.isFlaggedOrphan
-          }
-          (orphans.map(c => SyncAction.Flag(c.key, c.note.id)), OrphanInference.Computed)
-
-      Right(Plan(perSpec ++ orphanActions, inference, scan.failures))
+        Right(Plan(perSpec ++ orphanActions, inference, scan.failures))
