@@ -80,6 +80,25 @@ enum AnkiError:
   case UnknownField(noteType: String, field: String)
   case DuplicateNote(firstFieldChecksumOf: String)
 
+  /** Anki answered, and refused, with a message this tool does not classify further.
+    *
+    * NOT the same thing as being unable to reach Anki, and the difference decides what
+    * happens next. A refusal is a fact about ONE action: the executor records it and carries
+    * on, so one bad card does not abandon the other forty-nine. Being unable to reach Anki
+    * is not an action-level fact and is deliberately NOT modelled here — it stays a
+    * transport failure and aborts the run, because collecting fifty identical "connection
+    * refused" entries would describe a dead collection as forty-nine ordinary problems.
+    */
+  case Remote(action: String, message: String)
+
+  /** Anki answered with something this tool cannot read.
+    *
+    * Separate from [[Remote]] because the remedy differs: a refusal is Anki working
+    * correctly and saying no, whereas this means the wire shape is not the one that was
+    * verified — a version change, or an assumption that was wrong from the start.
+    */
+  case MalformedResponse(action: String, detail: String)
+
 trait Anki[F[_]]:
 
   /** Note types present in the collection, BY NAME. Ids are collection-local and must never
