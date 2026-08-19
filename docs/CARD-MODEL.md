@@ -205,6 +205,14 @@ Renaming a heading changes its key: Anki holds a key nothing claims, markdown ho
 
 Flag-then-prune gets the same tidiness without that bet. Nothing is destroyed except on request, after the list has been seen.
 
+**A known hazard, accepted for v0 rather than solved.** _Recorded 2026-08-19._ The tool cannot distinguish *"this heading was deleted"* from *"I could not see this heading"*. A vault that yields no marked headings is a legitimate **complete** scan of nothing — and a complete scan is precisely what licenses orphan detection — so every card in the collection is then absent from the markdown, gets flagged, and the run reports success.
+
+Two of the three ways in are now closed at the command line, by requiring the vault argument to be a directory carrying Obsidian's `.obsidian` marker rather than merely to exist: pointing at the vault's **parent**, and pointing at an **unrelated folder**, are both refused before anything is read.
+
+The third is not closed and cannot be by this means: **a vault whose files have not finished arriving**. With the vault on Dropbox or iCloud, `.obsidian` may land before the notes do, and a partially materialised vault is indistinguishable from one whose headings were removed.
+
+It is accepted for v0 because the damage is self-repairing: flagging is reversible, and the next run over a complete vault clears the flags. It stops being cheap the moment flagged cards are also **suspended** — a mistimed sync would then empty the review queue until the next correct run. Revisit before or alongside that work; the candidates considered and not taken were refusing when the vault yields zero cards while the collection holds some, and refusing above some proportion of the collection going orphan at once. The second was rejected on the grounds that the proportion is a number nobody can justify.
+
 It costs the reconciler nothing: `Flag` is already one of the `SyncAction` cases, and `prune` is a separate command reading those tags.
 
 ### Decks

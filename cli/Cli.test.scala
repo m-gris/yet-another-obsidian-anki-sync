@@ -13,8 +13,24 @@ class CliTest extends munit.FunSuite:
   def parse(args: String*): Either[String, Command] =
     parser.parse(args).left.map(_.toString)
 
+  /** A real Obsidian vault, made here rather than borrowed from the repository.
+    *
+    * It used to be `sys.props("user.dir")` — "any real directory", which was the whole
+    * problem: the argument only had to BE a directory, so the parent of a vault, or an
+    * unrelated folder, parsed happily. A vault is now a directory carrying Obsidian's own
+    * marker, so the fixture has to be one.
+    *
+    * Built in a temp directory so the test does not depend on a hidden directory surviving in
+    * git, which handles them badly.
+    */
   val existingDir: String =
-    sys.props("user.dir") // any real directory; the argument only has to BE one
+    val dir = java.nio.file.Files.createTempDirectory("vault-fixture")
+    java.nio.file.Files.createDirectory(dir.resolve(VaultRoot.MarkerDirectory))
+    dir.toString
+
+  /** A directory that exists but is NOT a vault — the shape of pointing one level too high. */
+  val notAVault: String =
+    java.nio.file.Files.createTempDirectory("not-a-vault").toString
 
   // ================================================ the guardrail ====
 
@@ -52,6 +68,27 @@ class CliTest extends munit.FunSuite:
 
   test("a vault path that is not a directory is refused at parse time") {
     assert(parse("inspect", "/definitely/not/a/real/directory").isLeft)
+  }
+
+  /** THE CASE A BARE DIRECTORY CHECK LET THROUGH, and the reason this is a type rather than a
+    * validation.
+    *
+    * A directory that exists but holds no Obsidian marker is almost always the PARENT of the
+    * vault, or an unrelated folder. Accepting it is not a harmless no-op: the tool reads no
+    * marked headings, which is a complete scan of nothing, so every card in the collection
+    * looks deleted and the run flags all of them and reports success.
+    */
+  test("a directory that exists but is NOT a vault is refused, and the message says why") {
+    val result = parse("inspect", notAVault)
+    assert(result.isLeft, s"an ordinary directory was accepted as a vault: $result")
+    assert(
+      result.left.exists(e => e.contains("Obsidian") || e.contains(VaultRoot.MarkerDirectory)),
+      s"the refusal does not explain what was missing: $result",
+    )
+  }
+
+  test("the same refusal applies to sync, not only to inspect") {
+    assert(parse("sync", notAVault, "--profile", "POC-test").isLeft)
   }
 
   test("the deck root defaults to Obsidian and accepts a nested path") {

@@ -19,7 +19,7 @@ import obsidiananki.plan.{
   SyncAction,
 }
 import org.http4s.ember.client.EmberClientBuilder
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
 import scala.jdk.CollectionConverters.*
 
 /** The imperative shell.
@@ -48,7 +48,7 @@ object Main
   }
 
   /** Read the vault and say what it holds. Touches no collection. */
-  private def inspect(vault: Path, deckRoot: DeckPath, verbose: Boolean): IO[ExitCode] =
+  private def inspect(vault: VaultRoot, deckRoot: DeckPath, verbose: Boolean): IO[ExitCode] =
     for
       files <- readVault(vault)
       index = VaultWalker.scan(files, deckRoot)
@@ -281,7 +281,7 @@ object Main
     * a plan full of orphan flags rather than after it.
     */
   private def sync(
-      vault: Path,
+      vault: VaultRoot,
       deckRoot: DeckPath,
       dryRun: Boolean,
       anki: AnkiConnectClient[IO],
@@ -563,14 +563,20 @@ object Main
     else if index.scan.failures.nonEmpty then ExitCode.Error
     else ExitCode.Success
 
-  private def readVault(root: Path): IO[Vector[VaultFile]] =
+  private def readVault(root: VaultRoot): IO[Vector[VaultFile]] =
     IO.blocking {
+      val dir = root.path
       Files
-        .walk(root)
+        .walk(dir)
         .iterator
         .asScala
-        .filter(p => p.toString.endsWith(".md") && !p.toString.contains("/.obsidian/"))
+        // Obsidian's own configuration lives under the very directory that marks this as a
+        // vault (see [[VaultRoot]]). It holds no cards, and the name is now referenced from
+        // one place rather than written out twice.
+        .filter(p =>
+          p.toString.endsWith(".md") && !p.toString.contains(s"/${VaultRoot.MarkerDirectory}/")
+        )
         .toVector
-        .map(p => VaultFile(root.relativize(p).toString, Files.readString(p)))
+        .map(p => VaultFile(dir.relativize(p).toString, Files.readString(p)))
         .sortBy(_.relativePath)
     }
