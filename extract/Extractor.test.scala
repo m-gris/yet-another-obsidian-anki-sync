@@ -14,6 +14,7 @@ class ExtractorTest extends munit.FunSuite:
       fileName,
       s"$fileName.md",
       root,
+      body,
     )
 
   def paths(n: ExtractedNote): Vector[String] = n.specs.map(_.key.path.render)
@@ -270,4 +271,200 @@ class ExtractorTest extends munit.FunSuite:
     val two = extract("# A\n\nx\n\n## Term #flashcard/2way\n\nDefinition.\n")
     assertEquals(specFor(one, "a / q?").spec.noteTypeName, Marker.NoteTypes.Basic)
     assertEquals(specFor(two, "a / term").spec.noteTypeName, Marker.NoteTypes.BasicAndReversed)
+  }
+
+  // ================================================ tables ====
+
+  val messagingTable: String =
+    """|# Messaging
+       |
+       |Intro.
+       |
+       |## Cost / benefit #flashcard/table
+       |
+       || Pattern | Benefit         | Cost                |
+       || ------- | --------------- | ------------------- |
+       || Queue   | Load Absorption | Delay & Duplication |
+       || Pub/Sub | Fan-out         | Ordering            |
+       |""".stripMargin
+
+  test("a table yields a pair card per cell PLUS a row card per row") {
+    val note = extract(messagingTable)
+    // 2 rows x 2 descriptors = 4 pair cards, + 2 row cards
+    assertEquals(note.specs.size, 6, s"got ${paths(note)}")
+    assertEquals(note.failures, Vector.empty)
+  }
+
+  test("pair keys extend the path with row concept AND column header") {
+    val note = extract(messagingTable)
+    assert(
+      paths(note).contains("messaging / cost / benefit / queue / benefit"),
+      s"pair key missing — have ${paths(note)}",
+    )
+  }
+
+  test("a row key extends the path with the row concept ONLY") {
+    val note = extract(messagingTable)
+    assert(paths(note).contains("messaging / cost / benefit / queue"), s"have ${paths(note)}")
+  }
+
+  test("a pair card is a three-field spec — no separate card model") {
+    val note = extract(messagingTable)
+    specFor(note, "messaging / cost / benefit / queue / benefit").spec match
+      case CardSpec.ThreeField(_, concept, descriptor, description, _) =>
+        assertEquals(concept, "Queue")
+        assertEquals(descriptor, "Benefit")
+        assertEquals(description.value, "Load Absorption")
+      case other => fail(s"expected ThreeField, got $other")
+  }
+
+  test("a row card carries ALL of the row's descriptors together") {
+    val note = extract(messagingTable)
+    specFor(note, "messaging / cost / benefit / queue").spec match
+      case CardSpec.TableRow(_, concept, descriptors) =>
+        assertEquals(concept, "Queue")
+        assertEquals(
+          descriptors.toVector,
+          Vector("Benefit" -> "Load Absorption", "Cost" -> "Delay & Duplication"),
+        )
+      case other => fail(s"expected TableRow, got $other")
+  }
+
+  /** The slash in "Cost / benefit" is the path JOIN character appearing as heading text.
+    * The encoding must keep the two distinguishable.
+    */
+  test("a slash in the table's own heading does not corrupt the derived keys") {
+    val note = extract(messagingTable)
+    val tag  = TagCodec.encode(specFor(note, "messaging / cost / benefit / queue").key).value
+    assert(tag.contains("%2f"), s"literal slash was not encoded: $tag")
+  }
+
+  test("source kinds distinguish pair cards from row cards, for legible collisions") {
+    import obsidiananki.plan.SourceKind
+    val note  = extract(messagingTable)
+    val kinds = note.specs.map(_.source.kind).toSet
+    assertEquals(kinds, Set(SourceKind.TablePair, SourceKind.TableRow))
+  }
+
+  // ---- edge cases the fixture vault exists to cover ----
+
+  test("a row with exactly ONE descriptor gets no row card — it would duplicate the pair") {
+    val note = extract(
+      """|# T
+         |
+         |x
+         |
+         |## One #flashcard/table
+         |
+         || Concept | Definition |
+         || ------- | ---------- |
+         || Alpha   | The first  |
+         |""".stripMargin
+    )
+    assertEquals(note.specs.size, 1, s"got ${paths(note)}")
+    assertEquals(note.specs.head.spec.noteTypeName, Marker.NoteTypes.ConceptDescriptor)
+  }
+
+  /** An explicit marker that yields zero cards is the dual of silent card creation: the
+    * author asked for cards and got none, with nothing said.
+    */
+  test("a table with NO descriptor columns is reported, not silently empty") {
+    val note = extract(
+      """|# T
+         |
+         |x
+         |
+         |## OnlyConcepts #flashcard/table
+         |
+         || Consistency model |
+         || ----------------- |
+         || Linearizable      |
+         |""".stripMargin
+    )
+    assertEquals(note.specs, Vector.empty)
+    assert(
+      note.failures.exists {
+        case BuildFailure.KeyKnown(_, _, r) => r.contains("no descriptor columns")
+        case _                              => false
+      },
+      s"a zero-card table was silent: ${note.failures}",
+    )
+  }
+
+  test("a table marker with no table in the section is reported") {
+    val note = extract("# T\n\nx\n\n## NoTable #flashcard/table\n\nJust prose, no table.\n")
+    assertEquals(note.specs, Vector.empty)
+    assert(note.failures.nonEmpty)
+  }
+
+  test("a wikilink inside a table cell keeps its display text") {
+    val note = extract(
+      """|# T
+         |
+         |x
+         |
+         |## W #flashcard/table
+         |
+         || Pattern | Benefit             | Cost  |
+         || ------- | ------------------- | ----- |
+         || Queue   | [[Load Absorption]] | Delay |
+         |""".stripMargin
+    )
+    specFor(note, "t / w / queue / benefit").spec match
+      case CardSpec.ThreeField(_, _, _, description, _) =>
+        assertEquals(description.value, "Load Absorption")
+      case other => fail(s"expected ThreeField, got $other")
+  }
+
+  // ================================================ B10 legibility ====
+
+  /** A collision is only useful if it says WHICH sources collided. Two identical row
+    * concepts in one table share a file, a line AND a kind, so without the row number both
+    * sides report the same position and the message teaches nothing.
+    */
+  test("B10: two identical row concepts are distinguishable by ROW NUMBER") {
+    val note = extract(
+      """|# T
+         |
+         |x
+         |
+         |## Dup #flashcard/table
+         |
+         || Pattern | Purpose | Failure mode |
+         || ------- | ------- | ------------ |
+         || Retry   | Recover | Amplifies    |
+         || Retry   | Repeat  | Storms       |
+         |""".stripMargin
+    )
+    val details = note.specs.map(_.source.detail).distinct.flatten.sorted
+    assertEquals(details, Vector("row 1", "row 2"), s"row numbers missing: $details")
+  }
+
+  test("B10: heading positions are real line numbers, and repeated names differ") {
+    val note = extract(
+      """|# Multi
+         |
+         |x
+         |
+         |## A
+         |
+         |y
+         |
+         |### Definition #flashcard/3way
+         |
+         |First.
+         |
+         |## B
+         |
+         |z
+         |
+         |### Definition #flashcard/3way
+         |
+         |Second.
+         |""".stripMargin
+    )
+    val lines = note.specs.map(_.source.line).sorted
+    assertEquals(lines.size, 2)
+    assert(lines.forall(_ > 0), s"line numbers not resolved: $lines")
+    assertEquals(lines.distinct.size, 2, s"identical heading names reported the SAME line: $lines")
   }

@@ -17,8 +17,16 @@ enum SourceKind:
     case TablePair => "table pair card"
     case TableRow  => "table row card"
 
-final case class SourceRef(file: String, line: Int, kind: SourceKind):
-  def describe: String = s"$file:$line (${kind.describe})"
+/** Where a spec came from.
+  *
+  * `detail` disambiguates sources that share a file, a line AND a kind — which is exactly
+  * what two identical row concepts in one table produce. Without it a collision between
+  * them reports the same position twice and tells the author nothing about which row to fix.
+  */
+final case class SourceRef(file: String, line: Int, kind: SourceKind, detail: Option[String] = None):
+  def describe: String =
+    val where = if line > 0 then s"$file:$line" else file
+    s"$where (${kind.describe}${detail.fold("")(d => s", $d")})"
 
 /** A spec together with its provenance. Provenance is a wrapper rather than a field of
   * [[CardSpec]] because a spec is about card CONTENT; where it came from is a different

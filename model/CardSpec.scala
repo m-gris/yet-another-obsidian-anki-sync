@@ -55,6 +55,14 @@ enum SpecError:
   /** A `#flashcard/table` section with no table in its body. */
   case TableWithoutTable(headingPath: String)
 
+  /** A table with a concept column but NO descriptor columns.
+    *
+    * Reported rather than silently producing nothing. An explicit marker that yields zero
+    * cards is the dual of the silent card creation the whole design guards against: the
+    * author asked for cards and got none, with no indication why.
+    */
+  case TableWithoutDescriptors(headingPath: String)
+
   /** A GFM task list (`- [ ]` / `- [x]`) in a card body.
     *
     * RULED: not supported. Rejected LOUDLY AND BY NAME rather than left to fail as an
