@@ -60,7 +60,9 @@ Implement `Anki[F]` over HTTP against `localhost:8765`. **Four hazards, all veri
 
    _Superseded 2026-08-19. This entry previously read "Use `updateNote`, NEVER `updateNoteFields`". That is now wrong and actively dangerous — follow the ordering above instead._
 
-   Both halves of the original finding hold: `updateNoteFields` **silently discards** its `tags` parameter (`error: null`, clean exit), and `updateNote` writes both. But `updateNote` **replaces the entire tag set**, verified live:
+   ⚠️ **`updateNoteFields` names two different things — do not conflate them.** Our *algebra method* `Anki[F].updateNoteFields` is implemented over AnkiConnect's **`updateNote` action, passing no `tags` key**. Calling AnkiConnect's `updateNoteFields` *action* instead would reintroduce the bug below.
+
+   Both halves of the original finding hold: the **`updateNoteFields` action silently discards** its `tags` parameter (`error: null`, clean exit), and the `updateNote` action writes both. But `updateNote` **replaces the entire tag set** when a `tags` key is present, verified live:
 
    ```
    initial            [leech, marc-put-this-here, src::t1]
@@ -70,6 +72,8 @@ Implement `Anki[F]` over HTTP against `localhost:8765`. **Four hazards, all veri
    ```
 
    `leech` is applied by Anki's own scheduler. Writing the whole tag set would make destroying it **mandatory on every update**, on the happy path — worse than the bug it closes.
+
+   The interpreter uses the third option in that table — **`updateNote` with no `tags` key at all** — which is strictly better than either thing this entry originally proposed: it cannot drop tags, because it never passes them, and it cannot replace them, because omitting the key preserves them.
 
    Surgical never writes the whole tag set, so it is *structurally incapable* of clobbering a foreign tag. And every interruption self-heals:
 
