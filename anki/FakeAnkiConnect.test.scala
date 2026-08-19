@@ -88,17 +88,35 @@ object FakeAnkiConnect:
           case Some(note) => ok(note.fields.map(_._1).asJson)
           case None       => err(s"model was not found: $model")
 
+      /** STRICT ABOUT THE QUERY, because a lenient fake here pins nothing.
+        *
+        * Reducing the search with `stripPrefix("tag:").stripSuffix("*")` accepts `tag:src::*`,
+        * `tag:src::` and bare `src::*` as the same thing — both strips being silent identity
+        * when the affix is absent. That leaves the interpreter free to send a query with no
+        * `tag:` qualifier, which against real Anki is a free-text search over FIELDS and can
+        * never match a tag. It would return nothing, every card would look absent, and
+        * because identity lookup is driven off this one enumeration every card in the vault
+        * would be re-created — accepted, since `allowDuplicate` is set. The suite would stay
+        * green throughout.
+        *
+        * So the shape is required rather than tolerated: this is the single enumeration the
+        * whole reconciler depends on.
+        */
       case "findNotes" =>
-        val query  = p.downField("query").as[String].getOrElse("")
-        val prefix = query.stripPrefix("tag:").stripSuffix("*").toLowerCase
-        ok(
-          state.notes
-            .filter((_, n) => n.tags.exists(_.toLowerCase.startsWith(prefix)))
-            .keys
-            .toVector
-            .sorted
-            .asJson
-        )
+        p.downField("query").as[String] match
+          case Left(_) => err("bad argument type for built-in operation")
+          case Right(query) if !query.startsWith("tag:") || !query.endsWith("*") =>
+            err(s"fake: refusing a search that is not a tag-prefix query: '$query'")
+          case Right(query) =>
+            val prefix = query.drop("tag:".length).dropRight(1).toLowerCase
+            ok(
+              state.notes
+                .filter((_, n) => n.tags.exists(_.toLowerCase.startsWith(prefix)))
+                .keys
+                .toVector
+                .sorted
+                .asJson
+            )
 
       case "notesInfo" =>
         val ids = p.downField("notes").as[Vector[Long]].getOrElse(Vector.empty)

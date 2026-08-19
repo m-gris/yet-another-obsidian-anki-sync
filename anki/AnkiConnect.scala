@@ -40,15 +40,31 @@ object AnkiConnect:
         Left(AnkiError.MalformedResponse(action, s"response was not JSON: ${failure.message}"))
       case Right(json) =>
         val cursor = json.hcursor
-        cursor.downField("error").as[Option[String]] match
-          case Left(_) =>
+        // THE ERROR KEY MUST BE PRESENT, and its absence is checked separately from its
+        // value. `as[Option[String]]` cannot do this: circe answers Right(None) for an
+        // ABSENT key exactly as it does for an explicit null, so a body carrying a result
+        // and no `error` key at all would take the success path — and for a search that
+        // means an empty list, which reads as "Anki holds nothing" rather than "this is not
+        // an AnkiConnect response". Verified against circe 0.14.16 rather than assumed.
+        cursor.downField("error").focus match
+          case None =>
             Left(AnkiError.MalformedResponse(action, "response has no 'error' field"))
-          case Right(Some(message)) =>
-            Left(classify(action, message))
-          case Right(None) =>
-            cursor.downField("result").focus match
-              case None       => Left(AnkiError.MalformedResponse(action, "response has no 'result' field"))
-              case Some(result) => Right(result)
+          case Some(errorJson) =>
+            errorJson.asNull match
+              case Some(_) =>
+                cursor.downField("result").focus match
+                  case None         => Left(AnkiError.MalformedResponse(action, "response has no 'result' field"))
+                  case Some(result) => Right(result)
+              case None =>
+                errorJson.asString match
+                  case Some(message) => Left(classify(action, message))
+                  case None =>
+                    Left(
+                      AnkiError.MalformedResponse(
+                        action,
+                        s"'error' was neither null nor a string: ${errorJson.noSpaces.take(120)}",
+                      )
+                    )
 
   /** Decode a response into the payload type.
     *
@@ -64,6 +80,28 @@ object AnkiConnect:
         .map(f => AnkiError.MalformedResponse(action, s"could not read result: ${f.message}"))
     }
 
+  /** Assert that an action which should report NOTHING back reported nothing back.
+    *
+    * A REAL TRIPWIRE, which matters because the obvious way to write this is not one:
+    * decoding the payload as `Option[Json]` accepts every possible JSON value, since
+    * `Decoder[Json]` is the identity decoder — so it reads as a check while asserting
+    * nothing at all. Anki answering something where it used to answer null is exactly the
+    * kind of wire change that should be noticed on the first run rather than the hundredth.
+    *
+    * Note that `createDeck` does NOT come through here: it answers with the deck's id, so it
+    * is read as the number it is rather than being waved past by a check loose enough to
+    * admit it.
+    */
+  def expectNoResult(action: String, result: Json): Either[AnkiError, Unit] =
+    if result.isNull then Right(())
+    else
+      Left(
+        AnkiError.MalformedResponse(
+          action,
+          s"expected no result, got: ${result.noSpaces.take(120)}",
+        )
+      )
+
   /** Turn a refusal message into a domain error where the message is unambiguous, and carry
     * it verbatim where it is not.
     *
@@ -75,8 +113,15 @@ object AnkiConnect:
     * Note what is deliberately NOT classified: an unknown FIELD name comes back as "cannot
     * create note because it is empty", because Anki drops the unrecognised key and then sees
     * a note with nothing in it. Mapping that to [[AnkiError.UnknownField]] would be a guess;
-    * a genuinely empty note produces the identical message. The interpreter checks field
-    * names against the note type up front instead, where the answer is knowable.
+    * a genuinely empty note produces the identical message.
+    *
+    * CONSEQUENCE, STATED PLAINLY BECAUSE IT IS A GAP AND NOT A DESIGN: [[AnkiError
+    * .UnknownField]] is therefore UNREACHABLE through this interpreter, while [[InMemoryAnki]]
+    * raises it on both write paths — so the two interpreters of the same algebra disagree
+    * about that part of the contract. Closing it needs a preflight that checks field names
+    * against each note type before any write, using `noteTypeNames`/`fieldNames`, which is
+    * NOT YET BUILT. Until it is, a wrong field name surfaces as an unhelpful "empty note"
+    * refusal on create, and on update as no error at all.
     */
   def classify(action: String, message: String): AnkiError =
     if message.startsWith("cannot create note because it is a duplicate") then

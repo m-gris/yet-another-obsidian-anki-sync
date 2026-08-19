@@ -122,6 +122,22 @@ class AnkiConnectClientTest extends munit.FunSuite:
 
   // ================================================ reading ====
 
+  /** THE SEARCH STRING IS THE WHOLE RECONCILER'S ONE ENUMERATION, so its shape is pinned
+    * rather than left to the fake's tolerance.
+    *
+    * Against real Anki a query without the `tag:` qualifier is a free-text search over
+    * FIELDS and cannot match a tag: it would return nothing, every card would look absent,
+    * and since identity lookup runs off this call the entire vault would be re-created —
+    * accepted, because `allowDuplicate` is set. The fake refuses any query that is not a
+    * tag-prefix search, so that mutation fails here instead.
+    */
+  test("the enumeration searches by TAG prefix, with the wildcard, not by free text") {
+    val (state, anki) = fixture
+    state.seed("Basic", Vector("Front" -> "f"), Vector("src::x"), "Obsidian::Patterns")
+    // Reaches the fake's strict query check; a query of the wrong shape is refused there.
+    assertEquals(anki.findNotesByTagPrefix("src::").get.size, 1)
+  }
+
   test("notes are found by tag prefix, and read back with fields in order") {
     val (state, anki) = fixture
     state.seed("Basic", Vector("Front" -> "f", "Back" -> "b"), Vector("src::x"), "Obsidian::Patterns")

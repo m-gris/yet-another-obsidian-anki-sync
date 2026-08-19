@@ -46,13 +46,13 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
     val request = Request[F](Method.POST, baseUri).withEntity(AnkiConnect.request(action, params))
     EitherT(client.expect[String](request).map(AnkiConnect.decodeAs[A](action, _)))
 
-  /** For actions that answer `null` on success. The result is deliberately read as an
-    * `Option` rather than ignored, so a response that is neither null nor absent still has
-    * to parse — an action silently answering something unexpected is how a wire change would
-    * otherwise go unnoticed.
+  /** For actions that answer `null` on success, with that asserted rather than assumed.
+    *
+    * See [[AnkiConnect.expectNoResult]] for why this is not written as `Option[Json]`: that
+    * type admits every JSON value, so it would read as a check while checking nothing.
     */
   private def command(action: String, params: Json): Result[Unit] =
-    call[Option[Json]](action, params).void
+    call[Json](action, params).subflatMap(AnkiConnect.expectNoResult(action, _))
 
   // ---------------------------------------------------------------- note types ----
 
@@ -131,7 +131,10 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
       )
     )
     for
-      _  <- command("createDeck", Json.obj("deck" := note.deck.render))
+      // createDeck answers with the deck's id, NOT with null, so it is read as the number it
+      // is. Routing it through `command` would have required loosening that check to admit
+      // any value, which would have disarmed it for every other action too.
+      _  <- call[Long]("createDeck", Json.obj("deck" := note.deck.render))
       id <- call[Long]("addNote", payload)
     yield AnkiNoteId(id)
 

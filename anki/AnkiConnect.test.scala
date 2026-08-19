@@ -68,6 +68,53 @@ class AnkiConnectTest extends munit.FunSuite:
     assert(AnkiConnect.decodeAs[Vector[String]]("modelNames", """{"foo": 1}""").isLeft)
   }
 
+  /** AN ABSENT `error` KEY IS NOT THE SAME AS `error: null`, and circe will not tell them
+    * apart for you: `as[Option[String]]` answers `Right(None)` for both — verified against
+    * circe 0.14.16, not assumed.
+    *
+    * The consequence is the reason this is tested rather than trusted. A body carrying a
+    * result and no `error` key would take the SUCCESS path, so a search would yield an empty
+    * list. Empty reads as "Anki holds nothing", every card in the vault looks absent, and
+    * since identity lookup runs off that one enumeration the whole vault is re-created —
+    * accepted, because `allowDuplicate` is set.
+    */
+  test("a response with NO error key at all is refused, not read as success") {
+    AnkiConnect.decodeAs[Vector[Long]]("findNotes", """{"result": [1, 2]}""") match
+      case Left(AnkiError.MalformedResponse(_, detail)) =>
+        assert(detail.contains("error"), s"the detail does not name the missing field: $detail")
+      case other => fail(s"a response with no 'error' key was accepted: $other")
+  }
+
+  /** And the message must be TRUE. An `error` field of the wrong type is not a missing one,
+    * and reporting it as missing sends the reader looking for the wrong thing.
+    */
+  test("an error field that is neither null nor a string is reported as what it is") {
+    AnkiConnect.decodeAs[Vector[Long]]("findNotes", """{"result": null, "error": 7}""") match
+      case Left(AnkiError.MalformedResponse(_, detail)) =>
+        assert(
+          !detail.contains("has no 'error' field"),
+          s"a wrong-typed error field was reported as a missing one: $detail",
+        )
+      case other => fail(s"expected MalformedResponse, got $other")
+  }
+
+  // ================================================ the no-result tripwire ====
+
+  test("an action that should report nothing accepts null") {
+    assertEquals(AnkiConnect.expectNoResult("updateNote", Json.Null), Right(()))
+  }
+
+  /** The check has to actually check. Decoding the payload as `Option[Json]` would accept
+    * every value there is — `Decoder[Json]` being the identity decoder — and so would read
+    * as a tripwire while asserting nothing.
+    */
+  test("an action that should report nothing REFUSES an actual value") {
+    assert(AnkiConnect.expectNoResult("updateNote", Json.fromInt(1234)).isLeft)
+    assert(AnkiConnect.expectNoResult("updateNote", Json.obj("id" := 1)).isLeft)
+    assert(AnkiConnect.expectNoResult("updateNote", Json.arr()).isLeft)
+    assert(AnkiConnect.expectNoResult("updateNote", Json.fromString("")).isLeft)
+  }
+
   // ================================================ classification ====
 
   test("a duplicate refusal is classified") {
