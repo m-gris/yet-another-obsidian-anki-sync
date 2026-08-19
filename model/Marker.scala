@@ -97,6 +97,15 @@ object Marker:
 
   private val MarkerPattern = """#flashcard(?:/[\w-]+)*""".r
 
+  /** The heading text with its marker removed, for display.
+    *
+    * Distinct from [[HeadingSegment.fromExtractedText]], which additionally canonicalises
+    * for the KEY — case-folded, whitespace-collapsed. A card shows this text to a human, so
+    * it keeps its original casing.
+    */
+  def stripMarker(headingText: String): String =
+    MarkerPattern.replaceAllIn(headingText, "").trim.replaceAll("\\s+", " ")
+
   private def fromToken(token: String): Option[Marker] = token match
     case "#flashcard/1way"     => Some(TwoField(TwoFieldDirections.Forward))
     case "#flashcard/2way"     => Some(TwoField(TwoFieldDirections.Both))

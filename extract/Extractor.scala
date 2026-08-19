@@ -1,0 +1,174 @@
+package obsidiananki.extract
+
+import cats.data.NonEmptyVector
+import laika.ast.*
+import obsidiananki.model.*
+import obsidiananki.parser.ObsidianSyntax
+import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef, SourcedSpec}
+
+/** Turning one parsed note into the cards it declares.
+  *
+  * The walk is over Laika's nested `Section` tree rather than over lines, which is the whole
+  * reason this tool exists: a card's identity is its position in the document tree, and no
+  * regex-based bridge can express that.
+  */
+final case class ExtractedNote(specs: Vector[SourcedSpec], failures: Vector[BuildFailure])
+
+object Extractor:
+
+  /** Extract every card declared by one note.
+    *
+    * @param noteId   from frontmatter, already validated
+    * @param fileName used as the fallback concept when a marked heading has no ancestor
+    * @param filePath for diagnostics only
+    */
+  def fromDocument(
+      noteId: NoteId,
+      fileName: String,
+      filePath: String,
+      root: RootElement,
+  ): ExtractedNote =
+    val specs    = Vector.newBuilder[SourcedSpec]
+    val failures = Vector.newBuilder[BuildFailure]
+
+    /** @param ancestors heading texts from the outermost down to this section's parent,
+      *                  already marker-stripped and canonicalised into segments
+      * @param ancestorTitles the same chain as DISPLAY text, for the concept — a concept is
+      *                  shown on a card, so it keeps its original casing rather than the
+      *                  canonical lowercase form the key uses
+      */
+    def walk(
+        element: Element,
+        ancestors: Vector[HeadingSegment],
+        ancestorTitles: Vector[String],
+    ): Unit = element match
+      case section: Section =>
+        val rawHeading = section.header.extractText
+        val ref        = SourceRef(filePath, section.header.options.id.fold(0)(_ => 0), SourceKind.Heading)
+
+        HeadingSegment.fromExtractedText(rawHeading) match
+          // A heading that extracts to nothing cannot contribute a path segment, so no key
+          // beneath it is derivable either. The blast radius is the FILE, not the card.
+          case Left(_) =>
+            failures += BuildFailure.KeyUnderivableInFile(noteId, ref, s"heading extracts to nothing")
+
+          case Right(segment) =>
+            val path      = ancestors :+ segment
+            val title     = Marker.stripMarker(rawHeading)
+            val nextTitles = ancestorTitles :+ title
+
+            Marker.parse(rawHeading) match
+              case Left(err) =>
+                failures += BuildFailure.KeyKnown(
+                  CardKey(noteId, HeadingPath(NonEmptyVector.fromVectorUnsafe(path))),
+                  ref,
+                  s"unusable marker: $err",
+                )
+
+              case Right(None) => () // ordinary prose section — an ancestor, not a card
+
+              case Right(Some(marker)) =>
+                val key = CardKey(noteId, HeadingPath(NonEmptyVector.fromVectorUnsafe(path)))
+                buildSpec(key, marker, title, ancestorTitles, section, fileName) match
+                  case Right(spec) => specs += SourcedSpec(spec, ref)
+                  case Left(err)   => failures += BuildFailure.KeyKnown(key, ref, describe(err))
+
+            // Descend regardless: an unmarked heading is still an ancestor, and a marked one
+            // can contain further marked headings.
+            section.content.foreach(walk(_, path, nextTitles))
+
+      case container: BlockContainer => container.content.foreach(walk(_, ancestors, ancestorTitles))
+      case _                         => ()
+
+    root.content.foreach(walk(_, Vector.empty, Vector.empty))
+    ExtractedNote(specs.result(), failures.result())
+
+  private def describe(e: SpecError): String = e match
+    case SpecError.EmptyBody(p)              => s"empty body at '$p'"
+    case SpecError.ClozeWithoutDeletions(p)  => s"cloze section with no ==highlight== at '$p'"
+    case SpecError.TableWithoutTable(p)      => s"table marker with no table at '$p'"
+    case SpecError.UnsupportedTaskList(p)    => s"task list is not supported, at '$p'"
+    case SpecError.UnsupportedEmbed(p, t)    => s"embed '$t' is not supported, at '$p'"
+
+  private def buildSpec(
+      key: CardKey,
+      marker: Marker,
+      title: String,
+      ancestorTitles: Vector[String],
+      section: Section,
+      fileName: String,
+  ): Either[SpecError, CardSpec] =
+    val where = key.path.render
+    for
+      text <- bodyText(ownBody(section)).left.map {
+        case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
+        case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
+        case other                            => other
+      }
+      body <- Body.fromExtracted(text).toRight(SpecError.EmptyBody(where))
+      spec <- marker match
+        case Marker.TwoField(directions) =>
+          Right(CardSpec.TwoField(key, title, body, directions))
+
+        case Marker.ThreeField(directions) =>
+          // The concept is the NEAREST ancestor heading, or the filename when the marked
+          // heading has no ancestor at all.
+          val concept = ancestorTitles.lastOption.getOrElse(fileName)
+          Right(CardSpec.ThreeField(key, concept, title, body, directions))
+
+        case Marker.Cloze => Left(SpecError.ClozeWithoutDeletions(where))
+        case Marker.Table => Left(SpecError.TableWithoutTable(where))
+    yield spec
+
+  /** A section's OWN prose — everything down to the next heading of ANY level.
+    *
+    * RULED (B6). Descendant sections are excluded: including them would make a parent card
+    * duplicate its children and grow without bound. The consequence is that a marked heading
+    * immediately followed by a subheading has an EMPTY body, which is a hard error rather
+    * than an empty field — see [[SpecError.EmptyBody]].
+    */
+  def ownBody(section: Section): Vector[Block] =
+    section.content.toVector.takeWhile {
+      case _: Section => false
+      case _          => true
+    }
+
+  /** Plain text of a section's own prose, with the constructs v0 refuses already rejected. */
+  def bodyText(blocks: Vector[Block]): Either[SpecError, String] =
+    // Reject BY TYPE, not by inspecting rendered text or matching an error message. The
+    // parser recognises both constructs precisely so this check can be structural.
+    val spans = blocks.flatMap(allSpans)
+    val embed = spans.collectFirst { case e: ObsidianSyntax.ObsidianEmbed => e }
+    val task  = spans.collectFirst { case t: ObsidianSyntax.TaskListMarker => t }
+    (embed, task) match
+      case (Some(e), _) => Left(SpecError.UnsupportedEmbed("", e.target))
+      case (_, Some(_)) => Left(SpecError.UnsupportedTaskList(""))
+      case _ =>
+        Right(blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim)
+
+  /** Text of one block, descending through ANY container.
+    *
+    * Descending generically matters: a `BulletList` is a `ListContainer`, not a
+    * `BlockContainer`, so a walker that only knows about blocks and spans silently returns
+    * nothing for a list — and a list is exactly what the docs promise a card body may hold.
+    */
+  private def blockText(b: Block): String = b match
+    case sc: SpanContainer       => sc.extractText
+    case ec: ElementContainer[?] =>
+      ec.content.collect { case blk: Block => blockText(blk) }.filter(_.nonEmpty).mkString("\n")
+    case _ => ""
+
+  /** Every span anywhere beneath an element, including inside table cells and list items.
+    *
+    * Written out rather than reaching for a Laika traversal helper because the rejection it
+    * feeds must be exhaustive: an embed hidden in a table cell is still an embed, and
+    * missing one would put a card with a broken image into Anki.
+    */
+  private def allSpans(e: Element): Vector[Span] = e match
+    case s: (Span & SpanContainer) => s +: s.content.toVector.flatMap(allSpans)
+    case s: Span                    => Vector(s)
+    // Generic container case, NOT BlockContainer specifically: a BulletList is a
+    // ListContainer, and matching only on BlockContainer would walk straight past every
+    // list — leaving a task marker or an embed inside one undetected.
+    case ec: ElementContainer[?]    => ec.content.toVector.flatMap(allSpans)
+    case _                          => Vector.empty

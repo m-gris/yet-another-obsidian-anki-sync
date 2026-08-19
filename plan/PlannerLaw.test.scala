@@ -281,7 +281,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
               s.spec match
                 case CardSpec.TwoField(k, f, _, d) =>
                   s.copy(spec = CardSpec.TwoField(k, f, Body.fromExtracted(s"edit $i").get, d))
-                case other => s
+                case _ => s
           },
           Vector.empty,
         )

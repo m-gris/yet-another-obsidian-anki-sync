@@ -2,7 +2,6 @@ package obsidiananki.parser
 
 import laika.api.MarkupParser
 import laika.api.bundle.{ExtensionBundle, ParserBundle, SpanParserBuilder}
-import laika.config.MessageFilter
 import laika.format.Markdown
 import laika.ast.*
 import laika.parse.builders.*
