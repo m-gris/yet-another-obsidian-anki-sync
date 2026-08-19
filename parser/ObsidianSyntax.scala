@@ -1,0 +1,187 @@
+package obsidiananki.parser
+
+import laika.api.MarkupParser
+import laika.api.bundle.{ExtensionBundle, ParserBundle, SpanParserBuilder}
+import laika.config.MessageFilter
+import laika.format.Markdown
+import laika.ast.*
+import laika.parse.builders.*
+import laika.parse.syntax.*
+
+/** Laika extensions for the Obsidian markdown dialect.
+  *
+  * Two constructs, both absent from CommonMark, both load-bearing:
+  *
+  *   - `[[wikilink]]` — 54 occurrences in the reference vault.
+  *   - `==highlight==` — the cloze deletion marker.
+  *
+  * WHY THIS IS NOT COSMETIC. Without the wikilink parser, CommonMark reads `[[X]]` as a
+  * shortcut reference link, fails to resolve it, and Laika suppresses header-id generation
+  * for the enclosing heading. A `Header` with no id then fails Laika's section-building
+  * rewrite, so THE HEADING NEVER BECOMES A `Section`. Its `#flashcard/…` marker is never
+  * seen, and every heading beneath it re-parents to the wrong ancestor — silently changing
+  * the heading path, which is half the card identity key. 22 heading lines in the reference
+  * vault carry a wikilink.
+  *
+  * PARSING IS STRICT. Lenient mode (`failOnMessages(MessageFilter.None)`) was adopted only
+  * because unresolved wikilinks broke section-building, and later because GFM task lists —
+  * which Laika does not implement — failed the same way. Both constructs are now recognised
+  * explicitly, so the mask is gone and every FUTURE unknown construct errors instead of
+  * silently dropping its text. That is the point of removing it: a mechanism that hides one
+  * class of failure hides all the others too.
+  */
+object ObsidianSyntax:
+
+  /** An `![[embed]]`.
+    *
+    * Deliberately a distinct node rather than rendered content. v0 builds no media pipeline;
+    * an embed must be REJECTED LOUDLY by the extraction stage rather than silently producing
+    * a card with a broken image. Keeping it in the AST is what makes that rejection possible
+    * — and reversible, if a media pipeline is ever wanted.
+    */
+  case class ObsidianEmbed(target: String, options: Options = Options.empty) extends Span:
+    type Self = ObsidianEmbed
+    def withOptions(newOptions: Options): ObsidianEmbed = copy(options = newOptions)
+
+  /** A GFM task-list marker, `[ ]` or `[x]`.
+    *
+    * RULED: task lists are NOT SUPPORTED and must be rejected LOUDLY AND BY NAME.
+    *
+    * Recognised here rather than left to fail as a mangled link reference, for two reasons.
+    * First, Laika's GitHubFlavor does not implement them, so CommonMark reads `[ ]` as a
+    * shortcut reference link, fails to resolve it, and the text lands in an `InvalidSpan`
+    * that `extractText` walks past — silent content loss, the same mechanism as the
+    * wikilink bug. Second, the resulting message would be "unresolved link id reference",
+    * which tells an author nothing about what is actually wrong.
+    *
+    * Recognising the construct lets extraction reject it BY TYPE with an error that names
+    * it — and, the real prize, means the parser no longer needs LENIENT MODE to get through
+    * a document containing one. Strict parsing is back on because of this node.
+    */
+  case class TaskListMarker(checked: Boolean, options: Options = Options.empty) extends Span:
+    type Self = TaskListMarker
+    def withOptions(newOptions: Options): TaskListMarker = copy(options = newOptions)
+
+  /** Text of a `==highlight==`, the cloze deletion marker. */
+  case class Highlighted(content: Seq[Span], options: Options = Options.empty)
+      extends Span
+      with SpanContainer:
+    type Self = Highlighted
+    def withContent(newContent: Seq[Span]): Highlighted = copy(content = newContent)
+    def withOptions(newOptions: Options): Highlighted   = copy(options = newOptions)
+
+  /** The display text of a wikilink's inner content.
+    *
+    * Priority — alias, then target, then fragment:
+    *   `[[Target]]`             -> "Target"
+    *   `[[Target|Alias]]`       -> "Alias"
+    *   `[[Target#Heading]]`     -> "Target"
+    *   `[[Note^blockid]]`       -> "Note"
+    *   `[[#Heading]]`           -> "Heading"   (no target to fall back on)
+    *
+    * THE ALIAS WINS ON EVIDENCE, NOT TASTE. `[[Availability|Availabilities]] multiply` must
+    * not render "Availability multiply". And a target can be an opaque frontmatter id with
+    * no human meaning at all — `[[1786868697-SMIR|Module 2 - Moving Data]]` occurs in the
+    * reference vault. The target is also the half Obsidian rewrites on file rename, while
+    * the pipe-alias survives byte-identical, so preferring the target would *cause* the
+    * rename-orphaning that preferring display text avoids.
+    */
+  def displayText(inner: String): String =
+    val (targetPart, aliasPart) = inner.indexOf('|') match
+      case -1 => (inner, None)
+      case i  => (inner.take(i), Some(inner.drop(i + 1)))
+
+    aliasPart.map(_.trim).filter(_.nonEmpty).getOrElse {
+      // Strip a #heading or ^blockid suffix; whichever comes first wins.
+      val cut = Seq(targetPart.indexOf('#'), targetPart.indexOf('^')).filter(_ >= 0) match
+        case Nil  => targetPart.length
+        case idxs => idxs.min
+      val bare     = targetPart.take(cut).trim
+      val fragment = targetPart.drop(cut + 1).trim
+      if bare.nonEmpty then bare else fragment
+    }
+
+  /** `![[embed]]`. Registered ahead of the wikilink parser: without it, `!` would be read as
+    * plain text and the remaining `[[...]]` would parse as an ordinary wikilink, silently
+    * turning an embed into a text reference.
+    */
+  val embedParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      ("![[" ~> delimitedBy("]]").failOn('\n')).map(inner => ObsidianEmbed(inner.trim))
+    }
+
+  /** `[[wikilink]]`.
+    *
+    * Three deliberate choices:
+    *   - `failOn('\n')` — an unclosed `[[dangling` degrades to plain text rather than
+    *     swallowing the rest of the document.
+    *   - emits `Text`, not `SpanLink` — so `extractText` and heading-path computation work
+    *     unchanged. `Styles("wikilink")` is carried so the styling decision stays reversible
+    *     without re-parsing.
+    *   - STANDALONE, not recursive — Obsidian does not render markdown inside display text.
+    */
+  val wikilinkParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      ("[[" ~> delimitedBy("]]").failOn('\n')).map { inner =>
+        Text(displayText(inner), Styles("wikilink"))
+      }
+    }
+
+  /** `[ ]` / `[x]` / `[X]`, recognised only so that it can be rejected by name.
+    *
+    * Deliberately narrow: exactly three characters, so ordinary bracketed prose and real
+    * link references are untouched. It is registered AFTER the wikilink parser, which
+    * matches on `[[`, so a wikilink is never mistaken for a task marker.
+    */
+  val taskListParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      ("[" ~> oneOf(' ', 'x', 'X') <~ literal("]")).map(c => TaskListMarker(c != " "))
+    }
+
+  /** `==highlight==`, the cloze deletion marker. Recursive: inline markup inside a highlight
+    * is ordinary markdown and should be parsed as such.
+    */
+  val highlightParser: SpanParserBuilder =
+    SpanParserBuilder.recursive { recParsers =>
+      ("==" ~> recParsers.recursiveSpans(delimitedBy("==").failOn('\n')))
+        .map(spans => Highlighted(spans))
+    }
+
+  /** The Obsidian-dialect span parsers on their own. Prefer [[markupParser]] — this is
+    * exposed only for tests that want to isolate the dialect from the rest of the config.
+    */
+  object bundle extends ExtensionBundle:
+    val description: String =
+      "Obsidian dialect: [[wikilinks]], ![[embeds]], ==highlights==, rejected task lists"
+    override def parsers: ParserBundle =
+      // Embed before wikilink: "![[" must win over "[[".
+      ParserBundle(spanParsers = Seq(embedParser, wikilinkParser, taskListParser, highlightParser))
+
+  /** THE canonical parser for this project. Build it here and nowhere else — every element
+    * below is load-bearing and two of them are silent when omitted.
+    *
+    *   - `GitHubFlavor` — NOT optional, and not merely about polish. Laika's base `Markdown`
+    *     format has NO table support: a markdown table parses as a single `Paragraph` whose
+    *     text is the literal pipe characters, and `#flashcard/table` therefore produces one
+    *     garbage card instead of n pair cards plus a row card. Verified, not assumed. The
+    *     same bundle is what turns a fenced block into a `CodeBlock` carrying its language
+    *     rather than a `Literal` with the language swallowed into the content.
+    *
+    *   - `bundle` — the Obsidian dialect. Without it a wikilink in a heading stops that
+    *     heading becoming a `Section` at all; see the note on this object.
+    *
+    *   - NO `failOnMessages` OVERRIDE. Parsing is strict on purpose: an unknown construct
+    *     must error rather than lose its text quietly. Lenient mode existed only to get past
+    *     wikilinks and task lists, and both are handled explicitly now.
+    *
+    * Frontmatter is deliberately NOT wired to Laika's config system here. Laika parses a
+    * `---` block as HOCON, which silently corrupts values — `id: 2026-08-18` comes back as
+    * `202608-18`, and a one-item YAML list comes back as a string. The `---` block must be
+    * split off and parsed with a real YAML parser before the body reaches this parser.
+    */
+  def markupParser: MarkupParser =
+    MarkupParser
+      .of(Markdown)
+      .using(Markdown.GitHubFlavor)
+      .using(bundle)
+      .build
