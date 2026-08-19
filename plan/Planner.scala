@@ -19,11 +19,21 @@ final case class ObservedCard(
     note: ObservedNote,
     deck: Option[DeckPath],
 ):
-  /** The content hash recorded on the note by the last successful sync, if any. */
+  /** The content hash recorded on the note by the last successful sync, if any.
+    *
+    * NONE WHEN THE NOTE CARRIES MORE THAN ONE, which is the whole reason this is not a
+    * `find`. Two hashes make "has this changed?" unanswerable, and picking whichever came
+    * first would answer it anyway — landing on "unchanged" half the time and skipping a
+    * note that needs writing. Reporting no recorded hash makes the planner treat the note
+    * as changed, so the next run rewrites it and `Executor` clears the stale tag: the state
+    * CONVERGES rather than being prevented, which is the only option available given it can
+    * arise from an interrupted tag write.
+    */
   def recordedSha: Option[String] =
     note.tags
-      .find(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.ShaPrefix}::"))
-      .map(_.drop(OwnedTag.ShaPrefix.length + 2).toLowerCase(java.util.Locale.ROOT))
+      .filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.ShaPrefix}::")) match
+      case Vector(only) => Some(only.drop(OwnedTag.ShaPrefix.length + 2).toLowerCase(java.util.Locale.ROOT))
+      case _            => None
 
   def isFlaggedOrphan: Boolean =
     note.tags.exists(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.OrphanedPrefix}::"))

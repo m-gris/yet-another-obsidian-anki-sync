@@ -59,10 +59,18 @@ object Executor:
     * was actually written, so a half-applied plan leaves Anki in a state the next run reads
     * correctly and simply plans less. Partial application is resumable by construction.
     *
-    * WRITE ORDERING IS PESSIMISTIC BY DESIGN. Within an update the new content hash is
-    * written BEFORE the fields it describes, so an interruption between the two causes a
-    * redundant update next run rather than a stale hash claiming the note is already
-    * correct — which would make every later run skip it, silently and permanently.
+    * WRITE ORDERING IS PESSIMISTIC BY DESIGN. Within an update the fields are written
+    * FIRST and the content hash describing them LAST, so an interruption between the two
+    * leaves new content under a stale hash. The next run sees the mismatch and writes it
+    * again — redundant work, harmless because the write is idempotent.
+    *
+    * THE REVERSE ORDER IS THE TRAP, and it is not obvious. Writing the hash first leaves
+    * OLD content under the NEW hash, and [[Planner]] decides "nothing to do" by comparing
+    * exactly those two — so the note is skipped by every later run, silently and
+    * permanently. This is not hypothetical: it is the order this code was originally
+    * written in, under a comment arguing it was the safe one.
+    * `ExecutorInterruptionTest` is the property that caught it and is what stops it coming
+    * back.
     *
     * The principle generalises: when an interruption must leave the system in one of two
     * wrong states, choose the one that makes work be REDONE over the one that makes work be
@@ -88,10 +96,10 @@ object Executor:
         changes.toVector.traverse_ {
           case Change.FieldsChanged(fields, newSha) =>
             for
-              // HASH FIRST. See the note on write ordering above: this ordering turns an
-              // interruption into a redundant update rather than a permanent silent skip.
-              _ <- replaceOwnedPrefix(anki, noteId, OwnedTag.ShaPrefix, OwnedTag.sha(newSha))
+              // FIELDS FIRST, HASH LAST. See the note on write ordering above: an
+              // interruption here must leave work to be REDONE, never work believed done.
               _ <- anki.updateNoteFields(noteId, fields)
+              _ <- replaceOwnedPrefix(anki, noteId, OwnedTag.ShaPrefix, OwnedTag.sha(newSha))
             yield ()
 
           case Change.DeckChanged(_, to) =>
