@@ -83,9 +83,12 @@ object Marker:
 
   /** Field names of the stock note types.
     *
-    * UNVERIFIED against the live collection — these are Anki's documented defaults, but
-    * this project has been bitten four times by plausible-looking defaults, so confirming
-    * them is on the live-Anki phase checklist rather than assumed correct here.
+    * VERIFIED against a live collection via `modelFieldNames` (2026-08-19), after being
+    * carried as an explicit assumption. Worth recording that they turned out to be correct:
+    * of the documented defaults this project has checked, this is the only one that did not
+    * lie. The others — HOCON typing, Laika's missing tables, `updateNoteFields` dropping
+    * tags — all produced plausible output instead of failing, which is why the assumption
+    * was worth checking rather than trusting.
     */
   object BasicFields:
     val Front: String = "Front"
