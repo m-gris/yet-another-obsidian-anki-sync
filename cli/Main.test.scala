@@ -9,6 +9,7 @@ import obsidiananki.model.*
 import obsidiananki.plan.*
 import org.http4s.{HttpApp, Uri}
 import org.http4s.client.Client
+import java.nio.file.{Files, Path, Paths}
 
 /** The shell, tested — including the guardrail, which had none.
   *
@@ -354,4 +355,320 @@ class MainTest extends munit.FunSuite:
     Main.verdict(Main.SyncOutcome.Applied(partial, Vector.empty)) match
       case Main.Verdict.Clean(_) => fail("a run with orphan inference suppressed reported clean")
       case _                     => ()
+  }
+
+  // ================================================ choosing a vault ====
+
+  /** Where the registry would live for a home directory nothing in these tests reads. Every
+    * test below injects the read, so no file at this path is ever opened.
+    */
+  val someHome: Path = Paths.get("/home/nobody")
+
+  val registryAt: Path = VaultRegistry.locate(someHome)
+
+  /** Entries built directly rather than parsed, so these tests exercise the picker and not
+    * the parser — which has its own suite. The ids are 16 hex characters because that is the
+    * shape the real registry uses, and they exist here mainly to be asserted ABSENT from the
+    * listing.
+    */
+  def registryEntry(
+      id: String,
+      path: String,
+      open: Boolean = false,
+      ts: Long = 1786621931297L,
+  ): RegisteredVault =
+    RegisteredVault(id, Paths.get(path), RegistryStamp(ts), open)
+
+  /** A directory that really is an Obsidian vault, made the way `CliTest` makes one. */
+  def realVaultDirectory(): Path =
+    val dir = Files.createTempDirectory("chosen-vault")
+    Files.createDirectory(dir.resolve(VaultRoot.MarkerDirectory))
+    dir
+
+  def refusalOf(result: Either[Vector[String], VaultRoot]): String = result match
+    case Left(lines)  => lines.mkString("\n")
+    case Right(chosen) => fail(s"expected a refusal, got the vault $chosen")
+
+  val threeRows: Vector[RegisteredVault] = Vector(
+    registryEntry("0123456789abcdef", "/vaults/alpha", open = true),
+    registryEntry("fedcba9876543210", "/vaults/beta"),
+    registryEntry("00112233445566aa", "/vaults/gamma", open = true),
+  )
+
+  /** THE ESCAPE HATCH MUST NOT DEPEND ON THE THING IT IS THE ESCAPE FROM.
+    *
+    * Every way the registry can fail degrades to "name the vault with --vault-path". If
+    * naming it explicitly went through the registry, a broken registry would take the
+    * remedy down with it. Asserted on the EFFECT — the injected read and the injected
+    * question both record whether they ran — because a test that only checked the returned
+    * vault would pass while the registry was read and discarded.
+    */
+  test("an explicit vault is used as given: the registry is not read and nothing is asked") {
+    val dir  = realVaultDirectory()
+    val root = VaultRoot.at(dir).toOption.getOrElse(fail("the fixture directory is not a vault"))
+    var readRan = false
+    var askRan  = false
+
+    val result = Main
+      .chooseVault(
+        VaultSelection.AtPath(root),
+        Main.ConsolePresence.Present,
+        someHome,
+        _ => IO { readRan = true; Right(Vector.empty) },
+        _ => IO { askRan = true; None },
+      )
+      .unsafeRunSync()
+
+    assert(!readRan, "the registry was read although the vault was named explicitly")
+    assert(!askRan, "a question was asked although the vault was named explicitly")
+    assertEquals(result, Right(root))
+  }
+
+  /** REFUSING A NON-INTERACTIVE RUN MUST NOT DEPEND ON THE REGISTRY EITHER, which is why the
+    * console check comes first. A cron run with a missing registry and a cron run with a
+    * healthy one are the same refusal, and neither may hang waiting for an answer that will
+    * never come.
+    */
+  test("no vault named and no terminal to ask at: refused, without reading or prompting") {
+    var readRan = false
+    var askRan  = false
+
+    val result = Main
+      .chooseVault(
+        VaultSelection.Ask,
+        Main.ConsolePresence.Absent,
+        someHome,
+        _ => IO { readRan = true; Right(threeRows) },
+        _ => IO { askRan = true; Some("1") },
+      )
+      .unsafeRunSync()
+
+    assert(!readRan, "the registry was read although there was nobody to show it to")
+    assert(!askRan, "a question was asked although there is no terminal to ask at")
+    val lines = refusalOf(result)
+    assert(lines.contains("--vault-path"), s"the refusal does not name the flag that works:\n$lines")
+  }
+
+  /** THREE FAILURES, THREE FACTS. `NotFound` in particular must read as "could not look",
+    * never as "you have no vaults" — the first says nothing about what exists and the second
+    * claims it does.
+    */
+  test("the three ways the registry can fail read as three different facts, each naming the file") {
+    def lines(e: RegistryError) = Main.describeRegistryError(e).mkString("\n")
+
+    val notFound   = lines(RegistryError.NotFound(registryAt))
+    val unreadable = lines(RegistryError.Unreadable(registryAt, "java.io.IOException: permission denied"))
+    val malformed  = lines(RegistryError.Malformed(registryAt, "no 'vaults' key"))
+
+    Vector(notFound, unreadable, malformed).foreach { text =>
+      assert(text.contains(registryAt.toString), s"the message does not name the file:\n$text")
+      assert(text.contains("--vault-path"), s"the message does not name the way forward:\n$text")
+    }
+
+    assertNotEquals(notFound, unreadable)
+    assertNotEquals(unreadable, malformed)
+    assertNotEquals(notFound, malformed)
+
+    assert(
+      notFound.toUpperCase.contains("COULD NOT"),
+      s"a missing registry does not say the list could not be looked at:\n$notFound",
+    )
+    assert(
+      !notFound.contains("lists no vaults"),
+      s"a missing registry claims the registry lists no vaults:\n$notFound",
+    )
+    assert(unreadable.contains("permission denied"), s"the cause was dropped:\n$unreadable")
+    assert(malformed.contains("no 'vaults' key"), s"the reason was dropped:\n$malformed")
+  }
+
+  /** A registry that was READ and holds no vaults is a different fact from one that could
+    * not be read at all, and the two send a person to different places. The alternative —
+    * printing an empty numbered list and waiting — is what this refusal exists to prevent.
+    */
+  test("a registry that lists no vaults is refused, in its own words") {
+    var askRan = false
+    val result = Main
+      .chooseVault(
+        VaultSelection.Ask,
+        Main.ConsolePresence.Present,
+        someHome,
+        _ => IO.pure(Right(Vector.empty)),
+        _ => IO { askRan = true; Some("1") },
+      )
+      .unsafeRunSync()
+
+    assert(!askRan, "an empty list was offered and an answer waited for")
+    val lines = refusalOf(result)
+    assert(lines.contains(registryAt.toString), s"the refusal does not name the file:\n$lines")
+    assert(lines.contains("--vault-path"), s"the refusal does not name the way forward:\n$lines")
+    assertNotEquals(
+      lines,
+      Main.describeRegistryError(RegistryError.NotFound(registryAt)).mkString("\n"),
+      "an empty registry and a missing registry print the same thing",
+    )
+  }
+
+  /** WHAT IS ON SCREEN WHEN SOMEONE IS ASKED TO CHOOSE.
+    *
+    * Two entries are flagged deliberately: the `open` flag is per entry, and Obsidian having
+    * one vault open is an observation of one file rather than something this tool can rely
+    * on. Two flagged entries must render as two flagged rows and not as an arbitrary winner.
+    */
+  test("the listing numbers the rows, shows full paths, and flags every open vault") {
+    val lines = Main.Offering.of(registryAt, threeRows).lines
+    val text  = lines.mkString("\n")
+    def rowFor(path: String) =
+      lines.find(_.contains(path)).getOrElse(fail(s"no row for $path in:\n$text"))
+
+    assert(text.contains(registryAt.toString), s"the header does not name the file read:\n$text")
+
+    assert(rowFor("/vaults/alpha").trim.startsWith("1 "), s"row 1 is not numbered 1:\n$text")
+    assert(rowFor("/vaults/beta").trim.startsWith("2 "), s"row 2 is not numbered 2:\n$text")
+    assert(rowFor("/vaults/gamma").trim.startsWith("3 "), s"row 3 is not numbered 3:\n$text")
+
+    assertEquals(
+      lines.count(_.contains("(open in Obsidian)")),
+      2,
+      s"two open vaults did not produce two flagged rows:\n$text",
+    )
+    assert(rowFor("/vaults/beta").contains("(open in Obsidian)") == false, s"beta was flagged:\n$text")
+
+    assert(
+      text.contains("--vault-path"),
+      s"the listing does not say how to reach a vault Obsidian has never opened:\n$text",
+    )
+    threeRows.foreach(row =>
+      assert(!text.contains(row.id), s"an opaque registry id reached the screen: ${row.id}\n$text")
+    )
+    assert(
+      !text.contains("1786621931297"),
+      s"a registry timestamp reached the screen:\n$text",
+    )
+  }
+
+  /** ONE VALUE RENDERS THE LIST AND READS THE ANSWER, so ordinal n cannot be interpreted
+    * against a different vector from the one that was shown.
+    *
+    * THE ORDINAL IS TAKEN OFF THE PRINTED ROW rather than assumed, and every row is checked.
+    * An earlier version of this test typed "2" against three rows and asserted the middle
+    * entry — which is the FIXED POINT of reversing the vector, so a mutant that interpreted
+    * answers against a reversed list survived it. A test that survives its mutant is not
+    * evidence.
+    */
+  test("the number printed beside a row is the number that selects it") {
+    val offering = Main.Offering.of(registryAt, threeRows)
+    threeRows.foreach { row =>
+      val printed = offering.lines
+        .find(_.contains(row.path.toString))
+        .getOrElse(fail(s"no row was printed for ${row.path}"))
+      val ordinal = printed.trim.takeWhile(_.isDigit)
+      assert(ordinal.nonEmpty, s"the row for ${row.path} carries no number: '$printed'")
+      assertEquals(
+        offering.interpret(ordinal),
+        Main.PickerAnswer.Chosen(row),
+        s"'$ordinal' is printed beside ${row.path} but does not select it",
+      )
+    }
+  }
+
+  /** TOTAL OVER AN ARBITRARY STRING. Whatever is typed at a prompt, including a pasted path
+    * or a vault name, has to land somewhere — and everything that is not an offered ordinal
+    * lands on a refusal naming the range, rather than on an exception or a silent pick.
+    */
+  test("the prompt accepts only an offered ordinal, and says the range when it does not") {
+    val offering = Main.Offering.of(registryAt, threeRows)
+
+    assertEquals(offering.interpret("1"), Main.PickerAnswer.Chosen(threeRows(0)))
+    assertEquals(offering.interpret("01"), Main.PickerAnswer.Chosen(threeRows(0)))
+    assertEquals(offering.interpret("+1"), Main.PickerAnswer.Chosen(threeRows(0)))
+    assertEquals(offering.interpret(" 3\r"), Main.PickerAnswer.Chosen(threeRows(2)))
+
+    val hostile =
+      Vector("", "   ", "0", "-1", "4", "1 2", "99999999999999999999", "/vaults/alpha", "alpha", "y")
+    hostile.foreach { typed =>
+      offering.interpret(typed) match
+        case Main.PickerAnswer.NotChosen(reason) =>
+          assert(
+            reason.contains("1") && reason.contains("3"),
+            s"the refusal for '$typed' does not name the range: $reason",
+          )
+        case chosen => fail(s"'$typed' selected something: $chosen")
+    }
+  }
+
+  /** EOF IS NOT AN ANSWER. Reading a closed stdin as a choice would pick a vault nobody
+    * named; reading it as "not understood" would send the person to correct a typo they did
+    * not make.
+    */
+  test("stdin closing before an answer arrives is a refusal of its own") {
+    var asked = 0
+    val result = Main
+      .chooseVault(
+        VaultSelection.Ask,
+        Main.ConsolePresence.Present,
+        someHome,
+        _ => IO.pure(Right(threeRows)),
+        _ => IO { asked += 1; None },
+      )
+      .unsafeRunSync()
+
+    assertEquals(asked, 1)
+    val lines = refusalOf(result)
+    assert(lines.contains("stdin"), s"the refusal does not say what happened:\n$lines")
+    assert(
+      !lines.contains("between 1 and"),
+      s"a closed stdin is reported as an answer that was not understood:\n$lines",
+    )
+  }
+
+  /** THE REGISTRY CHOOSES BUT DOES NOT VOUCH. An entry records that Obsidian opened that
+    * directory at some past time; the directory may since have moved. `VaultRoot.at` is
+    * still the only thing that decides, and its reason is carried VERBATIM rather than
+    * reworded — one fact, one wording, arriving by two routes.
+    *
+    * The count also proves there is no retry loop: a refusal ends the run.
+    */
+  test("a chosen entry that is no longer a vault is refused ONCE, saying where the path came from") {
+    val stale = Files.createTempDirectory("registry-entry-gone-stale")
+    val rows  = Vector(registryEntry("aabbccddeeff0011", stale.toString))
+    var asked = 0
+
+    val result = Main
+      .chooseVault(
+        VaultSelection.Ask,
+        Main.ConsolePresence.Present,
+        someHome,
+        _ => IO.pure(Right(rows)),
+        _ => IO { asked += 1; Some("1") },
+      )
+      .unsafeRunSync()
+
+    assertEquals(asked, 1, "the picker asked again after a refusal")
+    val lines = refusalOf(result)
+    val verbatim =
+      VaultRoot.at(stale).swap.toOption.getOrElse(fail("the stale fixture is somehow a vault"))
+    assert(lines.contains(verbatim), s"VaultRoot.at's own reason was reworded:\n$lines")
+    assert(lines.contains("registry"), s"the message does not say where the path came from:\n$lines")
+    assert(
+      lines.indexOf("registry") < lines.indexOf(verbatim),
+      s"the provenance comes after the reason it is meant to frame:\n$lines",
+    )
+  }
+
+  test("a chosen entry that IS a vault becomes the vault the run reads") {
+    val dir  = realVaultDirectory()
+    val root = VaultRoot.at(dir).toOption.getOrElse(fail("the fixture directory is not a vault"))
+    val rows = Vector(registryEntry("99887766554433aa", dir.toString))
+
+    val result = Main
+      .chooseVault(
+        VaultSelection.Ask,
+        Main.ConsolePresence.Present,
+        someHome,
+        _ => IO.pure(Right(rows)),
+        _ => IO.pure(Some("1")),
+      )
+      .unsafeRunSync()
+
+    assertEquals(result, Right(root))
   }

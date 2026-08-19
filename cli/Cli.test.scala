@@ -39,17 +39,17 @@ class CliTest extends munit.FunSuite:
     * error rather than a default.
     */
   test("sync WITHOUT a profile is a usage error, not a default") {
-    val result = parse("sync", existingDir)
+    val result = parse("sync", "--vault-path", existingDir)
     assert(result.isLeft, "sync ran without a profile")
     assert(result.left.exists(_.contains("profile")), s"error does not name the profile: $result")
   }
 
   test("a blank profile is refused") {
-    assert(parse("sync", existingDir, "--profile", "   ").isLeft)
+    assert(parse("sync", "--vault-path", existingDir, "--profile", "   ").isLeft)
   }
 
   test("sync WITH a profile parses") {
-    parse("sync", existingDir, "--profile", "POC-test") match
+    parse("sync", "--vault-path", existingDir, "--profile", "POC-test") match
       case Right(Command.Sync(_, profile, _, dryRun)) =>
         assertEquals(profile, "POC-test")
         assertEquals(dryRun, false)
@@ -61,13 +61,13 @@ class CliTest extends munit.FunSuite:
     * asking.
     */
   test("inspect needs NO profile, because it contacts nothing") {
-    assert(parse("inspect", existingDir).isRight)
+    assert(parse("inspect", "--vault-path", existingDir).isRight)
   }
 
   // ================================================ validation ====
 
   test("a vault path that is not a directory is refused at parse time") {
-    assert(parse("inspect", "/definitely/not/a/real/directory").isLeft)
+    assert(parse("inspect", "--vault-path", "/definitely/not/a/real/directory").isLeft)
   }
 
   /** THE CASE A BARE DIRECTORY CHECK LET THROUGH, and the reason this is a type rather than a
@@ -79,7 +79,7 @@ class CliTest extends munit.FunSuite:
     * looks deleted and the run flags all of them and reports success.
     */
   test("a directory that exists but is NOT a vault is refused, and the message says why") {
-    val result = parse("inspect", notAVault)
+    val result = parse("inspect", "--vault-path", notAVault)
     assert(result.isLeft, s"an ordinary directory was accepted as a vault: $result")
     assert(
       result.left.exists(e => e.contains("Obsidian") || e.contains(VaultRoot.MarkerDirectory)),
@@ -88,20 +88,95 @@ class CliTest extends munit.FunSuite:
   }
 
   test("the same refusal applies to sync, not only to inspect") {
-    assert(parse("sync", notAVault, "--profile", "POC-test").isLeft)
+    assert(parse("sync", "--vault-path", notAVault, "--profile", "POC-test").isLeft)
   }
 
   test("the deck root defaults to Obsidian and accepts a nested path") {
-    parse("inspect", existingDir) match
+    parse("inspect", "--vault-path", existingDir) match
       case Right(Command.Inspect(_, deckRoot, _)) => assertEquals(deckRoot.render, "Obsidian")
       case other                                  => fail(s"got $other")
-    parse("inspect", existingDir, "--deck-root", "My::Root") match
+    parse("inspect", "--vault-path", existingDir, "--deck-root", "My::Root") match
       case Right(Command.Inspect(_, deckRoot, _)) => assertEquals(deckRoot.render, "My::Root")
       case other                                  => fail(s"got $other")
   }
 
   test("an empty deck root is refused") {
-    assert(parse("inspect", existingDir, "--deck-root", "::").isLeft)
+    assert(parse("inspect", "--vault-path", existingDir, "--deck-root", "::").isLeft)
+  }
+
+  // ================================================ choosing a vault ====
+
+  /** OMITTING THE FLAG IS NOT AN ERROR AND IS NOT A DEFAULT EITHER. It parses to a request
+    * to ask, which `Main` answers by listing the vaults Obsidian has opened. The choice
+    * still has to be made; nothing here picks one.
+    */
+  test("with no --vault-path, both commands parse to a request to ASK") {
+    parse("inspect") match
+      case Right(Command.Inspect(selection, _, _)) => assertEquals(selection, VaultSelection.Ask)
+      case other                                   => fail(s"got $other")
+    parse("sync", "--profile", "POC-test") match
+      case Right(Command.Sync(selection, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
+      case other                                   => fail(s"got $other")
+  }
+
+  test("--vault-path names the vault outright, carrying a root that has already been checked") {
+    parse("inspect", "--vault-path", existingDir) match
+      case Right(Command.Inspect(VaultSelection.AtPath(root), _, _)) =>
+        assertEquals(
+          root.render,
+          java.nio.file.Paths.get(existingDir).toAbsolutePath.normalize.toString,
+        )
+      case other => fail(s"expected an explicitly named vault, got $other")
+  }
+
+  /** THE DEMOTION THAT MUST NOT HAPPEN. `--vault-path` is optional, so the obvious way to
+    * write it — validate, then `.orNone` — could plausibly turn a REFUSED path into "no flag
+    * given" and open the picker. A person who typed a path and got a menu would reasonably
+    * conclude the path was fine.
+    */
+  test("a --vault-path that is not a vault is REFUSED, never demoted to a request to ask") {
+    val result = parse("inspect", "--vault-path", notAVault)
+    result match
+      case Left(message) =>
+        assert(
+          message.contains("Obsidian") || message.contains(VaultRoot.MarkerDirectory),
+          s"the refusal does not explain what was missing: $message",
+        )
+      case Right(Command.Inspect(selection, _, _)) =>
+        fail(s"a bad --vault-path parsed instead of being refused, as $selection")
+      case Right(other) => fail(s"got $other")
+  }
+
+  /** THE EMPTY STRING IS THE ONE SHAPE THAT LIES. `Paths.get("")` is the empty path, and
+    * `VaultRoot.at` resolves it with `toAbsolutePath` — so `--vault-path ""` means "whatever
+    * directory I am standing in", and is accepted outright if that directory happens to
+    * carry the Obsidian marker. It arrives from `--vault-path "$VAULT"` with the variable
+    * unset, which is not an exotic way to invoke a tool.
+    *
+    * ASSERTED ON THE REFUSAL FIRING, never on the path that would otherwise come back: with
+    * the check deleted this parses successfully and yields the working directory, so an
+    * assertion about the resulting value could pass while the defect was live.
+    */
+  test("an EMPTY --vault-path is refused, and the message says what it would have meant") {
+    val result = parse("inspect", "--vault-path", "")
+    assert(result.isLeft, s"an empty vault path was accepted: $result")
+    assert(
+      result.left.exists(_.contains("current directory")),
+      s"the refusal does not say an empty path means the current directory: $result",
+    )
+  }
+
+  /** A TRIPWIRE, not a feature test. `--vault <name>` is one of the three ways the design
+    * rules, and it is deliberately ABSENT: Obsidian's registry stores no name for a vault —
+    * its entries are keyed by an opaque identifier and carry a path and a timestamp — so any
+    * name would be one this tool invented, and what a vault's name is has not been ruled.
+    *
+    * This test fails the day someone adds the flag, which is the moment to check the naming
+    * contract has been settled rather than guessed.
+    */
+  test("--vault is NOT accepted, because what a vault's name is has not been decided") {
+    assert(parse("inspect", "--vault", "anything").isLeft, "--vault was accepted")
+    assert(parse("sync", "--vault", "anything", "--profile", "POC-test").isLeft)
   }
 
   // ================================================ reporting ====

@@ -19,14 +19,25 @@ import obsidiananki.plan.{
   SyncAction,
 }
 import org.http4s.ember.client.EmberClientBuilder
-import java.nio.file.Files
+import java.io.IOException
+import java.nio.file.{Files, NoSuchFileException, Path, Paths}
 import scala.jdk.CollectionConverters.*
 
 /** The imperative shell.
   *
-  * Everything below the CLI is pure: reading files and printing lines happen here and
-  * nowhere else, which is why the walk, the extractor, the planner and the reporter can all
-  * be tested without a filesystem, a network or captured output.
+  * Everything below the CLI is pure, which is why the walk, the extractor, the planner and
+  * the reporter can all be tested without a filesystem, a network or captured output.
+  *
+  * WHERE THE IO IS, STATED EXACTLY. `Cli` consults the filesystem in one place and one only:
+  * `--vault-path` is checked at parse time for existence and for Obsidian's marker
+  * directory, so a path that is not a vault is refused before anything else happens. Every
+  * OTHER file this tool opens — the vault's markdown, Obsidian's vault registry — and every
+  * line it prints, and the one line it reads back, happen in this file.
+  *
+  * _Amended when the vault stopped being a positional argument. This previously read
+  * "reading files and printing lines happen here and nowhere else", which was already
+  * imprecise — `Cli` has stat-ed the vault path since the marker check was added — and this
+  * change adds a second read here rather than moving that one._
   */
 object Main
     extends CommandIOApp(
@@ -41,10 +52,22 @@ object Main
     */
   private type Refused[A] = EitherT[IO, AnkiError, A]
 
+  /** `inspect` and `sync` resolve the vault the SAME way — one call each to the same
+    * function, differing only in what they do with the answer.
+    *
+    * THE ORDER FOR `sync` IS GATE FIRST, THEN PROMPT: vault resolution happens INSIDE
+    * [[withVerifiedProfile]]'s body. Two things follow, both wanted. Nobody is asked to
+    * choose a vault for a run that a shut Anki had already doomed. And the gate's claim —
+    * "the check runs before the vault is READ" — stays true, because prompting is not
+    * reading: the vault's files are opened by `sync`, after the choice.
+    */
   def main: Opts[IO[ExitCode]] = Cli.command.map {
-    case Command.Inspect(vault, deckRoot, verbose) => inspect(vault, deckRoot, verbose)
-    case Command.Sync(vault, profile, deckRoot, dryRun) =>
-      withVerifiedProfile(profile)(sync(vault, deckRoot, dryRun, _))
+    case Command.Inspect(selection, deckRoot, verbose) =>
+      withChosenVault(selection)(inspect(_, deckRoot, verbose))
+    case Command.Sync(selection, profile, deckRoot, dryRun) =>
+      withVerifiedProfile(profile)(anki =>
+        withChosenVault(selection)(sync(_, deckRoot, dryRun, anki))
+      )
   }
 
   /** Read the vault and say what it holds. Touches no collection. */
@@ -56,6 +79,378 @@ object Main
       _ <- IO.println(s"files:    ${files.size}")
       _ <- Report.inspect(index, verbose).traverse_(IO.println)
     yield exitCodeFor(index)
+
+  // ------------------------------------------------------------ choosing a vault ----
+
+  /** What `System.console()` returned, and NOTHING MORE.
+    *
+    * NAMED FOR THE MEASUREMENT rather than for what one would like it to mean, because those
+    * are not the same thing and the gap is load-bearing. Measured on Temurin 17.0.17, the
+    * JDK this machine builds and runs it with: `System.console()` is non-null only when stdin AND stdout
+    * are both terminals, so `sync … | tee log`, typed by a person sitting at a terminal, is
+    * [[Absent]]. Calling this `stdinIsATerminal` would therefore be a name that lies in the
+    * one case the person can disprove by looking at their screen.
+    *
+    * THE DIRECTION IT FAILS IN IS THE POINT. A false [[Absent]] refuses a run that could have
+    * asked; a false [[Present]] would print a menu into a pipe and block on a stream nobody
+    * is typing into. Only the first happens here.
+    *
+    * UNVERIFIED UPGRADE HAZARD, recorded because it inverts the check rather than weakening
+    * it: `System.console()` is understood to change meaning from JDK 22 — non-null even under
+    * redirection, with `Console.isTerminal()` as the discriminator. Not measured here. If
+    * this project moves past JDK 17, re-measure BEFORE trusting this: unchanged, a cron run
+    * would start consuming stdin instead of being refused.
+    */
+  private[cli] enum ConsolePresence:
+    case Present
+    case Absent
+
+  /** What the person's typed answer amounted to.
+    *
+    * TWO CASES, NOT MORE. There is no retry loop, so every way of not choosing has exactly
+    * one consequence — print the reason, refuse, exit 2 — and [[Verdict]]'s own comment in
+    * this file already rules that a case the exit path cannot act on differently does not
+    * earn itself. End-of-input never reaches this type at all: [[chooseVault]] matches it at
+    * the boundary, where a closed stream is a different fact from a misread answer.
+    */
+  private[cli] enum PickerAnswer:
+    case Chosen(entry: RegisteredVault)
+    case NotChosen(reason: String)
+
+  /** The list that was shown, and the reading of what came back — ONE value.
+    *
+    * WHY THESE ARE NOT TWO FUNCTIONS. A renderer and a chooser each taking a
+    * `Vector[RegisteredVault]` could be handed different vectors, and then the person reads
+    * row 3 and gets vault 1. Ordinal *n* means nothing except against the vector that was
+    * displayed, so there is one vector and a private constructor, and the mismatch is
+    * unrepresentable rather than a thing code review has to keep catching.
+    *
+    * PURE: [[lines]] is text and [[interpret]] is a function on a string. Nothing here reads
+    * or writes anything, which is why the whole picker is testable with no terminal.
+    */
+  private[cli] final class Offering private (at: Path, rows: Vector[RegisteredVault]):
+
+    /** WHAT IS ON SCREEN, and as much about what is NOT.
+      *
+      * THE ORDER IS THE PARSER'S OWN and is not re-sorted here. In particular the vault
+      * Obsidian has open is not floated to the top: a row in first position is a default
+      * wearing a listing's clothes, and there is deliberately no default.
+      *
+      * `(open in Obsidian)` MARKS EVERY FLAGGED ENTRY. The flag is per entry; one open vault
+      * is an observation of one file rather than something this code can rely on, so two
+      * flagged entries make two flagged rows. It is an annotation and never a preselection.
+      *
+      * NO OPAQUE ID, because it is a key in a JSON object and not a name anyone chose. NO
+      * `ts` IN ANY FORM: that it is the moment the vault was last opened is an INFERENCE, and
+      * "last opened 3 days ago" is the shape that inference would take on screen. NO COUNT of
+      * vaults in the header — measured against circe 0.14.16, this build's version, two
+      * identical keys inside one JSON object collapse to one, so a count would claim more
+      * about the file than the parser can support; the ordinals number the rows anyway.
+      */
+    val lines: Vector[String] =
+      val header = Vector(
+        "Obsidian's vault registry, read from:",
+        s"  $at",
+        "",
+      )
+      val listed = rows.zipWithIndex.map { (row, index) =>
+        val flag = if row.openInObsidian then "  (open in Obsidian)" else ""
+        s"  ${index + 1}  ${row.path}$flag"
+      }
+      val footer = Vector(
+        "",
+        "This list is NOT every vault you have: it is the directories Obsidian has opened. A",
+        "vault Obsidian has never been pointed at is not here — name it with --vault-path.",
+        "",
+        s"Type the number of the vault to read (1-${rows.size}):",
+      )
+      header ++ listed ++ footer
+
+    /** TOTAL over an arbitrary string, because a prompt receives arbitrary strings.
+      *
+      * THE RULE IS THE WHOLE RULE: trim, parse as an integer if it is one, take that row if
+      * there is one. So `01`, `+1` and a trailing carriage return all select, while an empty
+      * line, `0`, a number past the end, two numbers, a number too large for an `Int`, a
+      * pasted path and a typed vault name all refuse with the range named.
+      *
+      * A TYPED PATH IS DELIBERATELY NOT ACCEPTED HERE. That is `--vault-path` reimplemented
+      * at a prompt — where the shell history keeps no record of what was chosen, and where
+      * the parse-time validation `--vault-path` gets is already behind us.
+      */
+    def interpret(typed: String): PickerAnswer =
+      val cleaned = typed.trim
+      cleaned.toIntOption.flatMap(n => rows.lift(n - 1)) match
+        case Some(entry) => PickerAnswer.Chosen(entry)
+        case None =>
+          PickerAnswer.NotChosen(
+            s"REFUSED: '$cleaned' is not one of the vaults offered. " +
+              s"Type the number of a row, between 1 and ${rows.size}."
+          )
+
+  private[cli] object Offering:
+    def of(at: Path, rows: Vector[RegisteredVault]): Offering = new Offering(at, rows)
+
+  /** What to tell the person when the registry could not be turned into a list.
+    *
+    * PURE: takes data, returns lines, prints nothing — the same contract as [[Report]], and
+    * these sit here rather than there only because that file is outside this change.
+    *
+    * ALL THREE CASES MATCHED, no wildcard, and all three END THE SAME WAY: name the vault
+    * with `--vault-path`. That is what makes every registry failure degrade to the behaviour
+    * the tool had before it read a registry at all — it fails backwards.
+    */
+  private[cli] def describeRegistryError(e: RegistryError): Vector[String] = e match
+    case RegistryError.NotFound(at) =>
+      Vector(
+        "REFUSED: no vault was named, and Obsidian's vault registry is not where this tool looks.",
+        "",
+        s"  looked at:  $at",
+        "",
+        "That is a report that the list COULD NOT BE LOOKED AT. It says nothing about how many",
+        "vaults you have. The path above is where Obsidian keeps the registry on macOS, and it is",
+        "the only place this tool tries — on another platform the file lives elsewhere and this",
+        "will never find it.",
+        "",
+        "Name the vault yourself: --vault-path <directory>",
+      )
+
+    case RegistryError.Unreadable(at, cause) =>
+      Vector(
+        "REFUSED: no vault was named, and Obsidian's vault registry could not be read.",
+        "",
+        s"  file:         $at",
+        // The cause is shown as itself. Rewording it here would make a second source of truth
+        // for one failure — the objection this file already records about not re-rendering
+        // `AnkiError`.
+        s"  the failure:  $cause",
+        "",
+        "The file is there; opening or reading it did not work.",
+        "",
+        "Name the vault yourself: --vault-path <directory>",
+      )
+
+    case RegistryError.Malformed(at, reason) =>
+      Vector(
+        "REFUSED: no vault was named, and Obsidian's vault registry is not a shape this tool reads.",
+        "",
+        s"  file:              $at",
+        s"  what went wrong:   $reason",
+        "",
+        "Nothing was guessed from it. A registry that cannot be parsed yields no vault list at all,",
+        "rather than a shortened one.",
+        "",
+        "Name the vault yourself: --vault-path <directory>",
+      )
+
+  /** The registry was READ and knows of no vault.
+    *
+    * A SEPARATE MESSAGE FROM [[RegistryError.NotFound]], deliberately: "there is no registry
+    * file at this path" and "the registry lists no vaults" are different facts with different
+    * remedies, and collapsing them would make the tool say it could not look when it did.
+    *
+    * Printing an empty numbered list and then waiting for a number is the alternative this
+    * exists to rule out.
+    */
+  private[cli] def describeNoVaults(at: Path): Vector[String] =
+    Vector(
+      "REFUSED: no vault was named, and Obsidian's registry lists no vaults.",
+      "",
+      s"  file:  $at",
+      "",
+      "The file was read and its vault list is empty, so there is nothing to offer. This is not",
+      "the same as the file being missing: Obsidian has a registry here and it knows of no vault.",
+      "",
+      "Name the vault yourself: --vault-path <directory>",
+    )
+
+  /** No vault named, and no terminal to ask at.
+    *
+    * WORDED TO THE PREDICATE WE ACTUALLY HAVE. See [[ConsolePresence]]: what was measured is
+    * that this process has no interactive console, which needs BOTH its input and its output
+    * to be a terminal. Saying "stdin is not a terminal" would be false for the person who
+    * piped the output while sitting at one — the single case where they can see for
+    * themselves that the message is wrong.
+    */
+  private[cli] def describeNoConsole(): Vector[String] =
+    Vector(
+      "REFUSED: no vault was named, and there is no interactive terminal to ask at.",
+      "",
+      "Choosing from Obsidian's list of vaults needs a terminal for BOTH the list and the answer,",
+      "and this process does not have both. That is the case under cron, in a pipeline and in",
+      "CI — and also for a run typed by hand whose output is redirected or piped.",
+      "",
+      "There is no default vault, not even the one Obsidian currently has open.",
+      "",
+      "Name the vault: --vault-path <directory>",
+    )
+
+  /** The answer never arrived because the stream ended.
+    *
+    * END OF INPUT IS NOT A CHOICE and is not a mistyped answer either. Reading it as the
+    * first row would pick a vault nobody named; reading it as "not understood" would send
+    * the person to correct a typo they did not make.
+    */
+  private[cli] def describeStdinClosed(): Vector[String] =
+    Vector(
+      "REFUSED: stdin closed before an answer arrived, so no vault was chosen.",
+      "",
+      "End of input is not an answer, and there is no default vault to fall back to.",
+      "",
+      "Name the vault: --vault-path <directory>",
+    )
+
+  /** A row was chosen and the directory it names is not a vault.
+    *
+    * `VaultRoot.at`'S REASON IS CARRIED VERBATIM. Rewording it would create a second source
+    * of truth for one failure — the same objection this file already records about not
+    * re-rendering `AnkiError` — and the two wordings would drift.
+    *
+    * THE PROVENANCE LINE COMES FIRST, and that placement is the point of it. `VaultRoot.at`'s
+    * text was written for a path someone typed, and ends by asking whether they meant a
+    * folder inside it; read cold against a path nobody typed, that question has no addressee.
+    * Saying where the path came from before quoting the reason gives it one.
+    *
+    * REFUSES; DOES NOT ASK AGAIN. One question, one answer.
+    */
+  private[cli] def describeStalePick(entry: RegisteredVault, reason: String): Vector[String] =
+    Vector(
+      "REFUSED: the vault you chose cannot be read.",
+      "",
+      "That path came from Obsidian's own registry, which records that Obsidian opened the",
+      "directory as a vault at some past time. Nobody typed it on the command line, and the",
+      "directory may since have been moved, renamed or deleted.",
+      "",
+      s"  chosen:  ${entry.path}",
+      s"  $reason",
+      "",
+      "Name the vault directly: --vault-path <directory>",
+    )
+
+  /** Turn what was typed on the command line into the vault to read, or into the lines that
+    * say why there is none.
+    *
+    * EVERY DEPENDENCY IS INJECTED — the console measurement, the home directory, the registry
+    * read and the question — so the whole of this is drivable with no terminal, no filesystem
+    * and no home. [[verifyThen]] already makes that argument about the profile gate: an
+    * untested guardrail is a claim rather than a guarantee, and this one stands between the
+    * tool and whichever collection a wrongly chosen vault would flag.
+    *
+    * `Left` is the refusal lines for the caller to print; the caller exits 2.
+    *
+    * THE ORDER IS NOT ARBITRARY, and each step is before the next for its own reason:
+    *   1. An explicitly named vault short-circuits — the registry is NOT read and nothing is
+    *      asked. Every registry failure degrades to "name it with --vault-path", so a broken
+    *      registry must not be able to break the thing it degrades to.
+    *   2. The console check comes BEFORE the registry read. Refusing a cron run must not
+    *      depend on the registry being readable, and the refusal is the same either way.
+    *   3. The registry read comes before the question, obviously; a read that failed has
+    *      nothing to show.
+    *
+    * ONE QUESTION, ONE ANSWER, NO RETRY LOOP. Every refusal ends the run, including a chosen
+    * row that turns out not to be a vault. A loop here is exited only by a human or by
+    * end-of-input, and is easy to spin.
+    *
+    * `at` IS COMPUTED ONCE and used for the read, for the listing's header and for the
+    * empty-registry message, so the path this says it read and the path it read cannot
+    * differ.
+    */
+  private[cli] def chooseVault(
+      selection: VaultSelection,
+      console: ConsolePresence,
+      home: Path,
+      readRegistry: Path => IO[Either[RegistryError, Vector[RegisteredVault]]],
+      ask: Vector[String] => IO[Option[String]],
+  ): IO[Either[Vector[String], VaultRoot]] =
+    selection match
+      case VaultSelection.AtPath(root) => IO.pure(Right(root))
+      case VaultSelection.Ask =>
+        console match
+          case ConsolePresence.Absent => IO.pure(Left(describeNoConsole()))
+          case ConsolePresence.Present =>
+            val at = VaultRegistry.locate(home)
+            readRegistry(at).flatMap {
+              case Left(error)                 => IO.pure(Left(describeRegistryError(error)))
+              case Right(rows) if rows.isEmpty => IO.pure(Left(describeNoVaults(at)))
+              case Right(rows) =>
+                val offering = Offering.of(at, rows)
+                ask(offering.lines).map {
+                  case None => Left(describeStdinClosed())
+                  case Some(typed) =>
+                    offering.interpret(typed) match
+                      case PickerAnswer.NotChosen(reason) => Left(Vector(reason))
+                      case PickerAnswer.Chosen(entry) =>
+                        // THE REGISTRY CHOOSES BUT DOES NOT VOUCH. An entry records a past
+                        // opening, not a present directory, so `VaultRoot.at` stays the one
+                        // predicate in this tool that decides whether a path is a vault.
+                        VaultRoot.at(entry.path) match
+                          case Right(root)  => Right(root)
+                          case Left(reason) => Left(describeStalePick(entry, reason))
+                }
+            }
+
+  /** [[chooseVault]] wired to the real console, the real home directory and the real file,
+    * then either handed to `body` or printed as a refusal.
+    *
+    * THE ONE PLACE THE PICKER TOUCHES THE WORLD: the console measurement, the home
+    * directory, the file read and the question are all supplied from here, rather than
+    * defaulted into [[chooseVault]]'s parameters where a test could not displace them.
+    *
+    * NOTE WHAT THAT LEAVES UNTESTED, rather than implying otherwise: everything in this
+    * function and the two below it is the production wiring the tests inject past, so it is
+    * exercised by running the tool and not by the suite.
+    */
+  private def withChosenVault(selection: VaultSelection)(
+      body: VaultRoot => IO[ExitCode]
+  ): IO[ExitCode] =
+    for
+      console <- IO(
+        if System.console() == null then ConsolePresence.Absent else ConsolePresence.Present
+      )
+      // `sys.props` APPLIED, not `get`: a JVM with no `user.home` is a broken JVM and should
+      // say so, loudly, rather than have a directory guessed for it.
+      home = Paths.get(sys.props("user.home"))
+      chosen <- chooseVault(selection, console, home, readRegistryFile, askOnConsole)
+      code <- chosen match
+        case Right(root) => body(root)
+        case Left(lines) => lines.traverse_(IO.println).as(ExitCode(2))
+    yield code
+
+  /** Read the registry file and hand its bytes to the pure parser.
+    *
+    * `try`/`catch` INSIDE `IO.blocking`, and NOT an `.attempt` over the `IO`: this file's
+    * gate comment says there is EXACTLY ONE `.attempt` over IO here, and a second would make
+    * that sentence false.
+    *
+    * TWO EXCEPTIONS CAUGHT AND NOTHING BROADER. `NoSuchFileException` first, because it is an
+    * `IOException` and the wider catch would otherwise swallow it and report "could not read"
+    * for a file that simply is not there — two different facts with two different remedies.
+    */
+  private def readRegistryFile(at: Path): IO[Either[RegistryError, Vector[RegisteredVault]]] =
+    IO.blocking {
+      try VaultRegistry.parse(at, Files.readString(at))
+      catch
+        case _: NoSuchFileException => Left(RegistryError.NotFound(at))
+        case failure: IOException   => Left(RegistryError.Unreadable(at, failure.toString))
+    }
+
+  /** Show the list and read one line back — bound together as ONE act, deliberately.
+    *
+    * A menu cannot be printed without a read following it, a read cannot happen without the
+    * menu, and a test injecting this can count how many times it happened, which is what
+    * proves there is no retry loop.
+    *
+    * `readLine` RETURNS `null` AT END OF INPUT. It is wrapped at the boundary and matched
+    * immediately by the caller, so no nullable and no `Option[String]` travels onward and
+    * there is no `getOrElse("")` to read a closed stream as an empty answer.
+    *
+    * THE MENU GOES TO STDOUT, like everything else this tool prints. Measured: the picker
+    * runs only when stdout is a terminal (see [[ConsolePresence]]), so the menu cannot be
+    * captured by `> log` or `| tee` and the stream choice is unobservable today. That stops
+    * being true if the console check ever sharpens to stdin alone — at which point where the
+    * menu goes becomes a real question rather than a free one.
+    */
+  private def askOnConsole(lines: Vector[String]): IO[Option[String]] =
+    lines.traverse_(IO.println) *> IO.blocking(Option(scala.io.StdIn.readLine()))
 
   // ------------------------------------------------------------- the profile gate ----
 
@@ -539,11 +934,20 @@ object Main
     *     cards could not be built from the vault, orphans could not be computed, or the run
     *     stopped early.
     *   - `ExitCode(2)` — the run REFUSED to do its job and NOTHING WAS WRITTEN: the three
-    *     profile refusals in [[withVerifiedProfile]], plus `CouldNotObserve` and
-    *     `RefusedInconsistent`.
+    *     profile refusals in [[withVerifiedProfile]], every refusal in [[withChosenVault]],
+    *     plus `CouldNotObserve` and `RefusedInconsistent`.
     *
     * `AbortedDuringExecution` is 1 AND NOT 2. That is the most consequential number here: 2
     * asserts that nothing was written, and on that path it is false.
+    *
+    * ONE CASE IS NOT IN THAT LIST, and it is the exception to "1 means it ran": a command
+    * line REFUSED BY THE PARSER exits **1**, printed to **stderr**, without the run having
+    * started at all. That is `CommandIOApp`'s own behaviour and not a choice made here
+    * (measured against decline-effect 2.6.2). So "that is not a vault" reaches a script as 1
+    * when `--vault-path` names it and as 2 when a registry row does. This split is not new
+    * with the flag — before `--vault-path` existed the vault was a positional argument and a
+    * bad one exited 1 the same way. Whether to unify it is open, and unifying means moving
+    * the check out of `Cli` and giving up failing before anything is read.
     *
     * There are no codes 3 or 4 because nothing consumes the exit code yet; when a consumer
     * appears, the split that earns itself is transient (`Unreachable`) against permanent
