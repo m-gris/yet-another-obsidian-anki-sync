@@ -88,10 +88,23 @@ enum PlanError:
     */
   case DuplicateKey(key: CardKey, first: SourceRef, second: SourceRef)
 
+  /** Two ANKI NOTES carry the same identity tag — the same collision as [[DuplicateKey]],
+    * arriving from the other side.
+    *
+    * Fatal for the same reason, and the symmetry is the point: this side was silent for as
+    * long as the lookup was built with `.toMap`, which kept one note and made the other
+    * invisible to every later run. Both note ids are named because the remedy is manual — a
+    * human has to open both in Anki and decide which to keep.
+    */
+  case DuplicateIdentityInAnki(key: CardKey, first: AnkiNoteId, second: AnkiNoteId)
+
   def describe: String = this match
     case DuplicateKey(key, first, second) =>
       s"duplicate card key '${key.path.render}' (note '${key.noteId.value}') derived from " +
         s"two sources: ${first.describe} and ${second.describe}"
+    case DuplicateIdentityInAnki(key, first, second) =>
+      s"two Anki notes claim the card key '${key.path.render}' (note '${key.noteId.value}'): " +
+        s"note ids ${first.value} and ${second.value} — open both in Anki and delete one"
 
 /** Whether orphans were computed, and if not, why not. Reported rather than silent: a run
   * that could not look for orphans must not be mistaken for a run that found none.

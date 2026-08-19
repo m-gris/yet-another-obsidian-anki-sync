@@ -11,7 +11,35 @@ import obsidiananki.model.{CardKey, CardSpec, OwnedTag}
   * because an orphan is a key the markdown does not have.
   */
 final case class ObservedState(notes: Vector[ObservedCard]):
-  def byKey: Map[CardKey, ObservedCard] = notes.map(n => n.key -> n).toMap
+  /** The lookup from card identity to the note holding it — OR the collisions that make such
+    * a lookup a lie.
+    *
+    * IT RETURNS AN EITHER SO THAT COLLISIONS CANNOT BE SKIPPED. The obvious `.toMap` silently
+    * keeps one of two notes claiming the same identity, and the loser then disappears from
+    * the reconciler completely: never updated, so it holds its old content forever; never
+    * flagged, because a card is only an orphan when its key is ABSENT from the markdown and
+    * the winner's key is present; and therefore never prunable either. It goes on appearing
+    * in reviews, diverging, with nothing anywhere saying so.
+    *
+    * This is the same failure the markdown side already treats as fatal, arriving from the
+    * other direction — and it is reachable: `allowDuplicate` is set deliberately, so Anki
+    * will not refuse the second note, and a retried creation after an interrupted run, a
+    * restored backup, or a card duplicated by hand all produce it.
+    */
+  def byKey: Either[Vector[PlanError], Map[CardKey, ObservedCard]] =
+    val collisions = notes
+      .groupBy(_.key)
+      .toVector
+      .sortBy(_._1.path.render)
+      .flatMap { (key, group) =>
+        // Ordered by note id so the report is stable run to run, and both sides are named:
+        // "there is a duplicate somewhere" cannot be acted on without opening every note.
+        group.sortBy(_.note.id.value) match
+          case first +: rest =>
+            rest.map(other => PlanError.DuplicateIdentityInAnki(key, first.note.id, other.note.id))
+          case _ => Vector.empty
+      }
+    if collisions.nonEmpty then Left(collisions) else Right(notes.map(n => n.key -> n).toMap)
 
 /** One Anki note, resolved against its identity tag. */
 final case class ObservedCard(
@@ -87,10 +115,17 @@ object Planner:
       deckOf: CardKey => DeckPath,
       newNoteOf: (SourcedSpec, DeckPath, String) => NewNote,
   ): Either[Vector[PlanError], Plan] =
+    // BOTH SIDES ARE CHECKED BEFORE EITHER IS REPORTED, so one run tells the author
+    // everything that needs fixing rather than revealing the Anki-side collision only after
+    // the markdown-side one has been dealt with.
     val duplicates = checkUnique(scan.specs)
-    if duplicates.nonEmpty then Left(duplicates)
+    val collisions = observed.byKey.left.getOrElse(Vector.empty)
+    val blocking   = duplicates ++ collisions
+
+    if blocking.nonEmpty then Left(blocking)
     else
-      val byKey = observed.byKey
+      // Safe by the check above: byKey is Right whenever no collisions were reported.
+      val byKey = observed.byKey.getOrElse(Map.empty)
 
       val perSpec = scan.specs.flatMap { sourced =>
         val key  = sourced.key
