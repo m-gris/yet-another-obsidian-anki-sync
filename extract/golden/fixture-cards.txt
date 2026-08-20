@@ -22,7 +22,7 @@
 # Every emitted value is wrapped in U+27E6/U+27E7 brackets so that leading and trailing
 # whitespace is visible BY POSITION, and escaped so that an invisible character is visible
 # at all. Escaping is one-way: nothing ever unescapes this file.
-specs 53
+specs 54
 failures 1
 
 card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
@@ -81,6 +81,11 @@ card ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
 card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20forearm⟧
   note ⟦Cloze⟧
   field ⟦Text⟧ ⟦Two bones run between elbow and wrist. On the thumb side is the {{c1::radius}};\non the little-finger side, the {{c2::ulna}}. In supination the {{c1::radius}} lies\nparallel to the {{c2::ulna}}, and in pronation it crosses over it — which is why\nboth are labelled: their text may be rewritten without either card losing its\nreview history.⟧
+  field ⟦Back Extra⟧ ⟦⟧
+
+card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20two%20parts⟧
+  note ⟦Cloze⟧
+  field ⟦Text⟧ ⟦The wrist itself is the {{c1::carpus}}, eight small bones in two rows. Beyond it the\npalm is built from the {{c2::metacarpals}}, one per digit.\nThe fingers themselves are the phalanges, and they come in three kinds:\nthe {{c3::proximal}} phalanges, nearest the palm\nthe {{c4::middle}} phalanges, absent from the thumb\nthe {{c5::distal}} phalanges, carrying the nails\nA cloze section whose body is SEVERAL BLOCKS. Every other cloze in this vault is one\nparagraph, so the separator that joins one block to the next was never reached, and a\nchange to it passed the golden file unnoticed. This section is what makes that change\nshow up as a diff.⟧
   field ⟦Back Extra⟧ ⟦⟧
 
 card ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧

@@ -583,7 +583,7 @@ class GoldenTest extends munit.FunSuite:
 
     // Against the LIVE scan, not the golden. Verified: `inspect --vault-path …/dummy-vault`
     // reports cards: 53, failures: 1, scan: complete, 3 duplicate keys.
-    assertEquals(index.scan.specs.size, 53, "the fixture vault no longer produces 53 specs")
+    assertEquals(index.scan.specs.size, 54, "the fixture vault no longer produces 54 specs")
     assertEquals(index.scan.failures.size, 1, "the fixture vault no longer produces exactly 1 build failure")
 
     val values = golden.cards.flatMap(_.fields.map(_._2))

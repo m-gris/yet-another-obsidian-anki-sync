@@ -47,3 +47,19 @@ on the little-finger side, the ==2|ulna==. In supination the ==1|radius== lies
 parallel to the ==2|ulna==, and in pronation it crosses over it — which is why
 both are labelled: their text may be rewritten without either card losing its
 review history.
+
+## Bones of the hand, in two parts #flashcard/cloze
+
+The wrist itself is the ==carpus==, eight small bones in two rows. Beyond it the
+palm is built from the ==metacarpals==, one per digit.
+
+The fingers themselves are the phalanges, and they come in three kinds:
+
+- the ==proximal== phalanges, nearest the palm
+- the ==middle== phalanges, absent from the thumb
+- the ==distal== phalanges, carrying the nails
+
+A cloze section whose body is SEVERAL BLOCKS. Every other cloze in this vault is one
+paragraph, so the separator that joins one block to the next was never reached, and a
+change to it passed the golden file unnoticed. This section is what makes that change
+show up as a diff.
