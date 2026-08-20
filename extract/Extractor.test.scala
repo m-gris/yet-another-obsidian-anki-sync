@@ -571,6 +571,119 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(clozeOf(note, "b / l").text.value, "The {{c1::femur}} is a bone.")
   }
 
+  /** The Back field of a two-field card, which is where a dropped body construct shows up. */
+  def twoFieldBack(n: ExtractedNote, path: String): String =
+    specFor(n, path).spec.fields.toMap.getOrElse("Back", fail(s"no Back field at '$path'"))
+
+  // ======================================= nothing in a body is silently discarded ====
+  //
+  // `CARD-MODEL.md` §"Where the concept comes from" ratifies what a description may contain:
+  // "the whole section body — prose, lists, formulae, code". Each test below covers a
+  // construct that reached the Anki field as NOTHING, with the card created and looking
+  // correct. They share one cause: Laika's containers do not form the hierarchy the walk
+  // assumed, so anything outside it fell to a catch-all returning the empty string.
+
+  /** A fenced code block with no language is a `LiteralBlock` — a `TextContainer`, which is
+    * neither a `SpanContainer` nor an `ElementContainer`. It fell straight through.
+    */
+  test("a fenced code block survives into the card") {
+    val note = extract("# B\n\nx\n\n## Run #flashcard/2way\n\nRun this:\n\n```\nscala-cli test .\n```\n")
+    val back = twoFieldBack(note, "b / run")
+    assert(back.contains("scala-cli test ."), s"the code fence was dropped: [$back]")
+  }
+
+  test("an indented code block survives into the card") {
+    val note = extract("# B\n\nx\n\n## Run #flashcard/2way\n\nRun this:\n\n    scala-cli test .\n")
+    val back = twoFieldBack(note, "b / run")
+    assert(back.contains("scala-cli test ."), s"the indented code block was dropped: [$back]")
+  }
+
+  /** A `Table` is a `Block` with `ElementTraversal`, but it is NOT an `ElementContainer` and
+    * has no `content` member at all — so a walk descending through `content` matched nothing
+    * and the whole table vanished. This is a table inside an ORDINARY body, not a
+    * `#flashcard/table` card.
+    */
+  test("a markdown table inside an ordinary body survives into the card") {
+    val note = extract(
+      "# B\n\nx\n\n## Compare #flashcard/2way\n\nintro\n\n| A | B |\n| - | - |\n| 1 | 2 |\n"
+    )
+    val back = twoFieldBack(note, "b / compare")
+    assert(back.contains("1") && back.contains("2"), s"the table was dropped: [$back]")
+  }
+
+  /** THE SAME GAP IN THE ONLY SAFETY CHECK THE EXTRACT LAYER HAS.
+    *
+    * Embeds are refused BY TYPE because an Anki card cannot resolve an Obsidian attachment
+    * link. The doc comment on that check claimed it reached "inside table cells". It did not,
+    * for the same reason as above — so an embed hidden in a cell was accepted and a card with
+    * a broken image was written.
+    *
+    * ASSERTED ON THE REJECTION FIRING, never on the absence of the embed from the output.
+    */
+  test("an embed hidden inside a table cell is REFUSED, not quietly accepted") {
+    val note = extract(
+      "# B\n\nx\n\n## Compare #flashcard/2way\n\n| A | B |\n| - | - |\n| ![[pic.png]] | 2 |\n"
+    )
+    val refusal = note.failures.map(_.toString).mkString(" ") + note.specs.map(_.toString).mkString(" ")
+    assert(
+      note.specs.isEmpty,
+      s"a card was built from a body containing an embed: $refusal",
+    )
+    assert(refusal.contains("pic.png"), s"the refusal does not name the embed: $refusal")
+  }
+
+  /** A body that is ONLY a list came out empty, and an empty body is a hard error — so the
+    * card was refused with a message blaming the author for a body that is plainly there.
+    */
+  test("a body that is only a list produces a card, not an empty-body error") {
+    val note = extract("# B\n\nx\n\n## Layers #flashcard/2way\n\n- epidermis\n- dermis\n")
+    assert(note.failures.isEmpty, s"a list-only body was refused: ${note.failures}")
+    val back = twoFieldBack(note, "b / layers")
+    assert(back.contains("epidermis") && back.contains("dermis"), s"[$back]")
+  }
+
+  test("a nested list keeps its sub-items") {
+    val note = extract("# B\n\nx\n\n## Layers #flashcard/2way\n\n- outer\n    - inner\n")
+    val back = twoFieldBack(note, "b / layers")
+    assert(back.contains("outer") && back.contains("inner"), s"the sub-item was dropped: [$back]")
+  }
+
+  /** THE ONE DOCUMENTED USE OF LISTS, and it had no test at all.
+    *
+    * `CARD-MODEL.md` §Lists rules that unordered lists need no card type of their own —
+    * "membership is the knowledge, not sequence. Plain multi-cloze covers it". So the
+    * supported way to write one is highlights inside list items, which means a cloze body
+    * containing a `BulletList`.
+    *
+    * That is precisely where this project has been bitten before: a `BulletList` is a
+    * `ListContainer`, NOT a `BlockContainer`, so a walker matching only on blocks returns
+    * nothing for a list and the card comes out empty — silently, since an empty body is only
+    * an error when it is empty for every reason at once.
+    */
+  test("highlights inside a bullet list become deletions, list and all") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nThe three layers:\n\n- the ==epidermis==\n- the ==dermis==\n- the ==hypodermis==\n"
+    )
+    val spec = clozeOf(note, "b / l")
+    assertEquals(spec.deletions.toVector.size, 3, s"lost a deletion inside the list: ${spec.text.value}")
+    val rendered = spec.text.value
+    assert(rendered.contains("{{c1::epidermis}}"), rendered)
+    assert(rendered.contains("{{c2::dermis}}"), rendered)
+    assert(rendered.contains("{{c3::hypodermis}}"), rendered)
+    assert(rendered.contains("The three layers:"), s"the prose before the list was dropped: $rendered")
+  }
+
+  /** A numbered list is ordinary content too. Progressive disclosure — one card per step,
+    * revealing the previous ones — is what `CARD-MODEL.md` defers, not this.
+    */
+  test("highlights inside a numbered list are deletions like any other") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\n1. first the ==ureter==\n2. then the ==bladder==\n"
+    )
+    val rendered = clozeOf(note, "b / l").text.value
+    assert(rendered.contains("{{c1::ureter}}") && rendered.contains("{{c2::bladder}}"), rendered)
+  }
+
   /** A label IS the cloze number, so two highlights sharing one blank together as one card. */
   test("a labelled group renders its own number, and a shared label renders the same number") {
     val note = extract(

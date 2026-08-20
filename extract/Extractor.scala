@@ -164,32 +164,65 @@ object Extractor:
       case _ =>
         Right(blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim)
 
-  /** Text of one block, descending through ANY container.
+  private def blockText(b: Block): String = elementText(b)
+
+  /** Text of any element, descending through EVERY child.
     *
-    * Descending generically matters: a `BulletList` is a `ListContainer`, not a
-    * `BlockContainer`, so a walker that only knows about blocks and spans silently returns
-    * nothing for a list — and a list is exactly what the docs promise a card body may hold.
+    * THE CASES BELOW ARE A TYPE LATTICE, NOT A STYLE. Laika's containers do not form the tidy
+    * hierarchy this walk originally assumed, and each omission destroyed content SILENTLY —
+    * the card was still created, still looked right, and was missing part of its answer. All
+    * three facts were read out of laika-core 1.3.2's sources rather than inferred:
+    *
+    *   - `BulletListItem` and `EnumListItem` are `BlockContainer`s but are NOT `Block`s (they
+    *     are `ListItem extends Element`). A walk collecting only `Block` children matched the
+    *     list and then discarded every item in it. That is why `- one` `- two` vanished while
+    *     the prose around it survived.
+    *   - `LiteralBlock` is a `TextContainer` — `Container[String]` — and is neither a
+    *     `SpanContainer` nor an `ElementContainer`. It fell to the catch-all. That is a fenced
+    *     or indented code block, silently deleted, in a project whose ratified design promises
+    *     the body may hold "prose, lists, formulae, code".
+    *   - `Table` is a `Block` with `ElementTraversal` and `RewritableContainer`. It is NOT an
+    *     `ElementContainer` and HAS NO `content` MEMBER AT ALL, so it too fell to the
+    *     catch-all: a table inside an ordinary body disappeared whole. Its parts are reachable
+    *     only by naming them, which is what the case below does.
+    *
+    * `case _ => ""` IS THE HAZARD, and it is kept only because Laika's element hierarchy is
+    * open. Every construct that has ever reached it did so by being silently deleted, which is
+    * this project's signature failure. Anything added here must be added because its shape was
+    * checked, never because a test happened to pass.
     */
-  private def blockText(b: Block): String = b match
-    case sc: SpanContainer       => sc.extractText
+  private def elementText(e: Element): String = e match
+    case sc: SpanContainer => sc.extractText
+    case tc: TextContainer => tc.content
+    // Named explicitly because a Table has no `content` to descend into. Head and body are
+    // `TableContainer`s, which ARE `ElementContainer`s, so everything below them is generic.
+    case t: Table =>
+      Vector(t.head, t.body).map(elementText).filter(_.nonEmpty).mkString("\n")
     case ec: ElementContainer[?] =>
-      ec.content.collect { case blk: Block => blockText(blk) }.filter(_.nonEmpty).mkString("\n")
+      ec.content.toVector.collect { case el: Element => elementText(el) }.filter(_.nonEmpty).mkString("\n")
     case _ => ""
 
   /** Every span anywhere beneath an element, including inside table cells and list items.
     *
     * Written out rather than reaching for a Laika traversal helper because the rejection it
-    * feeds must be exhaustive: an embed hidden in a table cell is still an embed, and
-    * missing one would put a card with a broken image into Anki.
+    * feeds must be exhaustive: an embed hidden in a table cell is still an embed, and missing
+    * one would put a card with a broken image into Anki.
+    *
+    * THAT SENTENCE WAS FALSE UNTIL 2026-08-20. A `Table` is not an `ElementContainer`, so it
+    * matched no case and returned nothing — an `![[embed]]` inside a table cell was NOT
+    * rejected, and the card was written. The comment claimed the coverage that made the check
+    * worth having, which is exactly why nobody tested it. The `Table` case below is what makes
+    * the sentence true.
     */
   private def allSpans(e: Element): Vector[Span] = e match
     case s: (Span & SpanContainer) => s +: s.content.toVector.flatMap(allSpans)
-    case s: Span                    => Vector(s)
+    case s: Span                   => Vector(s)
+    case t: Table                  => Vector(t.head, t.body).flatMap(allSpans)
     // Generic container case, NOT BlockContainer specifically: a BulletList is a
     // ListContainer, and matching only on BlockContainer would walk straight past every
     // list — leaving a task marker or an embed inside one undetected.
-    case ec: ElementContainer[?]    => ec.content.toVector.flatMap(allSpans)
-    case _                          => Vector.empty
+    case ec: ElementContainer[?] => ec.content.toVector.flatMap(allSpans)
+    case _                       => Vector.empty
 
 
 /** Line lookup for diagnostics.

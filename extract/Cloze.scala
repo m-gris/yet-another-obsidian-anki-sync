@@ -97,10 +97,18 @@ object Cloze:
       case t: TextContainer  => t.content
       case _                 => ""
 
-    def blockText(b: Block): String = b match
-      case sc: SpanContainer       => sc.content.map(spanText).mkString
+    // The same type lattice as `Extractor.elementText`, and the same reasons — see the long
+    // note there. A list item is not a `Block`, a `LiteralBlock` is a `TextContainer`, and a
+    // `Table` has no `content` at all. This one additionally intercepts `Highlighted`, which
+    // is the only thing that makes it a separate function rather than a call.
+    def blockText(b: Block): String = elementRender(b)
+
+    def elementRender(e: Element): String = e match
+      case sc: SpanContainer => sc.content.map(spanText).mkString
+      case tc: TextContainer => tc.content
+      case t: Table          => Vector(t.head, t.body).map(elementRender).filter(_.nonEmpty).mkString("\n")
       case ec: ElementContainer[?] =>
-        ec.content.collect { case blk: Block => blockText(blk) }.filter(_.nonEmpty).mkString("\n")
+        ec.content.toVector.collect { case el: Element => elementRender(el) }.filter(_.nonEmpty).mkString("\n")
       case _ => ""
 
     blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim
