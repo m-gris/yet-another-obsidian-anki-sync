@@ -692,8 +692,17 @@ class ExtractorTest extends munit.FunSuite:
     *
     * `![[x.png]]` was refused by name while `![x](x.png)` was swallowed without a word —
     * Laika parses the latter to `Image`, which is a `Link`, and neither a `TextContainer` nor
-    * a `SpanContainer`. IN A HEADING THAT SILENTLY CHANGES THE KEY: two headings differing
-    * only by their image were the same card.
+    * a `SpanContainer`.
+    *
+    * THIS COMMENT USED TO CLAIM THE CHECK REACHED A MARKED HEADING TOO ("in a heading that
+    * silently changes the key: two headings differing only by their image were the same
+    * card"). It never did: `Section(header, content)` keeps the header OUTSIDE `content`
+    * (`laika/ast/blocks.scala:231`), and this check runs over `Extractor.ownBody`, which is
+    * built from `section.content`. The heading hazard is REAL AND STILL OPEN — an image in a
+    * marked heading is dropped by `SpanContainer.extractText`'s silent default and the card's
+    * KEY changes, which orphans a live synced note rather than merely losing a word. It is
+    * named at `Extractor.scala`'s `section.header.extractText` and needs its own slice. THIS
+    * TEST IS ABOUT THE BODY.
     */
   test("a markdown image in a body is REFUSED, not silently swallowed") {
     val note = extract("# B\n\nx\n\n## C #flashcard/2way\n\nsee ![diagram](diagram.png) here\n")
@@ -784,4 +793,80 @@ class ExtractorTest extends munit.FunSuite:
     val rendered = clozeOf(note, "b / l").text.value
     assert(rendered.contains("{{c1::real}}"), rendered)
     assert(!rendered.contains("::x}}"), s"a code-span highlight became a deletion: $rendered")
+  }
+
+  // ============================== S9: refusal reasons, pinned before they were rewired ====
+  //
+  // THREE CHARACTERIZATION PINS AND ONE NEW BEHAVIOUR. T1, T2 and T3 were written and run
+  // GREEN against the pre-S9 tree, so that the behaviour they describe could be shown not to
+  // move when the extract layer was swapped onto `content.Lower`. T4 was written and run RED
+  // against that same tree: it is the ONE behaviour S9 deliberately changes.
+  //
+  // Why they had to be written at all: `extract/golden/fixture-cards.txt` records a failure's
+  // CASE NAME and KEY and deliberately never its reason, so nothing in the suite pinned any of
+  // these reason strings. S9 changes how two of them are derived.
+
+  /** T1 — CHARACTERIZATION. Ambiguous unlabelled cloze deletions are refused with the remedy.
+    *
+    * PINNED BY NOTHING BEFORE S9: there is no other test for
+    * [[SpecError.AmbiguousClozeDeletion]] in the repo, and `dummy-vault` contains no ambiguous
+    * section, so the golden cannot witness it either. S9 changes this check's KEY DERIVATION —
+    * the unlabelled group key stops coming from Laika's `extractText` and starts coming from
+    * the rendered `AsText` text — so the check must not be left unpinned while it moves.
+    */
+  test("two unlabelled highlights with identical text are refused, with the remedy named") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==quorum== is a majority; two ==quorum== sets meet.\n"
+    )
+    assert(note.specs.isEmpty, s"an ambiguous cloze section produced a card: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+    assert(reason.contains("quorum"), s"the refusal does not name the duplicated text: $reason")
+    assert(reason.contains("label them"), s"the refusal does not name the remedy: $reason")
+  }
+
+  /** T2 — CHARACTERIZATION. A cloze section with no `==highlight==` is refused by name. */
+  test("a cloze section with no highlight is refused, naming what is missing") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nOrdinary prose, nothing marked.\n")
+    assert(note.specs.isEmpty, s"a cloze section without a deletion produced a card: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+    assert(reason.contains("no ==highlight=="), s"the refusal does not say what is missing: $reason")
+  }
+
+  /** T3 — CHARACTERIZATION, AND VACUOUS BEFORE S9. A multi-item task list is refused ONCE.
+    *
+    * Before the swap this could not fail: the reason was the single sentence "task list is not
+    * supported, at '…'" however many items the list had. After the swap it is the ONLY thing
+    * pinning the `.distinct` in `Extractor.bodyBlocks` — the lowering returns one
+    * `Refusal.TaskList` PER ITEM (measured: two items, two refusals; five items, five), and
+    * without the de-duplication the author reads "a task list; a task list".
+    *
+    * The cost of that `.distinct` is accepted deliberately and stated here so it is not
+    * mistaken for an oversight: the author is NOT told how many items there were.
+    */
+  test("a multi-item task list is refused once, not once per item") {
+    val note = extract("# A\n\nx\n\n## Marked #flashcard/1way\n\n- [ ] a\n- [x] b\n")
+    assert(note.specs.isEmpty, s"a task list produced a card: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+    val occurrences = reason.sliding("task".length).count(_ == "task")
+    assertEquals(occurrences, 1, s"'task' should appear exactly once in: $reason")
+  }
+
+  /** T4 — NEW BEHAVIOUR, AND THE ONE INTENDED RED. Every refusal in a body is reported.
+    *
+    * BEFORE S9 THIS FAILED, and that failure is the point. `Extractor.bodyText` ran three
+    * independent `collectFirst`s over the body's spans and returned a SINGLE `SpecError`, with
+    * an embed anywhere beating a task list earlier in the document — so the author fixed the
+    * embed, re-ran, and only then learned about the task list. `content.Lower` accumulates in
+    * DOCUMENT ORDER and `Extractor.bodyBlocks` joins every description, so one run names both.
+    *
+    * Invisible to the golden, which pins a failure's case name and key but never its reason.
+    */
+  test("a body holding two refusable constructs reports BOTH, not just the first") {
+    val note = extract(
+      "# A\n\nx\n\n## Marked #flashcard/1way\n\n- [ ] a task first\n\nthen ![[diagram.png]]\n"
+    )
+    assert(note.specs.isEmpty, s"a card was built from a body with two refusals: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+    assert(reason.contains("task"), s"the task list is not named: $reason")
+    assert(reason.contains("diagram.png"), s"the embed is not named: $reason")
   }

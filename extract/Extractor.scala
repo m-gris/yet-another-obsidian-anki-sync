@@ -2,8 +2,8 @@ package obsidiananki.extract
 
 import cats.data.NonEmptyVector
 import laika.ast.*
+import obsidiananki.content as C
 import obsidiananki.model.*
-import obsidiananki.parser.ObsidianSyntax
 import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef, SourcedSpec}
 
 /** Turning one parsed note into the cards it declares.
@@ -45,6 +45,15 @@ object Extractor:
         ancestorTitles: Vector[String],
     ): Unit = element match
       case section: Section =>
+        // AN OPEN HAZARD, NOT COVERED BY ANYTHING BELOW. `SpanContainer.extractText` is Laika's
+        // own trait match with a silent `case _ => ""` (`laika/ast/containers.scala:117-121`),
+        // so an image in a MARKED HEADING is dropped without a word — and here that does not
+        // lose a word from a body, it changes the card's KEY, which orphans a live synced note.
+        //
+        // The body-side image refusal does NOT cover this and never did: `Section(header,
+        // content)` keeps the header OUTSIDE `content` (`laika/ast/blocks.scala:231`), and the
+        // refusal runs over `ownBody`, which is built from `section.content`. A comment on that
+        // refusal used to claim otherwise. Fixing this is its own slice.
         val rawHeading = section.header.extractText
         val ref        = SourceRef(filePath, lines.lineOf(rawHeading), SourceKind.Heading)
 
@@ -84,6 +93,12 @@ object Extractor:
             // can contain further marked headings.
             section.content.foreach(walk(_, path, nextTitles))
 
+      // A DELIBERATE, ANNOTATED EXCEPTION to "match concrete node types, never traits", and it
+      // is listed as such in the ledger beside `bodyBlocks`. This is a STRUCTURAL HUNT FOR
+      // `Section`s, not a rendering walk: its failure mode is failing to FIND a card, never
+      // silently dropping content from one. A missed container yields no card at all, which is
+      // loud in the diff against Anki; a rendering walk that missed one yielded a card that
+      // looked right and was missing part of its answer.
       case container: BlockContainer => container.content.foreach(walk(_, ancestors, ancestorTitles))
       case _                         => ()
 
@@ -98,8 +113,7 @@ object Extractor:
     case SpecError.TableWithoutTable(p)      => s"table marker with no table at '$p'"
     case SpecError.TableWithoutDescriptors(p) =>
       s"table at '$p' has a concept column but no descriptor columns, so it yields no cards"
-    case SpecError.UnsupportedTaskList(p)    => s"task list is not supported, at '$p'"
-    case SpecError.UnsupportedEmbed(p, t)    => s"embed '$t' is not supported, at '$p'"
+    case SpecError.UnsupportedContent(p, what) => s"$what, at '$p'"
 
   /** A marked heading yields ONE spec for most markers and MANY for a table — n pair cards
     * plus a row card per row. Each carries the source kind it should be reported as, so a
@@ -116,26 +130,44 @@ object Extractor:
     val where = key.path.render
     // A table section's content IS the table; it has no prose body of its own, so the
     // empty-body rule must not be applied to it.
+    //
     // THE SAFETY CHECK RUNS FOR A TABLE SECTION TOO. It used to live only in the `else`
     // branch, so a `#flashcard/table` section never ran it at all: an embed in a cell was
     // neither rendered nor refused — the cell came back empty, the row was dropped for being
-    // empty, and NOTHING was reported. A card silently ceased to exist. `bodyText` is called
-    // here purely for its rejections; its text is unused, because a table section's content
-    // IS the table.
+    // empty, and NOTHING was reported. A card silently ceased to exist. `bodyBlocks` is called
+    // here purely for its refusals; the lowered blocks are DISCARDED, because a table section's
+    // content IS the table and `Tables` decomposes it separately.
+    //
+    // WHAT FIRING IT COSTS, WHICH THIS COMMENT USED TO OMIT. `walk` records every `buildSpecs`
+    // failure as `BuildFailure.KeyKnown` at the SECTION key, while `Tables.cardsForRow:170,190`
+    // keys every table card ONE OR TWO SEGMENTS DEEPER — so `VaultScan.failedKeys` claims none
+    // of them, and `Planner:211` (`accountedFor = builtKeys ++ failedKeys`) sends every one of
+    // them to `SyncAction.Flag`. `dummy-vault/Patterns/Messaging.md § "Cost / benefit"` is nine
+    // cards; one `![[x.png]]` in one cell flags all nine against a live collection. NOT FIXED
+    // HERE — it needs a key SET on the failure record, which is its own slice.
+    //
+    // THIS SWAP DOES NOT WIDEN THAT HOLE, and the claim is a VERSION-SCOPED BET rather than a
+    // proof. Against laika-core 1.3.2 with `Markdown` + `GitHubFlavor` + this bundle and strict
+    // parsing, the set of constructs that can refuse a TABLE section is still exactly three —
+    // embed, image, task list: `laika/internal/markdown/github/Tables.scala:100-104` builds the
+    // head as unconditionally one `Row`, `:36-39` builds every cell as unconditionally
+    // `Seq(Paragraph(spans))`, `:85-97` pads only with the zero-block `CellType.BodyCell.empty`,
+    // and `parser/ObsidianSyntax.scala:251` sets no `failOnMessages` override, so an
+    // `InvalidBlock`/`InvalidSpan` fails the whole document at `VaultWalker.scala:92` instead of
+    // reaching the lowering. THE RESIDUAL, stated rather than hidden: `content.Lower` enumerates
+    // no `ast.InvalidBlock`/`ast.InvalidSpan`, and whether a below-Error invalid element can
+    // survive into the tree is UNVERIFIED.
     if marker == Marker.Table then
-      bodyText(ownBody(section)).left
-        .map {
-          case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
-          case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
-          case other                            => other
-        }
+      bodyBlocks(where, ownBody(section))
         .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Default))
     else for
-      text <- bodyText(ownBody(section)).left.map {
-        case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
-        case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
-        case other                            => other
-      }
+      lowered <- bodyBlocks(where, ownBody(section))
+      text = C.AsText.plain(lowered)
+      // COMPUTED AND THEN DISCARDED ON THE CLOZE PATH, DELIBERATELY. It reads like dead code
+      // and is not: `EmptyBody` must keep firing AHEAD of the cloze branch, so a cloze section
+      // whose body renders to nothing is reported as an empty body rather than as a cloze
+      // section with no highlight. Moving this below the marker match changes which error an
+      // author reads.
       body <- Body.fromExtracted(text).toRight(SpecError.EmptyBody(where))
       spec <- marker match
         case Marker.TwoField(directions) =>
@@ -147,7 +179,7 @@ object Extractor:
           val concept = ancestorTitles.lastOption.getOrElse(fileName)
           Right(Vector(CardSpec.ThreeField(key, concept, title, body, directions) -> RowSource.heading))
 
-        case Marker.Cloze => Cloze.fromSection(key, section).map(c => Vector(c -> RowSource.heading))
+        case Marker.Cloze => Cloze.fromLowered(key, lowered).map(c => Vector(c -> RowSource.heading))
         case Marker.Table => Tables.fromSection(key, section, CellDisplay.Default)
     yield spec
 
@@ -157,6 +189,12 @@ object Extractor:
     * duplicate its children and grow without bound. The consequence is that a marked heading
     * immediately followed by a subheading has an EMPTY body, which is a hard error rather
     * than an empty field — see [[SpecError.EmptyBody]].
+    *
+    * THIS RUNS OVER LAIKA'S TREE, AND LOWERING HAPPENS AFTER IT, NEVER BEFORE. The closed
+    * algebra has no `Section` constructor, so "lower the whole section, then take-while" has no
+    * analogue: every descendant section would already have been flattened into its parent's
+    * blocks, and every parent card would swallow all of its children — the cheapest available
+    * way to move the golden.
     */
   def ownBody(section: Section): Vector[Block] =
     section.content.toVector.takeWhile {
@@ -164,98 +202,70 @@ object Extractor:
       case _          => true
     }
 
-  /** Plain text of a section's own prose, with the constructs v0 refuses already rejected. */
-  def bodyText(blocks: Vector[Block]): Either[SpecError, String] =
-    // Reject BY TYPE, not by inspecting rendered text or matching an error message. The
-    // parser recognises both constructs precisely so this check can be structural.
-    val spans = blocks.flatMap(allSpans)
-    val embed = spans.collectFirst { case e: ObsidianSyntax.ObsidianEmbed => e }
-    val task  = spans.collectFirst { case t: ObsidianSyntax.TaskListMarker => t }
-    // A PLAIN MARKDOWN IMAGE IS AN EMBED TOO. `![[x.png]]` was refused by name while
-    // `![x](x.png)` was swallowed without a word: Laika parses the latter to `Image`, which is
-    // a `Link` and so neither a text nor a span container, and it fell to a catch-all. In a
-    // heading that silently changed the KEY — two headings differing only by their image were
-    // one card. Matched as the concrete `Image`, never as `Link`, which also covers ordinary
-    // hyperlinks that are perfectly renderable.
-    val image = spans.collectFirst { case i: laika.ast.Image => i }
-    (embed, task, image) match
-      case (Some(e), _, _) => Left(SpecError.UnsupportedEmbed("", e.target))
-      case (_, Some(_), _) => Left(SpecError.UnsupportedTaskList(""))
-      case (_, _, Some(i)) =>
-        // NAMES THE PATH, not the alt text. The path is what an author greps their vault for;
-        // the alt text is a label and several images may share one. `ExternalTarget` and
-        // `InternalTarget` are matched concretely — `Target` is sealed but its rendering
-        // differs, and `toString` would print the constructor.
-        val where = i.target match
-          case laika.ast.ExternalTarget(url) => url
-          case t: laika.ast.InternalTarget   => t.underlying.toString
-        Left(SpecError.UnsupportedEmbed("", where))
-      case _ =>
-        Right(blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim)
-
-  private def blockText(b: Block): String = elementText(b)
-
-  /** Text of any element, descending through EVERY child.
+  /** A section's own prose, LOWERED into this project's closed algebra — or every reason it
+    * could not be.
     *
-    * THE CASES BELOW ARE A TYPE LATTICE, NOT A STYLE. Laika's containers do not form the tidy
-    * hierarchy this walk originally assumed, and each omission destroyed content SILENTLY —
-    * the card was still created, still looked right, and was missing part of its answer. All
-    * three facts were read out of laika-core 1.3.2's sources rather than inferred:
+    * THIS IS THE ONLY PLACE A `Refusal` BECOMES A `SpecError`, AND THE ONLY PLACE A HEADING
+    * PATH IS ATTACHED. The predecessor, `bodyText`, constructed `SpecError.UnsupportedEmbed("")`
+    * with a heading path it did not have and could not have, and three separate `.left.map`
+    * blocks patched the empty string afterwards — one per call site. That lie is now
+    * UNREPRESENTABLE rather than merely fixed: `content.Refusal` has no path field at all, so
+    * the path can only be attached here, by the caller that knows it. The three patch blocks
+    * are gone because their input no longer exists, not because someone tidied them away.
     *
-    *   - `BulletListItem` and `EnumListItem` are `BlockContainer`s but are NOT `Block`s (they
-    *     are `ListItem extends Element`). A walk collecting only `Block` children matched the
-    *     list and then discarded every item in it. That is why `- one` `- two` vanished while
-    *     the prose around it survived.
-    *   - `LiteralBlock` is a `TextContainer` — `Container[String]` — and is neither a
-    *     `SpanContainer` nor an `ElementContainer`. It fell to the catch-all. That is a fenced
-    *     or indented code block, silently deleted, in a project whose ratified design promises
-    *     the body may hold "prose, lists, formulae, code".
-    *   - `Table` is a `Block` with `ElementTraversal` and `RewritableContainer`. It is NOT an
-    *     `ElementContainer` and HAS NO `content` MEMBER AT ALL, so it too fell to the
-    *     catch-all: a table inside an ordinary body disappeared whole. Its parts are reachable
-    *     only by naming them, which is what the case below does.
+    * ONE WALK, NOT TWO. Refusal used to be a separate pre-scan (`allSpans`, hunting embeds,
+    * images and task markers) standing beside a renderer (`elementText`). Two walks over one
+    * tree with different notions of "container" is this project's signature defect — it is how
+    * a cloze section was told it had no highlight when it plainly did. Refusal is now INHERENT
+    * in the single lowering: a construct is refused because the lowering has no case for it.
     *
-    * `case _ => ""` IS THE HAZARD, and it is kept only because Laika's element hierarchy is
-    * open. Every construct that has ever reached it did so by being silently deleted, which is
-    * this project's signature failure. Anything added here must be added because its shape was
-    * checked, never because a test happened to pass.
+    * `.distinct` IS ON THE DESCRIPTION, AND IT LOSES THE COUNT. Measured: `- [ ] a\n- [x] b`
+    * parses to two `BulletListItem`s each holding a `TaskListMarker`, so the lowering returns
+    * `NonEmptyVector(TaskList, TaskList)`, and a five-item list returns five. Without the
+    * de-duplication the author reads "a task list; a task list". The de-duplication belongs
+    * HERE, at the join, and never inside the lowering, whose vector stays complete for any
+    * future consumer that wants the multiplicity. THE COST IS ACCEPTED DELIBERATELY: the author
+    * is not told there were five. `Extractor.test.scala`'s "a multi-item task list is refused
+    * once" is what pins it.
+    *
+    * ORDER IS DOCUMENT ORDER, which is a CHANGE. `bodyText` ran three independent
+    * `collectFirst`s, so an embed anywhere beat a task list earlier in the document, and it
+    * reported exactly one. This joins all of them in the order the author wrote them.
     */
-  private def elementText(e: Element): String = e match
-    case sc: SpanContainer => sc.extractText
-    // CONCRETE, NOT `case tc: TextContainer`. A `Comment` is a `TextContainer` as well, so the
-    // trait match put HTML comments — which Obsidian does not render, and which an author
-    // therefore writes for nobody — onto the card. Matching the trait fixed code blocks and
-    // opened a disclosure in the same line.
-    case lb: LiteralBlock => lb.content
-    // Named explicitly because a Table has no `content` to descend into. Head and body are
-    // `TableContainer`s, which ARE `ElementContainer`s, so everything below them is generic.
-    case t: Table =>
-      Vector(t.head, t.body).map(elementText).filter(_.nonEmpty).mkString("\n")
-    case ec: ElementContainer[?] =>
-      ec.content.toVector.collect { case el: Element => elementText(el) }.filter(_.nonEmpty).mkString("\n")
-    case _ => ""
+  private def bodyBlocks(where: String, blocks: Vector[Block]): Either[SpecError, Vector[C.Block]] =
+    C.Lower.blocks(blocks).left.map { refusals =>
+      SpecError.UnsupportedContent(where, refusals.toVector.map(_.describe).distinct.mkString("; "))
+    }
 
-  /** Every span anywhere beneath an element, including inside table cells and list items.
-    *
-    * Written out rather than reaching for a Laika traversal helper because the rejection it
-    * feeds must be exhaustive: an embed hidden in a table cell is still an embed, and missing
-    * one would put a card with a broken image into Anki.
-    *
-    * THAT SENTENCE WAS FALSE UNTIL 2026-08-20. A `Table` is not an `ElementContainer`, so it
-    * matched no case and returned nothing — an `![[embed]]` inside a table cell was NOT
-    * rejected, and the card was written. The comment claimed the coverage that made the check
-    * worth having, which is exactly why nobody tested it. The `Table` case below is what makes
-    * the sentence true.
-    */
-  private def allSpans(e: Element): Vector[Span] = e match
-    case s: (Span & SpanContainer) => s +: s.content.toVector.flatMap(allSpans)
-    case s: Span                   => Vector(s)
-    case t: Table                  => Vector(t.head, t.body).flatMap(allSpans)
-    // Generic container case, NOT BlockContainer specifically: a BulletList is a
-    // ListContainer, and matching only on BlockContainer would walk straight past every
-    // list — leaving a task marker or an embed inside one undetected.
-    case ec: ElementContainer[?] => ec.content.toVector.flatMap(allSpans)
-    case _                       => Vector.empty
+  // ══════════════════════════════════ THE LEDGER OF SURVIVING LAIKA TRAIT-MATCHES ════
+  //
+  // "The old walks are gone" is true of the RENDERING walks in this file and in `Cloze.scala`:
+  // `bodyText`, `blockText`, `elementText` and `allSpans` are deleted, and with them the
+  // three-way `collectFirst` priority, the `case _ => ""` catch-all, the `case sc:
+  // SpanContainer` and `case ec: ElementContainer[?]` trait matches, and the known-false
+  // `SpecError.UnsupportedEmbed("")` construction. It is NOT true of the project as a whole,
+  // and writing it without this list would make it the eleventh untrue claim shipped here.
+  //
+  // FOUR TRAIT-MATCHES OVER LAIKA'S TYPES SURVIVE THIS SLICE:
+  //
+  //   1. `section.header.extractText`, above. `SpanContainer.extractText` is itself a trait
+  //      match with a silent `case _ => ""` (`laika/ast/containers.scala:117-121`). This is the
+  //      IDENTITY of every non-table card and it is the WORST-PLACED survivor: a silent drop
+  //      here does not lose a word, it changes a KEY — which orphans a live synced note. Open
+  //      defect, named at the call site, fixed in its own slice.
+  //   2. `Tables.cellSource` — frozen by ruling, identity path. It may never route through
+  //      `content.Lower` or `content.AsText`, because there a `Left` is not a loud error but an
+  //      ABSENT KEY.
+  //   3. `CellDisplay.Default` — DISPLAY path, movable in principle and BLOCKED in practice:
+  //      `CellDisplay.text` is a total `Cell => String` and `Lower.cell` is partial, and the
+  //      only permitted widening (a failure channel on `CellDisplay`) would change a shape that
+  //      `extract/Tables.test.scala` pins at seven call sites — a file outside this slice.
+  //   4. `walk`'s `case container: BlockContainer`, above, excluded with the reason written
+  //      there: it hunts `Section`s structurally and cannot silently truncate a card's content.
+  //
+  // AND ONE CONSEQUENCE, STATED RATHER THAN LEFT FOR A REVIEWER TO FIND: a `#flashcard/table`
+  // section is still walked TWICE after this slice — once by `Lower` for its refusals, once by
+  // `Tables` for its cards. Do not write "one lowering" without that exception.
 
 
 /** Line lookup for diagnostics.

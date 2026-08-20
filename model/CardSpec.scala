@@ -90,22 +90,27 @@ enum SpecError:
     */
   case TableWithoutDescriptors(headingPath: String)
 
-  /** A GFM task list (`- [ ]` / `- [x]`) in a card body.
+  /** Content in a card body that this tool does not put on a card.
     *
-    * RULED: not supported. Rejected LOUDLY AND BY NAME rather than left to fail as an
-    * "unresolved link id reference", which names the mechanism instead of the problem and
-    * tells an author nothing about what to change.
+    * `what` is every reason the lowering gave, `"; "`-joined in DOCUMENT ORDER and
+    * de-duplicated — see `Extractor.bodyBlocks`, the ONE place a `Refusal` becomes a
+    * `SpecError` and the ONE place a heading path is attached.
     *
-    * Note what this eliminates: the hazard was never "task lists do not work", it was that
-    * their text vanished SILENTLY. Loud rejection removes the silence. It does not add
-    * support, and support was never the requirement.
+    * TYPED AS A STRING ON PURPOSE. Verified 2026-08-20: `model/` imports nothing from
+    * `obsidiananki` at all — `cats.data.NonEmptyVector` is its only import, in this file
+    * and in `CardKey.scala`. Carrying `content.Refusal` here would give the
+    * dependency-free base layer a permanent dependency on the lowering's error
+    * vocabulary, for a payload NOTHING pattern-matches: `SpecError` values are
+    * constructed in `extract/` and consumed only by `Extractor.describe`.
+    *
+    * REPLACES `UnsupportedTaskList` AND `UnsupportedEmbed`, which named exactly two of the
+    * three constructs the old body walk could refuse (a plain markdown image was reported as
+    * an embed) and could name only ONE of them per section. Both were rejected LOUDLY AND BY
+    * NAME rather than left to fail as an "unresolved link id reference"; that property is
+    * what this case keeps, since `Refusal.describe` names the construct in the author's own
+    * vocabulary. Neither ruling changed: a task list and an embed are still unsupported.
     */
-  case UnsupportedTaskList(headingPath: String)
-
-  /** An `![[embed]]` in a card body. v0 builds no media pipeline; per the rendering ruling
-    * an embed is rejected loudly rather than silently producing a card with a broken image.
-    */
-  case UnsupportedEmbed(headingPath: String, target: String)
+  case UnsupportedContent(headingPath: String, what: String)
 
 /** What will become exactly one Anki note.
   *

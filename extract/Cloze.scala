@@ -1,9 +1,8 @@
 package obsidiananki.extract
 
 import cats.data.NonEmptyVector
-import laika.ast.*
+import obsidiananki.content as C
 import obsidiananki.model.*
-import obsidiananki.parser.ObsidianSyntax
 
 /** Turning a `#flashcard/cloze` section into one Anki note holding all of its deletions.
   *
@@ -15,7 +14,15 @@ import obsidiananki.parser.ObsidianSyntax
   */
 object Cloze:
 
-  /** Build the cloze note for a section.
+  /** Build the cloze note for a section's ALREADY-LOWERED body.
+    *
+    * IT TAKES BLOCKS, NOT A `Section`, AND IT CANNOT REFUSE FOR CONTENT REASONS. The refusal
+    * already happened upstream, in `Extractor.bodyBlocks`, which is the one place a
+    * `content.Refusal` becomes a `SpecError`. What used to sit here was a SECOND call to
+    * `Extractor.bodyText` whose only purpose was those refusals — and it was dead code even
+    * then: `buildSpecs` already called `bodyText(ownBody(section))` over the same blocks with
+    * the same function before it ever reached this object, so a cloze section containing an
+    * embed already failed with the refusal. Deleting it is unobservable.
     *
     * Numbering:
     *   - a LABELLED group takes its label as its `cN`, so it is stable by construction —
@@ -23,41 +30,56 @@ object Cloze:
     *   - an UNLABELLED group takes the lowest number no label has claimed, in order of first
     *     appearance. That is stable only while the set of deletions is stable, which is
     *     precisely the fragility the ruling makes visible: labelling is how you avoid it.
+    *
+    * WHAT MOVED, RECORDED AS A RULING RATHER THAN DISCOVERED. An unlabelled group's key, and
+    * every string in `ClozeDeletion.texts`, used to come from Laika's `Highlighted.extractText`
+    * while the rendered body came from a walk beside it. They now both come from the ONE
+    * `AsText`-rendered `inner` string: two lattices collapse to one. The evidence they agreed
+    * on the fixture is `content/Lower.test.scala`'s cloze differential, which passed green
+    * across all five fixture cloze sections immediately before it was deleted in this same
+    * slice. `ClozeDeletion.texts` is invisible to `extract/golden/fixture-cards.txt` (which
+    * pins the Cloze `Text` field, not the deletion texts); the group key is visible only
+    * through `AmbiguousClozeDeletion`'s reason string, which `Extractor.test.scala` now pins.
     */
-  def fromSection(key: CardKey, section: Section): Either[SpecError, CardSpec] =
-    val where  = key.path.render
-    val blocks = Extractor.ownBody(section)
-    val found  = highlights(blocks)
+  def fromLowered(key: CardKey, blocks: Vector[C.Block]): Either[SpecError, CardSpec] =
+    val where = key.path.render
 
-    if found.isEmpty then Left(SpecError.ClozeWithoutDeletions(where))
+    // ── PASS 1: collect the occurrences, discarding the string ──────────────────────
+    //
+    // DERIVED FROM `text`, NEVER WRITTEN BESIDE IT. This is `content/AsText.scala`'s own
+    // instruction, and it is the direct lesson of the drift scar this refactor exists to close:
+    // `collectHighlights` and `renderWithDeletions` used to be two walks over one tree with
+    // different notions of "container", so a cloze section whose highlight sat inside a table
+    // was told it had "no ==highlight==" — a message naming a remedy the author had already
+    // applied. Calling the renderer with a collecting hook makes a second walk impossible.
+    //
+    // The hook returns `inner` unchanged, so this pass renders exactly what `AsText.Plain`
+    // would; the returned string is discarded on purpose.
+    val found = Vector.newBuilder[(Option[Int], String)]
+    val _ = C.AsText.text(blocks, (label, inner) => { found += (label -> inner); inner })
+    val occurrences = found.result()
+
+    if occurrences.isEmpty then Left(SpecError.ClozeWithoutDeletions(where))
     else
       // Two unlabelled highlights with the same text are indistinguishable by anything but
       // position, so they are refused with the remedy named rather than tie-broken.
-      val unlabelledTexts = found.collect { case (None, text) => text }
-      unlabelledTexts.groupBy(identity).collectFirst { case (t, occurrences) if occurrences.sizeIs > 1 => t } match
+      val unlabelledTexts = occurrences.collect { case (None, text) => text }
+      unlabelledTexts.groupBy(identity).collectFirst { case (t, dups) if dups.sizeIs > 1 => t } match
         case Some(duplicate) => Left(SpecError.AmbiguousClozeDeletion(where, duplicate))
         case None =>
+          val (numbered, perOccurrence) = number(occurrences)
           for
-            // Called for its REJECTIONS — an embed or a task list anywhere in the body is
-            // refused by type here. Its text is deliberately discarded: the body that goes
-            // to Anki is built by `renderWithDeletions` below, which is the only rendering
-            // that carries the deletions.
-            _ <- Extractor.bodyText(blocks).left.map {
-              case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
-              case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
-              case other                            => other
-            }
             deletions <- NonEmptyVector
-              .fromVector(number(found))
+              .fromVector(numbered)
               .toRight(SpecError.ClozeWithoutDeletions(where))
             body <- Body
-              .fromExtracted(renderWithDeletions(blocks, deletions))
+              .fromExtracted(render(blocks, perOccurrence, where))
               .toRight(SpecError.EmptyBody(where))
           yield CardSpec.Cloze(key, body, deletions)
 
   /** The body as Anki must receive it: `{{cN::…}}` where the author wrote a highlight.
     *
-    * THIS IS THE STEP THAT WAS MISSING, and its absence was invisible because everything
+    * THIS IS THE STEP THAT WAS ONCE MISSING, and its absence was invisible because everything
     * around it was right. The grouping is ruled on, parsed, numbered and tested; the note
     * type and its field names are correct; the only thing never done was putting the two
     * together. A comment on the field renderer asserted this happened "when the note is
@@ -69,69 +91,80 @@ object Cloze:
     * because both fakes accept such a note happily — the fake and the code shared the
     * misunderstanding, so the suite was green and wrong together.
     *
-    * RENDERED FROM THE TREE, NOT BY SUBSTITUTING INTO THE EXTRACTED TEXT. By the time the
+    * RENDERED FROM THE STRUCTURE, NOT BY SUBSTITUTING INTO THE EXTRACTED TEXT. By the time the
     * body has been flattened to a string the `==` markers are gone, so a deletion could only
     * be located by matching its text — and a word that also appears elsewhere in the body
-    * would be blanked in the wrong place, or in several. Walking the spans puts each
-    * `{{cN::…}}` exactly where the author put the highlight.
+    * would be blanked in the wrong place, or in several.
+    *
+    * ORDINALS ARE CONSUMED POSITIONALLY, NOT BY LOOKING A GROUP UP. Two reasons, both
+    * concrete. A keyed lookup can only ever detect a MISSING key and never a SURPLUS one, so
+    * it is blind in one direction. And it would have to re-derive `label.map(Labelled)
+    * .getOrElse(Unlabelled(inner))` here in pass 2 — which is exactly the hook
+    * `content/Lower.test.scala` labelled HARNESS-ONLY precisely so that nobody would lift it
+    * into production. Position is also immune to a NESTED deletion, where pass 1's plain
+    * `inner` and pass 2's `{{cN::…}}` `inner` are different strings for the same occurrence.
+    *
+    * `misaligned` IS NOT CLAIMED UNREACHABLE. It is a LOUD, TWO-SIDED ALIGNMENT CHECK on a
+    * NAMED INVARIANT of `content.AsText.text`: it fires its `deletion` callback exactly once
+    * per `Inline.Deletion`, in document order, and identically for any hook — identically
+    * because the block-level `.filter(_.nonEmpty)` runs AFTER `blockText` has returned, so no
+    * hook can make a block vanish before its callbacks have fired. Too few ordinals fails
+    * INSIDE the render; too many fails after it. That invariant lives in a file this slice may
+    * not edit, so it is NAMED here, not assumed to be a type. This project has already shipped
+    * one comment asserting a branch was unreachable that was not.
     */
-  private def renderWithDeletions(blocks: Vector[Block], deletions: NonEmptyVector[ClozeDeletion]): String =
-    // A group's ordinal, looked up by the group itself rather than by text, so two
-    // highlights sharing a label render the same `cN` and therefore blank together.
-    val ordinalOf: Map[ClozeGroup, Int] = deletions.toVector.map(d => d.group -> d.ordinal).toMap
+  private def render(blocks: Vector[C.Block], perOccurrence: Vector[Int], where: String): String =
+    def misaligned(detail: String): Nothing =
+      sys.error(
+        s"cloze rendering misaligned at '$where': $detail. " +
+          s"`AsText.text` fired a different number of deletion callbacks than the collecting " +
+          s"pass over the same blocks did (${perOccurrence.size} ordinals)."
+      )
 
-    def spanText(s: Span): String = s match
-      case h: ObsidianSyntax.Highlighted =>
-        val group = h.group match
-          case Some(n) => ClozeGroup.Labelled(n)
-          case None    => ClozeGroup.Unlabelled(h.content.map(spanText).mkString)
-        val inner = h.content.map(spanText).mkString
-        ordinalOf.get(group) match
-          case Some(n) => s"{{c$n::$inner}}"
-          // Unreachable while `number` groups exactly the highlights `highlights` found —
-          // both walk the same blocks. Rendering the bare text rather than throwing would
-          // silently drop a deletion, which is the failure this whole function exists to
-          // fix, so it is left as a match error rather than papered over.
-          case None => sys.error(s"cloze group with no ordinal: $group")
-      case sc: SpanContainer => sc.content.map(spanText).mkString
-      case t: TextContainer  => t.content
-      case _                 => ""
+    val remaining = perOccurrence.iterator
+    val rendered = C.AsText.text(
+      blocks,
+      (_, inner) =>
+        if remaining.hasNext then s"{{c${remaining.next()}::$inner}}"
+        else misaligned("the render asked for more ordinals than were collected"),
+    )
+    if remaining.hasNext then misaligned("the render used fewer ordinals than were collected")
+    rendered
 
-    // The same type lattice as `Extractor.elementText`, and the same reasons — see the long
-    // note there. A list item is not a `Block`, a `LiteralBlock` is a `TextContainer`, and a
-    // `Table` has no `content` at all. This one additionally intercepts `Highlighted`, which
-    // is the only thing that makes it a separate function rather than a call.
-    def blockText(b: Block): String = elementRender(b)
-
-    def elementRender(e: Element): String = e match
-      case sc: SpanContainer => sc.content.map(spanText).mkString
-      case tc: TextContainer => tc.content
-      case t: Table          => Vector(t.head, t.body).map(elementRender).filter(_.nonEmpty).mkString("\n")
-      case ec: ElementContainer[?] =>
-        ec.content.toVector.collect { case el: Element => elementRender(el) }.filter(_.nonEmpty).mkString("\n")
-      case _ => ""
-
-    blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim
-
-  /** Assign each group its `cN`. */
-  private def number(found: Vector[(Option[Int], String)]): Vector[ClozeDeletion] =
+  /** Assign each group its `cN`, and say which group each OCCURRENCE belongs to.
+    *
+    * TWO RESULTS BECAUSE GROUPING IS NOT A BIJECTION. `deletions` is one entry per GROUP; the
+    * second vector is one entry per OCCURRENCE, aligned with `found`. They are different
+    * lengths whenever a label is shared, which the fixture does contain — `Body-Shapes.md`
+    * § "Bones of the forearm" is `Some(1), Some(2), Some(1), Some(2)`: four occurrences, two
+    * groups. A naive scheme that indexed `deletions` by occurrence position would mis-number
+    * exactly that section.
+    *
+    * THE INDEX IS IN RANGE BY CONSTRUCTION, which is why no `Map` lookup and no `getOrElse`
+    * appears here — the same argument `Tables.scala:186-188` already uses. Every index pushed
+    * onto `idxs` is either `acc.size` (the position the group is being appended at) or the
+    * `indexWhere` hit on that same growing vector, and `.map` is size-preserving, so
+    * `numbered(i)` is total for every `i` the fold produced.
+    */
+  private def number(found: Vector[(Option[Int], String)]): (Vector[ClozeDeletion], Vector[Int]) =
     val labels = found.collect { case (Some(n), _) => n }.toSet
 
+    def groupOf(label: Option[Int], text: String): ClozeGroup = label match
+      case Some(n) => ClozeGroup.Labelled(n)
+      case None    => ClozeGroup.Unlabelled(text)
+
     // Grouped in order of FIRST APPEARANCE, so the result is deterministic.
-    val groups: Vector[(ClozeGroup, Vector[String])] =
-      found
-        .map {
-          case (Some(n), text) => ClozeGroup.Labelled(n)      -> text
-          case (None, text)    => ClozeGroup.Unlabelled(text) -> text
-        }
-        .foldLeft(Vector.empty[(ClozeGroup, Vector[String])]) { case (acc, (group, text)) =>
+    val (groups, idxs) =
+      found.foldLeft((Vector.empty[(ClozeGroup, Vector[String])], Vector.empty[Int])) {
+        case ((acc, is), (label, text)) =>
+          val group = groupOf(label, text)
           acc.indexWhere(_._1 == group) match
-            case -1 => acc :+ (group -> Vector(text))
-            case i  => acc.updated(i, group -> (acc(i)._2 :+ text))
-        }
+            case -1 => (acc :+ (group -> Vector(text)), is :+ acc.size)
+            case i  => (acc.updated(i, group -> (acc(i)._2 :+ text)), is :+ i)
+      }
 
     var nextFree = 1
-    groups.map { (group, texts) =>
+    val numbered = groups.map { (group, texts) =>
       val ordinal = group match
         case ClozeGroup.Labelled(n) => n
         case ClozeGroup.Unlabelled(_) =>
@@ -143,18 +176,4 @@ object Cloze:
       ClozeDeletion(ordinal, group, texts)
     }
 
-  /** Every highlight in document order, with its group label and its text. */
-  private def highlights(blocks: Vector[Block]): Vector[(Option[Int], String)] =
-    blocks.flatMap(collectHighlights)
-
-  private def collectHighlights(e: Element): Vector[(Option[Int], String)] = e match
-    case h: ObsidianSyntax.Highlighted => Vector(h.group -> h.extractText)
-    // A `Table` is not an `ElementContainer` and has no `content` to descend into, so this
-    // walk found no highlight inside one — while `renderWithDeletions` beside it HAD learned
-    // about tables. The two walked the same blocks with different lattices, and the section
-    // was refused with "cloze section with no ==highlight==": a message naming a remedy the
-    // author had already applied. Two walks over one tree will drift; that is the argument
-    // for lowering once into a closed representation rather than matching Laika repeatedly.
-    case t: Table                => Vector(t.head, t.body).flatMap(collectHighlights)
-    case ec: ElementContainer[?] => ec.content.toVector.flatMap(collectHighlights)
-    case _                       => Vector.empty
+    (numbered, idxs.map(i => numbered(i).ordinal))
