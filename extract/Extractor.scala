@@ -129,7 +129,7 @@ object Extractor:
           case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
           case other                            => other
         }
-        .flatMap(_ => Tables.fromSection(key, section))
+        .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Default))
     else for
       text <- bodyText(ownBody(section)).left.map {
         case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
@@ -148,7 +148,7 @@ object Extractor:
           Right(Vector(CardSpec.ThreeField(key, concept, title, body, directions) -> RowSource.heading))
 
         case Marker.Cloze => Cloze.fromSection(key, section).map(c => Vector(c -> RowSource.heading))
-        case Marker.Table => Tables.fromSection(key, section)
+        case Marker.Table => Tables.fromSection(key, section, CellDisplay.Default)
     yield spec
 
   /** A section's OWN prose — everything down to the next heading of ANY level.
