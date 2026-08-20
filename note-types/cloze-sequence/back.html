@@ -1,0 +1,46 @@
+{{FrontSide}}
+
+<div id="cs-hint">j / ↓ reveal next · k / ↑ hide last · 1-4 to grade</div>
+
+<script>
+// ANSWER SIDE: the items stay hidden and are revealed one at a time, which is the whole
+// point of this note type — a list is one card on one schedule, so its order is enforced by
+// the review rather than by hoping the scheduler serves separate cards in sequence.
+//
+// KEYS, AND WHY NOT ENTER. Anki registers its reviewer shortcuts above the web view, so a
+// key Anki already uses never reaches the card: an earlier attempt to take Enter lost that
+// race and revealed everything at once. j/k and the arrows are chosen because Anki leaves
+// them free. Enter and 1-4 keep their usual meanings.
+(function () {
+  var items = Array.prototype.slice.call(document.querySelectorAll("#text li"));
+
+  function firstHidden() {
+    for (var i = 0; i < items.length; i++)
+      if (items[i].classList.contains("hidden-cloze")) return items[i];
+    return null;
+  }
+  function lastShown() {
+    for (var i = items.length - 1; i >= 0; i--)
+      if (!items[i].classList.contains("hidden-cloze")) return items[i];
+    return null;
+  }
+
+  document.addEventListener("keydown", function (e) {
+    var fwd  = (e.key === "j" || e.key === "ArrowDown");
+    var back = (e.key === "k" || e.key === "ArrowUp");
+    if (!fwd && !back) return;
+    var target = fwd ? firstHidden() : lastShown();
+    if (!target) return;
+    target.classList.toggle("hidden-cloze");
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
+  document.getElementById("text").addEventListener("click", function (e) {
+    if (e.target.classList && e.target.classList.contains("cloze"))
+      e.target.classList.toggle("hidden-cloze");
+  });
+})();
+</script>
+
+<style>#text { opacity: 1 }</style>

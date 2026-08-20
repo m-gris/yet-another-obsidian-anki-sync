@@ -1,0 +1,14 @@
+<h4>{{Title}}</h4>
+
+<div id="text">{{Text}}</div>
+
+<script>
+// FRONT: every list item hidden, and NOTHING else bound. Enter means "show answer" here
+// exactly as it does on every other card in the collection — the reveal belongs to the
+// answer side, so the muscle memory never changes.
+(function () {
+  Array.prototype.slice.call(document.querySelectorAll("#text li")).forEach(function (li) {
+    li.classList.add("cloze", "hidden-cloze");
+  });
+})();
+</script>
