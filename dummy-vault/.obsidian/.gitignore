@@ -1,0 +1,5 @@
+# Obsidian rewrites its own config here whenever the vault is opened.
+# The directory itself is the vault marker; its contents are not fixture data.
+*
+!.gitignore
+!.gitkeep
