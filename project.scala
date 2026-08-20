@@ -12,4 +12,14 @@
 //> using dep io.circe::circe-parser:0.14.16
 //> using test.dep org.scalameta::munit:1.3.5
 //> using test.dep org.scalameta::munit-scalacheck:1.3.0
-//> using option -deprecation -feature -Wunused:all
+// AN INEXHAUSTIVE MATCH IS AN ERROR, NOT A WARNING. Scala reports one as a warning and the
+// build still exits 0, so "the compiler will tell us" was false: a missing case shipped
+// silently. Every defect in the extraction layer this week was a construct nobody matched.
+// This is what makes a closed type's exhaustiveness an actual guarantee rather than a habit.
+//
+// THE PATTERN HAS NO SPACES IN IT, AND THAT IS NOT A STYLE CHOICE. scala-cli splits a `using
+// option` line on whitespace, so the obvious filter — matching the full sentence "match may not
+// be exhaustive" — is torn into fragments, forms no filter at all, and the build compiles clean
+// while guaranteeing nothing. Verified by compiling a deliberately inexhaustive match: with the
+// spaced form it was a warning and the build exited 0; with this form it is an error.
+//> using option -deprecation -feature -Wunused:all -Wconf:msg=exhaustive:e
