@@ -149,5 +149,12 @@ object Cloze:
 
   private def collectHighlights(e: Element): Vector[(Option[Int], String)] = e match
     case h: ObsidianSyntax.Highlighted => Vector(h.group -> h.extractText)
-    case ec: ElementContainer[?]       => ec.content.toVector.flatMap(collectHighlights)
-    case _                             => Vector.empty
+    // A `Table` is not an `ElementContainer` and has no `content` to descend into, so this
+    // walk found no highlight inside one — while `renderWithDeletions` beside it HAD learned
+    // about tables. The two walked the same blocks with different lattices, and the section
+    // was refused with "cloze section with no ==highlight==": a message naming a remedy the
+    // author had already applied. Two walks over one tree will drift; that is the argument
+    // for lowering once into a closed representation rather than matching Laika repeatedly.
+    case t: Table                => Vector(t.head, t.body).flatMap(collectHighlights)
+    case ec: ElementContainer[?] => ec.content.toVector.flatMap(collectHighlights)
+    case _                       => Vector.empty

@@ -648,6 +648,77 @@ class ExtractorTest extends munit.FunSuite:
     assert(back.contains("outer") && back.contains("inner"), s"the sub-item was dropped: [$back]")
   }
 
+  // =============================== the other half: nothing is silently ADDED or LOST ====
+  //
+  // Descending through every child fixes under-inclusion. It invites the opposite mistake,
+  // and the four below are it. THE RULE THEY ENFORCE IS: MATCH CONCRETE NODE TYPES, NEVER
+  // TRAITS. Laika's hierarchy is open, so a trait match is a bet on what else implements it —
+  // and the bet is lost in both directions at once, silently.
+
+  /** AN HTML COMMENT IS PRIVATE. Obsidian does not render one, so an author uses it for notes
+    * meant for nobody. Putting it on a flashcard is a disclosure, not a formatting slip.
+    *
+    * INTRODUCED 2026-08-20 BY THE FIX FOR CODE BLOCKS. A `LiteralBlock` is a `TextContainer`,
+    * so `case tc: TextContainer` rescued code blocks — and `Comment` is a `TextContainer` too,
+    * so the same line put comments on cards. Before that fix a comment fell to the catch-all
+    * and was correctly dropped. One defect closed, another opened, by one trait match.
+    */
+  test("an HTML comment stays private and never reaches the card") {
+    val note = extract("# B\n\nx\n\n## C #flashcard/2way\n\nreal answer\n\n<!-- PRIVATE NOTE -->\n")
+    val back = twoFieldBack(note, "b / c")
+    assert(!back.contains("PRIVATE"), s"a private comment was put on the card: [$back]")
+    assertEquals(back, "real answer")
+  }
+
+  /** A CLOZE SECTION WHOSE HIGHLIGHT IS INSIDE A TABLE was told it had no highlight at all.
+    *
+    * The highlight collector matched `ElementContainer` while the renderer beside it had
+    * learned about `Table`; a `Table` is not an `ElementContainer`, so the two walked the same
+    * blocks with different lattices. The message named a remedy the author had already applied.
+    */
+  test("a highlight inside a table is found, not reported as missing") {
+    val note = extract(
+      "# B\n\nx\n\n## C #flashcard/cloze\n\n| A | B |\n| - | - |\n| ==one== | two |\n"
+    )
+    assert(
+      !note.failures.map(_.toString).mkString.contains("no ==highlight=="),
+      s"a section with a highlight was told it had none: ${note.failures}",
+    )
+    assertEquals(clozeOf(note, "b / c").deletions.toVector.size, 1)
+  }
+
+  /** MARKDOWN IMAGES ARE REFUSED LIKE OBSIDIAN EMBEDS, and for the same reason: an Anki card
+    * cannot resolve a vault-relative path.
+    *
+    * `![[x.png]]` was refused by name while `![x](x.png)` was swallowed without a word —
+    * Laika parses the latter to `Image`, which is a `Link`, and neither a `TextContainer` nor
+    * a `SpanContainer`. IN A HEADING THAT SILENTLY CHANGES THE KEY: two headings differing
+    * only by their image were the same card.
+    */
+  test("a markdown image in a body is REFUSED, not silently swallowed") {
+    val note = extract("# B\n\nx\n\n## C #flashcard/2way\n\nsee ![diagram](diagram.png) here\n")
+    assert(note.specs.isEmpty, s"a card was built from a body containing an image: ${note.specs}")
+    assert(
+      note.failures.map(_.toString).mkString.contains("diagram.png"),
+      s"the refusal does not name the image: ${note.failures}",
+    )
+  }
+
+  /** THE SAFETY CHECK DID NOT RUN AT ALL FOR A TABLE-MARKED SECTION — it lives in the branch
+    * that table sections skip. So an embed in a cell was neither rendered nor refused: the
+    * cell came back empty, the row was dropped for being empty, and NOTHING was reported.
+    * A card silently ceased to exist.
+    */
+  test("an embed inside a #flashcard/table section is REFUSED, not silently dropped") {
+    val note = extract(
+      "# B\n\nx\n\n## C #flashcard/table\n\n| Pattern | Purpose |\n| - | - |\n| ![[pic.png]] | recover |\n"
+    )
+    assert(
+      note.failures.map(_.toString).mkString.contains("pic.png"),
+      s"an embed in a table cell was not refused: specs=${note.specs.size} failures=${note.failures}",
+    )
+  }
+
   /** THE ONE DOCUMENTED USE OF LISTS, and it had no test at all.
     *
     * `CARD-MODEL.md` §Lists rules that unordered lists need no card type of their own —

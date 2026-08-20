@@ -116,7 +116,20 @@ object Extractor:
     val where = key.path.render
     // A table section's content IS the table; it has no prose body of its own, so the
     // empty-body rule must not be applied to it.
-    if marker == Marker.Table then Tables.fromSection(key, section)
+    // THE SAFETY CHECK RUNS FOR A TABLE SECTION TOO. It used to live only in the `else`
+    // branch, so a `#flashcard/table` section never ran it at all: an embed in a cell was
+    // neither rendered nor refused — the cell came back empty, the row was dropped for being
+    // empty, and NOTHING was reported. A card silently ceased to exist. `bodyText` is called
+    // here purely for its rejections; its text is unused, because a table section's content
+    // IS the table.
+    if marker == Marker.Table then
+      bodyText(ownBody(section)).left
+        .map {
+          case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
+          case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
+          case other                            => other
+        }
+        .flatMap(_ => Tables.fromSection(key, section))
     else for
       text <- bodyText(ownBody(section)).left.map {
         case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
@@ -158,9 +171,25 @@ object Extractor:
     val spans = blocks.flatMap(allSpans)
     val embed = spans.collectFirst { case e: ObsidianSyntax.ObsidianEmbed => e }
     val task  = spans.collectFirst { case t: ObsidianSyntax.TaskListMarker => t }
-    (embed, task) match
-      case (Some(e), _) => Left(SpecError.UnsupportedEmbed("", e.target))
-      case (_, Some(_)) => Left(SpecError.UnsupportedTaskList(""))
+    // A PLAIN MARKDOWN IMAGE IS AN EMBED TOO. `![[x.png]]` was refused by name while
+    // `![x](x.png)` was swallowed without a word: Laika parses the latter to `Image`, which is
+    // a `Link` and so neither a text nor a span container, and it fell to a catch-all. In a
+    // heading that silently changed the KEY — two headings differing only by their image were
+    // one card. Matched as the concrete `Image`, never as `Link`, which also covers ordinary
+    // hyperlinks that are perfectly renderable.
+    val image = spans.collectFirst { case i: laika.ast.Image => i }
+    (embed, task, image) match
+      case (Some(e), _, _) => Left(SpecError.UnsupportedEmbed("", e.target))
+      case (_, Some(_), _) => Left(SpecError.UnsupportedTaskList(""))
+      case (_, _, Some(i)) =>
+        // NAMES THE PATH, not the alt text. The path is what an author greps their vault for;
+        // the alt text is a label and several images may share one. `ExternalTarget` and
+        // `InternalTarget` are matched concretely — `Target` is sealed but its rendering
+        // differs, and `toString` would print the constructor.
+        val where = i.target match
+          case laika.ast.ExternalTarget(url) => url
+          case t: laika.ast.InternalTarget   => t.underlying.toString
+        Left(SpecError.UnsupportedEmbed("", where))
       case _ =>
         Right(blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim)
 
@@ -193,7 +222,11 @@ object Extractor:
     */
   private def elementText(e: Element): String = e match
     case sc: SpanContainer => sc.extractText
-    case tc: TextContainer => tc.content
+    // CONCRETE, NOT `case tc: TextContainer`. A `Comment` is a `TextContainer` as well, so the
+    // trait match put HTML comments — which Obsidian does not render, and which an author
+    // therefore writes for nobody — onto the card. Matching the trait fixed code blocks and
+    // opened a disclosure in the same line.
+    case lb: LiteralBlock => lb.content
     // Named explicitly because a Table has no `content` to descend into. Head and body are
     // `TableContainer`s, which ARE `ElementContainer`s, so everything below them is generic.
     case t: Table =>

@@ -61,6 +61,27 @@ object ObsidianSyntax:
     type Self = TaskListMarker
     def withOptions(newOptions: Options): TaskListMarker = copy(options = newOptions)
 
+  /** A comment the author wrote for nobody: `%%Obsidian style%%` or `<!-- HTML style -->`.
+    *
+    * MODELLED BECAUSE IT MUST BE DROPPED, and dropping it is only safe once it is a TYPE.
+    * Laika's Markdown does not model comments at all — `<!-- x -->` arrives as an ordinary
+    * `Text` span, indistinguishable from an author who literally typed those characters. So a
+    * comment landed on the card. Obsidian hides comments in reading view, which is precisely
+    * why they get used for private notes, and precisely why printing one on a flashcard is a
+    * disclosure rather than a formatting slip.
+    *
+    * IT CANNOT BE FIXED DOWNSTREAM. No match over the parsed tree can tell a comment from
+    * text, because by then it IS text. The distinction only exists where the syntax does,
+    * which is here — the same argument that produced [[Highlighted]], [[ObsidianEmbed]] and
+    * [[TaskListMarker]]. If the tool must treat a construct differently, the construct is a
+    * node; it is never a string sniffed later.
+    *
+    * Carries its text so a diagnostic can quote it. Nothing renders it.
+    */
+  case class ObsidianComment(text: String, options: Options = Options.empty) extends Span:
+    type Self = ObsidianComment
+    def withOptions(newOptions: Options): ObsidianComment = copy(options = newOptions)
+
   /** A `==highlight==`, the cloze deletion marker, with its optional GROUP LABEL.
     *
     * `==text==`   -> Highlighted(None, …)      its own group of one
@@ -155,6 +176,22 @@ object ObsidianSyntax:
       ("[" ~> oneOf(' ', 'x', 'X') <~ literal("]")).map(c => TaskListMarker(c != " "))
     }
 
+  /** `%%Obsidian comment%%` — the native form, hidden in reading view. */
+  val obsidianCommentParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      ("%%" ~> delimitedBy("%%")).map(t => ObsidianComment(t))
+    }
+
+  /** `<!-- HTML comment -->`, which Obsidian also hides.
+    *
+    * Registered as its own parser rather than folded into the one above because the delimiters
+    * differ at both ends; sharing one parser would mean accepting `%%…-->`.
+    */
+  val htmlCommentParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      ("<!--" ~> delimitedBy("-->")).map(t => ObsidianComment(t))
+    }
+
   /** `==highlight==`, the cloze deletion marker. Recursive: inline markup inside a highlight
     * is ordinary markdown and should be parsed as such.
     */
@@ -194,7 +231,9 @@ object ObsidianSyntax:
       "Obsidian dialect: [[wikilinks]], ![[embeds]], ==highlights==, rejected task lists"
     override def parsers: ParserBundle =
       // Embed before wikilink: "![[" must win over "[[".
-      ParserBundle(spanParsers = Seq(embedParser, wikilinkParser, taskListParser, highlightParser))
+      ParserBundle(spanParsers =
+        Seq(embedParser, wikilinkParser, taskListParser, highlightParser,
+            obsidianCommentParser, htmlCommentParser))
 
   /** THE canonical parser for this project. Build it here and nowhere else — every element
     * below is load-bearing and two of them are silent when omitted.
