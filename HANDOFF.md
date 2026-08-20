@@ -33,22 +33,32 @@ Long messages must go via `--file`; the shell has an alias-guard hook that block
 
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
-`scala-cli test <tool dir>` runs everything. **247 tests, 0 failures, 0 warnings** as of 2026-08-19.
+`scala-cli test <tool dir>` runs everything. **305 tests, 0 failures, 0 warnings** as of 2026-08-20.
 
 ---
 
 ## State: what is done
 
-Everything except wiring the interpreter into the `sync` command.
+Everything except orphan suspension, a field-name preflight, and the `prune` command — see
+*Open items*. The reading and writing paths both work end to end against a real collection.
 
 - `parser/ObsidianSyntax.scala` — Obsidian dialect (wikilinks, embeds, highlights, task-list rejection) and **the canonical `markupParser`**. Build parsers only from there.
 - `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (the six markers), `CardSpec` (the six card shapes).
 - `anki/` — the `Anki[F]` algebra; `InMemoryAnki`, a working fake that **enforces Anki's real constraints**; and, since 2026-08-19, `AnkiConnectClient` over http4s/Ember plus `FakeAnkiConnect`, an in-process fake AnkiConnect **server** that reproduces the traps rather than the happy path.
 - `plan/` — `VaultScan`, `SyncAction`, `Planner`, `Executor`/`Observer`.
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
-- `cli/` — `inspect` works; `sync` still fails loudly as unimplemented, because the interpreter is written but **not yet wired to it**.
+- `cli/` — `inspect` and `sync` both work. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault.
 
-Try it: `scala-cli run <tool dir> -- inspect <tool dir>/dummy-vault` → 43 cards, 1 expected failure, 3 deliberate duplicate keys, exit 2.
+Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 53 cards, 1 expected failure, 3 deliberate duplicate keys, exit 2.
+
+**THE VAULT IS NAMED BY A FLAG, NOT POSITIONALLY** — that changed on 2026-08-20, and the old
+positional form now fails. With NO vault flag the tool lists the vaults Obsidian knows about and
+asks; with no terminal to ask at, it refuses. `dummy-vault` is a registered Obsidian vault, but
+do not rely on the picker to reach it — name it with `--vault-path`.
+
+**`sync` cannot write to `dummy-vault`'s collection**: the fixture contains deliberate duplicate
+identities, and duplicates are fatal by design. To exercise the write path, copy the vault
+without `Patterns/Table-Edge-Cases.md`.
 
 ---
 
@@ -187,7 +197,14 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
 
 ## Open items
 
-1. **Wire the interpreter into `sync`.** The interpreter exists and is tested; `Main` still routes `sync` to a loud refusal. This is the last piece of v0.
+1. **DECIDE WHAT A CARD FIELD CONTAINS: plain text or an HTML fragment?** Nothing can be
+   sensibly formatted until this is ruled on, and it is Marc's. Anki fields ARE HTML, so a
+   literal newline renders as a SPACE — verified by reading a synced note back. For
+   hard-wrapped prose that is correct and wanted. For a list it is wrong: the items are now
+   preserved (fixed 2026-08-20) but arrive newline-joined, so a bulleted answer reads as a
+   run-on sentence. Choosing HTML means escaping user content becomes an obligation, and
+   changes every content hash once — an UPDATE for every note, so scheduling survives, but the
+   run will report the lot.
 2. **Suspend orphans.** Ruled 2026-08-19 and **not yet built**: `Anki[F]` has no `suspend`/`unsuspend` operation, so this is new algebra plus `InMemoryAnki` plus the `AnkiConnect` actions (verified present: `suspend`, `unsuspend`, `suspended`, `areSuspended`). Note the return trip — `Unflag` must unsuspend, and unlike a deck move it does not come free from the existing deck-difference logic.
 3. **Check field names before writing.** `AnkiError.UnknownField` is raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, so the two interpreters of one algebra disagree about the contract. It cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note. Needs a preflight using `noteTypeNames`/`fieldNames`, once per note type.
 4. **The `prune` command** — reads `orphaned::` tags. v0-adjacent.
