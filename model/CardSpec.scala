@@ -185,8 +185,14 @@ object CardSpec:
           (Marker.ThreeWayField -> threeWay)
 
       case Cloze(_, text, _) =>
-        // Deletions are applied to the text when the note is rendered; the note itself has
-        // a single Text field holding all of them.
+        // The body ALREADY CARRIES its `{{cN::…}}` deletions: `Cloze.renderWithDeletions`
+        // puts them in when the spec is built, so there is nothing to apply here. One note
+        // holds all of a section's deletions, and Anki makes one card per distinct `cN`.
+        //
+        // This comment previously said deletions were "applied to the text when the note is
+        // rendered". Nothing did that, and the sentence is why nobody looked: the raw
+        // `==markdown==` went to Anki, which refuses a Cloze note containing no deletion.
+        // Corrected 2026-08-20, after a live run failed on exactly those two cards.
         Vector(
           Marker.ClozeFields.Text      -> text.value,
           Marker.ClozeFields.BackExtra -> "",

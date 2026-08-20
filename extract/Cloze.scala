@@ -38,16 +38,72 @@ object Cloze:
         case Some(duplicate) => Left(SpecError.AmbiguousClozeDeletion(where, duplicate))
         case None =>
           for
-            text <- Extractor.bodyText(blocks).left.map {
+            // Called for its REJECTIONS — an embed or a task list anywhere in the body is
+            // refused by type here. Its text is deliberately discarded: the body that goes
+            // to Anki is built by `renderWithDeletions` below, which is the only rendering
+            // that carries the deletions.
+            _ <- Extractor.bodyText(blocks).left.map {
               case SpecError.UnsupportedEmbed(_, t) => SpecError.UnsupportedEmbed(where, t)
               case SpecError.UnsupportedTaskList(_) => SpecError.UnsupportedTaskList(where)
               case other                            => other
             }
-            body <- Body.fromExtracted(text).toRight(SpecError.EmptyBody(where))
             deletions <- NonEmptyVector
               .fromVector(number(found))
               .toRight(SpecError.ClozeWithoutDeletions(where))
+            body <- Body
+              .fromExtracted(renderWithDeletions(blocks, deletions))
+              .toRight(SpecError.EmptyBody(where))
           yield CardSpec.Cloze(key, body, deletions)
+
+  /** The body as Anki must receive it: `{{cN::…}}` where the author wrote a highlight.
+    *
+    * THIS IS THE STEP THAT WAS MISSING, and its absence was invisible because everything
+    * around it was right. The grouping is ruled on, parsed, numbered and tested; the note
+    * type and its field names are correct; the only thing never done was putting the two
+    * together. A comment on the field renderer asserted this happened "when the note is
+    * rendered", which is why nobody looked — the seventh untrue claim in this project, and
+    * the one that hid an actual defect rather than merely overstating a guarantee.
+    *
+    * It cost two cards on the first live run: Anki REFUSES a Cloze note containing no
+    * deletion, with "cannot create note for unknown reason". Nothing caught it earlier
+    * because both fakes accept such a note happily — the fake and the code shared the
+    * misunderstanding, so the suite was green and wrong together.
+    *
+    * RENDERED FROM THE TREE, NOT BY SUBSTITUTING INTO THE EXTRACTED TEXT. By the time the
+    * body has been flattened to a string the `==` markers are gone, so a deletion could only
+    * be located by matching its text — and a word that also appears elsewhere in the body
+    * would be blanked in the wrong place, or in several. Walking the spans puts each
+    * `{{cN::…}}` exactly where the author put the highlight.
+    */
+  private def renderWithDeletions(blocks: Vector[Block], deletions: NonEmptyVector[ClozeDeletion]): String =
+    // A group's ordinal, looked up by the group itself rather than by text, so two
+    // highlights sharing a label render the same `cN` and therefore blank together.
+    val ordinalOf: Map[ClozeGroup, Int] = deletions.toVector.map(d => d.group -> d.ordinal).toMap
+
+    def spanText(s: Span): String = s match
+      case h: ObsidianSyntax.Highlighted =>
+        val group = h.group match
+          case Some(n) => ClozeGroup.Labelled(n)
+          case None    => ClozeGroup.Unlabelled(h.content.map(spanText).mkString)
+        val inner = h.content.map(spanText).mkString
+        ordinalOf.get(group) match
+          case Some(n) => s"{{c$n::$inner}}"
+          // Unreachable while `number` groups exactly the highlights `highlights` found —
+          // both walk the same blocks. Rendering the bare text rather than throwing would
+          // silently drop a deletion, which is the failure this whole function exists to
+          // fix, so it is left as a match error rather than papered over.
+          case None => sys.error(s"cloze group with no ordinal: $group")
+      case sc: SpanContainer => sc.content.map(spanText).mkString
+      case t: TextContainer  => t.content
+      case _                 => ""
+
+    def blockText(b: Block): String = b match
+      case sc: SpanContainer       => sc.content.map(spanText).mkString
+      case ec: ElementContainer[?] =>
+        ec.content.collect { case blk: Block => blockText(blk) }.filter(_.nonEmpty).mkString("\n")
+      case _ => ""
+
+    blocks.map(blockText).filter(_.nonEmpty).mkString("\n").trim
 
   /** Assign each group its `cN`. */
   private def number(found: Vector[(Option[Int], String)]): Vector[ClozeDeletion] =

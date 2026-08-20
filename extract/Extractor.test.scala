@@ -558,7 +558,46 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(ds.map(_.group), Vector(ClozeGroup.Unlabelled("real")))
   }
 
-  test("a cloze note carries the whole section text, not just the deletions") {
+  /** The body carries the WHOLE section AND its deletions, marked where the author put them.
+    *
+    * THIS TEST PREVIOUSLY ASSERTED `"The femur is a bone."` — the plain text, with no deletion
+    * in it at all — and passed. It was pinning the defect in place: Anki REFUSES a Cloze note
+    * containing no `{{cN::…}}`, so every cloze card this tool produced failed to be created.
+    * The first live run found it; nothing here could, because the in-memory Anki and the fake
+    * AnkiConnect server both accept such a note happily.
+    */
+  test("a cloze note carries the whole section text, WITH its deletions marked in place") {
     val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==femur== is a bone.\n")
-    assertEquals(clozeOf(note, "b / l").text.value, "The femur is a bone.")
+    assertEquals(clozeOf(note, "b / l").text.value, "The {{c1::femur}} is a bone.")
+  }
+
+  /** A label IS the cloze number, so two highlights sharing one blank together as one card. */
+  test("a labelled group renders its own number, and a shared label renders the same number") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==2|quorum== is a majority; two ==2|quorum== sets meet.\n"
+    )
+    assertEquals(
+      clozeOf(note, "b / l").text.value,
+      "A {{c2::quorum}} is a majority; two {{c2::quorum}} sets meet.",
+    )
+  }
+
+  /** An unlabelled group takes the lowest number no label has claimed, so it cannot collide
+    * with a label the author chose — which would silently merge two cards into one.
+    */
+  test("an unlabelled group skips a number a label already claims") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==1|shaft== and each ==end==.\n")
+    assertEquals(clozeOf(note, "b / l").text.value, "The {{c1::shaft}} and each {{c2::end}}.")
+  }
+
+  /** A highlight inside a code span is not a deletion, so it must survive rendering as the
+    * literal text the author typed rather than becoming a blank.
+    */
+  test("a literal highlight inside code is rendered as text, not turned into a deletion") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nWrite `==x==` to mark one. The ==real== one counts.\n"
+    )
+    val rendered = clozeOf(note, "b / l").text.value
+    assert(rendered.contains("{{c1::real}}"), rendered)
+    assert(!rendered.contains("::x}}"), s"a code-span highlight became a deletion: $rendered")
   }
