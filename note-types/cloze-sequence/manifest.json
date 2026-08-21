@@ -1,0 +1,29 @@
+{
+  "name": "Obsidian Cloze Sequence",
+  "renamedFrom": "Cloze Sequence",
+  "isCloze": false,
+  "fields": [
+    "Title",
+    "Text",
+    "Context"
+  ],
+  "styling": "styling.css",
+  "templates": [
+    {
+      "name": "Cloze Sequence",
+      "front": "templates/cloze-sequence.front.html",
+      "back": "templates/cloze-sequence.back.html"
+    }
+  ],
+  "derivedFrom": {
+    "url": "https://github.com/tekinosman/cloze-sequence",
+    "licence": "MIT",
+    "licenceFile": "LICENSE.upstream",
+    "modified": true
+  },
+  "capturedFrom": {
+    "profile": "claude-POC-test",
+    "action": "modelTemplates, modelStyling",
+    "date": "2026-08-21"
+  }
+}

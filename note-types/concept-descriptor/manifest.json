@@ -1,0 +1,35 @@
+{
+  "name": "Obsidian Concept-Descriptor",
+  "renamedFrom": "3 way Concept-Descriptor",
+  "isCloze": false,
+  "fields": [
+    "Concept",
+    "Descriptor",
+    "Description",
+    "ThreeWay",
+    "Context"
+  ],
+  "styling": "styling.css",
+  "templates": [
+    {
+      "name": "Card 1: Descriptor+Description -> Concept",
+      "front": "templates/card-1-recall-concept.front.html",
+      "back": "templates/card-1-recall-concept.back.html"
+    },
+    {
+      "name": "Card 2: Concept+Descriptor -> Description",
+      "front": "templates/card-2-recall-description.front.html",
+      "back": "templates/card-2-recall-description.back.html"
+    },
+    {
+      "name": "Card 3: Concept+Description -> Descriptor",
+      "front": "templates/card-3-recall-descriptor.front.html",
+      "back": "templates/card-3-recall-descriptor.back.html"
+    }
+  ],
+  "capturedFrom": {
+    "profile": "claude-POC-test",
+    "action": "modelTemplates, modelStyling",
+    "date": "2026-08-21"
+  }
+}

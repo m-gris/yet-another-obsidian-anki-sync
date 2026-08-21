@@ -1,0 +1,20 @@
+.card {
+    font-family: arial;
+    font-size: 20px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.context {
+  font-size: 0.6em;
+  line-height: 1.35;
+  color: #8a8a8a;
+  text-align: left;
+  margin: 0 0 1.1em 0;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid #e3e3e3;
+}
+.nightMode .context, .night_mode .context {
+  color: #8f8f8f;
+  border-bottom-color: #3a3a3a;
+}

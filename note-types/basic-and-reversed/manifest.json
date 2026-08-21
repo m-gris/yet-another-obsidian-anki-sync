@@ -1,0 +1,22 @@
+{
+  "name": "Obsidian Basic (and reversed card)",
+  "isCloze": false,
+  "fields": [
+    "Front",
+    "Back",
+    "Context"
+  ],
+  "styling": "styling.css",
+  "templates": [
+    {
+      "name": "Card 1",
+      "front": "templates/card-1.front.html",
+      "back": "templates/card-1.back.html"
+    },
+    {
+      "name": "Card 2",
+      "front": "templates/card-2.front.html",
+      "back": "templates/card-2.back.html"
+    }
+  ]
+}

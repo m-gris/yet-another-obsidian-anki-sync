@@ -1,0 +1,17 @@
+{
+  "name": "Obsidian Cloze",
+  "isCloze": true,
+  "fields": [
+    "Text",
+    "Back Extra",
+    "Context"
+  ],
+  "styling": "styling.css",
+  "templates": [
+    {
+      "name": "Cloze",
+      "front": "templates/cloze.front.html",
+      "back": "templates/cloze.back.html"
+    }
+  ]
+}
