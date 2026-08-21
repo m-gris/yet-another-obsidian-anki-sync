@@ -120,13 +120,13 @@ object Marker:
     * silent, and a silent disagreement means a write to a note type that does not exist.
     */
   object NoteTypes:
-    val Basic: String             = "Basic"
-    val BasicAndReversed: String  = "Basic (and reversed card)"
-    val Cloze: String             = "Cloze"
-    val ConceptDescriptor: String = "3 way Concept-Descriptor"
+    val Basic: String             = "Obsidian Basic"
+    val BasicAndReversed: String  = "Obsidian Basic (and reversed card)"
+    val Cloze: String             = "Obsidian Cloze"
+    val ConceptDescriptor: String = "Obsidian Concept-Descriptor"
 
     /** The list note type: one card per note, whose items reveal one at a time. */
-    val ClozeSequence: String = "Cloze Sequence"
+    val ClozeSequence: String = "Obsidian Cloze Sequence"
 
     /** All five, IN THE ORDER THE MANIFEST DIRECTORIES ARE LISTED in `note-types/README.md`
       * (`basic`, `basic-and-reversed`, `cloze`, `cloze-sequence`, `concept-descriptor`), so

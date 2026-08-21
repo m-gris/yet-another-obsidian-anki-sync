@@ -301,6 +301,24 @@ class MarkerTest extends munit.FunSuite:
     assertEquals(Marker.FieldOrder.byNoteType.keySet, Marker.NoteTypes.All.toSet)
   }
 
+  /** RULED BY MARC, 2026-08-21: this tool writes only to note types it owns, so that changing
+    * a template can never reach the rest of the collection. Pinned as literals rather than
+    * derived from the constants, because the point is the exact strings a live collection must
+    * hold — a test that read them back off `Marker` would pass no matter what they said.
+    */
+  test("the five note type names are the ones Marc chose") {
+    assertEquals(
+      Marker.NoteTypes.All,
+      Vector(
+        "Obsidian Basic",
+        "Obsidian Basic (and reversed card)",
+        "Obsidian Cloze",
+        "Obsidian Cloze Sequence",
+        "Obsidian Concept-Descriptor",
+      ),
+    )
+  }
+
   test("table keys extend the heading path, so they reuse the same encoding") {
     val pair = aKey("Messaging", "Cost / benefit", "Queue", "Benefit")
     val row  = aKey("Messaging", "Cost / benefit", "Queue")
