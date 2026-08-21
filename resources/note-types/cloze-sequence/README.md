@@ -70,7 +70,13 @@ AnkiMobile and AnkiDroid.
 
 The installer is `anki/NoteTypeInstall.scala`, driven by the `install-note-types` command. It
 creates only note types that are ABSENT; one that is present and differs from these files is
-reported and left alone. **It has not been run against a live collection by any agent.**
+reported and left alone — unless `--repair` is asked for, which is what rewrote this type's
+templates and stylesheet in the collection.
+
+**It HAS been run against a live collection**: profile `claude-POC-test`, 2026-08-21, plain
+then `--repair`, then a migrating `sync`; the measurements are in `../../../IN-FLIGHT.md`.
+Re-read read-only later the same day: `modelNames` lists `Obsidian Cloze Sequence`, and
+`findNotes` finds 2 notes on it. (This sentence previously said no agent had ever run it.)
 
 **Template names must match the collection exactly.** AnkiConnect's `updateModelTemplates`
 looks each template up by name and silently skips names it does not recognise (read out of the
@@ -81,10 +87,19 @@ only.
 
 ## Byte-identity
 
-The two files under `templates/` and `styling.css` were all three **byte-identical** to what
-profile `claude-POC-test` holds — checked on 2026-08-21 against `modelTemplates` and
-`modelStyling` respectively. Since that check, `templates/cloze-sequence.front.html` has gained
-exactly one line (the `Context` snippet) and `styling.css` one appended `.context` rule;
-`templates/cloze-sequence.back.html`, which carries the keyboard-reveal script, is untouched.
-Keeping these files equal to the collection is what lets a drift check be a string comparison
-rather than a re-derivation.
+The two files under `templates/` and `styling.css` are all three **byte-identical** to what
+profile `claude-POC-test` holds — re-checked 2026-08-21 against
+`modelTemplates("Obsidian Cloze Sequence")` and `modelStyling`, comparing whole strings, with
+the collection's single template name reported as `Cloze Sequence`. `modelFieldNames` returns
+`Title, Text, Context`, matching `manifest.json`.
+
+Identity was broken in between and has been restored, which is worth recording so that nobody
+re-derives the wrong history: after the original capture,
+`templates/cloze-sequence.front.html` gained one line here (the `Context` snippet) and
+`styling.css` one appended `.context` rule, so for a while the repository was AHEAD of the
+collection; `install-note-types --repair` then wrote both into the collection.
+`templates/cloze-sequence.back.html`, which carries the keyboard-reveal script, has not changed
+in this repository since it was first committed — `git log --follow -p` on it shows one
+content-introducing commit (`72e8761`) and two pure renames — and it equals the collection's
+copy today. Keeping these files equal to the collection is what lets a drift check
+be a string comparison rather than a re-derivation.

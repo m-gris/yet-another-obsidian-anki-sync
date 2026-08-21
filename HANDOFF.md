@@ -33,7 +33,9 @@ Long messages must go via `--file`; the shell has an alias-guard hook that block
 
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
-`scala-cli test <tool dir>` runs everything. **493 tests, 0 failures, 0 warnings** as of 2026-08-21.
+`scala-cli test <tool dir>` runs everything. **28 suites, 511 tests, 0 failures, 0 warnings** —
+measured by running it on 2026-08-21 and summing the per-suite totals. _The line previously said
+493 tests; the suite has grown since._
 
 ---
 
@@ -43,21 +45,36 @@ Everything except orphan suspension, a per-write field-name preflight, and the `
 — see *Open items*. The reading and writing paths both work end to end against a real
 collection.
 
-⚠️ **Nothing in this tool has touched a live collection since the note types were renamed on
+⚠️ ~~**Nothing in this tool has touched a live collection since the note types were renamed on
 2026-08-21.** `install-note-types` and `sync --migrate-note-types` have both been driven only
-against the in-process fakes. The live sequence, in order, is: hand-rename the two note types
-in Anki's Tools → Manage Note Types and add `Context` to each by hand → `install-note-types`
-→ `sync --dry-run` → `sync --migrate-note-types`.
+against the in-process fakes.~~ **CONTRADICTED — do not act on the struck-through paragraph.**
+_Flagged 2026-08-21._ `IN-FLIGHT.md` records the whole sequence as having been run against
+profile `claude-POC-test`, with before/after measurements (43 notes, 0 card ids changed, 0
+scheduling moves, 21 notes retyped). The two documents cannot both be right and `IN-FLIGHT.md`
+is the later one. **NOT RE-VERIFIED HERE:** nothing in this session talked to a collection, so
+which is true was established by reading `IN-FLIGHT.md`, not by measuring. Read that file
+before you believe either.
+
+The live sequence, in order, is: hand-rename the two note types in Anki's Tools → Manage Note
+Types → `install-note-types` → `install-note-types --repair` (this is what adds `Context` and
+rewrites the templates; the by-hand field addition the old text called for is not needed) →
+`sync --dry-run` → `sync --migrate-note-types`.
 
 - `parser/ObsidianSyntax.scala` — Obsidian dialect (wikilinks, embeds, highlights, task-list rejection) and **the canonical `markupParser`**. Build parsers only from there.
-- `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (the six markers), `CardSpec` (the six card shapes).
+- `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (**seven** markers: `Marker.fromToken` accepts `1way`, `2way`, `3way`, `3way/all`, `cloze`, `table`, `sequence` — this line said six before `sequence` was added), `CardSpec` (**five** cases: `TwoField`, `ThreeField`, `Cloze`, `TableRow`, `Sequence` — this line said "six card shapes", which does not match the enum; both counts re-read on 2026-08-21).
 - `anki/` — the `Anki[F]` algebra; `InMemoryAnki`, a working fake that **enforces Anki's real constraints**; and, since 2026-08-19, `AnkiConnectClient` over http4s/Ember plus `FakeAnkiConnect`, an in-process fake AnkiConnect **server** that reproduces the traps rather than the happy path.
 - `plan/` — `VaultScan`, `SyncAction`, `Planner`, `Executor`/`Observer`.
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
-- `cli/` — `inspect`, `sync` and `install-note-types`. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault. `install-note-types` (added 2026-08-21) creates this tool's five note types from `resources/note-types/`; it has NOT been run against a live collection by any agent. `sync` refuses before observing when those note types are missing or lack a field it writes.
-  `sync --migrate-note-types` (added 2026-08-21) additionally moves notes that sit on a DIFFERENT note type from the one the vault asks for — which since the rename is every note synced before that date. It has NOT been run against a live collection either. Without the flag those notes are left alone and reported as *deferred*, which makes the run exit 1 rather than 0.
+- `cli/` — `inspect`, `sync` and `install-note-types`. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault. `install-note-types` (added 2026-08-21) creates this tool's five note types from `resources/note-types/`, and with `--repair` also adds missing fields and overwrites templates and styling. `sync` refuses before observing when those note types are missing or lack a field it writes.
+  `sync --migrate-note-types` (added 2026-08-21) additionally moves notes that sit on a DIFFERENT note type from the one the vault asks for — which since the rename is every note synced before that date. Without the flag those notes are left alone and reported as *deferred*, which makes the run exit 1 rather than 0.
+  _Two sentences here claiming these commands "have NOT been run against a live collection by any agent" were removed on 2026-08-21: `IN-FLIGHT.md` says they have. See the contradiction flagged above; nothing in this session measured a collection either way._
 
-Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 53 cards, 1 expected failure, 3 deliberate duplicate keys, exit 2.
+Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 12 files,
+55 cards, 2 expected failures, 3 deliberate duplicate keys, `scan: complete`, exit 2. _Corrected
+2026-08-21 by running exactly that command and copying what it printed; the line previously said
+53 cards and 1 failure._ The two failures are both fixtures doing their job: the under-indented
+nested list in `Patterns/Shallow-Nesting.md`, and the descriptor-less table in the first section
+of `Patterns/Table-Edge-Cases.md`.
 
 **THE VAULT IS NAMED BY A FLAG, NOT POSITIONALLY** — that changed on 2026-08-20, and the old
 positional form now fails. With NO vault flag the tool lists the vaults Obsidian knows about and
@@ -67,6 +84,10 @@ do not rely on the picker to reach it — name it with `--vault-path`.
 **`sync` cannot write to `dummy-vault`'s collection**: the fixture contains deliberate duplicate
 identities, and duplicates are fatal by design. To exercise the write path, copy the vault
 without `Patterns/Table-Edge-Cases.md`.
+
+⚠️ **Before you point `sync` at a collection that already holds table cards, read open item 1
+below** — one refusal inside a `#flashcard/table` section sends every card that table already
+produced to the orphan list.
 
 ---
 
@@ -187,7 +208,8 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
 
 ## Things that look like bugs and are not
 
-- **`dummy-vault/Patterns/Table-Edge-Cases.md` produces duplicate keys on purpose.** It has two `Retry` rows. `inspect` reports them and exits 2. That is the fixture working. Do not "fix" it.
+- **`dummy-vault/Patterns/Table-Edge-Cases.md` produces duplicate keys on purpose.** It has two `Retry` rows, which mint three duplicate keys — the row card and both pair cards. `inspect` reports them and exits 2. That is the fixture working. Do not "fix" it. Its first section is also one of the vault's two expected failures: a concept column with no descriptor columns.
+- **`dummy-vault/Patterns/Shallow-Nesting.md` fails on purpose too**, and is the vault's other expected failure. Its list items are indented two spaces, which this tool's parser reads as a new list rather than as nesting, so the card would say something the note does not. **Re-indenting it to four spaces silently retires the check** — the failure disappears and the test counting the vault's failures goes green while proving nothing. `FIXTURES.md` carries the full note.
 - **`Cost / benefit` contains the path separator on purpose.** It probes the encoding.
 - **`hostile-vaults/corrupt-frontmatter/` must SUCCEED, not fail.** Those files are the shapes a *wrong* parser mangles silently. Only 6 of the 11 hostile fixtures are must-fail cases; `FIXTURES.md` says which is which.
 
@@ -215,7 +237,34 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
 
 ## Open items
 
-1. **DECIDE WHAT A CARD FIELD CONTAINS: plain text or an HTML fragment?** Nothing can be
+1. ⚠️ **A REFUSAL INSIDE A `#flashcard/table` SECTION ORPHANS EVERY CARD THAT TABLE ALREADY
+   PRODUCED — the one way a live, correctly-synced card reaches the prune list.** _Added to this
+   document 2026-08-21. It was recorded only in two mid-file source comments —
+   `extract/Extractor.scala:174-181` and `content/Lower.scala:134-145` — so a fresh session
+   reading the documents it is told to read first would not have met it. NOT FIXED; the code
+   below was read in this session, not remembered._
+
+   The chain, each link read rather than inferred: `Extractor.walk` records **every** `buildSpecs`
+   failure as `BuildFailure.KeyKnown` at the **section** key (`extract/Extractor.scala:118`),
+   while `Tables.cardsForRow` keys each table card **one or two segments deeper** — the row's
+   concept, plus the column header for a pair card. `VaultScan.failedKeys` therefore gains a key
+   that no Anki note carries, and claims none of the table's real keys. `Planner` then computes
+   `accountedFor = scan.builtKeys ++ scan.failedKeys` (`plan/Planner.scala:231`) and emits
+   `SyncAction.Flag` for every observed note outside it. Nothing in that path is degraded or
+   partial, so the run looks healthy: the scan still reports `complete`.
+
+   The blast radius is a whole table, not a card. `dummy-vault/Patterns/Messaging.md`'s
+   `## Cost / benefit` is **nine cards** — counted in this session by grepping
+   `extract/golden/fixture-cards.txt` for `src::fix-messaging`, which yields nine entries, every
+   one of them keyed below the section key. Refuse that one section and all nine live notes are
+   flagged as orphans.
+
+   What can fire the refusal today, per the comment at `extract/Extractor.scala:182-192` (its
+   reasoning is version-scoped to laika-core 1.3.2 and was NOT re-verified here): an embed, an
+   image or a task list inside a cell — in practice one `![[x.png]]`. The fix needs the failure
+   record to carry a key SET rather than a single key, and is its own slice.
+
+2. **DECIDE WHAT A CARD FIELD CONTAINS: plain text or an HTML fragment?** Nothing can be
    sensibly formatted until this is ruled on, and it is Marc's. Anki fields ARE HTML, so a
    literal newline renders as a SPACE — verified by reading a synced note back. For
    hard-wrapped prose that is correct and wanted. For a list it is wrong: the items are now
@@ -223,8 +272,20 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
    run-on sentence. Choosing HTML means escaping user content becomes an obligation, and
    changes every content hash once — an UPDATE for every note, so scheduling survives, but the
    run will report the lot.
-2. **Suspend orphans.** Ruled 2026-08-19 and **not yet built**: `Anki[F]` has no `suspend`/`unsuspend` operation, so this is new algebra plus `InMemoryAnki` plus the `AnkiConnect` actions (verified present: `suspend`, `unsuspend`, `suspended`, `areSuspended`). Note the return trip — `Unflag` must unsuspend, and unlike a deck move it does not come free from the existing deck-difference logic.
-3. **Check field names before writing.** _Partly done, 2026-08-21._ `sync` now runs `NoteTypeInstaller.readiness` before it observes the collection — one `modelNames` plus one `modelFieldNames` per note type — and refuses the whole run when a note type is absent or does not declare a field this tool writes. What is still open is narrower: nothing checks an INDIVIDUAL write's field names against the note type it names. The two coincide today, because every write is built by `CardSpec.fields` and `anki/NoteTypeAssets.test.scala` ties that to the manifests. `AnkiError.UnknownField` is still raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, because it cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note.
-4. **The `prune` command** — reads `orphaned::` tags. v0-adjacent.
-5. **Repair-in-place of an existing note type is NOT BUILT, and that is now a ruling rather than a gap.** _Amended 2026-08-21._ `install-note-types` creates note types that are ABSENT and, for one that is present and differs from `resources/note-types/`, REPORTS the difference and changes nothing. There is no `--repair`, not even behind a flag: repairing means sending a template and a stylesheet over ones a person may have edited by hand in Anki, and only that person knows whether the repository's version is the one they want. If repair is ever built, `updateModelTemplates` looks templates up BY NAME and silently ignores names it does not recognise, so a wrong name is a repair that reports success and changes nothing.
-6. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.
+3. **Suspend orphans.** Ruled 2026-08-19 and **not yet built**: `Anki[F]` has no `suspend`/`unsuspend` operation, so this is new algebra plus `InMemoryAnki` plus the `AnkiConnect` actions (verified present: `suspend`, `unsuspend`, `suspended`, `areSuspended`). Note the return trip — `Unflag` must unsuspend, and unlike a deck move it does not come free from the existing deck-difference logic.
+4. **Check field names before writing.** _Partly done, 2026-08-21._ `sync` now runs `NoteTypeInstaller.readiness` before it observes the collection — one `modelNames` plus one `modelFieldNames` per note type — and refuses the whole run when a note type is absent or does not declare a field this tool writes. What is still open is narrower: nothing checks an INDIVIDUAL write's field names against the note type it names. The two coincide today, because every write is built by `CardSpec.fields` and `anki/NoteTypeAssets.test.scala` ties that to the manifests. `AnkiError.UnknownField` is still raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, because it cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note.
+5. **The `prune` command** — reads `orphaned::` tags. v0-adjacent.
+6. ~~**Repair-in-place of an existing note type is NOT BUILT.**~~ **BUILT — this item is closed.**
+   _Corrected 2026-08-21 by reading the code, which contradicted the item flatly._ The entry
+   claimed "there is no `--repair`, not even behind a flag". There is: `cli/Cli.scala:195-200`
+   declares an `Opts.flag("repair", …).orFalse` on `install-note-types`, and
+   `cli/Main.scala`'s `repairNoteTypes` adds missing fields and overwrites templates and
+   styling with the repository's versions. **The ruling the entry was defending survives and
+   is unchanged** — the flag is OFF BY DEFAULT, precisely because a template somebody improved
+   in Anki is theirs, so the overwrite must be asked for by name. What was wrong was only the
+   claim that no opt-in exists. `anki/NoteTypeInstall.scala` records why refusing *always*,
+   with no opt-in at all, turned out to be the more dangerous default.
+   The caveat in the old entry still stands and is worth keeping: `updateModelTemplates` looks
+   templates up BY NAME and silently ignores names it does not recognise, so a wrong name is a
+   repair that reports success and changes nothing.
+7. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.

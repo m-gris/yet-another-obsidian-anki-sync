@@ -108,6 +108,18 @@ enum NoteTypeStatus:
     * installer run before that hand-rename would leave the collection holding TWO note types —
     * a new empty one and the old populated one, every note still on the old — because
     * `createModel` refuses only when the NEW name already exists. Nothing would report it.
+    *
+    * ⚠️ THIS GUARD NARROWS THAT HAZARD; IT DOES NOT CLOSE IT, and the difference is a
+    * misspelling. [[NoteTypeInstaller.statusOf]] reaches this case through
+    * `asset.renamedFrom.filter(inCollection.contains)` — an EXACT string match. If the human
+    * rename typed the new name wrong, the collection holds neither `spec.name` nor
+    * `renamedFrom`: the type is classified [[Absent]], [[NoteTypeInstaller.install]] creates
+    * every absent type, and the result is the empty duplicate beside the populated original
+    * that this case exists to prevent — with the original now under a name no code here will
+    * ever look for. Nothing compares names loosely and nothing warns. A misspelled rename was
+    * reported during the live run of 2026-08-21; the collection no longer shows it
+    * (`modelNames` on 2026-08-21 lists only the correctly spelled names), so the mechanism
+    * above was read out of this file rather than reproduced.
     */
   case AwaitingManualRename(asset: NoteTypeAsset, currentName: String)
 

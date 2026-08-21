@@ -341,9 +341,20 @@ object InMemoryAnki:
     * THIS IS ALSO THE BROADEST DETECTOR THE PROJECT HAS for a manifest drifting away from
     * `model/Marker.scala`, and it is worth knowing about because it is not obvious. The fake
     * refuses a write naming a field its note type does not declare, so a manifest that lost
-    * `Context`, or a manifest whose `name` no longer matches `Marker.NoteTypes`, turns most of
-    * the suite red rather than one test. `anki/NoteTypeAssets.test.scala` is what turns that
-    * into a message a reader can act on.
+    * `Context`, or a manifest whose `name` no longer matches `Marker.NoteTypes`, fails tests in
+    * suites that have nothing to do with note type assets.
+    *
+    * MEASURED 2026-08-21, in a scratch copy of this project, suite size 511:
+    *   - `Context` deleted from `basic/manifest.json` — 38 failed, across ten suites.
+    *   - `Context` deleted from ALL FIVE manifests — 43 failed.
+    *   - `basic/manifest.json`'s `name` changed to `Obsidian Basik` — 57 failed, across twelve
+    *     suites, `PlannerTest` (15), `NoteTypeInstallTest` (8) and `InMemoryAnkiTest` (7)
+    *     worst hit.
+    *
+    * So a MINORITY of the suite in every case — this comment used to say "most of the suite" —
+    * but a minority scattered across `plan`, `cli`, `extract` and `anki` rather than confined
+    * to one test, and the spread is what makes it a detector at all.
+    * `anki/NoteTypeAssets.test.scala` is what turns that into a message a reader can act on.
     *
     * IT THROWS IF THE FILES CANNOT BE READ, deliberately and with every error named. There is
     * no honest fallback: a fake built from a partially-loaded set of note types would let tests

@@ -13,10 +13,22 @@ tie them to the Scala: `anki/NoteTypeAssets.test.scala` compares every manifest 
 
 _Amended 2026-08-21. This paragraph previously said nothing here was read by the Scala code._
 
-What is still NOT done: no agent has run `install-note-types` against a live collection, and
-nobody has reviewed a card produced by one of these note types on a screen. Everything below
-that is described as verified was verified by READING a live collection, never by writing to
-one.
+These files HAVE been installed into a live collection. `install-note-types` was run against
+profile `claude-POC-test` on 2026-08-21 — plain, then `--repair`, then a migrating `sync`; the
+run and its before/after measurements are recorded in `IN-FLIGHT.md` (43 notes before and 43
+after, 21 moved to a new note type, **0** card ids changed, **0** scheduling values changed, 38
+of 43 carrying a populated `Context`). Re-read later the same day, read-only, via `modelNames`,
+`modelFieldNames`, `modelTemplates` and `modelStyling`: that profile holds all five note types,
+and for every one of them the field list, both sides of every template and the stylesheet are
+**byte-identical** to the files in this directory. `findNotes` + `notesInfo` over the five types
+returns 44 notes, 38 with a non-empty `Context` — one note more than the run recorded, added
+since by something these read-only calls cannot account for.
+
+_Amended 2026-08-21 (second amendment). This paragraph previously said no agent had ever run
+`install-note-types` against a live collection._
+
+What is still NOT done: nobody has reviewed a card produced by one of these note types on a
+screen.
 
 ---
 
@@ -58,6 +70,19 @@ naive create-if-missing installer, run before the hand-rename, would leave the c
 holding **two** note types — a new empty one and the old populated one, every note still on
 the old — with no error anywhere. An installer that sees `name` absent *and* `renamedFrom`
 present must refuse and name the pair.
+
+**`renamedFrom` narrows that hazard; it does not close it.** The guard is an exact string
+match — `asset.renamedFrom.filter(inCollection.contains)`, in `NoteTypeInstaller.statusOf`
+(`anki/NoteTypeInstall.scala:275`, read 2026-08-21). A hand-rename that MISSPELLS the new name
+therefore defeats it in silence: neither `name` nor `renamedFrom` is in the collection, the type
+is classified `Absent`, and `NoteTypeInstaller.install` creates every `Absent` type
+(`anki/NoteTypeInstall.scala:441`) — leaving an empty duplicate beside the populated,
+misspelled one, which is precisely the outcome `renamedFrom` exists to prevent. Nothing compares
+names loosely and nothing warns. So the hazard is not "cannot happen"; it is "cannot happen when
+the hand-rename is spelled exactly right". A misspelled rename was reported during the live run
+of 2026-08-21; it is not visible in the collection now — `modelNames` today lists only
+`Obsidian Cloze Sequence` — so that half of this paragraph rests on the report, while the
+mechanism above was read out of the code.
 
 ---
 
@@ -133,8 +158,12 @@ longer be what the collection holds.
 
 - **Template files carry no trailing newline.** What the file holds is what is sent, so a
   trailing newline would be a trailing newline in the template. The two captured
-  `cloze-sequence` templates have none (they are byte-identical to the live collection,
-  checked 2026-08-21), and the authored ones match them.
+  `cloze-sequence` templates have none — checked 2026-08-21 by comparing both files with what
+  `modelTemplates("Obsidian Cloze Sequence")` returns from profile `claude-POC-test`: neither
+  side ends in a newline, on disk or in the collection, and both are byte-identical to the
+  collection's copy. That identity was briefly broken and has been restored: the front gained
+  the `Context` line here after it was captured, and `install-note-types --repair` is what put
+  that line into the collection. The authored templates match the captured ones.
 - **Stylesheets end with a newline**, as Anki's own stock stylesheets do.
 - **The `.context` block is preceded by exactly one blank line** in all five stylesheets. The
   blank line is what marks it as this tool's addition to an otherwise-captured stylesheet.
@@ -254,7 +283,15 @@ severed from display, so a tag-derived breadcrumb would read in permanent lowerc
 extractor already computes the properly cased chain and currently discards all but its last
 element.
 
-Populating the field is a separate slice; nothing writes it yet.
+**The field is populated.** `extract/CardContext.scala` renders the properly-cased chain,
+`extract/Extractor.scala` and `extract/Tables.scala` pass the ancestor titles into the card
+specs, and `CardSpec.fields` (`model/CardSpec.scala:275-326`, read 2026-08-21) emits
+`Marker.ContextField` on every one of its five arms. Measured in profile `claude-POC-test` on
+2026-08-21 with `findNotes` + `notesInfo`: 38 of the 44 notes on these five types carry a
+non-empty `Context`, the first of them reading `Messaging Patterns › Cost / benefit`.
+
+_Amended 2026-08-21. This paragraph previously said "Populating the field is a separate slice;
+nothing writes it yet."_
 
 `Context` is **last** on every type for three reasons: Anki's Sort Field defaults to field 1,
 and a breadcrumb there would fill the Browse list; `modelFieldAdd` appends; and appending
@@ -282,9 +319,16 @@ Two placement rules that are not cosmetic:
    non-empty, and `{{Context}}` is a real field reference. Placed *outside* the wrapper, every
    plain `#flashcard/3way` note would generate a **third card** showing a breadcrumb and
    nothing else, answered by the Descriptor. It would look like a card.
-   **This has not been measured** — measuring it requires creating a note, which this slice
-   does not do. Treat inside-the-wrapper as mandatory until someone measures it: create one
-   note with `ThreeWay` empty and `Context` non-empty, then `findCards` on it, and expect 2.
+   **Half of this is now measured, read-only.** In profile `claude-POC-test` on 2026-08-21,
+   `findNotes` + `notesInfo` over the 21 notes on `Obsidian Concept-Descriptor` (counting each
+   note's `cards`): the 16 notes with `ThreeWay` empty and `Context` non-empty have exactly
+   **2** cards each, and the single note with `ThreeWay` set has 3. So the snippet where it
+   actually sits — inside the wrapper, see
+   `templates/card-3-recall-descriptor.front.html` — does not generate a third card, which is
+   the check this paragraph used to ask for. The other half is still **unmeasured**: that
+   placing the snippet OUTSIDE the wrapper WOULD generate that third card is a prediction from
+   Anki's card-generation rule, not an observation — measuring it means writing a deliberately
+   mis-placed template into a collection, which nobody has done.
 2. **On `cloze-sequence` the snippet is a new first line, above `<h4>{{Title}}</h4>` and
    outside `<div id="text">`.** That front template hides every `#text li` and the stylesheet
    dims `#text` to `opacity: 0.5`; context is the frame, not dimmed answer.

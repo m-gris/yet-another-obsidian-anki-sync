@@ -10,7 +10,12 @@ import java.nio.charset.StandardCharsets
   *
   * WHY THIS EXISTS AT ALL. Until it did, the tool could WRITE A NOTE of a given type but could
   * not CREATE THE TYPE, so a fresh Anki profile could not be synced into: the first write
-  * failed. The one custom type that exists in the `claude-POC-test` profile got there by hand.
+  * failed. TWO custom types got into the `claude-POC-test` profile by hand, before any of this
+  * existed — `Cloze Sequence` and `3 way Concept-Descriptor` — and the hand-rename design this
+  * file serves is built around exactly those two: they are the two manifests carrying
+  * `renamedFrom` and `capturedFrom`, and they are now `Obsidian Cloze Sequence` and
+  * `Obsidian Concept-Descriptor` in that profile (`modelNames`, read 2026-08-21). This sentence
+  * used to say there was one.
   *
   * EVERY FILE UNDER `resources/note-types/` IS THE EXACT TEXT THAT GOES INTO A COLLECTION —
   * no templating, no substitution, no shared stylesheet partial concatenated at install time.
@@ -25,7 +30,13 @@ import java.nio.charset.StandardCharsets
   * compares the two. There is a second, broader detector as well, which is worth knowing about
   * because it is not obvious: [[InMemoryAnki.defaultNoteTypes]] is built from these manifests,
   * and the fake rejects a write naming a field its note type does not declare — so a manifest
-  * that lost a field name turns most of the suite red rather than one test.
+  * that lost a field name fails tests in suites that never mention note type assets at all.
+  * MEASURED 2026-08-21, in a scratch copy of this project, by deleting `Context` from
+  * `basic/manifest.json`: 38 of 511 tests failed, spread over ten suites (`PlannerTest` 15,
+  * `RetypingTest` / `PlannerLawTest` / `ExecutorInterruptionTest` / `DuplicateIdentityTest` /
+  * `NoteTypeAssetsTest` 3 each, `AnkiConnectClientTest` / `NoteTypeInstallTest` / `MainTest` /
+  * `FixtureVaultTest` 2 each). That is a MINORITY of the suite — this comment used to say
+  * "most" — and the spread, not the count, is the property worth having.
   */
 
 /** Where a vendored note type came from, and under what licence. */

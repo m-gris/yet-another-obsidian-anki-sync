@@ -179,12 +179,25 @@ object Main
   /** THE EXIT-CODE CONTRACT OF `install-note-types`, in the same three-value shape as
     * [[exitCodeFor]]:
     *
-    *   - `2` — the run REFUSED and NOTHING WAS WRITTEN. Exactly one thing reaches it: a note
-    *     type still awaiting its hand-rename, which stops the whole run rather than part of it.
+    *   - `2` — the run REFUSED and NOTHING WAS WRITTEN. TWO things reach it, and only the
+    *     second is decided here. _Amended 2026-08-21: this line said "exactly one thing", which
+    *     was false against the code directly above it._
+    *       1. THE ASSET FAILURE — this tool's own note type definitions under
+    *          `resources/note-types/` could not be read, so [[installNoteTypes]] returns
+    *          `ExitCode(2)` at its `NoteTypeAssets.all` `Left` arm without ever calling this
+    *          function. The comment on [[installNoteTypes]] states this too.
+    *       2. A HAND-RENAME STILL OUTSTANDING — `outcome.blockedByRename.nonEmpty`, the branch
+    *          below, which stops the whole run rather than part of it. [[repairNoteTypes]]
+    *          re-tests the same condition so that `--repair` repairs nothing either.
     *   - `1` — it ran and something is wrong: a note type could not be created, or one is
     *     present and differs from the repository and was therefore left alone.
     *   - `0` — every note type is now present and matches. Creating some of them is not a
     *     problem; that is the command doing its job.
+    *
+    * A THIRD `2` PRECEDES ALL OF THESE AND IS NOT PART OF THIS CONTRACT: the shared profile
+    * gate, [[verifyThen]], answers `ExitCode(2)` on a mismatched, unaskable or unreachable
+    * profile before `install-note-types` is entered at all. It is common to every command that
+    * touches a collection, which is why it is named here rather than counted above.
     *
     * SPLIT OUT SO IT CAN BE TESTED, for the same reason [[verifyThen]] is.
     */

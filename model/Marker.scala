@@ -150,13 +150,17 @@ object Marker:
     * in permanent lowercase. `Extractor` already computes the properly cased chain and used to
     * discard all but its last element.
     *
-    * WHAT IT IS FOR. A card can be unanswerable because it lost its context. The example is
-    * in this repository and was re-read from it: before this field existed,
-    * `extract/golden/fixture-cards.txt` recorded the card keyed
-    * `…body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border` as
-    * carrying `Concept: Frontal`, `Descriptor: Anterior border` and nothing else. Frontal WHAT
-    * — bone, lobe, cortex? The one segment that disambiguates, `Cranial bones and their
-    * sutures`, was dropped. The same shape was reported from a live collection.
+    * WHAT IT IS FOR. A card can be unanswerable because it lost its context — the motivating
+    * example is the `Frontal` / `Anterior border` card out of
+    * `dummy-vault/Anatomy/Body-Shapes.md`, which without this field asks "Frontal WHAT?".
+    *
+    * THE WORKED EXAMPLE LIVES AT `extract/CardContext.scala` AND IS NOT RESTATED HERE. _Amended
+    * 2026-08-21: this comment used to carry its own copy of it, and that copy had drifted into
+    * being false in two ways — it named two of the note's four fields, and it called them "the
+    * card face" when on the first of the note type's three templates the Concept is the ANSWER._
+    * Two prose copies of one worked example is how that happens; one copy plus a pointer is why
+    * this is a pointer. Anything about this field that `model/` needs on its own — where it sits
+    * in each note type's field list, and why — is at [[FieldOrder]] below.
     */
   val ContextField: String = "Context"
 

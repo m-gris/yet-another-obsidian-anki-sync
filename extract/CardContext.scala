@@ -7,16 +7,38 @@ import obsidiananki.content as C
   * ==Why the card needs one==
   *
   * A card can be unanswerable because it lost its context, and the loss is invisible from
-  * inside Anki. The example is in this repository: before this field existed,
-  * `extract/golden/fixture-cards.txt` recorded the card keyed
-  * `…body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border` as
-  * carrying `Concept: Frontal`, `Descriptor: Anterior border` and nothing else — the whole
-  * card face. Frontal WHAT — bone, lobe, cortex? The single segment that disambiguates,
-  * `Cranial bones and their sutures`, was dropped, so the card asks a question that cannot be
-  * answered without already knowing the answer. The same shape was reported from a live
-  * collection. `LEARNING-MODEL.md` names the consequence: a card that cannot be derived gets
-  * answered by pattern-matching its answer string, which "silently teaches you that you know
-  * something you do not".
+  * inside Anki. The example is in this repository, and both halves of it were re-read here on
+  * 2026-08-21 after an earlier version of this paragraph got both halves wrong.
+  *
+  * THE NOTE. At `06b185c^` — the commit before `Put the heading chain on the card as a visible
+  * Context field` — `extract/golden/fixture-cards.txt` recorded the note keyed
+  * `…body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border` on note
+  * type `3 way Concept-Descriptor` with FOUR fields, not two: `Concept: Frontal`,
+  * `Descriptor: Anterior border`, `Description: Orbital rim`, and an empty `ThreeWay`. _This
+  * corrects a sentence that said "`Concept: Frontal`, `Descriptor: Anterior border` and nothing
+  * else"._
+  *
+  * THE CARD FACES, WHICH THE GOLDEN DOES NOT SHOW. A golden entry is a note's FIELD SET; what a
+  * reviewer sees is a template's rendering of it, and this note type has three.
+  * `resources/note-types/concept-descriptor/manifest.json` names them in order, and their
+  * template files say the same thing:
+  *
+  *   - Card 1, `Descriptor+Description -> Concept`: the front is `{{Descriptor}}<br>
+  *     {{Description}}` and the back is `{{Concept}}`. **`Frontal` is the ANSWER on this
+  *     template, not part of the question.** _This corrects a sentence that called the Concept
+  *     and Descriptor together "the whole card face"._
+  *   - Card 2, `Concept+Descriptor -> Description`: the front is `{{Concept}}<br>{{Descriptor}}`
+  *     and the back is `{{Description}}`. **This is the face the argument is actually about** —
+  *     the whole question was `Frontal` / `Anterior border`. Frontal WHAT: bone, lobe, cortex?
+  *     The one segment that disambiguates, `Cranial bones and their sutures`, was dropped, so
+  *     the card asks a question that cannot be answered without already knowing the answer.
+  *   - Card 3, `Concept+Description -> Descriptor`: its whole front is wrapped in
+  *     `{{#ThreeWay}}…{{/ThreeWay}}`, and `ThreeWay` is empty on this note, so no third card is
+  *     generated for it.
+  *
+  * The same shape was reported from a live collection. `LEARNING-MODEL.md` names the
+  * consequence: a card that cannot be derived gets answered by pattern-matching its answer
+  * string, which "silently teaches you that you know something you do not".
   *
   * ==Why this is derived from the TITLES and never from the KEY==
   *
