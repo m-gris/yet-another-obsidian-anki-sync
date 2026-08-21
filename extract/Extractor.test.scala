@@ -7,7 +7,8 @@ import obsidiananki.plan.{BuildFailure, SourcedSpec}
 class ExtractorTest extends munit.FunSuite:
 
   def extract(markdown: String, id: String = "n1", fileName: String = "Note"): ExtractedNote =
-    val (_, body) = Frontmatter.read(markdown).fold(e => fail(s"frontmatter: $e"), identity)
+    val (_, split) = Frontmatter.read(markdown).fold(e => fail(s"frontmatter: $e"), identity)
+    val body = split.body
     val root = ObsidianSyntax.markupParser.parse(body).fold(e => fail(s"parse: $e"), _.content)
     Extractor.fromDocument(
       NoteId.fromFrontmatter(id).toOption.get,
@@ -15,6 +16,7 @@ class ExtractorTest extends munit.FunSuite:
       s"$fileName.md",
       root,
       body,
+      split.bodyFirstLine,
     )
 
   def paths(n: ExtractedNote): Vector[String] = n.specs.map(_.key.path.render)

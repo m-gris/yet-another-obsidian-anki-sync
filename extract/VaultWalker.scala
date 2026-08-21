@@ -80,7 +80,8 @@ object VaultWalker:
         case Right(deck) =>
           Frontmatter.read(file.content) match
             case Left(err) => unreadable(s"frontmatter: $err")
-            case Right((keys, body)) =>
+            case Right((keys, split)) =>
+              val body = split.body
               keys.get("id").map(NoteId.fromFrontmatter) match
                 // No id means no cards — but SAID, not skipped. Silently dropping a whole
                 // file is the same omission the design guards against everywhere else, and
@@ -92,7 +93,14 @@ object VaultWalker:
                     case Left(err) => unreadable(s"markdown: ${err.toString.take(200)}")
                     case Right(doc) =>
                       val note =
-                        Extractor.fromDocument(noteId, fileName, file.relativePath, doc.content, body)
+                        Extractor.fromDocument(
+                          noteId,
+                          fileName,
+                          file.relativePath,
+                          doc.content,
+                          body,
+                          split.bodyFirstLine,
+                        )
                       specs ++= note.specs
                       failures ++= note.failures
                       note.specs.foreach(s => decks += s.key -> deck)

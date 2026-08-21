@@ -28,10 +28,19 @@ object Extractor:
       filePath: String,
       root: RootElement,
       body: String = "",
+      bodyFirstLine: Int = 1,
   ): ExtractedNote =
     val specs    = Vector.newBuilder[SourcedSpec]
     val failures = Vector.newBuilder[BuildFailure]
-    val lines    = LineIndex(body)
+    val lines    = LineIndex(body, bodyFirstLine)
+
+    // SCANNED ONCE PER NOTE, then asked per card. This reads the RAW SOURCE, which is the only
+    // place the answer still exists — see `ListIndent` for why a parsed tree cannot be asked.
+    //
+    // GIVEN THE SAME ORIGIN AS `lines`, and that is not optional: a finding is looked up by the
+    // heading line `lines` produced, so if the two counted from different origins every lookup
+    // would miss and the check would silently never fire.
+    val listIndent = ListIndent.scan(body, bodyFirstLine)
 
     /** @param ancestors heading texts from the outermost down to this section's parent,
       *                  already marker-stripped and canonicalised into segments
@@ -80,14 +89,33 @@ object Extractor:
 
               case Right(Some(marker)) =>
                 val key = CardKey(noteId, HeadingPath(NonEmptyVector.fromVectorUnsafe(path)))
-                buildSpecs(key, marker, title, ancestorTitles, section, fileName) match
-                  case Right(built) => built.foreach { case (spec, src) =>
-                      specs += SourcedSpec(
-                        spec,
-                        ref.copy(kind = src.kind, detail = src.detail),
-                      )
-                    }
-                  case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))
+
+                // CHECKED BEFORE THE CARD IS BUILT, not after. Once built, the card looks fine:
+                // the regrouped list is well-formed markdown and renders without complaint, so
+                // there is nothing downstream left to notice. This is the last point at which
+                // the evidence — the source lines — is still in hand.
+                //
+                // A card whose body has this is refused ALONE. Its siblings under other
+                // headings in the same file are unaffected and still sync, because ownership is
+                // per-heading; a whole file is not punished for one bad section.
+                val ambiguousNesting = listIndent.under(ref.line)
+
+                if ambiguousNesting.nonEmpty then
+                  val why =
+                    SpecError.ListNestingUnreadable(
+                      key.path.render,
+                      ListIndent.explain(ambiguousNesting),
+                    )
+                  failures += BuildFailure.KeyKnown(key, ref, describe(why))
+                else
+                  buildSpecs(key, marker, title, ancestorTitles, section, fileName) match
+                    case Right(built) => built.foreach { case (spec, src) =>
+                        specs += SourcedSpec(
+                          spec,
+                          ref.copy(kind = src.kind, detail = src.detail),
+                        )
+                      }
+                    case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))
 
             // Descend regardless: an unmarked heading is still an ancestor, and a marked one
             // can contain further marked headings.
@@ -118,6 +146,7 @@ object Extractor:
       s"#flashcard/sequence at '$p' asks for a list revealed one item at a time, but $what — " +
         s"write the items as a list, or use #flashcard/1way or #flashcard/2way if the answer " +
         s"is meant to be shown whole"
+    case SpecError.ListNestingUnreadable(p, what) => s"$what, at '$p'"
 
   /** A marked heading yields ONE spec for most markers and MANY for a table — n pair cards
     * plus a row card per row. Each carries the source kind it should be reported as, so a
@@ -502,7 +531,13 @@ object Extractor:
   * with identical text report DIFFERENT lines — reporting the first match for both would
   * reproduce the very ambiguity these positions exist to remove.
   */
-private final class LineIndex(body: String):
+/** @param bodyFirstLine
+  *   the line of the ORIGINAL FILE that `body` starts on. Without it every position reported by
+  *   this class is counted from the top of the BODY and is therefore short by the length of the
+  *   frontmatter — a number that is printed as `Note.md:15` and reads as a file position while
+  *   not being one. See [[obsidiananki.extract.SplitNote]] for the measurement.
+  */
+private final class LineIndex(body: String, bodyFirstLine: Int):
   private val lines  = body.linesIterator.toVector
   private var cursor = 0
 
@@ -514,4 +549,4 @@ private final class LineIndex(body: String):
       if idx < 0 then 0
       else
         cursor = idx + 1
-        idx + 1 // 1-based, as an editor counts
+        idx + bodyFirstLine // the file's own line number, as an editor counts it

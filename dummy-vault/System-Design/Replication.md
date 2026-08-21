@@ -24,10 +24,10 @@ served by lagging replicas. It is strictly weaker than
 value. Typical implementations:
 
 - Route reads to the leader for a short window after a write.
-  - Simple, but concentrates read load on one node.
+    - Simple, but concentrates read load on one node.
 - Pin the client to a replica whose applied log position is at least the
   position returned by its last write.
-  - Needs the server to hand the client a version token, e.g. `last_lsn`.
+    - Needs the server to hand the client a version token, e.g. `last_lsn`.
 
 ## How does a follower catch up after a network partition? #flashcard/1way
 

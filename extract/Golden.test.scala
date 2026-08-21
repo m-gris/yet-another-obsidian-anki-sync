@@ -581,10 +581,16 @@ class GoldenTest extends munit.FunSuite:
   test("the golden's own coverage has not been hollowed out") {
     assert(index.scan.specs.nonEmpty, "the live scan produced NO specs at all")
 
-    // Against the LIVE scan, not the golden. Verified: `inspect --vault-path …/dummy-vault`
-    // reports cards: 53, failures: 1, scan: complete, 3 duplicate keys.
+    // Against the LIVE scan, not the golden.
     assertEquals(index.scan.specs.size, 55, "the fixture vault no longer produces 55 specs")
-    assertEquals(index.scan.failures.size, 1, "the fixture vault no longer produces exactly 1 build failure")
+
+    // TWO expected failures now, and they are different KINDS of expected. The first is a table
+    // with a concept column and no descriptor columns. The second belongs to
+    // `Patterns/Shallow-Nesting.md`, a note added deliberately to carry an under-indented nested
+    // list: the parser regroups such a list, so the card would assert something the note does
+    // not say, and it is refused instead. That fixture must not be "tidied" — re-indenting it
+    // would take this back to 1 and quietly retire the check. The file says so itself.
+    assertEquals(index.scan.failures.size, 2, "the fixture vault no longer produces exactly 2 build failures")
 
     val values = golden.cards.flatMap(_.fields.map(_._2))
 

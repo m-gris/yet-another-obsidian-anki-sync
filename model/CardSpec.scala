@@ -134,6 +134,27 @@ enum SpecError:
     */
   case SequenceWithoutItems(headingPath: String, whatIsThere: String)
 
+  /** A nested list this tool's markdown parser and the author's editor read DIFFERENTLY.
+    *
+    * The parser wants four columns of indentation, or a tab, before it reads a line as a
+    * sub-item; CommonMark — which Obsidian implements — is satisfied by two. Given less than
+    * four, the parser does not merely decline to nest: it closes the list and opens a new one,
+    * which the next unindented item then joins. A remark and the thing it was a remark about
+    * come out as siblings, so the card asserts something the note never said WHILE LOOKING
+    * PERFECTLY WELL-FORMED. Silent success again, which is why this is a refusal, not a warning.
+    *
+    * REFUSED RATHER THAN REPAIRED, because repair is impossible rather than merely awkward:
+    * indentation is consumed by the parser, so once the wrong shape exists nothing records
+    * which line was indented and which was not. `extract/ListIndent.scala` therefore reads
+    * SOURCE TEXT, and `what` carries the evidence it found — line numbers and column counts.
+    *
+    * `what` IS A STRING, precedent [[UnsupportedContent]] and for the same recorded reason:
+    * `model/` imports nothing from `obsidiananki`, and carrying `ListIndent.Finding` here would
+    * give the dependency-free base layer a dependency on `extract/` for a payload that nothing
+    * pattern-matches.
+    */
+  case ListNestingUnreadable(headingPath: String, what: String)
+
 /** What will become exactly one Anki note.
   *
   * TABLE KEYS EXTEND THE HEADING PATH rather than forming a parallel key shape. A pair card

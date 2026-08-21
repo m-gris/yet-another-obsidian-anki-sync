@@ -23,7 +23,7 @@
 # whitespace is visible BY POSITION, and escaped so that an invisible character is visible
 # at all. Escaping is one-way: nothing ever unescapes this file.
 specs 55
-failures 1
+failures 2
 
 card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
   note ⟦Basic (and reversed card)⟧
@@ -353,11 +353,12 @@ card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication
 card ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
   note ⟦Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Read-your-writes consistency⟧
-  field ⟦Back⟧ ⟦<p>A guarantee that a client always sees its own prior writes, even when reads are\nserved by lagging replicas. It is strictly weaker than\nConsistency Models: other clients may still observe the old\nvalue. Typical implementations:</p><ul><li>Route reads to the leader for a short window after a write.</li></ul><ul><li>Simple, but concentrates read load on one node.</li><li>Pin the client to a replica whose applied log position is at least the\nposition returned by its last write.</li></ul><ul><li>Needs the server to hand the client a version token, e.g. <code>last_lsn</code>.</li></ul>⟧
+  field ⟦Back⟧ ⟦<p>A guarantee that a client always sees its own prior writes, even when reads are\nserved by lagging replicas. It is strictly weaker than\nConsistency Models: other clients may still observe the old\nvalue. Typical implementations:</p><ul><li><p>Route reads to the leader for a short window after a write.</p><ul><li>Simple, but concentrates read load on one node.</li></ul></li><li><p>Pin the client to a replica whose applied log position is at least the\nposition returned by its last write.</p><ul><li>Needs the server to hand the client a version token, e.g. <code>last_lsn</code>.</li></ul></li></ul>⟧
 
 card ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up%20after%20a%20network%20partition%3f⟧
   note ⟦Basic⟧
   field ⟦Front⟧ ⟦How does a follower catch up after a network partition?⟧
   field ⟦Back⟧ ⟦<p>It reconnects and asks the leader for everything after the last log position it\ndurably applied; the leader replays from that offset if the segment still exists,\notherwise the follower must take a fresh snapshot. See Write-Ahead Log for\nwhy the position, not the wall clock, is the resume point.</p><pre><code class="language-sql">SELECT client_addr, state, sent_lsn, replay_lsn,\n       sent_lsn - replay_lsn AS lag_bytes\nFROM pg_stat_replication;</code></pre><p>A follower whose <code>replay_lsn</code> stops advancing while <code>sent_lsn</code> moves is applying\ntoo slowly, not disconnected — a distinction Monitoring dashboards routinely\nblur.</p>⟧
 
+fail ⟦KeyKnown⟧ ⟦src::fix-shallow-nesting::shallow%20nesting/why%20is%20a%20sloppy%20quorum%20weaker%20than%20a%20strict%20one%3f⟧
 fail ⟦KeyKnown⟧ ⟦src::fix-table-edges::table%20edge%20cases/concept%20column%20only%2c%20no%20descriptor%20columns⟧

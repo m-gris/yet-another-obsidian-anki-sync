@@ -16,6 +16,30 @@ class FrontmatterTest extends munit.FunSuite:
     assert(note.body.startsWith("# Heading"), s"body was '${note.body.take(30)}'")
   }
 
+  // ============================== where the body starts ====
+
+  /** Every line number this tool prints to an author is counted from `bodyFirstLine`, so
+    * getting it wrong fails nothing — it just sends the reader to the wrong line, plausibly.
+    * That is exactly the class of defect this project keeps finding, so the arithmetic is
+    * pinned here rather than trusted.
+    */
+  test("the body's first line is the FILE's line number, not 1") {
+    // ---(1) id(2) ---(3) blank(4) # Heading(5)
+    assertEquals(split("---\nid: n1\n---\n\n# Heading\n\nBody.\n").bodyFirstLine, 5)
+  }
+
+  test("blank lines after the closing fence are counted, not silently skipped") {
+    // They are dropped from the body TEXT, so unless they are also counted the origin comes
+    // out short by however many the author happened to leave behind.
+    val note = split("---\nid: n1\n---\n\n\n\n# Heading\n")
+    assertEquals(note.bodyFirstLine, 7)
+    assert(note.body.startsWith("# Heading"), s"body was '${note.body.take(30)}'")
+  }
+
+  test("a note with no frontmatter starts at line 1") {
+    assertEquals(split("# Heading\n\nBody.\n").bodyFirstLine, 1)
+  }
+
   test("a note with no frontmatter is an ordinary note, not an error") {
     val src  = "# Heading\n\nBody.\n"
     val note = split(src)

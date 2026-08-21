@@ -153,9 +153,43 @@ class FixtureVaultTest extends munit.FunSuite:
     val reasons = index.scan.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }
     reasons.foreach { r =>
       assert(
-        r.contains("cloze") || r.contains("no descriptor columns"),
+        r.contains("cloze") || r.contains("no descriptor columns") || r.contains("nested list"),
         s"unexpected build failure from the real vault: $r",
       )
     }
     assert(index.scan.canInferOrphans, "the fixture vault should scan completely")
+  }
+
+  /** The under-indented nested list in `Patterns/Shallow-Nesting.md` is refused, and refused
+    * with the FILE's own line numbers.
+    *
+    * ==Why this is not already covered by `ListIndentTest`==
+    *
+    * That suite hands the scanner a string and starts counting at line 1. Everything this test
+    * adds lives in the wiring around it: that a note on disk reaches the scan at all, that the
+    * refusal is attached to the ONE card whose body contains the problem, and — the part that
+    * was actually wrong before it existed — that the line numbers survive frontmatter removal.
+    * A body-relative line number looks entirely plausible in an error message and sends the
+    * author to the wrong place, which no unit test on a frontmatter-free string can catch.
+    */
+  test("an under-indented nested list is refused, quoting the file's own line numbers") {
+    val index  = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
+    val nested = index.scan.failures.collect {
+      case BuildFailure.KeyKnown(_, ref, reason) if reason.contains("nested list") => (ref, reason)
+    }
+
+    assertEquals(nested.size, 1, s"expected exactly one refusal, got ${nested.map(_._1)}")
+    val (ref, reason) = nested.head
+
+    assertEquals(ref.file, "Patterns/Shallow-Nesting.md")
+
+    // Read off the fixture, and the reason the fixture says not to re-indent it: these are the
+    // lines the two offending sub-items sit on IN THE FILE, frontmatter included. Before the
+    // body's origin was threaded through, this reported 22 and 24 — four lines high, exactly
+    // the frontmatter that had been removed.
+    assert(reason.contains("line 26"), reason)
+    assert(reason.contains("line 28"), reason)
+
+    // The remedy has to be in the message, not just the complaint.
+    assert(reason.contains("4 spaces or one tab"), reason)
   }

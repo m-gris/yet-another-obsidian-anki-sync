@@ -71,9 +71,9 @@ class AsTextSuite extends munit.FunSuite:
       .sortBy(_.toString)
 
     val tables = files.flatMap { p =>
-      val (_, body) =
+      val (_, split) =
         Frontmatter.read(Files.readString(p)).fold(e => fail(s"$p frontmatter: $e"), identity)
-      parse(body).content.toVector.flatMap(tablesIn)
+      parse(split.body).content.toVector.flatMap(tablesIn)
     }
     assert(tables.nonEmpty, s"no table found under $vaultRoot")
 

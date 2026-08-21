@@ -27,8 +27,21 @@ enum FrontmatterError:
   /** The block parsed but is not a mapping — a bare list or scalar at the top level. */
   case NotAMapping
 
-/** A note's frontmatter and body, separated. */
-final case class SplitNote(frontmatter: Option[String], body: String)
+/** A note's frontmatter and body, separated.
+  *
+  * @param bodyFirstLine
+  *   the line of the ORIGINAL FILE that `body` starts on, 1-based as an editor counts.
+  *
+  * CARRIED BECAUSE EVERY DIAGNOSTIC DOWNSTREAM IS COUNTED IN THE WRONG UNITS WITHOUT IT.
+  * Everything after this point sees only `body`, so a line number computed there is relative to
+  * the body and is short by however much frontmatter was removed — for a note with the usual
+  * three-line `---` block plus a blank line, by four. That number is printed as
+  * `Note.md:15 (heading)`, which reads as a file position and is not one; an author who follows
+  * it lands four lines above the thing being complained about. Measured on
+  * `dummy-vault/System-Design/Replication.md`, where a heading on file line 19 was reported as
+  * line 15.
+  */
+final case class SplitNote(frontmatter: Option[String], body: String, bodyFirstLine: Int)
 
 object Frontmatter:
 
@@ -49,17 +62,27 @@ object Frontmatter:
     // The ENTIRE rule: the very first line must be exactly the fence. Every hostile case
     // follows from it without a special case — a thematic break, a table separator and a
     // fenced block all sit below line 1, and a leading blank line means line 1 is not it.
-    if !lines.headOption.exists(_.stripLineEnd.trim == Fence) then Right(SplitNote(None, content))
+    if !lines.headOption.exists(_.stripLineEnd.trim == Fence) then
+      Right(SplitNote(None, content, bodyFirstLine = 1))
     else
       lines.indexWhere(_.stripLineEnd.trim == Fence, from = 1) match
         // Opened but never closed: the whole file could be frontmatter or none of it.
         // Guessing would silently discard the document, so it is refused.
         case -1 => Left(FrontmatterError.Unterminated)
         case closing =>
+          val afterFence = lines.drop(closing + 1)
+          // COUNTED, NOT ASSUMED. The blank lines between the closing fence and the first real
+          // line are dropped below, so they have to be counted here or `bodyFirstLine` is short
+          // by however many there were. `takeWhile` on the same predicate the drop uses is what
+          // keeps the two from drifting apart.
+          val blanksDropped = afterFence.takeWhile(_.forall(c => c == '\r' || c == '\n')).size
           Right(
             SplitNote(
               frontmatter = Some(lines.slice(1, closing).mkString),
-              body = lines.drop(closing + 1).mkString.dropWhile(c => c == '\r' || c == '\n'),
+              body = afterFence.mkString.dropWhile(c => c == '\r' || c == '\n'),
+              // +1 for the closing fence line itself, +1 to move from a 0-based index to the
+              // 1-based line number an editor shows.
+              bodyFirstLine = closing + 1 + blanksDropped + 1,
             )
           )
 
@@ -94,11 +117,16 @@ object Frontmatter:
       catch case e: org.yaml.snakeyaml.error.YAMLException => Left(FrontmatterError.Malformed(e.getMessage))
 
   /** Split and parse in one step. */
-  def read(content: String): Either[FrontmatterError, (Map[String, String], String)] =
+  /** Returns the parsed keys alongside the WHOLE [[SplitNote]] rather than just its body text,
+    * so that `bodyFirstLine` reaches the caller. It used to return the body as a bare `String`,
+    * which is precisely how every downstream line number came to be counted from the wrong
+    * origin — the information was discarded here, one call before it was needed.
+    */
+  def read(content: String): Either[FrontmatterError, (Map[String, String], SplitNote)] =
     for
       note <- split(content)
       keys <- note.frontmatter.fold(Right(Map.empty[String, String]))(parse)
-    yield (keys, note.body)
+    yield (keys, note)
 
   /** A YAML loader with IMPLICIT TYPING TURNED OFF, so every scalar stays a string.
     *
