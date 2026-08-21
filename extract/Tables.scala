@@ -2,6 +2,7 @@ package obsidiananki.extract
 
 import cats.data.NonEmptyVector
 import laika.ast.*
+import obsidiananki.content as C
 import obsidiananki.model.*
 import obsidiananki.plan.SourceKind
 
@@ -66,6 +67,31 @@ object CellDisplay:
   val Default: CellDisplay =
     CellDisplay(cell => cell.content.collect { case sc: SpanContainer => sc.extractText }.mkString(" ").trim)
 
+  /** WHAT PRODUCTION INJECTS SINCE S11 — [[Default]]'s text, escaped for an HTML field.
+    *
+    * ADDED BESIDE `Default` RATHER THAN REPLACING IT, and the choice is load-bearing in two
+    * directions. `content/AsText.test.scala` compares `AsText.cellDisplay` against
+    * `CellDisplay.Default` over the whole fixture; mutating `Default` would leave that sweep
+    * green while it silently stopped comparing what its name says it compares, because no
+    * fixture cell contains any of the six escaped characters. And `Escaped` is DEFINED IN
+    * TERMS OF `Default`, so `Default` is still on the production path as the inner factor and
+    * that sweep still pins it — this is a decomposition, not a shadow path.
+    *
+    * TOTAL, AND WITH NO FAILURE CHANNEL. `Html.escape` is a total `String => String`;
+    * escaping needs no lowering, so the partiality of `content.Lower.cell` is irrelevant here.
+    * That matters because the repo carried the opposite claim as a reason (see the ledger at
+    * the foot of `Extractor.scala`, and `content/Lower.scala:128-131`, which is not this
+    * slice's to correct): a future author must not "unblock" richer cell rendering by adding a
+    * failure channel nobody needed.
+    *
+    * ESCAPE-ONLY, AND THAT IS NOT FINISHED WORK. A cell's bold, inline code and any block
+    * shape inside it still flatten exactly as they did before S11. Rendering a cell's
+    * STRUCTURE is a later slice, and it needs `extract/Tables.test.scala` in its file list,
+    * because both honest routes to it cross that file.
+    */
+  val Escaped: CellDisplay =
+    CellDisplay(cell => C.Html.escape(Default.text(cell)).render)
+
 object Tables:
 
   /** Build every card a table section declares.
@@ -81,10 +107,11 @@ object Tables:
     * project already has a scar from.
     *
     * A NAMED, UNCLOSED HOLE: `Extractor.scala` has two call sites and only ONE of them runs.
-    * The arm at `Extractor.scala:151` sits in the `else` of `if marker == Marker.Table`
-    * (line 125) and exists only because an inexhaustive match is a build error here. Its
-    * `CellDisplay.Default` argument is exercised by no test and never will be while that `if`
-    * stands — a future "simplification" that collapses the `if` makes it live.
+    * The arm inside `buildSpecs`'s `marker match` sits in the `else` of
+    * `if marker == Marker.Table` and exists only because an inexhaustive match is a build
+    * error here. Its `CellDisplay` argument is exercised by no test and never will be while
+    * that `if` stands — a future "simplification" that collapses the `if` makes it live.
+    * Both call sites inject [[CellDisplay.Escaped]] since S11.
     */
   def fromSection(
       key: CardKey,
@@ -174,6 +201,13 @@ object Tables:
           // is observable to the differential guard (a dropped card changes the key sequence)
           // and, with `CellDisplay.Default`, unreachable — `Body.fromExtracted` returns
           // `None` iff the text trims to empty, and `cellSource` already trims.
+          //
+          // RE-DERIVED FOR `CellDisplay.Escaped`, which is what production injects since S11,
+          // rather than left stale: `Html.escape` is INJECTIVE, maps empty to empty, and
+          // introduces no whitespace — every character it emits is either the input character
+          // or an entity beginning `&`. So a non-empty trimmed input yields a non-empty output
+          // whose first and last characters are non-whitespace, on which `.trim` is a no-op.
+          // The argument above therefore survives the swap unchanged.
           Body.fromExtracted(d.value).map { body =>
             val key = base.copy(path = HeadingPath(base.path.segments :+ rowSeg :+ d.headerSeg))
             CardSpec.ThreeField(key, rowConcept, d.header, body, ThreeFieldDirections.Default) ->

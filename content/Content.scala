@@ -326,11 +326,26 @@ enum Block:
   /** A run of prose. May be empty — see section (F). */
   case Paragraph(content: Vector[Inline])
 
-  /** A bulleted list — MEMBERSHIP is the knowledge, not sequence. */
+  /** A list the author spelled with a BULLET character — `-`, `*` or `+`.
+    *
+    * THE CONSTRUCTOR NAMES THE SYNTAX AND NOTHING ELSE. This docstring used to say "MEMBERSHIP
+    * is the knowledge, not sequence", and its sibling said the opposite about [[Numbered]] —
+    * both asserting that the bullet character carries the AUTHOR'S MEANING. It does not, and
+    * `#flashcard/sequence` is what makes that concrete: a bulleted body under that marker is
+    * revealed one item at a time, while the same bulleted body under `#flashcard/2way` is
+    * shown whole. WHETHER THE ORDER IS THE KNOWLEDGE IS STATED BY THE HEADING'S MARKER and is
+    * not inferable from the body — which is precisely why that marker is explicit rather than
+    * inferred. Corrected 2026-08-21, by the slice that falsified it.
+    */
   case Bullets(items: Vector[Item])
 
-  /** A numbered list — SEQUENCE is the knowledge. Carries no start number and no format; see
-    * the named loss (H)(1).
+  /** A list the author spelled with NUMBERS — `1.`, `2.`, and so on.
+    *
+    * Two spellings of one shape: this and [[Bullets]] differ in the character the author typed
+    * and in the element a renderer emits for it (`<ol>` rather than `<ul>`), not in what the
+    * list MEANS. See [[Bullets]] for where the meaning actually lives.
+    *
+    * Carries no start number and no format; see the named loss (H)(1).
     */
   case Numbered(items: Vector[Item])
 

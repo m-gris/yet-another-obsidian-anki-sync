@@ -163,7 +163,9 @@ class ExtractorTest extends munit.FunSuite:
     )
     specFor(note, "a / parent").spec match
       case CardSpec.TwoField(_, _, back, _) =>
-        assertEquals(back.value, "Only this sentence.")
+        // The `<p>` arrived in S11: a card body is an HTML fragment. The assertion is on the
+        // WHOLE value rather than `contains`, so the child's sentence still cannot sneak in.
+        assertEquals(back.value, "<p>Only this sentence.</p>")
       case other => fail(s"expected TwoField, got $other")
   }
 
@@ -203,6 +205,30 @@ class ExtractorTest extends munit.FunSuite:
       case Some(key) => assertEquals(key.path.render, "a / marked")
       case None      => fail(s"failure did not carry a key: ${note.failures}")
     }
+
+  /** B6 IS DECIDED ON THE PLAIN-TEXT RENDERING, NEVER ON THE HTML ONE — and this body is the
+    * input that discriminates the two.
+    *
+    * `%%…%%` is an Obsidian comment and lowers to ZERO inlines, so this body becomes one
+    * paragraph holding a single space. `AsText` kills it through its trailing `.trim` and the
+    * rule fires. `AsHtml` has no such trim and renders `<p> </p>` — eleven non-blank
+    * characters — on which `Body.fromExtracted`'s `raw.trim.isEmpty` does NOT fire, because
+    * the string begins with `<`.
+    *
+    * So an HTML-gated B6 would silently ship a visually blank card here instead of refusing;
+    * and for a `2way` marker Anki then declines the reverse card, so the marker produces ONE
+    * card where it promised TWO. Refusal → card is the one direction the design forbids, and
+    * nothing else reddens on it: a more permissive tool makes MORE cards, not fewer.
+    *
+    * NO NOTE IN `dummy-vault` CONTAINS THIS BODY, so `extract/golden/fixture-cards.txt` pins
+    * nothing here and this test is the whole net.
+    */
+  test("B6 is decided on the plain text: a body of only comments is still an EMPTY body") {
+    val note = extract("# A\n\nx\n\n## Marked #flashcard/2way\n\n%%a%% %%b%%\n")
+    assert(note.specs.isEmpty, s"a body of only private comments produced a card: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+    assert(reason.contains("empty body"), s"the refusal is not an empty-body error: $reason")
+  }
 
   // ================================================ loud rejections ====
 
@@ -323,9 +349,13 @@ class ExtractorTest extends munit.FunSuite:
     specFor(note, "messaging / cost / benefit / queue").spec match
       case CardSpec.TableRow(_, concept, descriptors) =>
         assertEquals(concept, "Queue")
+        // `&amp;` arrived in S11: production injects `CellDisplay.Escaped`, so a cell's text
+        // is escaped for an HTML field. This is the one place the fixture markdown in THIS
+        // file carries a character that escaping moves — `dummy-vault` carries none in any
+        // table cell, which is why the golden does not witness it.
         assertEquals(
           descriptors.toVector,
-          Vector("Benefit" -> "Load Absorption", "Cost" -> "Delay & Duplication"),
+          Vector("Benefit" -> "Load Absorption", "Cost" -> "Delay &amp; Duplication"),
         )
       case other => fail(s"expected TableRow, got $other")
   }
@@ -568,7 +598,9 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("a cloze note carries the whole section text, WITH its deletions marked in place") {
     val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==femur== is a bone.\n")
-    assertEquals(clozeOf(note, "b / l").text.value, "The {{c1::femur}} is a bone.")
+    // The `<p>` arrived in S11. `{{c1::…}}` is unchanged and UNESCAPED: those braces are the
+    // tool's own, put there by `content.Html.clozeDeletion` after the inner text was escaped.
+    assertEquals(clozeOf(note, "b / l").text.value, "<p>The {{c1::femur}} is a bone.</p>")
   }
 
   /** The Back field of a two-field card, which is where a dropped body construct shows up. */
@@ -667,7 +699,9 @@ class ExtractorTest extends munit.FunSuite:
     val note = extract("# B\n\nx\n\n## C #flashcard/2way\n\nreal answer\n\n<!-- PRIVATE NOTE -->\n")
     val back = twoFieldBack(note, "b / c")
     assert(!back.contains("PRIVATE"), s"a private comment was put on the card: [$back]")
-    assertEquals(back, "real answer")
+    // The `<p>` arrived in S11. The point of the whole-value assertion is unchanged: the
+    // comment appears NOWHERE, not even as an empty element or a stray space.
+    assertEquals(back, "<p>real answer</p>")
   }
 
   /** A CLOZE SECTION WHOSE HIGHLIGHT IS INSIDE A TABLE was told it had no highlight at all.
@@ -771,7 +805,7 @@ class ExtractorTest extends munit.FunSuite:
     )
     assertEquals(
       clozeOf(note, "b / l").text.value,
-      "A {{c2::quorum}} is a majority; two {{c2::quorum}} sets meet.",
+      "<p>A {{c2::quorum}} is a majority; two {{c2::quorum}} sets meet.</p>",
     )
   }
 
@@ -780,7 +814,10 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("an unlabelled group skips a number a label already claims") {
     val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==1|shaft== and each ==end==.\n")
-    assertEquals(clozeOf(note, "b / l").text.value, "The {{c1::shaft}} and each {{c2::end}}.")
+    assertEquals(
+      clozeOf(note, "b / l").text.value,
+      "<p>The {{c1::shaft}} and each {{c2::end}}.</p>",
+    )
   }
 
   /** A highlight inside a code span is not a deletion, so it must survive rendering as the
@@ -869,4 +906,237 @@ class ExtractorTest extends munit.FunSuite:
     val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
     assert(reason.contains("task"), s"the task list is not named: $reason")
     assert(reason.contains("diagram.png"), s"the embed is not named: $reason")
+  }
+
+  // ============================================= S11: the field is HTML ====
+  //
+  // ANKI FIELDS ARE HTML. A literal newline in one renders as a SPACE — read back from a real
+  // note — so while the tool sent plain text, every piece of the author's formatting was
+  // destroyed on the way out: a bulleted answer arrived on the card as one run-on line.
+  //
+  // WHAT THE TWO TESTS BELOW OBSERVE IS TAGS IN A FIELD VALUE. NOBODY HAS RENDERED THESE
+  // CARDS. Where a claim here is about LINES A PERSON SEES it is written as a PREDICTION from
+  // `<p>` / `<li>` box layout, never as an observation.
+
+  /** THE ACCEPTANCE TEST FOR S11, and it is TWO opposite requirements held in one value.
+    *
+    * A HARD-WRAPPED PARAGRAPH MUST NOT GAIN A LINE BREAK. The author wraps prose at 80
+    * columns and that wrap is not content; it survives here as a literal newline INSIDE one
+    * `<p>`, which HTML collapses back to a space — PREDICTED from block layout rather than
+    * observed. Emitting `<br>` instead would put the author's column width on the card, which
+    * is why the second assertion is about an ABSENCE and carries its own clue.
+    *
+    * A LIST MUST GAIN ONE. Note what that means under HTML: the list gains NO NEWLINE
+    * CHARACTER AT ALL — it gains `</li><li>`. A test written against `\n` would be false on
+    * the list half and vacuous on the paragraph half.
+    *
+    * THE `</p><p>` ADJACENCY is the half the hard-wrap assertion alone cannot prove, so it is
+    * pinned by asserting the WHOLE field value rather than by `contains`: a boundary BETWEEN
+    * blocks must stop collapsing at the same moment a wrap INSIDE one goes on collapsing.
+    * Those two together are the whole job of this slice.
+    */
+  test("a hard-wrapped paragraph gains no line break, while a list gains one element per item") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Q #flashcard/2way
+         |
+         |alpha
+         |beta
+         |
+         |gamma
+         |
+         |- one
+         |- two
+         |""".stripMargin
+    )
+    val back = twoFieldBack(note, "b / q")
+    assertEquals(back, "<p>alpha\nbeta</p><p>gamma</p><ul><li>one</li><li>two</li></ul>")
+    assert(
+      !back.contains("<br"),
+      s"a `<br>` here would put the author's 80-column wrap on the card as a line break: [$back]",
+    )
+  }
+
+  /** THE ONLY THING PINNING `CellDisplay.Escaped` END TO END.
+    *
+    * Measured on 2026-08-21: no cell in any `dummy-vault` table contains any of the six
+    * escaped characters, so the 27 table-derived cards move
+    * `extract/golden/fixture-cards.txt` by ZERO BYTES and the golden cannot witness this.
+    *
+    * DRIVEN FROM AN INLINE MARKDOWN STRING ON PURPOSE, and adding the same character to
+    * `dummy-vault` instead would be the wrong fix: `content/AsText.test.scala` runs a live
+    * sweep comparing `AsText.cellDisplay` against `CellDisplay.Default` over the fixture, and
+    * it would redden — in a file this slice may not edit.
+    *
+    * NOTE WHAT THIS DOES NOT ASSERT: the cell is ESCAPED, not rendered. A cell's bold, inline
+    * code and block structure still flatten exactly as they did before this slice.
+    */
+  test("a special character in a table cell reaches the card escaped") {
+    val note = extract(
+      "# B\n\nx\n\n## T #flashcard/table\n\n| Concept | Note |\n| - | - |\n| Alpha | a < b |\n"
+    )
+    assertEquals(note.failures, Vector.empty)
+    val fields = specFor(note, "b / t / alpha / note").spec.fields.toMap
+    val description = fields.getOrElse("Description", fail(s"no Description field — have $fields"))
+    assertEquals(description, "a &lt; b")
+  }
+
+  // ================================================ S12: the sequence card ====
+  //
+  // WHAT THESE FOUR TESTS OBSERVE IS SPEC VALUES AND TAGS. The human's requirement is about
+  // what a card DOES ON REVIEW — items revealed one at a time, on one schedule — and NOBODY
+  // HAS RENDERED THIS CARD. Where a claim below is about what a person would see, it is
+  // written as a PREDICTION read off `note-types/cloze-sequence/front.html` and `back.html`,
+  // never as an observation.
+
+  /** Every reason this note refused to build, joined — the channel an author actually reads. */
+  def refusalReasons(n: ExtractedNote): String =
+    n.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+
+  /** THE HAPPY PATH: one marked section becomes ONE note of the list note type.
+    *
+    * THE LEAD-IN PARAGRAPH IS INSIDE THE FIELD AND IS NOT EXTRACTED AWAY, which looks like a
+    * leak until you read the template. `front.html:9-13` adds `hidden-cloze` to `#text li` and
+    * binds nothing else, so everything in the field that is not a list item is PROMPT — the
+    * lead-in becomes the question and the items are what is hidden. Removing it here would
+    * remove the question.
+    *
+    * THE WHOLE `fields` VECTOR IS ASSERTED, not the Text value alone, because field ORDER is
+    * part of what a note type contract is: `Marker.ClozeSequenceFields` is the single source
+    * of it and a silent reordering would put the body in the Title.
+    */
+  test("a sequence section becomes one Cloze Sequence note whose Text carries the list") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence
+         |
+         |From the body to the lungs:
+         |
+         |- superior vena cava
+         |- right atrium
+         |""".stripMargin
+    )
+    assertEquals(note.failures, Vector.empty)
+    assertEquals(paths(note), Vector("b / path of blood"))
+    val spec = specFor(note, "b / path of blood").spec
+    assertEquals(spec.noteTypeName, Marker.NoteTypes.ClozeSequence)
+    assertEquals(
+      spec.fields,
+      Vector(
+        "Title" -> "Path of blood",
+        "Text"  -> "<p>From the body to the lungs:</p><ul><li>superior vena cava</li><li>right atrium</li></ul>",
+      ),
+    )
+  }
+
+  /** THE RULED REFUSAL: a marker asking for a list, over a body that holds none.
+    *
+    * The marker and the body are two INDEPENDENT statements, which is the whole point of the
+    * marker being explicit rather than inferred from the body — so when they disagree the
+    * refusal must name BOTH halves: what was asked for, and what is actually there.
+    *
+    * IT MUST ALSO NAME THE OTHER EXIT, and that clause is not decoration. A bulleted answer
+    * shown WHOLE is legitimate and is a different card from one revealed step by step; the
+    * author's real mistake here is usually the MARKER, not the markdown. This message is the
+    * only place an author who never read the design document learns that.
+    */
+  test("a sequence marker over a body with NO list is refused, naming both halves") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence
+         |
+         |Just prose, no list at all.
+         |
+         |```
+         |select 1
+         |```
+         |""".stripMargin
+    )
+    assertEquals(note.specs, Vector.empty, s"a sequence card was built with no list: ${note.specs}")
+    val reason = refusalReasons(note)
+    assert(reason.contains("#flashcard/sequence"), s"the refusal does not name what was ASKED FOR: $reason")
+    assert(reason.contains("no list"), s"the refusal does not say a list is missing: $reason")
+    assert(reason.contains("a paragraph"), s"the refusal does not name WHAT IS THERE: $reason")
+    assert(reason.contains("a code block"), s"the refusal does not name WHAT IS THERE: $reason")
+    assert(
+      reason.contains("#flashcard/2way"),
+      s"the refusal does not name the other exit, so the author cannot learn that a list " +
+        s"shown WHOLE is a legitimate different card: $reason",
+    )
+  }
+
+  /** THE SURVIVAL HALF OF THE PREDICATE, and it is the only thing pinning it.
+    *
+    * `%%…%%` is an Obsidian comment and lowers to ZERO inlines, so each item here holds one
+    * empty paragraph. The renderer drops an item that renders empty, and then drops the whole
+    * list — so the `Text` field would contain the lead-in paragraph and NO `li` at all.
+    *
+    * A PRESENCE-ONLY PREDICATE PASSES THIS BODY: the list block is right there with two items
+    * in it. So is B6, carried by the lead-in paragraph, and so is `Body.fromExtracted` on the
+    * HTML. PREDICTED CONSEQUENCE, read off the templates rather than observed: `front.html:10`
+    * hides `#text li` and there are none, so front and back would be identical and the reveal
+    * key would do nothing — a card reviewed forever as a prompt with no answer, with no error
+    * anywhere.
+    */
+  test("a sequence list whose items ALL render empty is refused, not shipped as a card") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence
+         |
+         |From the body to the lungs:
+         |
+         |- %%not written yet%%
+         |- %%nor this one%%
+         |""".stripMargin
+    )
+    assertEquals(
+      note.specs,
+      Vector.empty,
+      s"a sequence card whose Text holds no list item was emitted: ${note.specs}",
+    )
+    val reason = refusalReasons(note)
+    assert(reason.contains("#flashcard/sequence"), s"the refusal does not name what was ASKED FOR: $reason")
+    assert(
+      reason.contains("renders empty") || reason.contains("render empty"),
+      s"the refusal does not say the items rendered empty, so the author is sent hunting for " +
+        s"a list that is plainly there: $reason",
+    )
+  }
+
+  /** B6 STILL FIRES FIRST, AND IT MATTERS WHICH ERROR THE AUTHOR READS.
+    *
+    * The B6 gate sits ahead of the marker match, so a marked heading immediately followed by a
+    * subheading reports "empty body" — the more actionable error, since the fix is to write
+    * prose — rather than "no list". This ordering is exactly the kind a later reader
+    * "improves" by moving the sequence check earlier.
+    */
+  test("a sequence heading with an EMPTY body reports the empty body, not the missing list") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence
+         |
+         |### Immediately a subheading
+         |
+         |So the marked heading has no prose of its own.
+         |""".stripMargin
+    )
+    assertEquals(note.specs, Vector.empty)
+    val reason = refusalReasons(note)
+    assert(reason.contains("empty body"), s"expected an empty-body refusal, got: $reason")
+    assert(!reason.contains("no list"), s"the sequence check ran ahead of B6: $reason")
   }

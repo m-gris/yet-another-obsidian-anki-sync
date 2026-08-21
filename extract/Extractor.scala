@@ -114,6 +114,10 @@ object Extractor:
     case SpecError.TableWithoutDescriptors(p) =>
       s"table at '$p' has a concept column but no descriptor columns, so it yields no cards"
     case SpecError.UnsupportedContent(p, what) => s"$what, at '$p'"
+    case SpecError.SequenceWithoutItems(p, what) =>
+      s"#flashcard/sequence at '$p' asks for a list revealed one item at a time, but $what — " +
+        s"write the items as a list, or use #flashcard/1way or #flashcard/2way if the answer " +
+        s"is meant to be shown whole"
 
   /** A marked heading yields ONE spec for most markers and MANY for a table — n pair cards
     * plus a row card per row. Each carries the source kind it should be reported as, so a
@@ -159,28 +163,195 @@ object Extractor:
     // survive into the tree is UNVERIFIED.
     if marker == Marker.Table then
       bodyBlocks(where, ownBody(section))
-        .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Default))
+        .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Escaped))
     else for
       lowered <- bodyBlocks(where, ownBody(section))
+
+      // ── THE RULE, AND THEN THE INVARIANT. TWO BINDINGS, IN THIS ORDER. ────────────────
+      //
+      // BOTH RENDERINGS ARE COMPUTED AHEAD OF THE MARKER MATCH, AND BOTH ARE DISCARDED ON THE
+      // CLOZE PATH. That reads like dead code and is not: `EmptyBody` must keep firing AHEAD
+      // of the cloze branch, so a cloze section whose body renders to nothing is reported as
+      // an empty body rather than as a cloze section with no highlight. Moving either below
+      // the marker match changes which error an author reads.
       text = C.AsText.plain(lowered)
-      // COMPUTED AND THEN DISCARDED ON THE CLOZE PATH, DELIBERATELY. It reads like dead code
-      // and is not: `EmptyBody` must keep firing AHEAD of the cloze branch, so a cloze section
-      // whose body renders to nothing is reported as an empty body rather than as a cloze
-      // section with no highlight. Moving this below the marker match changes which error an
-      // author reads.
-      body <- Body.fromExtracted(text).toRight(SpecError.EmptyBody(where))
+
+      // B6 GATES ON THE PLAIN TEXT, NEVER ON THE HTML — and the reason is this codebase's own,
+      // written at `CellDisplay` above `Tables.scala`'s object: A RENDERER CAN NEITHER MINT NOR
+      // DESTROY A CARD.
+      //
+      // The divergence is REACHABLE, not hypothetical. `content/Lower.scala:428` lowers an
+      // `ObsidianComment` to zero inlines, so a body of `%%a%% %%b%%` lowers to
+      // `Paragraph(Vector(Inline.Text(" ")))`. `AsText` kills that through its trailing `.trim`;
+      // `AsHtml` renders `<p> </p>`, eleven non-blank characters, and
+      // `Body.fromExtracted`'s `raw.trim.isEmpty` (`model/CardSpec.scala:24-26`) does NOT fire
+      // on it — the `.trim` is a no-op there because the string begins with `<`. Gating on the
+      // HTML would silently retire B6 for that input and, for a `2way` marker, ship one card
+      // where the marker promised two. `Extractor.test.scala`'s "B6 is decided on the plain
+      // text" is what pins this; no `dummy-vault` note contains that body.
+      _ <- Body.fromExtracted(text).toRight(SpecError.EmptyBody(where))
+
+      html = C.AsHtml.plain(lowered).render
+
+      // AN ASSERTION, NOT A SECOND REFUSAL, AND NOT CLAIMED UNREACHABLE.
+      //
+      // Why not a second `SpecError.EmptyBody`: that error is the AUTHOR's channel and teaches
+      // exactly one lesson — "this marked heading has no prose of its own, because a subheading
+      // follows it". If the gate above passed, the author's source is not empty, there is
+      // nothing they can do, and a second `EmptyBody` sends them hunting for prose they already
+      // wrote. `sys.error` is the shape `Cloze.render`'s `misaligned` already uses in this
+      // layer for the same kind of statement.
+      //
+      // IT IS ONE-DIRECTIONAL, WHICH IS WEAKER THAN UNREACHABLE AND IS SAID THAT WAY ON
+      // PURPOSE — this project has already shipped a comment asserting a branch unreachable
+      // that was not. The argument: `AsHtml` empty ⇒ every block contributed nothing ⇒ every
+      // block's inner rendered empty ⇒ `AsText`'s per-block text was empty for all of them ⇒
+      // the gate above already left with a `Left`. The only mechanism `AsText` has that
+      // `AsHtml` lacks is that trailing `.trim`, and it diverges in the OTHER direction
+      // (AsText-empty while AsHtml is not) — which is precisely why the gate reads `AsText`.
+      // EVIDENCE, and it is evidence rather than a type-level proof:
+      // `content/AsHtml.test.scala`'s B6 aggregate asserts
+      // `AsHtml.plain(bs).render.isEmpty == AsText.plain(bs).isEmpty` over hand-built values.
+      body = Body
+        .fromExtracted(html)
+        .getOrElse(
+          sys.error(
+            s"card body rendering disagreed at '$where': the plain-text rendering is non-empty " +
+              s"(${text.length} chars) while the HTML rendering is blank (${html.length} chars). " +
+              s"B6 was decided on the plain text and passed, so this is a renderer disagreement, " +
+              s"not an empty body."
+          )
+        )
+
       spec <- marker match
         case Marker.TwoField(directions) =>
-          Right(Vector(CardSpec.TwoField(key, title, body, directions) -> RowSource.heading))
+          // ESCAPED HERE, IN THE ARGUMENT POSITION, AND NOWHERE UPSTREAM. See the note below
+          // the `ThreeField` arm — rebinding `title` is the highest-consequence mistake
+          // available in this function.
+          Right(
+            Vector(
+              CardSpec.TwoField(key, C.Html.escape(title).render, body, directions) ->
+                RowSource.heading
+            )
+          )
 
         case Marker.ThreeField(directions) =>
           // The concept is the NEAREST ancestor heading, or the filename when the marked
           // heading has no ancestor at all.
+          //
+          // WHY THE ESCAPING HAPPENS IN THESE ARGUMENT POSITIONS AND NOWHERE ELSE. `rawHeading`
+          // (`:57`) and `title` (`:68`) feed BOTH identity and display: `HeadingSegment
+          // .fromExtractedText(rawHeading)` and `Marker.stripMarker(rawHeading)` are two
+          // separate calls on the same raw string eight lines apart, and display and identity
+          // have already forked there. Escaping upstream of that fork would move card KEYS —
+          // the golden's Quorums key carries `>` as `%3e` INSIDE the key
+          // (`…what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f`), which would become
+          // `%26gt%3b`: one orphan plus one history-less card for every heading containing any
+          // of the six escaped characters. `title` must likewise not be escaped before it feeds
+          // `nextTitles`, or the escape reaches descendants twice over.
+          //
+          // WITH THE TABLE CELLS ABOVE, THIS MAKES THE RULE COMPLETE AND GREPPABLE: every
+          // String that becomes an Anki field value is escaped at its construction site in
+          // `extract/`, with exactly ONE named exception — `model/CardSpec.scala:206-215`
+          // builds a `TableRow`'s Back as `s"$d: $v"` joined with `"\n"` inside `model/`,
+          // which imports nothing from `content/`. That one is not escaped and not rendered;
+          // it is an open question, not an oversight.
           val concept = ancestorTitles.lastOption.getOrElse(fileName)
-          Right(Vector(CardSpec.ThreeField(key, concept, title, body, directions) -> RowSource.heading))
+          Right(
+            Vector(
+              CardSpec.ThreeField(
+                key,
+                C.Html.escape(concept).render,
+                C.Html.escape(title).render,
+                body,
+                directions,
+              ) -> RowSource.heading
+            )
+          )
 
         case Marker.Cloze => Cloze.fromLowered(key, lowered).map(c => Vector(c -> RowSource.heading))
-        case Marker.Table => Tables.fromSection(key, section, CellDisplay.Default)
+        case Marker.Table => Tables.fromSection(key, section, CellDisplay.Escaped)
+
+        case Marker.Sequence =>
+          // ── THE REFUSAL, AND THE ONE PLACE IN THIS PROJECT THAT GATES ON A RENDERER ──────
+          //
+          // TWO PARTS TO THE PREDICATE, and the second is an EXTENSION of the ruling rather
+          // than an application of it. The ruling covers "a marker asking for a list over a
+          // body that has none". The second part covers "a body whose list has items and every
+          // one of them renders empty", and it is measured rather than imagined:
+          // `content/Lower.scala:428` lowers an Obsidian comment to ZERO inlines, so
+          // `- %%not ready yet%%` becomes `Item(Vector(Block.Paragraph(Vector())))`;
+          // `AsHtml`'s item arm filters that empty item out of the `<li>` concat and its
+          // `wrap` then drops the whole `<ul>`. Such a body PASSES B6 (the lead-in paragraph
+          // carries it), PASSES `Body.fromExtracted` on the HTML, and PASSES a presence-only
+          // check — and ships a note whose Text holds zero `li`, which
+          // `note-types/cloze-sequence/front.html:10` then hides none of. Silent success.
+          //
+          // THE ORACLE IS `AsHtml`, NOT `AsText`, AND THE EQUIVALENCE IS EXACT RATHER THAN
+          // APPROXIMATE. `AsHtml.plain(item.blocks).isEmpty` computes the identical expression
+          // to the emptiness `AsHtml`'s own item arm tests before deciding whether to emit an
+          // `<li>`: in the tight arm both sides are `inlines(spans, Plain)`, and in the general
+          // arm both sides are literally the same filtered concat. The rendered STRINGS differ;
+          // the EMPTINESS coincides, and emptiness is all this predicate reads. An `AsText`
+          // oracle would additionally refuse an item that renders to whitespace only — which
+          // `AsHtml` emits as a real `<li>` that reveals perfectly well — i.e. a false refusal
+          // of a working card, through the trailing-`.trim` divergence nobody has ruled on.
+          //
+          // THIS COUPLES A REFUSAL TO A RENDERER, WHICH WILL READ AS VIOLATING A RULE THIS
+          // CODEBASE STATES, so both halves of the honest rule are written here, next to each
+          // other, or a later reader "fixes" one into the other. `Tables.scala` says A RENDERER
+          // CAN NEITHER MINT NOR DESTROY A CARD, and taken literally that forbids this: a
+          // change to `AsHtml`'s empty-item rule would change which sections refuse. Taken
+          // DELIBERATELY, because the structural alternative is worse — a presence-only check
+          // lets the renderer destroy the card's CONTENT while the refusal certifies it fine.
+          // THE HONEST RESTATEMENT: GATE ON ONE NAMED RENDERER, AND ON THE ONE THAT PRODUCES
+          // THE FIELD IN QUESTION. B6 asks about the body AS TEXT and gates on `AsText`, for
+          // the reasons written above at that gate; this asks about a property of the field
+          // the note type's `#text li` selector consumes, so it gates on `AsHtml`.
+          //
+          // B6 STILL FIRES FIRST, FREE, AND THAT ORDERING IS DELIBERATE: the B6 gate is above,
+          // ahead of this match, so a `#flashcard/sequence` heading immediately followed by a
+          // subheading reads "empty body" — the more actionable error, since the fix is to
+          // write prose — and never "no list".
+          //
+          // A REFUSAL HERE CANNOT ORPHAN A LIVE NOTE, and the mechanism is load-bearing rather
+          // than incidental: `walk` records every `buildSpecs` `Left` as `BuildFailure.KeyKnown`
+          // AT THE SECTION KEY, `VaultScan` collects those into `failedKeys`, and
+          // `Planner:211`'s `accountedFor = builtKeys ++ failedKeys` therefore claims this key,
+          // so the live note is never sent to `SyncAction.Flag`. THE INVARIANT THAT BUYS IT:
+          // ONE MARKED SECTION, ONE CARD, KEYED AT THE SECTION KEY. `Marker.Table` lacks that
+          // property and pays for it — see the hole documented above. The moment anyone emits
+          // per-item cards at deeper keys, and "one card per list item" is the obvious thing a
+          // future reader proposes, that hazard reappears verbatim on the marker whose refusal
+          // fires most often.
+          val items     = sequenceItems(lowered)
+          val surviving = items.filter(item => !C.AsHtml.plain(item.blocks).isEmpty)
+          if surviving.isEmpty then
+            val what =
+              if items.isEmpty then s"the body holds no list — it holds ${describeBlocks(lowered)}"
+              else s"the body's list has ${items.size} items and every one of them renders empty"
+            Left(SpecError.SequenceWithoutItems(where, what))
+          else
+            // THE TITLE IS ESCAPED IN THE ARGUMENT POSITION AND NOWHERE UPSTREAM — see the
+            // note under the `ThreeField` arm, which spells out why with the measured witness
+            // rather than repeating it here. Doing it here keeps that rule complete and
+            // greppable with exactly its ONE existing exception; a rule with two is not a rule.
+            //
+            // THE TITLE IS NON-EMPTY WHENEVER THIS SPEC EXISTS, and that is DERIVED rather
+            // than assumed: `HeadingSegment.fromExtractedText` and `Marker.stripMarker` apply
+            // the same marker regex and then trim, so they are empty on exactly the same
+            // inputs — and a heading that reached `buildSpecs` already produced a segment
+            // (`model/CardKey.test.scala:47` pins that a marker-only heading is a `Left`).
+            // THAT IS ALL THE TOOL GUARANTEES, and no sentence here says anything about what
+            // Anki does with the field: nobody has installed this note type.
+            //
+            // `text` IS THE WHOLE RENDERED BODY — the `body` binding computed above, reused.
+            // THIS ARM ADDS ZERO RENDERING CODE, which is the strongest fact in the slice:
+            // `AsHtml` already emits `<ul><li>` for `Block.Bullets` and `<ol><li>` for
+            // `Block.Numbered`, and `note-types/cloze-sequence/back.html:15` selects
+            // `#text li`, agnostic to which. The field this note type wants is byte-for-byte
+            // the `Body` this branch already builds.
+            Right(Vector(CardSpec.Sequence(key, C.Html.escape(title).render, body) -> RowSource.heading))
     yield spec
 
   /** A section's OWN prose — everything down to the next heading of ANY level.
@@ -237,6 +408,44 @@ object Extractor:
       SpecError.UnsupportedContent(where, refusals.toVector.map(_.describe).distinct.mkString("; "))
     }
 
+  /** Every list item in a body, in document order — the raw material of a sequence card.
+    *
+    * A FULL EXHAUSTIVE MATCH, five arms written longhand, rather than an `.exists` with a
+    * catch-all. `-Wconf:msg=exhaustive:e` is live, so when a sixth `Block` constructor arrives
+    * the compiler ASKS whether it is a list instead of silently answering "no" — which is the
+    * difference between a new constructor being considered and a card quietly ceasing to
+    * exist.
+    *
+    * TOP-LEVEL ONLY, AND THE RESTRICTION IS NOT REAL. A list cannot occur inside a table cell
+    * at all: `content.Cell` holds `Vector[Inline]`, so that is unrepresentable rather than
+    * merely unhandled. The only other place a list can nest is inside an `Item` — i.e. already
+    * inside a list, and therefore already counted: if an inner item survives rendering then
+    * its outer item's inner is non-empty, so the outer survives too.
+    */
+  private def sequenceItems(blocks: Vector[C.Block]): Vector[C.Item] = blocks.flatMap {
+    case C.Block.Bullets(items)  => items
+    case C.Block.Numbered(items) => items
+    case C.Block.Paragraph(_)    => Vector.empty
+    case C.Block.Code(_, _)      => Vector.empty
+    case C.Block.Table(_, _)     => Vector.empty
+  }
+
+  /** A body's block shapes, in the AUTHOR'S vocabulary — the "what is there" half of a
+    * refusal that has to name both halves.
+    *
+    * `.distinct` FOLLOWS `bodyBlocks`'s PRECEDENT AND CARRIES ITS COST: the author is told
+    * there is "a paragraph", never that there were three. Accepted for the same reason it was
+    * accepted there — "a paragraph, a paragraph, a paragraph" reads as a bug in the tool.
+    */
+  private def describeBlocks(blocks: Vector[C.Block]): String =
+    blocks.map {
+      case C.Block.Paragraph(_) => "a paragraph"
+      case C.Block.Bullets(_)   => "a bulleted list"
+      case C.Block.Numbered(_)  => "a numbered list"
+      case C.Block.Code(_, _)   => "a code block"
+      case C.Block.Table(_, _)  => "a table"
+    }.distinct.mkString(", ")
+
   // ══════════════════════════════════ THE LEDGER OF SURVIVING LAIKA TRAIT-MATCHES ════
   //
   // "The old walks are gone" is true of the RENDERING walks in this file and in `Cloze.scala`:
@@ -256,10 +465,28 @@ object Extractor:
   //   2. `Tables.cellSource` — frozen by ruling, identity path. It may never route through
   //      `content.Lower` or `content.AsText`, because there a `Left` is not a loud error but an
   //      ABSENT KEY.
-  //   3. `CellDisplay.Default` — DISPLAY path, movable in principle and BLOCKED in practice:
-  //      `CellDisplay.text` is a total `Cell => String` and `Lower.cell` is partial, and the
-  //      only permitted widening (a failure channel on `CellDisplay`) would change a shape that
-  //      `extract/Tables.test.scala` pins at seven call sites — a file outside this slice.
+  //   3. `CellDisplay` — the DISPLAY path. Production injects `CellDisplay.Escaped` since S11;
+  //      `CellDisplay.Default` is still on that path as `Escaped`'s inner factor, and its trait
+  //      match is what survives here. PART OF THIS MOVED AND PART IS STILL BLOCKED, and the
+  //      reason recorded here before S11 was WRONG rather than merely stale, so it is replaced
+  //      and not amended:
+  //
+  //        MOVED — ESCAPING. `CellDisplay.Escaped` composes `Html.escape` over `Default`. It is
+  //        a total `String => String`; escaping needs no lowering at all, so the old reason
+  //        ("`CellDisplay.text` is total while `Lower.cell` is partial, therefore the only
+  //        permitted widening is a failure channel") was not binding and never had been. That
+  //        wrong reason is still load-bearing prose at `content/Lower.scala:128-131`, which
+  //        this slice may not edit; left uncorrected it invites a future author to "unblock"
+  //        the rest by adding a failure channel nobody needs.
+  //
+  //        STILL BLOCKED — A CELL'S BLOCK STRUCTURE. Bold, inline code and any block shape
+  //        inside a cell still flatten. Both honest routes to fixing that cross a file outside
+  //        these slices: rendering inside `Tables.scala` reddens `extract/Tables.test.scala`,
+  //        and routing cells through `content/` needs `content/AsText.test.scala`'s live cell
+  //        differential widened. THE ROUTE THAT COMPILES GREEN IS THE DANGEROUS ONE: mutating
+  //        `CellDisplay.Default` in place passes everything silently, because no fixture cell
+  //        contains a special character, so that differential would go on passing while it
+  //        stopped comparing what its name says it compares.
   //   4. `walk`'s `case container: BlockContainer`, above, excluded with the reason written
   //      there: it hunts `Section`s structurally and cannot silently truncate a card's content.
   //

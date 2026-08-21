@@ -112,6 +112,28 @@ enum SpecError:
     */
   case UnsupportedContent(headingPath: String, what: String)
 
+  /** A `#flashcard/sequence` section whose body yields NO list item that survives rendering.
+    *
+    * NAMED FOR THE ITEMS, NOT FOR THE LIST, ON PURPOSE: the name must not promise a weaker
+    * check than the code performs. Two situations reach it, and `whatIsThere` says which:
+    *
+    *   1. THE BODY HOLDS NO LIST AT ALL — the ruled case. The marker and the body are two
+    *      independent statements and they disagree, so both halves are named: what was asked
+    *      for, and what is actually there.
+    *   2. THE BODY'S LIST HAS ITEMS AND EVERY ONE OF THEM RENDERS EMPTY. `- %%not ready yet%%`
+    *      is the measured example: an Obsidian comment lowers to zero inlines, the renderer
+    *      drops the empty item, and then drops the whole list. Without this half the tool
+    *      would ship a note whose Text holds ZERO `li` — front identical to back, the reveal
+    *      key doing nothing, reviewed forever as a prompt with no answer and no error
+    *      anywhere. That is silent success, this project's signature failure.
+    *
+    * `whatIsThere` IS A STRING, precedent [[UnsupportedContent]] and for the same recorded
+    * reason: `model/` imports nothing from `obsidiananki`, and nothing pattern-matches the
+    * payload — `SpecError` values are built in `extract/` and read only by
+    * `Extractor.describe`.
+    */
+  case SequenceWithoutItems(headingPath: String, whatIsThere: String)
+
 /** What will become exactly one Anki note.
   *
   * TABLE KEYS EXTEND THE HEADING PATH rather than forming a parallel key shape. A pair card
@@ -148,6 +170,30 @@ enum CardSpec:
     */
   case TableRow(key: CardKey, concept: String, descriptors: NonEmptyVector[(String, String)])
 
+  /** `#flashcard/sequence` — ONE note whose list items are revealed one at a time, on ONE
+    * schedule.
+    *
+    * `text` IS THE WHOLE RENDERED BODY, not the items alone, because the note type's templates
+    * want exactly that: they render the whole field and hide only its `li` elements, so
+    * everything else in the body becomes the question side.
+    *
+    * THIS TYPE DOES NOT GUARANTEE THAT THE TEXT HOLDS A LIST, AND NO COMMENT MAY IMPLY IT
+    * DOES. "There is at least one list item that survives rendering" is established by a
+    * REFUSAL in `extract/` — [[SpecError.SequenceWithoutItems]] — which runs before this value
+    * is ever built. A `Sequence` constructed by hand in a test can hold anything at all.
+    *
+    * TWO SHAPES REJECTED, recorded with their reasons so they are not re-proposed:
+    *   - `NonEmptyVector[Item]` is IMPOSSIBLE here. `model/` imports nothing from
+    *     `obsidiananki` (verified 2026-08-20, recorded at [[SpecError.UnsupportedContent]]),
+    *     and carrying `content.Item` would give the dependency-free base layer a permanent
+    *     dependency on the renderer's algebra.
+    *   - `NonEmptyVector[String]` joined into `<li>` inside `fields` is worse, and this file's
+    *     own note at [[TableRow]] already rules out its shape: markup construction outside
+    *     `content/` bypasses the opaque `Fragment` and reopens the hole that type was
+    *     introduced to shut.
+    */
+  case Sequence(key: CardKey, title: String, text: Body)
+
 object CardSpec:
 
   extension (spec: CardSpec)
@@ -157,6 +203,7 @@ object CardSpec:
       case ThreeField(k, _, _, _, _) => k
       case Cloze(k, _, _)            => k
       case TableRow(k, _, _)         => k
+      case Sequence(k, _, _)         => k
 
     /** The Anki note type this spec creates. Behaviour on the sum type: the consumer asks,
       * the variant answers, rather than the consumer branching on which variant it holds.
@@ -168,6 +215,7 @@ object CardSpec:
       case Cloze(_, _, _)                                => Marker.NoteTypes.Cloze
       // The row card is a plain Basic: concept on the front, all descriptors on the back.
       case TableRow(_, _, _)                             => Marker.NoteTypes.Basic
+      case Sequence(_, _, _)                             => Marker.NoteTypes.ClozeSequence
 
     /** Field name to value, in the note type's field order.
       *
@@ -213,3 +261,8 @@ object CardSpec:
           Marker.BasicFields.Front -> concept,
           Marker.BasicFields.Back  -> back,
         )
+
+      case Sequence(_, title, text) =>
+        // The zip form, exactly as the three-field arm above: the constant is the single
+        // source of field ORDER, so a reordering happens in one place rather than two.
+        Marker.ClozeSequenceFields.zip(Vector(title, text.value))

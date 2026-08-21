@@ -82,7 +82,28 @@ class FixtureVaultTest extends munit.FunSuite:
 
   test("LAW on REAL specs: plan, apply, and the next plan is empty") {
     val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
-    val anki  = InMemoryAnki()
+
+    // "Cloze Sequence" IS OPTED IN HERE RATHER THAN ADDED TO `defaultNoteTypes`, and the
+    // distinction is the point rather than a style choice. `defaultNoteTypes` models a STOCK
+    // collection, which the human's is; baking this type into it would make the whole suite
+    // behave as though the slice that INSTALLS the note type had already run — and it would
+    // hide that nothing in the production path checks, before planning, that the collection
+    // HAS this type. `noteTypeNames` exists on the algebra (`anki/Anki.scala:107`) and is
+    // implemented in both backends, and grep finds no production caller; the failure is
+    // therefore discovered per note at WRITE time, after the plan has been printed as though
+    // it would work. WHAT THE ERROR LOOKS LIKE AGAINST A LIVE COLLECTION IS NOT ASSERTED HERE:
+    // `anki/AnkiConnect.scala:130` maps a `model was not found:` message to
+    // `AnkiError.NoSuchNoteType`, and whether a real AnkiConnect answers `addNote` that way is
+    // unverified — we may not contact one. Opting in at the call site keeps "the collection
+    // does not have this type yet" true and visible.
+    //
+    // VERIFIED, so that luck is not mistaken for design: `InMemoryAnki.cardCountOf` matches the
+    // note type BY EXACT NAME and falls through to `case _ => 1`. So the opted-in type yields
+    // exactly ONE card — which is right, and right for this note type, but right BY
+    // FALLTHROUGH rather than by any rule naming it.
+    val anki = InMemoryAnki(
+      InMemoryAnki.defaultNoteTypes + (Marker.NoteTypes.ClozeSequence -> Marker.ClozeSequenceFields)
+    )
 
     def planNow(): Plan =
       val observed = Observer.observe(anki).fold(e => fail(s"observe: $e"), identity)
@@ -103,7 +124,10 @@ class FixtureVaultTest extends munit.FunSuite:
 
   test("every tag derived from the real vault is one Anki will actually store") {
     val index = VaultWalker.scan(loadVault(), deckRoot)
-    val anki  = InMemoryAnki()
+    // Opted in for the same reason as above — see the note there.
+    val anki = InMemoryAnki(
+      InMemoryAnki.defaultNoteTypes + (Marker.NoteTypes.ClozeSequence -> Marker.ClozeSequenceFields)
+    )
     index.scan.specs.foreach { s =>
       val note = newNoteOf(s, deckRoot, "deadbeef")
       assert(

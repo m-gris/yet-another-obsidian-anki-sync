@@ -55,6 +55,31 @@ object Cloze:
     //
     // The hook returns `inner` unchanged, so this pass renders exactly what `AsText.Plain`
     // would; the returned string is discarded on purpose.
+    //
+    // PASS 1 STAYS ON `AsText` AND MUST NEVER BE POINTED AT `AsHtml`. Three reasons, all
+    // independent:
+    //
+    //   IDENTITY. The `inner` STRING collected here is the unlabelled group's KEY (`groupOf`,
+    //   below), and that key decides grouping → ordinals → which `cN` carries which scheduling
+    //   history. Escaping alone would move nothing, since `Html.escape` is injective; RENDERING
+    //   is not injective in the way that matters. `==foo==` and `==*foo*==` both key as `foo`
+    //   today and correctly fire `SpecError.AmbiguousClozeDeletion`; keyed on HTML they are
+    //   `foo` and `<em>foo</em>` — two distinct groups, so a ratified refusal would SILENTLY
+    //   BECOME TWO CARDS.
+    //
+    //   THE AUTHOR. `SpecError.AmbiguousClozeDeletion(where, duplicate)` shows that key back to
+    //   them (`Extractor.describe`). An HTML key would report `<em>foo</em>` — a refusal
+    //   written in a markup language they never typed.
+    //
+    //   THE TYPES ALREADY SAY SO, and the reason is written anyway. `AsHtml`'s hook is
+    //   `(Option[Int], Html.Fragment) => Html.Fragment` and this one is
+    //   `(Option[Int], String) => String`, deliberately incompatible, so the substitution
+    //   cannot be made by accident. A type cannot carry WHY, and the why is what stops someone
+    //   from making them compatible.
+    //
+    // `Extractor.test.scala`'s "two unlabelled highlights with identical text are refused" and
+    // "highlights sharing a label form ONE group" are the tripwires: if either reddens, pass 1
+    // has moved.
     val found = Vector.newBuilder[(Option[Int], String)]
     val _ = C.AsText.text(blocks, (label, inner) => { found += (label -> inner); inner })
     val occurrences = found.result()
@@ -104,32 +129,47 @@ object Cloze:
     * into production. Position is also immune to a NESTED deletion, where pass 1's plain
     * `inner` and pass 2's `{{cN::…}}` `inner` are different strings for the same occurrence.
     *
-    * `misaligned` IS NOT CLAIMED UNREACHABLE. It is a LOUD, TWO-SIDED ALIGNMENT CHECK on a
-    * NAMED INVARIANT of `content.AsText.text`: it fires its `deletion` callback exactly once
-    * per `Inline.Deletion`, in document order, and identically for any hook — identically
-    * because the block-level `.filter(_.nonEmpty)` runs AFTER `blockText` has returned, so no
-    * hook can make a block vanish before its callbacks have fired. Too few ordinals fails
-    * INSIDE the render; too many fails after it. That invariant lives in a file this slice may
-    * not edit, so it is NAMED here, not assumed to be a type. This project has already shipped
-    * one comment asserting a branch was unreachable that was not.
+    * THE TWO PASSES NOW RUN OVER DIFFERENT RENDERERS, AND `misaligned` IS THE CLAIM THAT THEY
+    * AGREE. Pass 1 collects through `content.AsText.text`; this pass renders through
+    * `content.AsHtml.html`. Each renderer states the SAME invariant of itself — it fires its
+    * `deletion` callback exactly once per `Inline.Deletion`, in document order, and identically
+    * for any hook, because every emptiness filter in it runs AFTER the inner render has
+    * returned, so no hook can make a block vanish before its callbacks have fired. What used to
+    * be one function's property is therefore now a claim that TWO WALKS AGREE.
+    *
+    * IT IS NOT CLAIMED UNREACHABLE, and that wording is deliberate: this project has already
+    * shipped one comment asserting a branch was unreachable that was not. Too few ordinals
+    * fails INSIDE the render; too many fails after it.
+    *
+    * THE EVIDENCE FOR THE TWO-WALK CLAIM IS A TEST, NOT THIS PARAGRAPH.
+    * `content/AsHtml.test.scala`'s callback-alignment differential renders one set of blocks
+    * through both renderers and compares the LABEL SEQUENCES — deletions in a paragraph, in a
+    * list item, in a header cell, in a body cell, nested inside an `Emphasis`, one beside a
+    * sibling that renders empty, and one whose own inner renders empty. Both files are outside
+    * this slice's file list, which is why the invariant is NAMED here rather than assumed to be
+    * a type.
+    *
+    * `{{`, `::` AND `}}` DO NOT APPEAR IN THIS FILE. They live in `content.Html.clozeDeletion`,
+    * which applies the wrapper AFTER escaping — that ordering, and not a remembered special
+    * case, is why a `<` inside a deletion cannot break the deletion.
     */
   private def render(blocks: Vector[C.Block], perOccurrence: Vector[Int], where: String): String =
     def misaligned(detail: String): Nothing =
       sys.error(
         s"cloze rendering misaligned at '$where': $detail. " +
-          s"`AsText.text` fired a different number of deletion callbacks than the collecting " +
-          s"pass over the same blocks did (${perOccurrence.size} ordinals)."
+          s"`AsHtml.html` fired a different number of deletion callbacks than the collecting " +
+          s"pass over the same blocks through `AsText.text` did (${perOccurrence.size} ordinals)."
       )
 
     val remaining = perOccurrence.iterator
-    val rendered = C.AsText.text(
+    val rendered = C.AsHtml.html(
       blocks,
       (_, inner) =>
-        if remaining.hasNext then s"{{c${remaining.next()}::$inner}}"
+        if remaining.hasNext then C.Html.clozeDeletion(remaining.next(), inner)
         else misaligned("the render asked for more ordinals than were collected"),
     )
     if remaining.hasNext then misaligned("the render used fewer ordinals than were collected")
-    rendered
+    rendered.render
 
   /** Assign each group its `cN`, and say which group each OCCURRENCE belongs to.
     *

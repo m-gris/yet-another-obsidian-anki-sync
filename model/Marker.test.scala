@@ -9,7 +9,7 @@ class MarkerTest extends munit.FunSuite:
 
   // ---------------------------------------------------------------- parsing ----
 
-  test("each of the six markers parses to its own variant") {
+  test("each of the seven markers parses to its own variant") {
     assertEquals(parsed("Term #flashcard/1way"), Some(Marker.TwoField(TwoFieldDirections.Forward)))
     assertEquals(parsed("Term #flashcard/2way"), Some(Marker.TwoField(TwoFieldDirections.Both)))
     assertEquals(
@@ -22,6 +22,7 @@ class MarkerTest extends munit.FunSuite:
     )
     assertEquals(parsed("Bones #flashcard/cloze"), Some(Marker.Cloze))
     assertEquals(parsed("Cost / benefit #flashcard/table"), Some(Marker.Table))
+    assertEquals(parsed("Path of blood #flashcard/sequence"), Some(Marker.Sequence))
   }
 
   test("3way and 3way/all are DIFFERENT variants, not the same one") {
@@ -65,6 +66,7 @@ class MarkerTest extends munit.FunSuite:
       Some(NoteTypes.ConceptDescriptor),
     )
     assertEquals(Marker.Cloze.noteTypeName, Some(NoteTypes.Cloze))
+    assertEquals(Marker.Sequence.noteTypeName, Some(NoteTypes.ClozeSequence))
   }
 
   test("a table marker has no single note type") {
@@ -140,6 +142,26 @@ class MarkerTest extends munit.FunSuite:
         .noteTypeName,
       NoteTypes.Basic,
     )
+    assertEquals(
+      CardSpec.Sequence(k, "Path of blood", body("<ul><li>a</li></ul>")).noteTypeName,
+      NoteTypes.ClozeSequence,
+    )
+  }
+
+  /** The field ORDER comes from [[Marker.ClozeSequenceFields]] and from nowhere else, which is
+    * why this asserts the whole pair vector rather than the two values.
+    *
+    * WHAT THIS DOES NOT ASSERT, and it must not be read as asserting it: that the `Text` field
+    * holds a list. `CardSpec.Sequence` guarantees nothing of the kind — that is established by
+    * a refusal in `extract/`, and the value below is hand-built.
+    */
+  test("a sequence spec emits Title and Text, in that order") {
+    val spec = CardSpec.Sequence(aKey("Anatomy", "Path"), "Path of blood", body("<ul><li>a</li></ul>"))
+    assertEquals(
+      spec.fields,
+      Vector("Title" -> "Path of blood", "Text" -> "<ul><li>a</li></ul>"),
+    )
+    assertEquals(spec.fields.map(_._1), Marker.ClozeSequenceFields)
   }
 
   def threeField(directions: ThreeFieldDirections): CardSpec =
