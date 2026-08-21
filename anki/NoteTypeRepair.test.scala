@@ -67,6 +67,53 @@ class NoteTypeRepairTest extends munit.FunSuite:
 
   private val ConceptDescriptor = Marker.NoteTypes.ConceptDescriptor
 
+  /** An interpreter that performs the first `writes` REPAIR writes and then refuses every
+    * further one, modelling a run cut off midway — Anki quit, connection dropped.
+    *
+    * Reads pass through, so the collection can still be asked what landed. Only the three
+    * repair operations are counted, because they are the only ones this suite drives.
+    *
+    * WHY A DECORATOR AND NOT A RECORDING SPY: the property under test is the ORDER two writes
+    * go out in, and the honest way to observe that without asserting on calls is to stop after
+    * the first one and ask the collection what changed. Same reason `ExecutorInterruption.test`
+    * exists rather than a mock that counts invocations.
+    */
+  final class FailAfter(underlying: InMemoryAnki, writes: Int) extends Anki[Result]:
+    private var done = 0
+
+    private def write[A](op: => Result[A]): Result[A] =
+      if done >= writes then
+        Left(AnkiError.UnsupportedOperation("interrupted", s"fault injected after $writes writes"))
+      else
+        done += 1
+        op
+
+    def addNoteTypeField(noteType: String, field: String): Result[Unit] =
+      write(underlying.addNoteTypeField(noteType, field))
+    def setNoteTypeTemplates(noteType: String, templates: Map[String, CardTemplate]): Result[Unit] =
+      write(underlying.setNoteTypeTemplates(noteType, templates))
+    def setNoteTypeStyling(noteType: String, css: String): Result[Unit] =
+      write(underlying.setNoteTypeStyling(noteType, css))
+
+    export underlying.{
+      noteTypeNames,
+      fieldNames,
+      noteTypeTemplates,
+      noteTypeStyling,
+      noteTypeIsCloze,
+      createNoteType,
+      findNotesByTagPrefix,
+      notesInfo,
+      addNote,
+      updateNoteFields,
+      changeNoteType,
+      addTags,
+      removeTags,
+      cardsOf,
+      deckOf,
+      changeDeck,
+    }
+
   // ══════════════════════════════════ planning, with no Anki at all ══════
 
   test("a present note type missing a field is planned an AddField for exactly that field") {
@@ -189,15 +236,71 @@ class NoteTypeRepairTest extends munit.FunSuite:
   }
 
   test("the Context field arrives BEFORE the templates that reference it") {
-    // A template naming a field the note type does not have renders nothing. If a run fails
-    // between the two writes, the wrong order leaves a live card with a blank breadcrumb.
-    val anki = collectionWith(asInheritedByRename(ConceptDescriptor))
-    val plan = NoteTypeInstaller.planRepair(surveyOf(anki))
+    // A template naming a field the note type does not have renders NOTHING. So if a run dies
+    // between the two writes, the wrong order leaves a live card whose breadcrumb is blank.
+    //
+    // ASSERTED BY INTERRUPTING RATHER THAN BY INSPECTING THE PLAN, and the difference matters:
+    // an earlier version of this test read the order off `plan.actions` and therefore pinned how
+    // `planRepair` happens to concatenate its vectors, not the order the writes actually go out
+    // in. Mutating the sort inside `repair` left that version green. Cutting the run off after
+    // one write and asking the COLLECTION what landed cannot be fooled that way.
+    val anki    = collectionWith(asInheritedByRename(ConceptDescriptor))
+    val stopped = FailAfter(anki, writes = 1)
+    val plan    = NoteTypeInstaller.planRepair(surveyOf(anki))
 
-    val fieldAt    = plan.actions.indexWhere(_.isInstanceOf[RepairAction.AddField])
-    val templateAt = plan.actions.indexWhere(_.isInstanceOf[RepairAction.ReplaceTemplates])
-    assert(fieldAt >= 0 && templateAt >= 0, s"expected both actions, got ${plan.actions.map(_.describe)}")
-    assert(fieldAt < templateAt, s"templates were planned before the field: ${plan.actions.map(_.describe)}")
+    NoteTypeInstaller.repair[Result](stopped, assets, plan).fold(e => fail(s"repair aborted: $e"), identity)
+
+    assert(
+      anki.fieldNames(ConceptDescriptor).fold(e => fail(s"$e"), identity).contains("Context"),
+      "after one write the field was still missing, so something else went first",
+    )
+    assertEquals(
+      anki.noteTypeTemplates(ConceptDescriptor).fold(e => fail(s"$e"), identity),
+      asInheritedByRename(ConceptDescriptor).templates.toVector.toMap,
+      "a template was written before the field it references",
+    )
+  }
+
+  test("a difference the repair will NOT close keeps the run from reporting itself clean") {
+    // The teeth of the re-read. This note type needs no action — the only difference is a field
+    // of somebody else's, which a repair must never remove — so nothing is written and nothing
+    // fails. `isClean` must still be false, because the collection and the repository still
+    // disagree and no human has decided which is right.
+    //
+    // This is the case that catches a `repair` which reports drift from what it INTENDED rather
+    // than from what it READ: with the re-read stubbed out, every assertion above still passes
+    // and this one does not.
+    val ours  = assetNamed(ConceptDescriptor).spec
+    val anki  = collectionWith(ours.copy(fields = ours.fields :+ "SomebodyElsesField"))
+    val plan  = NoteTypeInstaller.planRepair(surveyOf(anki))
+    assertEquals(plan.actions, Vector.empty)
+
+    val outcome = repairOf(anki)
+    assertEquals(outcome.failures, Vector.empty)
+    assertEquals(outcome.plan.refusals, Vector.empty)
+    assert(
+      outcome.remainingDrift.exists((n, d) => n == ConceptDescriptor && d.nonEmpty),
+      s"the surviving difference was not read back: ${outcome.remainingDrift}",
+    )
+    assert(!outcome.isClean, "a collection that still differs from the repository reported clean")
+  }
+
+  test("adding a field that is already declared changes nothing and does not duplicate it") {
+    // Anki's own `modelFieldAdd` is guarded by `if fieldName not in fieldMap`, so this is a
+    // property of the real API that the fake must share. Exercised DIRECTLY because no repair
+    // plan ever asks for a field that is already present — which is exactly how a fake that
+    // appended unconditionally stayed green through every other test in this file.
+    val ours   = assetNamed(ConceptDescriptor).spec
+    val anki   = collectionWith(ours)
+    val before = anki.fieldNames(ConceptDescriptor).fold(e => fail(s"$e"), identity)
+
+    assertEquals(anki.addNoteTypeField(ConceptDescriptor, "Context"), Right(()))
+
+    assertEquals(
+      anki.fieldNames(ConceptDescriptor).fold(e => fail(s"$e"), identity),
+      before,
+      "adding an existing field changed the field list",
+    )
   }
 
   test("a repair is idempotent — running it twice changes nothing the second time") {

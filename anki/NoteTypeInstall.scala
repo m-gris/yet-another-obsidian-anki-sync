@@ -419,8 +419,13 @@ object NoteTypeInstaller:
     ordered
       .traverse(action => perform(action).attempt.map(_.left.toOption.map(action -> _).toLeft(action)))
       .flatMap { results =>
-        val touched = (plan.actions.map(_.noteType) ++ plan.refusals.map(_.noteType)).distinct
-        survey(anki, assets.filter(a => touched.contains(a.spec.name))).map { after =>
+        // EVERY note type is re-read, not only the ones an action touched. Narrowing this to
+        // "what we changed" was the first version and it made `isClean` mean less than it says:
+        // a note type whose difference this repair deliberately does NOT close — a field order,
+        // a field of somebody else's that must never be removed — was left out of the answer
+        // entirely, so a collection still differing from the repository reported itself clean.
+        // The extra cost is a handful of reads.
+        survey(anki, assets).map { after =>
           RepairOutcome(
             plan = plan,
             applied = results.collect { case Right(action) => action },
