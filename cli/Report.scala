@@ -1,6 +1,6 @@
 package obsidiananki.cli
 
-import obsidiananki.anki.{InstallOutcome, NoteTypeProblem, NoteTypeStatus}
+import obsidiananki.anki.{InstallOutcome, NoteTypeProblem, NoteTypeStatus, RepairOutcome}
 import obsidiananki.extract.VaultIndex
 import obsidiananki.plan.*
 
@@ -137,6 +137,55 @@ object Report:
           outcome.failures.map((name, error) => s"  '$name': ${error.toString}")
 
     refusal ++ listed ++ driftLines ++ failureLines
+
+  /** What `--repair` changed, and — the part worth printing even when it is boring — what it
+    * READ BACK afterwards.
+    *
+    * THE SURVIVING-DIFFERENCE SECTION IS NOT DECORATION. Two of Anki's own actions report
+    * success having done nothing: `updateModelTemplates` skips a template name it does not
+    * recognise, and `modelFieldAdd` is a no-op when the field is already there. So a repair that
+    * printed only "applied 3 changes" would be reporting its intentions. These lines come from
+    * reading the collection back.
+    */
+  def noteTypeRepair(outcome: RepairOutcome): Vector[String] =
+    val applied =
+      if outcome.applied.isEmpty then Vector("", "REPAIR: nothing needed changing.")
+      else Vector("", "REPAIRED:") ++ outcome.applied.map("  " + _.describe)
+
+    val refused =
+      if outcome.plan.refusals.isEmpty then Vector.empty
+      else
+        Vector("", "REFUSED — these were left exactly as they are:") ++
+          outcome.plan.refusals.map(r => s"  '${r.noteType}': ${r.reason}") ++
+          Vector(
+            "",
+            "A note type whose TEMPLATE NAMES do not match the repository cannot be repaired:",
+            "Anki updates templates by name and silently ignores names it does not know, so the",
+            "attempt would report success having changed nothing. Rename the templates in Anki to",
+            "match, or change the repository to match the collection — either way it is a choice",
+            "about which of the two is right, and only you can make it.",
+          )
+
+    val failures =
+      if outcome.failures.isEmpty then Vector.empty
+      else
+        Vector("", "COULD NOT APPLY:") ++
+          outcome.failures.map((action, error) => s"  ${action.describe}: ${error.toString}")
+
+    val surviving = outcome.remainingDrift.filter(_._2.nonEmpty)
+    val survivingLines =
+      if surviving.isEmpty then Vector("", "Read back afterwards: every note type now matches.")
+      else
+        Vector("", "STILL DIFFERENT after the repair, read back from the collection:") ++
+          surviving.flatMap((name, drift) => s"  $name" +: drift.map("    " + _.describe)) ++
+          Vector(
+            "",
+            "A field order and a field this tool does not declare are reported here and are",
+            "never changed: reordering fields would rearrange your Browse columns uninvited, and",
+            "removing a field would delete its contents from every note of that type.",
+          )
+
+    applied ++ refused ++ failures ++ survivingLines
 
   /** Why `sync` will not write to this collection, and what to do about it. */
   def noteTypesNotReady(problems: Vector[NoteTypeProblem]): Vector[String] =

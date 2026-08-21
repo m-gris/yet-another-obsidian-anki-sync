@@ -273,10 +273,21 @@ class CliTest extends munit.FunSuite:
 
   // ================================================ install-note-types ====
 
-  test("install-note-types parses and carries the profile") {
+  test("install-note-types parses and carries the profile, and does NOT repair by default") {
     assertEquals(
       parse("install-note-types", "--profile", "claude-POC-test"),
-      Right(Command.InstallNoteTypes("claude-POC-test")),
+      Right(Command.InstallNoteTypes("claude-POC-test", repair = false)),
+    )
+  }
+
+  /** The DEFAULT matters more here than the flag does. Without `--repair` this command creates
+    * what is absent and overwrites nothing, so a template somebody improved in Anki survives a
+    * run they made for an unrelated reason. The flag is how they say otherwise, in as many words.
+    */
+  test("install-note-types --repair is opt-in, and is carried through") {
+    assertEquals(
+      parse("install-note-types", "--profile", "claude-POC-test", "--repair"),
+      Right(Command.InstallNoteTypes("claude-POC-test", repair = true)),
     )
   }
 

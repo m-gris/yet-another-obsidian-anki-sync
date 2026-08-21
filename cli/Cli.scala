@@ -69,7 +69,7 @@ enum Command:
     * did it as a side effect of the first sync would alter the schema of somebody's collection
     * without ever having been asked to.
     */
-  case InstallNoteTypes(profile: String)
+  case InstallNoteTypes(profile: String, repair: Boolean)
 
 object Cli:
 
@@ -183,7 +183,22 @@ object Cli:
       "install-note-types",
       "Create this tool's note types in a collection, and report any that already differ.",
     ) {
-      profileOpt.map(Command.InstallNoteTypes.apply)
+      // OFF BY DEFAULT, and that is the whole ruling rather than a convenience. Without it this
+      // command only CREATES what is absent; with it, a note type that is present and differs
+      // from the repository has its missing fields added and its templates and stylesheet
+      // overwritten. A template somebody improved in Anki is theirs, so the overwrite has to be
+      // asked for by name — but see `NoteTypeInstall.scala` for why never offering it at all
+      // turned out to be the more dangerous default.
+      (
+        profileOpt,
+        Opts
+          .flag(
+            "repair",
+            "Also update note types that are present and differ: add missing fields, and " +
+              "overwrite templates and styling with the repository's versions.",
+          )
+          .orFalse,
+      ).mapN(Command.InstallNoteTypes.apply)
     }
 
   val command: Opts[Command] = inspect orElse sync orElse installNoteTypes

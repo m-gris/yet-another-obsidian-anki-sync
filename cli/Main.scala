@@ -11,6 +11,7 @@ import obsidiananki.anki.{
   AssetError,
   DeckPath,
   InstallOutcome,
+  NoteTypeAsset,
   NoteTypeAssets,
   NoteTypeInstaller,
   NoteTypeProblem,
@@ -78,8 +79,8 @@ object Main
       withVerifiedProfile(profile)(anki =>
         withChosenVault(selection)(sync(_, deckRoot, dryRun, retypePolicy, anki))
       )
-    case Command.InstallNoteTypes(profile) =>
-      withVerifiedProfile(profile)(installNoteTypes)
+    case Command.InstallNoteTypes(profile, repair) =>
+      withVerifiedProfile(profile)(installNoteTypes(_, repair))
   }
 
   /** Read the vault and say what it holds. Touches no collection. */
@@ -104,7 +105,7 @@ object Main
     * what 2 means here; and the fault is in the build or the packaging rather than in anything
     * the person did.
     */
-  private def installNoteTypes(anki: AnkiConnectClient[IO]): IO[ExitCode] =
+  private def installNoteTypes(anki: AnkiConnectClient[IO], repair: Boolean): IO[ExitCode] =
     NoteTypeAssets.all match
       case Left(errors) =>
         (Vector(
@@ -132,7 +133,47 @@ object Main
 
           case Right(outcome) =>
             Report.noteTypes(outcome).traverse_(IO.println) *>
-              IO.pure(exitCodeForInstall(outcome))
+              (if !repair then IO.pure(exitCodeForInstall(outcome))
+               else repairNoteTypes(anki, assets, outcome))
+        }
+
+  /** The second half of `install-note-types --repair`: close the differences the survey found.
+    *
+    * RUNS AFTER THE INSTALL REPORT AND NEVER INSTEAD OF IT, so what a person reads is always
+    * "here is what differs" followed by "here is what I did about it", in that order. A repair
+    * that printed only its own actions would be asking someone to accept a change it never
+    * showed them.
+    *
+    * A RUN BLOCKED BY A HAND-RENAME REPAIRS NOTHING, for the same reason it creates nothing: the
+    * collection is not in the state this command is for, and there is exactly one thing to do
+    * about that. The install half has already said so, so this adds nothing to the noise.
+    */
+  private def repairNoteTypes(
+      anki: AnkiConnectClient[IO],
+      assets: Vector[NoteTypeAsset],
+      outcome: InstallOutcome,
+  ): IO[ExitCode] =
+    if outcome.blockedByRename.nonEmpty then IO.pure(ExitCode(2))
+    else
+      val plan = NoteTypeInstaller.planRepair(outcome.before)
+      if plan.isEmpty && plan.refusals.isEmpty then IO.pure(exitCodeForInstall(outcome))
+      else
+        NoteTypeInstaller.repair[Refused](anki, assets, plan).value.flatMap {
+          case Left(error) =>
+            Vector(
+              "",
+              "STOPPED: the collection refused a request during the repair.",
+              "",
+              s"  Anki's answer:  ${error.toString}",
+              "",
+              "Part of the repair may already have landed. Re-running is safe — a repair adds",
+              "only fields that are missing and rewrites templates to match the repository, so",
+              "doing it twice reaches the same place as doing it once.",
+            ).traverse_(IO.println).as(ExitCode.Error)
+
+          case Right(result) =>
+            Report.noteTypeRepair(result).traverse_(IO.println) *>
+              IO.pure(if result.isClean then ExitCode.Success else ExitCode.Error)
         }
 
   /** THE EXIT-CODE CONTRACT OF `install-note-types`, in the same three-value shape as
