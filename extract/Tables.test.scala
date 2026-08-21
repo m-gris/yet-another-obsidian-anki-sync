@@ -132,8 +132,19 @@ class TablesTest extends munit.FunSuite:
     val seg = HeadingSegment.fromExtractedText("T").fold(e => fail(s"heading segment: $e"), identity)
     CardKey(id, HeadingPath(NonEmptyVector.one(seg)))
 
+  /** `contextTitles` IS PART OF THE HARNESS, NOT PART OF WHAT THESE TESTS MEASURE.
+    *
+    * `Tables.fromSection` holds no rule about which heading segments a card's breadcrumb
+    * keeps — the caller computes that, and for a table the caller passes
+    * `ancestorTitles :+ title`. What is passed here mirrors the fixture markdown above (`# T`
+    * with `## Grid #flashcard/table` beneath it) so that the value is realistic rather than a
+    * sentinel, but no assertion in this file reads it: these tests are about the identity /
+    * display severance, and a breadcrumb is neither.
+    */
   private def cardsOf(section: Section, display: CellDisplay): Vector[(CardSpec, RowSource)] =
-    Tables.fromSection(baseKey, section, display).fold(e => fail(s"fromSection: $e"), identity)
+    Tables
+      .fromSection(baseKey, section, display, Vector("T", "Grid"))
+      .fold(e => fail(s"fromSection: $e"), identity)
 
   /** The hostile display projection.
     *
@@ -199,7 +210,7 @@ class TablesTest extends munit.FunSuite:
     * the hostile renderer reaches nothing at all.
     *
     * `CardSpec.TableRow`'s back field matters most. Its `s"$d: $v"` join lives in
-    * `CardSpec.fields` (`CardSpec.scala:206`), NOT in `Tables.scala` — so it is exactly the
+    * `CardSpec.fields`'s `TableRow` arm, NOT in `Tables.scala` — so it is exactly the
     * surface a botched split leaves untouched while everything else looks right.
     */
   test("the display change actually reached every rendered field") {
@@ -215,12 +226,12 @@ class TablesTest extends munit.FunSuite:
     var sawRow = false
     hostile.foreach { (spec, _) =>
       spec match
-        case CardSpec.ThreeField(_, concept, descriptor, description, _) =>
+        case CardSpec.ThreeField(_, concept, descriptor, description, _, _) =>
           assert(concept.contains("<<"), s"$why — ThreeField concept was [$concept]")
           assert(descriptor.contains("<<"), s"$why — ThreeField descriptor was [$descriptor]")
           assert(description.value.contains("<<"), s"$why — ThreeField description was [$description]")
 
-        case CardSpec.TableRow(_, _, _) =>
+        case CardSpec.TableRow(_, _, _, _) =>
           sawRow = true
           val front = fieldValue(spec, Marker.BasicFields.Front)
           val back  = fieldValue(spec, Marker.BasicFields.Back)

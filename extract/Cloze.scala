@@ -41,7 +41,18 @@ object Cloze:
     * pins the Cloze `Text` field, not the deletion texts); the group key is visible only
     * through `AmbiguousClozeDeletion`'s reason string, which `Extractor.test.scala` now pins.
     */
-  def fromLowered(key: CardKey, blocks: Vector[C.Block]): Either[SpecError, CardSpec] =
+  /** @param context
+    *   the breadcrumb this card shows, ALREADY JOINED AND ESCAPED by
+    *   [[obsidiananki.extract.CardContext.render]]. Carried through rather than derived here:
+    *   this object holds no heading chain and must not acquire one, since which segments a
+    *   card's breadcrumb keeps depends on what that card's face already shows — a decision
+    *   that belongs to `Extractor.buildSpecs`, where every card shape is visible at once.
+    */
+  def fromLowered(
+      key: CardKey,
+      blocks: Vector[C.Block],
+      context: String,
+  ): Either[SpecError, CardSpec] =
     val where = key.path.render
 
     // ── PASS 1: collect the occurrences, discarding the string ──────────────────────
@@ -100,7 +111,7 @@ object Cloze:
             body <- Body
               .fromExtracted(render(blocks, perOccurrence, where))
               .toRight(SpecError.EmptyBody(where))
-          yield CardSpec.Cloze(key, body, deletions)
+          yield CardSpec.Cloze(key, body, deletions, context)
 
   /** The body as Anki must receive it: `{{cN::…}}` where the author wrote a highlight.
     *

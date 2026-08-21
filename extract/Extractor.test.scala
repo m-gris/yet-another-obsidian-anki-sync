@@ -115,7 +115,7 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     specFor(note, "linearizability / definition").spec match
-      case CardSpec.ThreeField(_, concept, descriptor, _, _) =>
+      case CardSpec.ThreeField(_, concept, descriptor, _, _, _) =>
         assertEquals(concept, "Linearizability")
         assertEquals(descriptor, "Definition")
       case other => fail(s"expected ThreeField, got $other")
@@ -130,14 +130,14 @@ class ExtractorTest extends munit.FunSuite:
       fileName = "Consistency",
     )
     specFor(note, "definition").spec match
-      case CardSpec.ThreeField(_, concept, _, _, _) => assertEquals(concept, "Consistency")
+      case CardSpec.ThreeField(_, concept, _, _, _, _) => assertEquals(concept, "Consistency")
       case other                                    => fail(s"expected ThreeField, got $other")
   }
 
   test("the marker is stripped from the descriptor as well as from the key") {
     val note = extract("# A\n\nx\n\n## Cost #flashcard/3way/all\n\nExpensive.\n")
     specFor(note, "a / cost").spec match
-      case CardSpec.ThreeField(_, _, descriptor, _, directions) =>
+      case CardSpec.ThreeField(_, _, descriptor, _, directions, _) =>
         assertEquals(descriptor, "Cost")
         assertEquals(directions, ThreeFieldDirections.All)
       case other => fail(s"expected ThreeField, got $other")
@@ -164,7 +164,7 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     specFor(note, "a / parent").spec match
-      case CardSpec.TwoField(_, _, back, _) =>
+      case CardSpec.TwoField(_, _, back, _, _) =>
         // The `<p>` arrived in S11: a card body is an HTML fragment. The assertion is on the
         // WHOLE value rather than `contains`, so the child's sentence still cannot sneak in.
         assertEquals(back.value, "<p>Only this sentence.</p>")
@@ -269,7 +269,7 @@ class ExtractorTest extends munit.FunSuite:
   test("a wikilink in a body keeps its display text") {
     val note = extract("# A\n\nx\n\n## M #flashcard/1way\n\nStronger than [[Sequential Consistency]].\n")
     specFor(note, "a / m").spec match
-      case CardSpec.TwoField(_, _, back, _) =>
+      case CardSpec.TwoField(_, _, back, _, _) =>
         assert(back.value.contains("Sequential Consistency"), s"lost the link text: ${back.value}")
       case other => fail(s"expected TwoField, got $other")
   }
@@ -339,7 +339,7 @@ class ExtractorTest extends munit.FunSuite:
   test("a pair card is a three-field spec — no separate card model") {
     val note = extract(messagingTable)
     specFor(note, "messaging / cost / benefit / queue / benefit").spec match
-      case CardSpec.ThreeField(_, concept, descriptor, description, _) =>
+      case CardSpec.ThreeField(_, concept, descriptor, description, _, _) =>
         assertEquals(concept, "Queue")
         assertEquals(descriptor, "Benefit")
         assertEquals(description.value, "Load Absorption")
@@ -349,7 +349,7 @@ class ExtractorTest extends munit.FunSuite:
   test("a row card carries ALL of the row's descriptors together") {
     val note = extract(messagingTable)
     specFor(note, "messaging / cost / benefit / queue").spec match
-      case CardSpec.TableRow(_, concept, descriptors) =>
+      case CardSpec.TableRow(_, concept, descriptors, _) =>
         assertEquals(concept, "Queue")
         // `&amp;` arrived in S11: production injects `CellDisplay.Escaped`, so a cell's text
         // is escaped for an HTML field. This is the one place the fixture markdown in THIS
@@ -443,7 +443,7 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     specFor(note, "t / w / queue / benefit").spec match
-      case CardSpec.ThreeField(_, _, _, description, _) =>
+      case CardSpec.ThreeField(_, _, _, description, _, _) =>
         assertEquals(description.value, "Load Absorption")
       case other => fail(s"expected ThreeField, got $other")
   }
@@ -991,7 +991,7 @@ class ExtractorTest extends munit.FunSuite:
   // WHAT THESE FOUR TESTS OBSERVE IS SPEC VALUES AND TAGS. The human's requirement is about
   // what a card DOES ON REVIEW — items revealed one at a time, on one schedule — and NOBODY
   // HAS RENDERED THIS CARD. Where a claim below is about what a person would see, it is
-  // written as a PREDICTION read off `note-types/cloze-sequence/front.html` and `back.html`,
+  // written as a PREDICTION read off `note-types/cloze-sequence/templates/`,
   // never as an observation.
 
   /** Every reason this note refused to build, joined — the channel an author actually reads. */
@@ -1007,8 +1007,13 @@ class ExtractorTest extends munit.FunSuite:
     * remove the question.
     *
     * THE WHOLE `fields` VECTOR IS ASSERTED, not the Text value alone, because field ORDER is
-    * part of what a note type contract is: `Marker.ClozeSequenceFields` is the single source
-    * of it and a silent reordering would put the body in the Title.
+    * part of what a note type contract is: `Marker.FieldOrder.ClozeSequence` is the single
+    * source of it and a silent reordering would put the body in the Title.
+    *
+    * THE `Context` VALUE IS THE ANCESTOR CHAIN WITHOUT THIS HEADING — here just `B`, the note's
+    * H1. It stops short of `Path of blood` because that string is already the `Title` field,
+    * which this note type's own front template prints as `<h4>{{Title}}</h4>`; including it
+    * would print the same words twice on the question side.
     */
   test("a sequence section becomes one Cloze Sequence note whose Text carries the list") {
     val note = extract(
@@ -1031,8 +1036,9 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(
       spec.fields,
       Vector(
-        "Title" -> "Path of blood",
-        "Text"  -> "<p>From the body to the lungs:</p><ul><li>superior vena cava</li><li>right atrium</li></ul>",
+        "Title"   -> "Path of blood",
+        "Text"    -> "<p>From the body to the lungs:</p><ul><li>superior vena cava</li><li>right atrium</li></ul>",
+        "Context" -> "B",
       ),
     )
   }

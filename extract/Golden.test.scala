@@ -629,3 +629,88 @@ class GoldenTest extends munit.FunSuite:
       "the golden's DO-NOT-REGENERATE warning has been changed or removed",
     )
   }
+
+  // ================================================ bucket 4: the Context field ====
+
+  /** POSITIVE LITERALS ABOUT THE BREADCRUMB, in this source, which regeneration does not
+    * touch — the same anti-weakening device as the bucket above and for the same reason.
+    *
+    * The failure this guards against is the one the whole field exists to prevent, arriving in
+    * the opposite direction: `Context` is created, populated, hashed and synced, and is
+    * INVISIBLE. Extraction emitting an empty string for every card is a change the two buckets
+    * above would report once as a content move and then never mention again, and no live
+    * symptom would follow — the note types wrap the field in `{{#Context}}…{{/Context}}`, so
+    * an empty value renders as nothing at all rather than as an empty rule.
+    */
+  test("every card carries a Context field, and it is the LAST field") {
+    golden.cards.foreach { c =>
+      val names = c.fields.map(_._1)
+      assert(
+        names.lastOption.contains(escape(Marker.ContextField)),
+        s"card ⟦${c.tag}⟧ does not end with a ${Marker.ContextField} field: $names",
+      )
+    }
+  }
+
+  /** FIVE EMPTY, FIFTY NOT. The five are the `#flashcard/3way` headings sitting DIRECTLY under
+    * their note's H1 — `System-Design/Consistency.md`'s `## Definition` and
+    * `## Why it is a spectrum`, and all three of `System-Design/Linearizability.md`'s. For a
+    * three-field card the breadcrumb stops short of the last ancestor, because that ancestor
+    * IS the Concept the card asks the reviewer to recall; with only one ancestor there is
+    * nothing left to show.
+    *
+    * BOTH NUMBERS ARE ASSERTED, not just the total. Fifty alone would pass if the empty ones
+    * grew; five alone would pass if extraction stopped emitting cards. If either genuinely
+    * moves, change the literal BY HAND and say here which fixture caused it.
+    */
+  test("exactly five cards have an empty Context, and they are the five under an H1") {
+    // Read positionally off the LAST field, whose name the test above already pinned. A
+    // name lookup with a fallback would report "empty" for a card that had no Context field
+    // at all — the two are different failures and must not collapse into one.
+    val contexts = golden.cards.map { c =>
+      val (name, value) = c.fields.lastOption.getOrElse(fail(s"card \u27e6${c.tag}\u27e7 has no fields"))
+      assertEquals(name, escape(Marker.ContextField), s"last field of \u27e6${c.tag}\u27e7")
+      c.tag -> value
+    }
+    val (empty, nonEmpty) = contexts.partition(_._2.isEmpty)
+
+    assertEquals(empty.size, 5, s"expected 5 empty-context cards, got: ${empty.map(_._1)}")
+    assertEquals(nonEmpty.size, 50, "the number of cards carrying a real breadcrumb has changed")
+
+    assertEquals(
+      empty.map(_._1),
+      Vector(
+        "src::fix-consistency::consistency/definition",
+        "src::fix-consistency::consistency/why%20it%20is%20a%20spectrum",
+        "src::fix-linearizability::linearizability/definition",
+        "src::fix-linearizability::linearizability/cost",
+        "src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency",
+      ),
+    )
+  }
+
+  /** THE CARD THAT MOTIVATED THE WHOLE FIELD, pinned by value.
+    *
+    * Measured in a live collection before this existed: heading path
+    * `body shapes / cranial bones and their sutures / frontal / anterior border` produced a
+    * card whose entire face read `Concept: Frontal`, `Descriptor: Anterior border`. Frontal
+    * WHAT — bone, lobe, cortex? The one segment that disambiguates was dropped.
+    *
+    * THREE THINGS AT ONCE, which is why it is one assertion and not three: that the chain is
+    * in DISPLAY CASING (`Body shapes`, not the key's `body shapes`), that the separator is
+    * U+203A rather than `/` or `>`, and that the segment which does the disambiguating is
+    * present. A breadcrumb derived from the `src::` tag would fail the first; a `>` separator
+    * would arrive HTML-escaped as `&gt;` and fail the second.
+    */
+  test("the motivating card carries its disambiguating ancestor") {
+    val tag = "src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border"
+    val card = golden.cards
+      .find(_.tag == tag)
+      .getOrElse(fail(s"the motivating card is gone from the golden: $tag"))
+
+    assertEquals(card.fields.toMap.get(escape("Concept")), Some("Frontal"))
+    assertEquals(
+      card.fields.toMap.get(escape(Marker.ContextField)),
+      Some("Body shapes › Cranial bones and their sutures"),
+    )
+  }

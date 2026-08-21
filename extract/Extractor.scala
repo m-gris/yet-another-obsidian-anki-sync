@@ -190,9 +190,17 @@ object Extractor:
     // reaching the lowering. THE RESIDUAL, stated rather than hidden: `content.Lower` enumerates
     // no `ast.InvalidBlock`/`ast.InvalidSpan`, and whether a below-Error invalid element can
     // survive into the tree is UNVERIFIED.
+    // THE BREADCRUMB A TABLE'S CARDS SHOW, computed HERE and passed down, because the rule is
+    // the caller's and not `Tables`'. A table card's face shows the row cell and the column
+    // header — never the marked heading and never its ancestors — so nothing above it is
+    // already on the card and the whole chain INCLUDING this heading survives. Contrast the
+    // heading-derived three-field arm below, which must drop one segment because that segment
+    // IS the Concept.
+    val tableContextTitles = ancestorTitles :+ title
+
     if marker == Marker.Table then
       bodyBlocks(where, ownBody(section))
-        .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Escaped))
+        .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles))
     else for
       lowered <- bodyBlocks(where, ownBody(section))
 
@@ -257,10 +265,17 @@ object Extractor:
           // ESCAPED HERE, IN THE ARGUMENT POSITION, AND NOWHERE UPSTREAM. See the note below
           // the `ThreeField` arm — rebinding `title` is the highest-consequence mistake
           // available in this function.
+          // CONTEXT IS THE WHOLE ANCESTOR CHAIN. This card's face is the heading itself, so
+          // every ancestor above it is absent from the card and none of them is the answer.
           Right(
             Vector(
-              CardSpec.TwoField(key, C.Html.escape(title).render, body, directions) ->
-                RowSource.heading
+              CardSpec.TwoField(
+                key,
+                C.Html.escape(title).render,
+                body,
+                directions,
+                CardContext.render(ancestorTitles),
+              ) -> RowSource.heading
             )
           )
 
@@ -281,11 +296,27 @@ object Extractor:
           //
           // WITH THE TABLE CELLS ABOVE, THIS MAKES THE RULE COMPLETE AND GREPPABLE: every
           // String that becomes an Anki field value is escaped at its construction site in
-          // `extract/`, with exactly ONE named exception — `model/CardSpec.scala:206-215`
-          // builds a `TableRow`'s Back as `s"$d: $v"` joined with `"\n"` inside `model/`,
+          // `extract/`, with exactly ONE named exception — `CardSpec.fields`'s `TableRow` arm
+          // builds that card's Back as `s"$d: $v"` joined with `"\n"` inside `model/`,
           // which imports nothing from `content/`. That one is not escaped and not rendered;
           // it is an open question, not an oversight.
           val concept = ancestorTitles.lastOption.getOrElse(fileName)
+
+          // CONTEXT DROPS THE LAST ANCESTOR, AND THAT IS NOT A TIDINESS RULE. The last
+          // ancestor is bound one line above as the Concept, which Card 1 of this note type
+          // asks the reviewer to RECALL. Printing it in the breadcrumb would print the answer
+          // on the question side of that card. So the breadcrumb carries everything ABOVE the
+          // concept and stops there.
+          //
+          // AN EMPTY CHAIN IS THE ORDINARY RESULT FOR A `##` HEADING DIRECTLY UNDER AN H1 —
+          // five of the fixture vault's fifty-five cards. It is also what an ancestorless
+          // heading produces, where the concept fell back to the file name: `dropRight` on an
+          // empty vector is empty, so no branch is needed and none is written.
+          //
+          // WHAT THE MOTIVATING CARD BECOMES: heading path
+          // `Body shapes / Cranial bones and their sutures / Frontal / Anterior border` was
+          // showing `Concept: Frontal, Descriptor: Anterior border` and nothing else. It now
+          // carries `Body shapes › Cranial bones and their sutures` above the prompt.
           Right(
             Vector(
               CardSpec.ThreeField(
@@ -294,12 +325,32 @@ object Extractor:
                 C.Html.escape(title).render,
                 body,
                 directions,
+                CardContext.render(ancestorTitles.dropRight(1)),
               ) -> RowSource.heading
             )
           )
 
-        case Marker.Cloze => Cloze.fromLowered(key, lowered).map(c => Vector(c -> RowSource.heading))
-        case Marker.Table => Tables.fromSection(key, section, CellDisplay.Escaped)
+        // A CLOZE CARD'S FACE IS THE BODY TEXT ALONE — the heading is nowhere on it — so the
+        // breadcrumb carries the chain INCLUDING this heading.
+        //
+        // THE RESIDUAL, NAMED RATHER THAN HIDDEN: a heading that NAMES what its own body
+        // blanks would now print the answer on the question side. All five cloze headings in
+        // the fixture vault were checked against their bodies on 2026-08-21 and none leaks —
+        // "The three layers, blanked", "Bones of the forearm", "Bones of the hand, in two
+        // parts", "Anatomy of a long bone", "Cells that remodel bone". Five data points are
+        // evidence, not a guarantee; the mitigation is an authoring rule of the kind
+        // `CARD-MODEL.md` already states for `3way` headings, and the alternative — dropping
+        // the heading for cloze alone — costs the largest context gain in the design.
+        case Marker.Cloze =>
+          Cloze
+            .fromLowered(key, lowered, CardContext.render(ancestorTitles :+ title))
+            .map(c => Vector(c -> RowSource.heading))
+
+        // UNREACHABLE WHILE THE `if marker == Marker.Table` ABOVE STANDS, and compiled only
+        // because an inexhaustive match is a build error here. It is given the same argument
+        // the live call site is given, so a future "simplification" that collapses that `if`
+        // does not silently start emitting contextless table cards.
+        case Marker.Table => Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles)
 
         case Marker.Sequence =>
           // ── THE REFUSAL, AND THE ONE PLACE IN THIS PROJECT THAT GATES ON A RENDERER ──────
@@ -314,7 +365,8 @@ object Extractor:
           // `wrap` then drops the whole `<ul>`. Such a body PASSES B6 (the lead-in paragraph
           // carries it), PASSES `Body.fromExtracted` on the HTML, and PASSES a presence-only
           // check — and ships a note whose Text holds zero `li`, which
-          // `note-types/cloze-sequence/front.html:10` then hides none of. Silent success.
+          // `note-types/cloze-sequence/templates/cloze-sequence.front.html:11` then hides none
+          // of. Silent success.
           //
           // THE ORACLE IS `AsHtml`, NOT `AsText`, AND THE EQUIVALENCE IS EXACT RATHER THAN
           // APPROXIMATE. `AsHtml.plain(item.blocks).isEmpty` computes the identical expression
@@ -377,10 +429,24 @@ object Extractor:
             // `text` IS THE WHOLE RENDERED BODY — the `body` binding computed above, reused.
             // THIS ARM ADDS ZERO RENDERING CODE, which is the strongest fact in the slice:
             // `AsHtml` already emits `<ul><li>` for `Block.Bullets` and `<ol><li>` for
-            // `Block.Numbered`, and `note-types/cloze-sequence/back.html:15` selects
+            // `Block.Numbered`, and the cloze-sequence back template's `:15` selects
             // `#text li`, agnostic to which. The field this note type wants is byte-for-byte
             // the `Body` this branch already builds.
-            Right(Vector(CardSpec.Sequence(key, C.Html.escape(title).render, body) -> RowSource.heading))
+            //
+            // CONTEXT IS THE ANCESTOR CHAIN WITHOUT THIS HEADING, exactly as for the two-field
+            // arm and for the same reason: `Title` IS this heading, printed on the question
+            // side by the note type's own `<h4>{{Title}}</h4>`, so repeating it in the
+            // breadcrumb would print it twice.
+            Right(
+              Vector(
+                CardSpec.Sequence(
+                  key,
+                  C.Html.escape(title).render,
+                  body,
+                  CardContext.render(ancestorTitles),
+                ) -> RowSource.heading
+              )
+            )
     yield spec
 
   /** A section's OWN prose — everything down to the next heading of ANY level.

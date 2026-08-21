@@ -112,13 +112,27 @@ object Tables:
     * error here. Its `CellDisplay` argument is exercised by no test and never will be while
     * that `if` stands — a future "simplification" that collapses the `if` makes it live.
     * Both call sites inject [[CellDisplay.Escaped]] since S11.
+    *
+    * `contextTitles` IS FULLY COMPUTED BY THE CALLER, AND THIS FILE HOLDS NO RULE ABOUT IT.
+    * Which heading segments a card's breadcrumb keeps depends on what that card's face already
+    * shows, and the six shapes differ; `Extractor.buildSpecs` is the one place all six are
+    * visible together, so the decision lives there. What this file knows is only that a table
+    * card's face shows a row cell and a column header, never the marked heading, so it keeps
+    * every segment it is handed — the caller passes `ancestorTitles :+ title`.
+    *
+    * IT IS UNESCAPED HERE AND ESCAPED IN THE ARGUMENT POSITION, exactly as `display` escapes
+    * cell text: escaping upstream of the identity/display fork moves card KEYS. It also takes
+    * NO DEFAULT AND HAS NO DELEGATING OVERLOAD, for the reason already written above about
+    * `display` — a default would let production and the guard drive different arities.
     */
   def fromSection(
       key: CardKey,
       section: Section,
       display: CellDisplay,
+      contextTitles: Vector[String],
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
-    val where = key.path.render
+    val where   = key.path.render
+    val context = CardContext.render(contextTitles)
     firstTable(section).toRight(SpecError.TableWithoutTable(where)).flatMap { table =>
       val headerRow = rowCells(table.head.content).headOption.getOrElse(Vector.empty)
       val bodyRows  = rowCells(table.body.content)
@@ -129,7 +143,9 @@ object Tables:
       if descriptorHeaders.isEmpty then Left(SpecError.TableWithoutDescriptors(where))
       else
         Right(
-          bodyRows.zipWithIndex.flatMap((row, i) => cardsForRow(key, descriptorHeaders, row, i + 1, display))
+          bodyRows.zipWithIndex.flatMap((row, i) =>
+            cardsForRow(key, descriptorHeaders, row, i + 1, display, context)
+          )
         )
     }
 
@@ -156,6 +172,7 @@ object Tables:
       row: Vector[Cell],
       rowNumber: Int,
       display: CellDisplay,
+      context: String,
   ): Vector[(CardSpec, RowSource)] =
     row.headOption.map(cell => (cell, cellSegment(cell))) match
       // A row with no cells at all names nothing.
@@ -210,8 +227,14 @@ object Tables:
           // The argument above therefore survives the swap unchanged.
           Body.fromExtracted(d.value).map { body =>
             val key = base.copy(path = HeadingPath(base.path.segments :+ rowSeg :+ d.headerSeg))
-            CardSpec.ThreeField(key, rowConcept, d.header, body, ThreeFieldDirections.Default) ->
-              RowSource.table(SourceKind.TablePair, rowNumber)
+            CardSpec.ThreeField(
+              key,
+              rowConcept,
+              d.header,
+              body,
+              ThreeFieldDirections.Default,
+              context,
+            ) -> RowSource.table(SourceKind.TablePair, rowNumber)
           }
         }
 
@@ -227,6 +250,7 @@ object Tables:
                 key,
                 rowConcept,
                 NonEmptyVector.fromVectorUnsafe(pairs.map(d => d.header -> d.value)),
+                context,
               ) -> RowSource.table(SourceKind.TableRow, rowNumber)
             )
 

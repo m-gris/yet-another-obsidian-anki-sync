@@ -167,7 +167,13 @@ enum SpecError:
   */
 enum CardSpec:
   /** `#flashcard/1way` and `#flashcard/2way`. */
-  case TwoField(key: CardKey, front: String, back: Body, directions: TwoFieldDirections)
+  case TwoField(
+      key: CardKey,
+      front: String,
+      back: Body,
+      directions: TwoFieldDirections,
+      context: String,
+  )
 
   /** `#flashcard/3way` and `#flashcard/3way/all`, and a table's pair cards. */
   case ThreeField(
@@ -176,12 +182,18 @@ enum CardSpec:
       descriptor: String,
       description: Body,
       directions: ThreeFieldDirections,
+      context: String,
   )
 
   /** `#flashcard/cloze` — one note holding ALL of the section's deletions, so adding a
     * highlight adds a CARD to an existing note rather than churning the key.
     */
-  case Cloze(key: CardKey, text: Body, deletions: NonEmptyVector[ClozeDeletion])
+  case Cloze(
+      key: CardKey,
+      text: Body,
+      deletions: NonEmptyVector[ClozeDeletion],
+      context: String,
+  )
 
   /** A table's row card: the concept, with all its descriptors together.
     *
@@ -189,7 +201,12 @@ enum CardSpec:
     * duplicate the single pair card. This is the card that preserves the relation; a
     * benefit divorced from its cost is trivia.
     */
-  case TableRow(key: CardKey, concept: String, descriptors: NonEmptyVector[(String, String)])
+  case TableRow(
+      key: CardKey,
+      concept: String,
+      descriptors: NonEmptyVector[(String, String)],
+      context: String,
+  )
 
   /** `#flashcard/sequence` — ONE note whose list items are revealed one at a time, on ONE
     * schedule.
@@ -213,52 +230,66 @@ enum CardSpec:
     *     `content/` bypasses the opaque `Fragment` and reopens the hole that type was
     *     introduced to shut.
     */
-  case Sequence(key: CardKey, title: String, text: Body)
+  case Sequence(key: CardKey, title: String, text: Body, context: String)
 
 object CardSpec:
 
   extension (spec: CardSpec)
     /** Every spec knows its own key. */
     def key: CardKey = spec match
-      case TwoField(k, _, _, _)      => k
-      case ThreeField(k, _, _, _, _) => k
-      case Cloze(k, _, _)            => k
-      case TableRow(k, _, _)         => k
-      case Sequence(k, _, _)         => k
+      case TwoField(k, _, _, _, _)      => k
+      case ThreeField(k, _, _, _, _, _) => k
+      case Cloze(k, _, _, _)            => k
+      case TableRow(k, _, _, _)         => k
+      case Sequence(k, _, _, _)         => k
 
     /** The Anki note type this spec creates. Behaviour on the sum type: the consumer asks,
       * the variant answers, rather than the consumer branching on which variant it holds.
       */
     def noteTypeName: String = spec match
-      case TwoField(_, _, _, TwoFieldDirections.Forward) => Marker.NoteTypes.Basic
-      case TwoField(_, _, _, TwoFieldDirections.Both)    => Marker.NoteTypes.BasicAndReversed
-      case ThreeField(_, _, _, _, _)                     => Marker.NoteTypes.ConceptDescriptor
-      case Cloze(_, _, _)                                => Marker.NoteTypes.Cloze
+      case TwoField(_, _, _, TwoFieldDirections.Forward, _) => Marker.NoteTypes.Basic
+      case TwoField(_, _, _, TwoFieldDirections.Both, _)    => Marker.NoteTypes.BasicAndReversed
+      case ThreeField(_, _, _, _, _, _)                     => Marker.NoteTypes.ConceptDescriptor
+      case Cloze(_, _, _, _)                                => Marker.NoteTypes.Cloze
       // The row card is a plain Basic: concept on the front, all descriptors on the back.
-      case TableRow(_, _, _)                             => Marker.NoteTypes.Basic
-      case Sequence(_, _, _)                             => Marker.NoteTypes.ClozeSequence
+      case TableRow(_, _, _, _)                             => Marker.NoteTypes.Basic
+      case Sequence(_, _, _, _)                             => Marker.NoteTypes.ClozeSequence
 
     /** Field name to value, in the note type's field order.
       *
       * For a three-field spec the first three are the ruled display order; the trailing
       * [[Marker.ThreeWayField]] is the conditional switch that makes Anki generate the
       * third card, empty unless the marker asked for all directions.
+      *
+      * [[Marker.ContextField]] IS LAST ON EVERY ARM, and every arm APPENDS it explicitly
+      * rather than growing the vector it zips against. `Vector.zip` truncates to the shorter
+      * side without complaint, so adding `"Context"` to `Marker.ConceptDescriptorFields` or
+      * `Marker.ClozeSequenceFields` would drop the field on the floor with every test still
+      * green. `Marker.FieldOrder` holds the complete declared list, and
+      * `model/Marker.test.scala` compares what this function emits against it.
+      *
+      * THE VALUE MAY LEGITIMATELY BE EMPTY — a card whose heading chain is empty, such as a
+      * `3way` heading sitting directly under a note's H1. The note type's templates wrap the
+      * field in `{{#Context}}…{{/Context}}`, so an empty value emits no markup at all rather
+      * than an empty rule and a margin.
       */
     def fields: Vector[(String, String)] = spec match
-      case TwoField(_, front, back, _) =>
+      case TwoField(_, front, back, _, context) =>
         Vector(
           Marker.BasicFields.Front -> front,
           Marker.BasicFields.Back  -> back.value,
+          Marker.ContextField      -> context,
         )
 
-      case ThreeField(_, concept, descriptor, description, directions) =>
+      case ThreeField(_, concept, descriptor, description, directions, context) =>
         val threeWay = directions match
           case ThreeFieldDirections.All     => "1"
           case ThreeFieldDirections.Default => ""
         Marker.ConceptDescriptorFields.zip(Vector(concept, descriptor, description.value)) :+
-          (Marker.ThreeWayField -> threeWay)
+          (Marker.ThreeWayField -> threeWay) :+
+          (Marker.ContextField -> context)
 
-      case Cloze(_, text, _) =>
+      case Cloze(_, text, _, context) =>
         // The body ALREADY CARRIES its `{{cN::…}}` deletions: `Cloze.renderWithDeletions`
         // puts them in when the spec is built, so there is nothing to apply here. One note
         // holds all of a section's deletions, and Anki makes one card per distinct `cN`.
@@ -270,9 +301,10 @@ object CardSpec:
         Vector(
           Marker.ClozeFields.Text      -> text.value,
           Marker.ClozeFields.BackExtra -> "",
+          Marker.ContextField          -> context,
         )
 
-      case TableRow(_, concept, descriptors) =>
+      case TableRow(_, concept, descriptors, context) =>
         // Joining the descriptors is the minimal honest thing to do here. How this should
         // actually LOOK is a rendering concern and may be revised when fields are rendered
         // to HTML; the structure — concept front, all descriptors together on the back — is
@@ -281,9 +313,13 @@ object CardSpec:
         Vector(
           Marker.BasicFields.Front -> concept,
           Marker.BasicFields.Back  -> back,
+          Marker.ContextField      -> context,
         )
 
-      case Sequence(_, title, text) =>
+      case Sequence(_, title, text, context) =>
         // The zip form, exactly as the three-field arm above: the constant is the single
-        // source of field ORDER, so a reordering happens in one place rather than two.
-        Marker.ClozeSequenceFields.zip(Vector(title, text.value))
+        // source of field ORDER for the two fields it names, so a reordering of THOSE happens
+        // in one place rather than two. Context is appended, never zipped — see the note on
+        // this function.
+        Marker.ClozeSequenceFields.zip(Vector(title, text.value)) :+
+          (Marker.ContextField -> context)

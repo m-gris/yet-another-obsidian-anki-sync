@@ -85,7 +85,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     VaultScan.from(
       Vector(
         SourcedSpec(
-          CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward),
+          CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, "Coupling"),
           SourceRef("Note.md", 1, SourceKind.Heading),
         )
       ),

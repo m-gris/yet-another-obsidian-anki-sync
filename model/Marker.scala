@@ -53,10 +53,12 @@ enum Marker:
     *
     * THE INVERSION THE AUTHOR MUST BE TOLD ONCE: EVERYTHING IN THE BODY THAT IS NOT A LIST
     * ITEM IS PRINTED ON THE QUESTION SIDE. Read off the templates rather than predicted —
-    * `note-types/cloze-sequence/front.html:1-3` renders `<h4>{{Title}}</h4>` plus the WHOLE
-    * `{{Text}}` div, and `front.html:9-13` adds `hidden-cloze` to `#text li` and binds nothing
-    * else. `styling.css:22-24` dims that div to `opacity: 0.5` on the question side and
-    * `back.html:46` restores it to 1, which says the same thing the selector says. So a
+    * `note-types/cloze-sequence/templates/cloze-sequence.front.html:2-4` renders
+    * `<h4>{{Title}}</h4>` plus the WHOLE `{{Text}}` div, and its `:10-14` adds `hidden-cloze`
+    * to `#text li` and binds nothing else. `styling.css:22-24` dims that div to `opacity: 0.5`
+    * on the question side and the back template's `:46` restores it to 1, which says the same
+    * thing the selector says. (Paths and line numbers re-checked 2026-08-21, after the note
+    * type's files moved under `templates/` and its front gained a `Context` line.) So a
     * lead-in paragraph is a GIFT — it becomes the prompt — while prose written AFTER the list
     * is a SPOILER printed on the front. The contract is therefore stronger than "the body is
     * the answer": THE BODY'S LIST ITEMS ARE THE ANSWER; EVERYTHING ELSE IN THE BODY IS PROMPT.
@@ -95,45 +97,85 @@ object Marker:
     * RESOLVED BY NAME, NEVER BY ID. Note type ids are collection-local: the id recorded in
     * the design documents came from a different profile's backup and does not match the
     * live one, and the plan duplicates a profile anyway. Names are the stable contract.
+    *
+    * EVERY NAME IS PREFIXED `Obsidian `, AND THAT IS A RULING RATHER THAN A CONVENTION.
+    * Ruled by Marc, 2026-08-21: this tool writes ONLY to note types it owns, so that changing
+    * a template can never reach the rest of his collection. Before the ruling the tool wrote
+    * to Anki's STOCK `Basic` / `Basic (and reversed card)` / `Cloze`, which every other note
+    * in the collection also uses.
+    *
+    * TWO OF THE FIVE ARE RENAMES OF NOTE TYPES THAT ALREADY HOLD NOTES — `Cloze Sequence` and
+    * `3 way Concept-Descriptor`. AnkiConnect has no rename-model action, so those two renames
+    * are done BY HAND in Tools → Manage Note Types. (REPORTED, NOT RE-CHECKED HERE: the
+    * add-on's own `apiReflect` action list was enumerated live on 2026-08-21 and holds
+    * `modelFieldRename` and `modelTemplateRename` but nothing for the model itself. Re-running
+    * `apiReflect` is what would confirm it.) The old names are recorded in
+    * `note-types/<type>/manifest.json` under `renamedFrom`, which is what lets an installer
+    * refuse rather than create a second, empty note type beside the populated one.
+    *
+    * THE OTHER HALF OF THIS CONTRACT IS `note-types/<slug>/manifest.json`, whose `name` key
+    * carries the same five strings. Nothing compares the two yet — the test that does (design
+    * document §4, "T1") belongs to the slice that writes the installer, because it must read
+    * those files and `model/` deliberately depends on nothing. Until then a disagreement is
+    * silent, and a silent disagreement means a write to a note type that does not exist.
     */
   object NoteTypes:
-    val Basic: String            = "Basic"
-    val BasicAndReversed: String = "Basic (and reversed card)"
-    val Cloze: String            = "Cloze"
+    val Basic: String             = "Basic"
+    val BasicAndReversed: String  = "Basic (and reversed card)"
+    val Cloze: String             = "Cloze"
     val ConceptDescriptor: String = "3 way Concept-Descriptor"
 
-    /** The list note type: one card per note, whose items reveal one at a time.
-      *
-      * VERIFIED 2026-08-21, and worth recording because it is easy to assume otherwise: THIS
-      * `val` IS THE SOLE MACHINE-READABLE STATEMENT OF THAT NOTE TYPE'S NAME IN THE REPO.
-      * None of the four installable files in `note-types/cloze-sequence/` names the model —
-      * `fields.json` holds only field names, and the name appears elsewhere only as the H1 of
-      * that directory's `README.md` and in one prose comment. So a rename here silently stops
-      * matching a real collection, and nothing in the repository would notice.
-      */
+    /** The list note type: one card per note, whose items reveal one at a time. */
     val ClozeSequence: String = "Cloze Sequence"
 
-  /** Field order for [[NoteTypes.ConceptDescriptor]].
+    /** All five, IN THE ORDER THE MANIFEST DIRECTORIES ARE LISTED in `note-types/README.md`
+      * (`basic`, `basic-and-reversed`, `cloze`, `cloze-sequence`, `concept-descriptor`), so
+      * that the owed manifest-versus-Scala test can compare two ordered vectors rather than
+      * two sets. A set comparison would pass while the two disagreed about which name belongs
+      * to which directory.
+      */
+    val All: Vector[String] =
+      Vector(Basic, BasicAndReversed, Cloze, ClozeSequence, ConceptDescriptor)
+
+  /** The heading chain a card came from, shown ON THE CARD.
+    *
+    * WHY A REAL FIELD AND NOT THE `src::` TAG. The tag carries the CANONICAL path —
+    * lowercased and percent-encoded — because identity is deliberately severed from display.
+    * A breadcrumb derived from it would read `body shapes > cranial bones and their sutures`
+    * in permanent lowercase. `Extractor` already computes the properly cased chain and used to
+    * discard all but its last element.
+    *
+    * WHAT IT IS FOR. A card can be unanswerable because it lost its context. The example is
+    * in this repository and was re-read from it: before this field existed,
+    * `extract/golden/fixture-cards.txt` recorded the card keyed
+    * `…body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border` as
+    * carrying `Concept: Frontal`, `Descriptor: Anterior border` and nothing else. Frontal WHAT
+    * — bone, lobe, cortex? The one segment that disambiguates, `Cranial bones and their
+    * sutures`, was dropped. The same shape was reported from a live collection.
+    */
+  val ContextField: String = "Context"
+
+  /** Field order for [[NoteTypes.ConceptDescriptor]]'s FIRST THREE fields.
     *
     * RULED (B7): Concept, Descriptor, Description — matching the templates already on the
     * note type. Field order is purely a display concern here, because `allowDuplicate` is
     * on and identity comes from the `src::` tag rather than Anki's first-field checksum.
+    *
+    * ⚠️ THIS VECTOR MUST NOT GROW, AND THE REASON IS A SILENT TRUNCATION RATHER THAN TASTE.
+    * `CardSpec.fields` builds the three-field arm as `ConceptDescriptorFields.zip(Vector(
+    * concept, descriptor, description))`, and `Vector.zip` truncates to the shorter side
+    * WITHOUT COMPLAINT. Appending a name here would therefore drop it on the floor and every
+    * test would stay green. The complete field list — including [[ThreeWayField]] and
+    * [[ContextField]] — is [[FieldOrder.ConceptDescriptor]], which is built from this vector
+    * rather than beside it.
     */
   val ConceptDescriptorFields: Vector[String] = Vector("Concept", "Descriptor", "Description")
 
-  /** Field order for [[NoteTypes.ClozeSequence]], mirroring [[ConceptDescriptorFields]].
+  /** Field order for [[NoteTypes.ClozeSequence]]'s first two fields.
     *
-    * AN OWED CONTRACT, NOT A GUARANTEE, AND THE GAP IS NAMED RATHER THAN PAPERED OVER.
-    * `note-types/cloze-sequence/fields.json` is the other half of this contract, and NOTHING
-    * ties the two together: no test reads that file, and no build step compares them. If they
-    * drift, a real collection answers `UnknownField` per note at write time — after the plan
-    * has already been printed as though it would work.
-    *
-    * Tying them belongs to the slice that INSTALLS the note type, which already reads all four
-    * files in that directory. It is not done here because `model/` deliberately depends on
-    * nothing (verified 2026-08-20, recorded at [[SpecError.UnsupportedContent]]), so reading
-    * that file from here would need a third copy of the upward `user.dir` path walk inside the
-    * one package that has no dependencies at all.
+    * ⚠️ MUST NOT GROW, for the identical zip-truncation reason spelled out at
+    * [[ConceptDescriptorFields]]: `CardSpec.fields`'s sequence arm zips this against two
+    * values. The complete list is [[FieldOrder.ClozeSequence]].
     */
   val ClozeSequenceFields: Vector[String] = Vector("Title", "Text")
 
@@ -146,14 +188,26 @@ object Marker:
     */
   val ThreeWayField: String = "ThreeWay"
 
-  /** Field names of the stock note types.
+  /** Field names carried over from Anki's stock note types.
     *
-    * VERIFIED against a live collection via `modelFieldNames` (2026-08-19), after being
-    * carried as an explicit assumption. Worth recording that they turned out to be correct:
-    * of the documented defaults this project has checked, this is the only one that did not
-    * lie. The others — HOCON typing, Laika's missing tables, `updateNoteFields` dropping
-    * tags — all produced plausible output instead of failing, which is why the assumption
-    * was worth checking rather than trusting.
+    * THESE NAMES WERE VERIFIED against a live collection via `modelFieldNames`, twice, by
+    * earlier sessions and not re-checked here: 2026-08-19, and again 2026-08-21 in profile
+    * `claude-POC-test`, where stock `Basic` came back `[Front, Back]` and stock `Cloze`
+    * `[Text, Back Extra]`. Worth recording, because of the documented library defaults this
+    * project has checked, this is the only one that did not lie. The others — HOCON typing,
+    * Laika's missing tables, `updateNoteFields` dropping tags — all produced plausible output
+    * instead of failing.
+    *
+    * WHAT THEY NOW NAME HAS CHANGED, THOUGH THE STRINGS HAVE NOT. Since [[NoteTypes]] became
+    * the tool's own `Obsidian *` types, these are the names this tool AUTHORS into types it
+    * creates, not names it reads off Anki's. They were kept identical to the stock ones
+    * deliberately: `Retype` between [[NoteTypes.Basic]] and [[NoteTypes.BasicAndReversed]] is
+    * then a template change and not a field remapping, and a template copied from a stock type
+    * needs no edit.
+    *
+    * ⚠️ `anki/InMemoryAnki.scala`'s `defaultNoteTypes` comment claims these names are
+    * "UNVERIFIED against a live collection". That comment is STALE — see the two dates above —
+    * and correcting it belongs to whichever slice next edits that file.
     */
   object BasicFields:
     val Front: String = "Front"
@@ -162,6 +216,58 @@ object Marker:
   object ClozeFields:
     val Text: String      = "Text"
     val BackExtra: String = "Back Extra"
+
+  /** THE COMPLETE, ORDERED FIELD LIST OF EACH NOTE TYPE — what an installer's `createModel`
+    * is given, and what `CardSpec.fields` must produce, name for name and in order.
+    *
+    * SEPARATE FROM [[ConceptDescriptorFields]] AND [[ClozeSequenceFields]] ON PURPOSE. Those
+    * two are ZIP OPERANDS whose length is load-bearing; these are DECLARATIONS. Growing a zip
+    * operand silently drops a field (see the warning there); growing a declaration is caught,
+    * because `CardSpec.fields` can be compared against it.
+    *
+    * NOTHING IN PRODUCTION READS THIS YET, and that is stated rather than hidden: the
+    * installer that will feed it to `createModel` is a later slice. What reads it today is
+    * `model/Marker.test.scala`, which compares it against what `CardSpec.fields` emits — the
+    * test that makes a truncating zip fail rather than pass quietly.
+    *
+    * [[ContextField]] IS LAST ON EVERY TYPE, for three reasons. Anki's Sort Field defaults to
+    * field 1, and a breadcrumb there would fill the Browse list with the same repeated prefix.
+    * Appending leaves every existing field position unchanged, so nothing downstream shifts.
+    * And AnkiConnect's `modelFieldAdd` appends unless given an explicit index, so appending is
+    * what a later repair would do anyway — that last one is REPORTED, from a reading of the
+    * add-on source on 2026-08-21 (`__init__.py:1433`), and was not re-checked here.
+    */
+  object FieldOrder:
+    val Basic: Vector[String] =
+      Vector(BasicFields.Front, BasicFields.Back, ContextField)
+
+    /** The same three names as [[Basic]] — see the note at [[BasicFields]] for why the two
+      * types deliberately share a field list.
+      */
+    val BasicAndReversed: Vector[String] = Basic
+
+    val Cloze: Vector[String] =
+      Vector(ClozeFields.Text, ClozeFields.BackExtra, ContextField)
+
+    val ClozeSequence: Vector[String] = ClozeSequenceFields :+ ContextField
+
+    val ConceptDescriptor: Vector[String] =
+      ConceptDescriptorFields :+ ThreeWayField :+ ContextField
+
+    /** Keyed by note type name, so a consumer holding a `CardSpec` can ask
+      * `FieldOrder.byNoteType(spec.noteTypeName)`.
+      *
+      * A `Map`, so `.apply` THROWS on an unknown name rather than returning an empty vector.
+      * Deliberate: a silently empty field list is a note type whose cards never generate,
+      * which is this project's signature failure shape.
+      */
+    val byNoteType: Map[String, Vector[String]] = Map(
+      NoteTypes.Basic             -> Basic,
+      NoteTypes.BasicAndReversed  -> BasicAndReversed,
+      NoteTypes.Cloze             -> Cloze,
+      NoteTypes.ClozeSequence     -> ClozeSequence,
+      NoteTypes.ConceptDescriptor -> ConceptDescriptor,
+    )
 
   private val MarkerPattern = """#flashcard(?:/[\w-]+)*""".r
 

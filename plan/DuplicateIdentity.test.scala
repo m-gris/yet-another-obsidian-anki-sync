@@ -40,7 +40,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
 
   def specOf(k: CardKey, back: String): SourcedSpec =
     SourcedSpec(
-      CardSpec.TwoField(k, "front", body(back), TwoFieldDirections.Forward),
+      CardSpec.TwoField(k, "front", body(back), TwoFieldDirections.Forward, "Coupling"),
       SourceRef("Note.md", 1, SourceKind.Heading),
     )
 
@@ -68,7 +68,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
     anki
       .addNote(
         NewNote(
-          noteType = "Basic",
+          noteType = Marker.NoteTypes.Basic,
           deck = defaultDeck,
           fields = Vector("Front" -> "front", "Back" -> "a stray duplicate"),
           tags = NonEmptyVector.of(TagCodec.encode(k), OwnedTag.sha("deadbeef")),

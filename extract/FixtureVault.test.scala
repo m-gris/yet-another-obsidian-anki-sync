@@ -83,27 +83,27 @@ class FixtureVaultTest extends munit.FunSuite:
   test("LAW on REAL specs: plan, apply, and the next plan is empty") {
     val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
 
-    // "Cloze Sequence" IS OPTED IN HERE RATHER THAN ADDED TO `defaultNoteTypes`, and the
-    // distinction is the point rather than a style choice. `defaultNoteTypes` models a STOCK
-    // collection, which the human's is; baking this type into it would make the whole suite
-    // behave as though the slice that INSTALLS the note type had already run — and it would
-    // hide that nothing in the production path checks, before planning, that the collection
-    // HAS this type. `noteTypeNames` exists on the algebra (`anki/Anki.scala:107`) and is
-    // implemented in both backends, and grep finds no production caller; the failure is
-    // therefore discovered per note at WRITE time, after the plan has been printed as though
-    // it would work. WHAT THE ERROR LOOKS LIKE AGAINST A LIVE COLLECTION IS NOT ASSERTED HERE:
-    // `anki/AnkiConnect.scala:130` maps a `model was not found:` message to
-    // `AnkiError.NoSuchNoteType`, and whether a real AnkiConnect answers `addNote` that way is
-    // unverified — we may not contact one. Opting in at the call site keeps "the collection
-    // does not have this type yet" true and visible.
+    // THE CLOZE-SEQUENCE OPT-IN IS GONE FROM THIS CALL SITE, and it is worth saying why,
+    // because it was here on purpose and its purpose has NOT been served elsewhere.
     //
-    // VERIFIED, so that luck is not mistaken for design: `InMemoryAnki.cardCountOf` matches the
-    // note type BY EXACT NAME and falls through to `case _ => 1`. So the opted-in type yields
-    // exactly ONE card — which is right, and right for this note type, but right BY
-    // FALLTHROUGH rather than by any rule naming it.
-    val anki = InMemoryAnki(
-      InMemoryAnki.defaultNoteTypes + (Marker.NoteTypes.ClozeSequence -> Marker.ClozeSequenceFields)
-    )
+    // WHAT USED TO BE HERE: `InMemoryAnki.defaultNoteTypes + (ClozeSequence -> …)`. The four
+    // types in `defaultNoteTypes` were Anki's STOCK four, which is what Marc's collection
+    // holds, so opting the fifth in at the call site kept "the collection does not have this
+    // type yet" true and VISIBLE — and what it made visible is a real gap: nothing in the
+    // production path checks, before planning, that the collection HAS the types it is about
+    // to write to. `noteTypeNames` exists on the algebra and grep still finds no production
+    // caller, so the failure is discovered per note at WRITE time, after the plan has been
+    // printed as though it would work.
+    //
+    // WHY IT CANNOT STAY: Marc ruled on 2026-08-21 that the tool writes only to note types it
+    // owns, so ALL FIVE are now `Obsidian *` types and none of them is stock. There is no
+    // longer a "stock collection plus one" to express. `defaultNoteTypes` is now
+    // `Marker.FieldOrder.byNoteType` — the five types the tool owns — so this fake models a
+    // collection in which the installer has already run.
+    //
+    // ⚠️ THE GAP THE OPT-IN DEMONSTRATED IS STILL OPEN, and nothing in the suite demonstrates
+    // it any more. It belongs to the slice that writes the installer.
+    val anki = InMemoryAnki()
 
     def planNow(): Plan =
       val observed = Observer.observe(anki).fold(e => fail(s"observe: $e"), identity)
@@ -124,10 +124,8 @@ class FixtureVaultTest extends munit.FunSuite:
 
   test("every tag derived from the real vault is one Anki will actually store") {
     val index = VaultWalker.scan(loadVault(), deckRoot)
-    // Opted in for the same reason as above — see the note there.
-    val anki = InMemoryAnki(
-      InMemoryAnki.defaultNoteTypes + (Marker.NoteTypes.ClozeSequence -> Marker.ClozeSequenceFields)
-    )
+    // The default note types are now the tool's own five — see the long note above.
+    val anki = InMemoryAnki()
     index.scan.specs.foreach { s =>
       val note = newNoteOf(s, deckRoot, "deadbeef")
       assert(

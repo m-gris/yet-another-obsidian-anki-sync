@@ -1,6 +1,6 @@
 package obsidiananki.anki
 
-import obsidiananki.model.OwnedTag
+import obsidiananki.model.{Marker, OwnedTag}
 
 /** A working in-memory Anki collection: a FAKE, not a mock.
   *
@@ -55,15 +55,25 @@ final class InMemoryAnki private (
     *
     * Enough fidelity to make the card/note impedance real: a reversed note has two cards, a
     * three-field note two or three depending on whether the conditional switch is set.
+    *
+    * MATCHED THROUGH `Marker` RATHER THAN AGAINST STRING LITERALS, since 2026-08-21, and the
+    * change is not cosmetic. This function used to name `"Basic (and reversed card)"` and
+    * `"3 way Concept-Descriptor"` as literals — a third, undeclared copy of a contract
+    * `model/Marker.scala` already states. When the tool's note types were renamed to its own
+    * `Obsidian *` names, those two arms would have stopped matching and fallen through to
+    * `case _ => 1`, so the fake would have claimed SILENTLY, with every test still green, that
+    * a reversed note has one card. `defaultNoteTypes` below would at least have failed loudly.
+    * A `match` on `String` cannot be made exhaustive, so the protection is the reference
+    * itself, not the shape of the match.
     */
   private def cardCountOf(noteType: String, fields: Vector[(String, String)]): Int =
     val byName = fields.toMap
     noteType match
-      case "Basic (and reversed card)" => 2
-      case "3 way Concept-Descriptor" =>
-        if byName.get("ThreeWay").exists(_.nonEmpty) then 3 else 2
-      case "Cloze" => 1
-      case _       => 1
+      case Marker.NoteTypes.BasicAndReversed => 2
+      case Marker.NoteTypes.ConceptDescriptor =>
+        if byName.get(Marker.ThreeWayField).exists(_.nonEmpty) then 3 else 2
+      case Marker.NoteTypes.Cloze => 1
+      case _                      => 1
 
   // ------------------------------------------------------------------ queries ----
 
@@ -194,16 +204,37 @@ final class InMemoryAnki private (
 
 object InMemoryAnki:
 
-  /** The stock note types, plus the project's concept-descriptor type with its conditional
-    * switch field. Field names mirror Anki's documented defaults and are UNVERIFIED against
-    * a live collection — confirming them is on the live-Anki checklist.
+  /** THE FIVE NOTE TYPES THIS TOOL OWNS, with the field list each one declares.
+    *
+    * REPLACED THE FOUR STOCK TYPES ON 2026-08-21, and what the value MEANS changed with it.
+    * It used to hold `Basic`, `Basic (and reversed card)`, `Cloze` and
+    * `3 way Concept-Descriptor` as string literals — a model of a STOCK collection, which is
+    * what Marc's was. Marc then ruled that the tool writes only to note types it owns, so that
+    * changing a template can never reach the rest of his collection, and the four became five
+    * `Obsidian *` types (`model/Marker.scala`, `NoteTypes`). A fake still holding the stock
+    * four would have answered `NoSuchNoteType` to every write in the suite.
+    *
+    * IT IS NOW DERIVED, NOT RESTATED. `Marker.FieldOrder.byNoteType` is the same map, and it
+    * is what an installer's `createModel` calls will be built from — so the fake and the
+    * installer cannot disagree about a field name, which is the disagreement that produces
+    * Anki's least helpful error: a wrong field name is reported on create as "cannot create
+    * note because it is empty", indistinguishable from a genuinely empty note, and on update
+    * as no error at all.
+    *
+    * ⚠️ IT NO LONGER MODELS AN UNINSTALLED COLLECTION, and that is a real loss, named rather
+    * than hidden. `extract/FixtureVault.test.scala` used to opt the `Cloze Sequence` type in
+    * at the call site precisely so that "the collection does not have this type yet" stayed
+    * true and visible — because nothing in the production path checks, before planning, that
+    * the collection HAS the types it is about to write to. `noteTypeNames` exists on the
+    * algebra and grep still finds no production caller. That gap is unchanged and unclosed;
+    * what changed is that this value no longer demonstrates it.
+    *
+    * THE FIELD NAMES THEMSELVES were verified against a live collection via `modelFieldNames`
+    * on 2026-08-19 and again on 2026-08-21 in profile `claude-POC-test`: stock `Basic` is
+    * `[Front, Back]` and stock `Cloze` is `[Text, Back Extra]`. This comment previously
+    * described them as "UNVERIFIED against a live collection", which was stale on both dates.
     */
-  val defaultNoteTypes: Map[String, Vector[String]] = Map(
-    "Basic"                    -> Vector("Front", "Back"),
-    "Basic (and reversed card)" -> Vector("Front", "Back"),
-    "Cloze"                    -> Vector("Text", "Back Extra"),
-    "3 way Concept-Descriptor" -> Vector("Concept", "Descriptor", "Description", "ThreeWay"),
-  )
+  val defaultNoteTypes: Map[String, Vector[String]] = Marker.FieldOrder.byNoteType
 
   def apply(
       noteTypes: Map[String, Vector[String]] = defaultNoteTypes,

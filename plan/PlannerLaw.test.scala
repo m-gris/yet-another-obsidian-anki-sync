@@ -74,11 +74,11 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
         f <- Gen.oneOf("front", "Front", "term")
         b <- genBody
         d <- Gen.oneOf(TwoFieldDirections.Forward, TwoFieldDirections.Both)
-      yield CardSpec.TwoField(k, f, b, d),
+      yield CardSpec.TwoField(k, f, b, d, "Coupling"),
       for
         b <- genBody
         d <- Gen.oneOf(ThreeFieldDirections.Default, ThreeFieldDirections.All)
-      yield CardSpec.ThreeField(k, "Concept", "Descriptor", b, d),
+      yield CardSpec.ThreeField(k, "Concept", "Descriptor", b, d, "Coupling"),
     )
 
   val genSourced: Gen[SourcedSpec] =
@@ -279,8 +279,8 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
             if !editBodies then s
             else
               s.spec match
-                case CardSpec.TwoField(k, f, _, d) =>
-                  s.copy(spec = CardSpec.TwoField(k, f, Body.fromExtracted(s"edit $i").get, d))
+                case CardSpec.TwoField(k, f, _, d, c) =>
+                  s.copy(spec = CardSpec.TwoField(k, f, Body.fromExtracted(s"edit $i").get, d, c))
                 case _ => s
           },
           Vector.empty,
@@ -326,8 +326,8 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       val edited = VaultScan.from(
         scan.specs.map { s =>
           s.spec match
-            case CardSpec.TwoField(k, f, _, d) =>
-              s.copy(spec = CardSpec.TwoField(k, f, Body.fromExtracted("changed").get, d))
+            case CardSpec.TwoField(k, f, _, d, c) =>
+              s.copy(spec = CardSpec.TwoField(k, f, Body.fromExtracted("changed").get, d, c))
             case _ => s
         },
         Vector.empty,

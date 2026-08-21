@@ -31,8 +31,15 @@ class PlannerTest extends munit.FunSuite:
 
   def body(s: String): Body = Body.fromExtracted(s).getOrElse(fail("empty test body"))
 
+  /** The `context` breadcrumb is a fixed literal in this file, and that is deliberate.
+    * Nothing the planner does reads it — it is one more field value, hashed with the rest —
+    * so varying it here would suggest a coupling that does not exist. It is non-empty rather
+    * than `""` so that a spec built here is shaped like one the extractor really produces.
+    */
+  val testContext: String = "Coupling"
+
   def twoFieldSpec(k: CardKey, front: String, back: String): CardSpec =
-    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward)
+    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, testContext)
 
   def sourced(spec: CardSpec, file: String = "Note.md", line: Int = 1): SourcedSpec =
     SourcedSpec(spec, SourceRef(file, line, SourceKind.Heading))
@@ -87,6 +94,7 @@ class PlannerTest extends munit.FunSuite:
           "Definition",
           body("Operations appear instantaneous."),
           ThreeFieldDirections.All,
+          testContext,
         )
       ),
     )
@@ -164,7 +172,7 @@ class PlannerTest extends munit.FunSuite:
 
     // ...then retagged as 2way, which shares field names with Basic. An ordinary update
     // would SUCCEED here and the reverse card would never exist.
-    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both)
+    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
     planOf(scanOf(sourced(reversed)), observe(anki)).actions match
       case Vector(SyncAction.Retype(_, _, from, to)) =>
         assertEquals(from, Marker.NoteTypes.Basic)
@@ -336,7 +344,9 @@ class PlannerTest extends munit.FunSuite:
     // The note type is part of the hash, so a retype is always visible as a difference.
     assertNotEquals(
       Planner.contentHash(base),
-      Planner.contentHash(CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both)),
+      Planner.contentHash(
+        CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both, testContext)
+      ),
     )
   }
 
@@ -352,7 +362,7 @@ class PlannerTest extends munit.FunSuite:
     val k    = key("n1", "A", "Term")
     runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "Term", "def"))), observe(anki)), anki)
 
-    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both)
+    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
     val plan     = planOf(scanOf(sourced(reversed)), observe(anki))
     val failures = runPlanCollecting(plan, anki)
 
@@ -375,7 +385,7 @@ class PlannerTest extends munit.FunSuite:
 
     val scan = scanOf(
       sourced(twoFieldSpec(good1, "f", "b")),
-      sourced(CardSpec.TwoField(bad, "Term", body("def"), TwoFieldDirections.Both)),
+      sourced(CardSpec.TwoField(bad, "Term", body("def"), TwoFieldDirections.Both, testContext)),
       sourced(twoFieldSpec(good2, "f", "b")),
     )
     val failures = runPlanCollecting(planOf(scan, observe(anki)), anki)

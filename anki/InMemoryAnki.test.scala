@@ -24,7 +24,7 @@ class InMemoryAnkiTest extends munit.FunSuite:
 
   def basicNote(tag: OwnedTag, front: String = "F", back: String = "B"): NewNote =
     NewNote(
-      noteType = "Basic",
+      noteType = Marker.NoteTypes.Basic,
       deck = deck("Obsidian", "System-Design"),
       fields = Vector("Front" -> front, "Back" -> back),
       tags = NonEmptyVector.one(tag),
@@ -154,7 +154,7 @@ class InMemoryAnkiTest extends munit.FunSuite:
     val plain = added(anki, basicNote(TagCodec.encode(key("n1", "A"))))
     val rev = added(
       anki,
-      basicNote(TagCodec.encode(key("n1", "B"))).copy(noteType = "Basic (and reversed card)"),
+      basicNote(TagCodec.encode(key("n1", "B"))).copy(noteType = Marker.NoteTypes.BasicAndReversed),
     )
     assertEquals(anki.cardsOf(Vector(plain)).map(_.size), Right(1))
     assertEquals(anki.cardsOf(Vector(rev)).map(_.size), Right(2))
@@ -164,7 +164,7 @@ class InMemoryAnkiTest extends munit.FunSuite:
     val anki = InMemoryAnki()
     def threeWay(tag: String, switch: String) =
       NewNote(
-        noteType = "3 way Concept-Descriptor",
+        noteType = Marker.NoteTypes.ConceptDescriptor,
         deck = deck("Obsidian"),
         fields = Vector(
           "Concept"     -> "Linearizability",
@@ -184,7 +184,7 @@ class InMemoryAnkiTest extends munit.FunSuite:
     val anki = InMemoryAnki()
     val id = added(
       anki,
-      basicNote(TagCodec.encode(key("n1", "B"))).copy(noteType = "Basic (and reversed card)"),
+      basicNote(TagCodec.encode(key("n1", "B"))).copy(noteType = Marker.NoteTypes.BasicAndReversed),
     )
     val cards = anki.cardsOf(Vector(id)).fold(e => fail(s"$e"), identity)
     val moved = deck("Obsidian", "Patterns", "Nested")
@@ -198,10 +198,10 @@ class InMemoryAnkiTest extends munit.FunSuite:
 
   test("note types are discoverable by name and report their fields") {
     val anki = InMemoryAnki()
-    assert(anki.noteTypeNames.fold(_ => Nil, identity).contains("3 way Concept-Descriptor"))
+    assert(anki.noteTypeNames.fold(_ => Nil, identity).contains(Marker.NoteTypes.ConceptDescriptor))
     assertEquals(
-      anki.fieldNames("3 way Concept-Descriptor"),
-      Right(Vector("Concept", "Descriptor", "Description", "ThreeWay")),
+      anki.fieldNames(Marker.NoteTypes.ConceptDescriptor),
+      Right(Vector("Concept", "Descriptor", "Description", "ThreeWay", "Context")),
     )
     assert(anki.fieldNames("No Such Type").isLeft)
   }
