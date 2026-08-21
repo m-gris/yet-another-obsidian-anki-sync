@@ -201,6 +201,18 @@ class UnplaceableNoteTest extends munit.FunSuite:
     val observed = observe(anki)
     assertEquals(observed.notes, Vector.empty, "a capitalised tag was decoded as an identity")
     assertEquals(observed.unresolved.size, 1, "a capitalised identity tag was silently ignored")
+
+    // THE MESSAGE MUST NAME THE OFFENDING TAG, and this half of the assertion is the half with
+    // teeth. Counting the reports is not enough: with a case-SENSITIVE search the tag is not
+    // recognised at all, the note falls into the "found by the search but carries no such tag"
+    // branch, and it is still reported — just with a reason that names nothing the person can
+    // act on. Measured: mutating the search to be case-sensitive left this test green until
+    // this line was added.
+    val message = observed.unresolved.head.describe
+    assert(
+      message.contains("SRC::n1::coupling"),
+      s"the report does not name the tag the person has to fix: $message",
+    )
   }
 
   test("a healthy collection reports nothing unresolved") {
