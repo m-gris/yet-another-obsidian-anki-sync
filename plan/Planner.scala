@@ -166,12 +166,32 @@ object Planner:
               Vector(SyncAction.Create(key, newNoteOf(sourced, deck, sha)))
 
             case Some(existing) =>
-              // The marker changed the note type. NOT an Update: an ordinary field write
+              // The note is on the wrong note type. NOT an Update: an ordinary field write
               // succeeds against a same-shaped note type and the requested card never
               // appears — silent success, which is the failure this case exists to prevent.
+              //
+              // EVERYTHING THE NOTE MUST STILL HOLD AFTERWARDS IS GATHERED HERE, because the
+              // operation that carries this out blanks the fields and replaces the tags
+              // wholesale. Nothing extra is read to do it: the fields come from the spec that
+              // is already in hand, and the foreign tags from the observation already made.
+              //
+              // THE OWNED TAGS ARE REBUILT RATHER THAN CARRIED OVER, which is what makes a
+              // separate Unflag unnecessary here and what stops a stale hash surviving the
+              // move: the note ends up with exactly the identity tag and the hash of the
+              // content being written, and any `sha::` or `orphaned::` it held before is gone
+              // by the same write. The key is present in the markdown — that is why this
+              // branch was reached at all — so an `orphaned::` tag on it was stale.
               if existing.note.noteType != sourced.spec.noteTypeName then
                 Vector(
-                  SyncAction.Retype(key, existing.note.id, existing.note.noteType, sourced.spec.noteTypeName)
+                  SyncAction.Retype(
+                    key = key,
+                    noteId = existing.note.id,
+                    from = existing.note.noteType,
+                    to = sourced.spec.noteTypeName,
+                    fields = sourced.spec.fields,
+                    ownedTags = NonEmptyVector.of(TagCodec.encode(key), OwnedTag.sha(sha)),
+                    preservedTags = existing.note.tags.filterNot(OwnedTag.isOwned),
+                  )
                 )
               else
                 val fieldsDiffer = !existing.recordedSha.contains(sha)

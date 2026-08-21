@@ -93,6 +93,22 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   def noteTypeStyling(noteType: String): Result[String] =
     call("modelStyling", Json.obj("modelName" := noteType))(using AnkiConnect.modelStylingCss)
 
+  /** THE ONE PLACE THIS TOOL READS ANKI'S INTERNAL NOTE-TYPE DICTIONARY, and it reads exactly
+    * one integer out of it — see [[Anki.noteTypeIsCloze]] for why the fact cannot be inferred
+    * and [[AnkiConnect.firstModelIsCloze]] for what is decoded.
+    *
+    * `findModelsByName` is used rather than `modelNamesAndIds` or `modelTemplates` because it
+    * is the only action that returns the flag at all. It takes a LIST and answers with a LIST,
+    * so one name goes in and the first entry comes out; a name the collection does not hold is
+    * refused with `model was not found: <name>`, which [[AnkiConnect.classify]] already turns
+    * into [[AnkiError.NoSuchNoteType]] — the same shape `modelTemplates` and `modelStyling`
+    * produce, verified live on 2026-08-21.
+    */
+  def noteTypeIsCloze(noteType: String): Result[Boolean] =
+    call("findModelsByName", Json.obj("modelNames" := Vector(noteType)))(using
+      AnkiConnect.firstModelIsCloze
+    )
+
   /** NOT ROUTED THROUGH `command`, AND NOT ASSERTED TO ANSWER ANYTHING IN PARTICULAR.
     *
     * `createModel` answers with the MODEL IT CREATED, not with null, so
@@ -211,6 +227,41 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
           "id" := id.value,
           "fields" := Json.obj(fields.map((name, value) => name := value)*),
         )
+      ),
+    )
+
+  /** Uses the `updateNoteModel` ACTION, and this is the ONE write in this interpreter that
+    * sends a `tags` array on purpose.
+    *
+    * The class note above forbids passing `tags` to `updateNote`, because there it REPLACES the
+    * note's whole tag set and would destroy the person's own tags along with Anki's `leech`.
+    * Here replacement is not avoidable: `updateNoteModel` replaces the tag set whether or not
+    * the key is sent, and sending nothing erases it. So the rule is inverted rather than
+    * broken — everything the note must keep is sent, foreign tags included, which is why
+    * [[Anki.changeNoteType]] takes them as a separate echoed argument.
+    *
+    * The two tag vectors are concatenated OWNED FIRST. Order is not significant to Anki, which
+    * stores tags as one space-delimited string and sorts them itself; owned-first simply keeps
+    * the request readable when someone is looking at the wire.
+    *
+    * ANSWERS `null` ON SUCCESS — the add-on's `updateNoteModel` ends on
+    * `collection.update_note(...)` and returns nothing — so it goes through [[command]], where
+    * anything else is a loud failure rather than a shrug.
+    */
+  def changeNoteType(
+      id: AnkiNoteId,
+      to: String,
+      fields: Vector[(String, String)],
+      ownedTags: NonEmptyVector[OwnedTag],
+      preservedTags: Vector[String],
+  ): Result[Unit] =
+    command(
+      "updateNoteModel",
+      AnkiConnect.updateNoteModelParams(
+        id,
+        to,
+        fields,
+        ownedTags.toVector.map(_.value) ++ preservedTags,
       ),
     )
 

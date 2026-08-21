@@ -277,6 +277,80 @@ object FakeAnkiConnect:
             )
             ok(Json.Null)
 
+      /** READ OUT OF THE INSTALLED ADD-ON'S SOURCE on 2026-08-21 (`__init__.py:1184-1193`),
+        * not exercised. It takes a LIST of names and answers with a LIST of note-type
+        * dictionaries, raising `model was not found: <name>` for the first name it cannot
+        * resolve.
+        *
+        * ONLY THE KEYS THIS TOOL READS ARE ANSWERED — `name` and `type` — and that is a
+        * deliberate limit rather than laziness: the real answer is Anki's entire internal
+        * note-type structure, and reproducing it here would invite an interpreter to depend on
+        * a shape this fake would then be responsible for keeping true. `type` carries Anki's
+        * own values, read from `anki/consts.py` on this machine: `MODEL_STD = 0`,
+        * `MODEL_CLOZE = 1`.
+        */
+      case "findModelsByName" =>
+        val names = p.downField("modelNames").as[Vector[String]].getOrElse(Vector.empty)
+        names.find(!state.models.contains(_)) match
+          case Some(missing) => err(s"model was not found: $missing")
+          case None =>
+            ok(
+              names.map { name =>
+                val spec = state.models(name)
+                Json.obj(
+                  "name" := name,
+                  "type" := (if spec.isCloze then AnkiConnect.ClozeModelType else 0),
+                )
+              }.asJson
+            )
+
+      /** READ OUT OF THE ADD-ON'S SOURCE on 2026-08-21 (`__init__.py:849-899`), not exercised
+        * — moving a note between note types is a write, and no agent has had write access to a
+        * live collection.
+        *
+        * THE THREE DESTRUCTIVE BEHAVIOURS ARE THE POINT OF MODELLING IT AT ALL, and each is a
+        * direct transcription rather than an interpretation:
+        *
+        *   - `anki_note.fields = [''] * len(new_model['flds'])` — every field of the NEW type
+        *     is blanked before anything is written back, so a field the request does not name
+        *     ends up empty.
+        *   - the fill loop compares `name.lower() == anki_name.lower()` and simply falls
+        *     through when nothing matches: an unrecognised field name is ignored with no error.
+        *   - `anki_note.tags = note.get('tags', [])` is unconditional, so an omitted `tags` key
+        *     ERASES the note's tags rather than preserving them — the opposite of `updateNote`
+        *     two cases above, which is exactly why both are modelled here.
+        *
+        * The three `ValueError`s and the two lookup failures carry the add-on's own wording,
+        * because `web.py:290` puts `str(exception)` into the envelope verbatim.
+        *
+        * WHAT IS NOT MODELLED: card generation. The note's cards are left alone, ids and all.
+        * What Anki really does to a card whose ordinal the new note type cannot generate is
+        * unestablished, and inventing an answer here would let a test prove it.
+        */
+      case "updateNoteModel" =>
+        val note  = p.downField("note")
+        val id    = note.downField("id").as[Long].toOption
+        val model = note.downField("modelName").as[String].toOption.filter(_.nonEmpty)
+        val fields = note.downField("fields").as[JsonObject].map(fieldsFrom).toOption.filter(_.nonEmpty)
+        (id, model, fields) match
+          case (None, _, _)    => err("Note ID is required")
+          case (_, None, _)    => err("Model name is required")
+          case (_, _, None)    => err("Fields must be provided as a dictionary")
+          case (Some(noteId), Some(modelName), Some(newFields)) =>
+            (state.notes.get(noteId), state.models.get(modelName)) match
+              case (None, _) => err(s"Note was not found: $noteId")
+              case (_, None) => err(s"Model '$modelName' not found")
+              case (Some(existing), Some(spec)) =>
+                val supplied = newFields.map((name, value) => name.toLowerCase -> value).toMap
+                state.notes += noteId -> existing.copy(
+                  model = modelName,
+                  fields = spec.fields.toVector.map(name =>
+                    name -> supplied.getOrElse(name.toLowerCase, "")
+                  ),
+                  tags = note.downField("tags").as[Vector[String]].getOrElse(Vector.empty),
+                )
+                ok(Json.Null)
+
       /** VERIFIED LIVE: this accepts a `tags` parameter and silently discards it. Modelled
         * faithfully so that an interpreter reaching for it — it has the more obvious name —
         * loses the tags here, in a test, rather than in a collection.

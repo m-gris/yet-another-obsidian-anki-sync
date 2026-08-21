@@ -120,8 +120,16 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       .plan(scan, observed, _ => deck, newNoteOf)
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
+  /** `RetypePolicy.Apply`, so that a generated scan which happens to move a note between note
+    * types is ATTEMPTED here rather than set aside. Deferring would leave the action unapplied
+    * and the property below would then fail for a reason about policy rather than about the
+    * planner.
+    */
   def runPlan(p: Plan, anki: InMemoryAnki): Vector[ExecutionFailure] =
-    Executor.run(p, anki).fold(e => fail(s"execution aborted: $e"), identity)
+    Executor
+      .run(p, anki, RetypePolicy.Apply)
+      .fold(e => fail(s"execution aborted: $e"), identity)
+      .failures
 
   // ---------------------------------------------------------------- properties ----
 

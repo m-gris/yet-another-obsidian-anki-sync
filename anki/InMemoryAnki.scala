@@ -1,5 +1,6 @@
 package obsidiananki.anki
 
+import cats.data.NonEmptyVector
 import obsidiananki.model.{Marker, OwnedTag}
 
 /** A working in-memory Anki collection: a FAKE, not a mock.
@@ -101,6 +102,13 @@ final class InMemoryAnki private (
   def noteTypeStyling(noteType: String): Either[AnkiError, String] =
     noteTypeAt(noteType).map(_.styling)
 
+  /** Answered from the flag the note type was CREATED with, never inferred from its name, its
+    * stylesheet or its templates — see [[Anki.noteTypeIsCloze]] for the note type that makes
+    * every such inference get it backwards.
+    */
+  def noteTypeIsCloze(noteType: String): Either[AnkiError, Boolean] =
+    noteTypeAt(noteType).map(_.isCloze)
+
   def findNotesByTagPrefix(prefix: String): Either[AnkiError, Vector[AnkiNoteId]] =
     val wanted = foldTag(prefix)
     Right(
@@ -189,6 +197,49 @@ final class InMemoryAnki private (
     yield
       val merged = existing.fields.map((name, old) => name -> fields.toMap.getOrElse(name, old))
       notes += id.value -> existing.copy(fields = merged, modCount = existing.modCount + 1)
+
+  /** MODELS THE TRAP RATHER THAN THE INTENTION, which is the whole reason this fake exists.
+    *
+    * Anki's `updateNoteModel` blanks every field of the new note type and then fills in only
+    * the names it was given, matching CASE-INSENSITIVELY and ignoring any name the new type
+    * does not have — with no error on either count. That is reproduced here exactly. Note in
+    * particular what is NOT done: [[checkFields]] is deliberately not called, so a field name
+    * the target does not declare is dropped SILENTLY here, exactly as it is dropped silently by
+    * Anki. A fake that rejected it would let a test prove a safety this tool does not have.
+    *
+    * The tag set is REPLACED, never merged, for the same reason: `anki_note.tags = new_tags` is
+    * unconditional in the add-on. Everything the caller wants the note to keep must be in one
+    * of the two tag arguments.
+    *
+    * WHAT THIS FAKE DOES NOT MODEL, stated so it is not mistaken for a guarantee: card
+    * generation. The note's cards are left exactly as they are, with their ids and their decks.
+    * That matches what a live probe reported for a move between two note types of the SAME
+    * shape, and it is deliberately not extrapolated to the case where the ordinals no longer
+    * fit — that case is refused by [[obsidiananki.plan.Retyping]] rather than simulated here.
+    */
+  def changeNoteType(
+      id: AnkiNoteId,
+      to: String,
+      fields: Vector[(String, String)],
+      ownedTags: NonEmptyVector[OwnedTag],
+      preservedTags: Vector[String],
+  ): Either[AnkiError, Unit] =
+    val allTags = ownedTags.toVector.map(_.value) ++ preservedTags
+    for
+      existing <- notes.get(id.value).toRight(AnkiError.NoSuchNote(id))
+      target   <- noteTypeAt(to)
+      _        <- rejectWhitespace(allTags)
+    yield
+      val supplied = fields.map((name, value) => name.toLowerCase(java.util.Locale.ROOT) -> value).toMap
+      val blanked = target.fields.toVector.map { name =>
+        name -> supplied.getOrElse(name.toLowerCase(java.util.Locale.ROOT), "")
+      }
+      notes += id.value -> existing.copy(
+        noteType = to,
+        fields = blanked,
+        tags = allTags,
+        modCount = existing.modCount + 1,
+      )
 
   private def mutateTags(
       ids: Vector[AnkiNoteId],

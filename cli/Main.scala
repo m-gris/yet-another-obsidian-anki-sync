@@ -18,13 +18,14 @@ import obsidiananki.anki.{
 import obsidiananki.extract.{VaultFile, VaultIndex, VaultWalker}
 import obsidiananki.model.CardKey
 import obsidiananki.plan.{
-  ExecutionFailure,
+  ExecutionReport,
   Executor,
   Observer,
   OrphanInference,
   Plan,
   PlanError,
   Planner,
+  RetypePolicy,
   SyncAction,
 }
 import org.http4s.ember.client.EmberClientBuilder
@@ -73,9 +74,9 @@ object Main
   def main: Opts[IO[ExitCode]] = Cli.command.map {
     case Command.Inspect(selection, deckRoot, verbose) =>
       withChosenVault(selection)(inspect(_, deckRoot, verbose))
-    case Command.Sync(selection, profile, deckRoot, dryRun) =>
+    case Command.Sync(selection, profile, deckRoot, dryRun, retypePolicy) =>
       withVerifiedProfile(profile)(anki =>
-        withChosenVault(selection)(sync(_, deckRoot, dryRun, anki))
+        withChosenVault(selection)(sync(_, deckRoot, dryRun, retypePolicy, anki))
       )
     case Command.InstallNoteTypes(profile) =>
       withVerifiedProfile(profile)(installNoteTypes)
@@ -755,7 +756,13 @@ object Main
     case CouldNotObserve(error: AnkiError)
     case RefusedInconsistent(errors: Vector[PlanError])
     case PlannedOnly(plan: Plan)
-    case Applied(plan: Plan, failures: Vector[ExecutionFailure])
+
+    /** `report` CARRIES BOTH WHAT FAILED AND WHAT WAS DEFERRED, and they are not the same
+      * fact. A failure is an action Anki refused; a deferral is an action this run was not
+      * asked to perform. Collapsing them would either tell someone their collection is
+      * misbehaving when it is not, or hide work that is outstanding.
+      */
+    case Applied(plan: Plan, report: ExecutionReport)
 
     /** Carries ONLY the error, deliberately not the plan, so that no renderer can be tempted
       * to compute an "N of M applied" figure that nobody knows.
@@ -772,6 +779,7 @@ object Main
       vault: VaultRoot,
       deckRoot: DeckPath,
       dryRun: Boolean,
+      retypePolicy: RetypePolicy,
       anki: AnkiConnectClient[IO],
   ): IO[ExitCode] =
     for
@@ -781,7 +789,7 @@ object Main
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")
       _ <- IO.println(s"cards:    ${index.scan.specs.size}")
-      outcome <- observeAndApply(index, deckRoot, dryRun, anki)
+      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, anki)
       result = verdict(outcome)
       _ <- (describeSyncOutcome(outcome) ++ describeVerdict(result)).traverse_(IO.println)
     yield exitCodeFor(result)
@@ -811,6 +819,7 @@ object Main
       index: VaultIndex,
       deckRoot: DeckPath,
       dryRun: Boolean,
+      retypePolicy: RetypePolicy,
       anki: AnkiConnectClient[IO],
   ): IO[SyncOutcome] =
     NoteTypeAssets.all match
@@ -819,11 +828,18 @@ object Main
         // THE PREFLIGHT COMES FIRST, before the collection is enumerated and long before
         // anything is written. It never creates anything: `install-note-types` is the command
         // that does that, explicitly and on its own.
+        //
+        // IT IS ALSO WHAT MAKES A MIGRATION'S ORDERING SAFE. A retype names a note type this
+        // tool owns as its destination, and this preflight has already refused the whole run
+        // if any of the five is absent — so by the time `Executor` moves a note, the type it
+        // is moving to demonstrably exists and declares every field being written. Without
+        // that, a migration run against a collection where `install-note-types` had not yet
+        // been run would blank each note's fields and then have nowhere to put them back.
         NoteTypeInstaller.readiness[Refused](anki, assets).value.flatMap {
           case Left(error)                    => IO.pure(SyncOutcome.CouldNotObserve(error))
           case Right(problems) if problems.nonEmpty =>
             IO.pure(SyncOutcome.NoteTypesNotReady(problems))
-          case Right(_) => reconcile(index, deckRoot, dryRun, anki)
+          case Right(_) => reconcile(index, deckRoot, dryRun, retypePolicy, anki)
         }
 
   /** Observe, plan, and — unless this is a dry run — apply. The note types have already been
@@ -833,6 +849,7 @@ object Main
       index: VaultIndex,
       deckRoot: DeckPath,
       dryRun: Boolean,
+      retypePolicy: RetypePolicy,
       anki: AnkiConnectClient[IO],
   ): IO[SyncOutcome] =
     Observer.observe[Refused](anki).value.flatMap {
@@ -843,12 +860,12 @@ object Main
           case Right(plan) =>
             (if dryRun then IO.println("DRY RUN — the plan below will NOT be applied.")
              else IO.unit) *>
-              Report.plan(plan).traverse_(IO.println) *>
+              Report.plan(plan, retypePolicy).traverse_(IO.println) *>
               (if dryRun then IO.pure(SyncOutcome.PlannedOnly(plan))
                else
-                 Executor.run[Refused](plan, anki).value.map {
-                   case Left(error)     => SyncOutcome.AbortedDuringExecution(error)
-                   case Right(failures) => SyncOutcome.Applied(plan, failures)
+                 Executor.run[Refused](plan, anki, retypePolicy).value.map {
+                   case Left(error)   => SyncOutcome.AbortedDuringExecution(error)
+                   case Right(report) => SyncOutcome.Applied(plan, report)
                  })
     }
 
@@ -906,15 +923,19 @@ object Main
       case SyncOutcome.PlannedOnly(_) =>
         Vector("", "DRY RUN — nothing was written.")
 
-      case SyncOutcome.Applied(plan, failures) =>
+      case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred)) =>
         // `attempted:` and `failed:`, never "applied N of M". `Executor.runOne` traverses an
         // Update's changes, so a failure on the first change abandons the rest of THAT action
         // while recording one failure — "applied" would assert more than the code guarantees.
+        //
+        // DEFERRED ACTIONS ARE SUBTRACTED FROM `attempted:` rather than counted in it. They
+        // were not attempted; printing them as attempts and then as zero failures would say
+        // they succeeded.
         val counts = Vector(
           "",
-          s"attempted: ${plan.actions.size}",
+          s"attempted: ${plan.actions.size - deferred.size}",
           s"failed:    ${failures.size}",
-        )
+        ) ++ Option.when(deferred.nonEmpty)(s"deferred:  ${deferred.size}")
         val failureLines =
           if failures.isEmpty then Vector.empty
           else
@@ -933,7 +954,7 @@ object Main
                 "and the collection and attempts them again. Whether that succeeds depends on why each one",
                 "failed — an action this tool cannot yet carry out will fail again.",
               )
-        counts ++ failureLines
+        counts ++ failureLines ++ Report.deferredRetypes(deferred)
 
       case SyncOutcome.AbortedDuringExecution(error) =>
         Vector(
@@ -959,11 +980,11 @@ object Main
     * is outside this change.
     */
   private def keyOf(a: SyncAction): CardKey = a match
-    case SyncAction.Create(key, _)       => key
-    case SyncAction.Update(key, _, _)    => key
-    case SyncAction.Retype(key, _, _, _) => key
-    case SyncAction.Flag(key, _)         => key
-    case SyncAction.Unflag(key, _)       => key
+    case SyncAction.Create(key, _)                => key
+    case SyncAction.Update(key, _, _)             => key
+    case SyncAction.Retype(key, _, _, _, _, _, _) => key
+    case SyncAction.Flag(key, _)                  => key
+    case SyncAction.Unflag(key, _)                => key
 
   /** How the run is to be judged: ONE value, read by the exit code and by the last line on
     * screen alike.
@@ -1045,10 +1066,21 @@ object Main
           else s"dry run; ${plan.actions.size} actions are outstanding"
         )
 
-    case SyncOutcome.Applied(plan, failures) =>
+    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred)) =>
+      // DEFERRED WORK MAKES A RUN NON-CLEAN, deliberately, even though nothing went wrong.
+      // The precedent this departs from is the dry run, which is clean with actions
+      // outstanding — but a dry run's work is outstanding until the NEXT ordinary run, whereas
+      // this work is outstanding until somebody passes a flag no ordinary run will pass. A
+      // green result would say the collection matches the vault, and it does not.
       val reasons =
         (if failures.isEmpty then Vector.empty
-         else Vector(s"${failures.size} actions failed — listed above")) ++ problemsIn(plan)
+         else Vector(s"${failures.size} actions failed — listed above")) ++
+          (if deferred.isEmpty then Vector.empty
+           else
+             Vector(
+               s"${deferred.size} notes are on the wrong note type and were left alone — " +
+                 "re-run with --migrate-note-types to move them"
+             )) ++ problemsIn(plan)
       if reasons.nonEmpty then Verdict.Problems(reasons)
       else
         Verdict.Clean(

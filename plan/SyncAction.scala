@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath, NewNote}
-import obsidiananki.model.CardKey
+import obsidiananki.model.{CardKey, OwnedTag}
 
 /** What the reconciler concluded, and what it may not conclude.
   *
@@ -54,17 +54,51 @@ enum SyncAction:
     */
   case Update(key: CardKey, noteId: AnkiNoteId, changes: NonEmptyVector[Change])
 
-  /** The marker changed, so the NOTE TYPE must change.
+  /** The note is on the wrong NOTE TYPE, and must be moved onto the right one.
     *
-    * Its own case because the failure it prevents is SILENT SUCCESS: `Basic` and
-    * `Basic (and reversed card)` share field names, so an ordinary field update succeeds,
-    * reports success, and the reverse card the author asked for never exists.
+    * Its own case because the failure it prevents is SILENT SUCCESS: `Obsidian Basic` and
+    * `Obsidian Basic (and reversed card)` share field names, so an ordinary field update
+    * succeeds, reports success, and the reverse card the author asked for never exists.
     *
-    * Whether this can be executed while preserving scheduling depends on an AnkiConnect
-    * capability that has not been verified. If it cannot, this becomes confirm-required
-    * rather than automatic, since the alternative destroys review history.
+    * TWO DIFFERENT THINGS PRODUCE IT, and only one of them is rare. A marker edited in the
+    * vault changes the desired note type — that is the case this action was originally carved
+    * out for. The other is a MIGRATION: when this tool stopped writing to Anki's stock `Basic`
+    * / `Basic (and reversed card)` / `Cloze` and took note types of its own on 2026-08-21,
+    * every note already synced became a note on the wrong type, all at once.
+    *
+    * IT CARRIES THE WHOLE FIELD SET AND THE WHOLE TAG SET, which is not redundancy with
+    * [[Change.FieldsChanged]] but a requirement of the operation that carries it out: Anki's
+    * `updateNoteModel` blanks every field and replaces every tag, so anything not passed is
+    * destroyed. See [[obsidiananki.anki.Anki.changeNoteType]] for the add-on source that says
+    * so.
+    *
+    * THE TAGS ARE SPLIT so that the ownership asymmetry stays legible: `ownedTags` are minted
+    * by this tool — the `src::` identity and the `sha::` hash OF THE NEW CONTENT — while
+    * `preservedTags` are foreign tags read off the note and echoed back verbatim. A stale
+    * `sha::`, and any stale `orphaned::`, are simply not carried over; they are dropped by the
+    * same write, which is why a retyped note needs no accompanying [[Unflag]].
+    *
+    * A CONTENT EDIT MADE IN THE SAME RUN TRAVELS WITH IT, because `fields` is the spec's
+    * current field set rather than whatever the note held before — so a heading that was both
+    * retagged and rewritten needs no accompanying [[Update]]. What does NOT travel with it is a
+    * DECK move: a note that changed folder AND note type gets only this action, and the deck
+    * move is planned by the next run once the note types agree. That is convergent rather than
+    * lossy, and it keeps this action a single write.
+    *
+    * THE COROLLARY IS THE THING TO KNOW WHEN THE MOVE IS DEFERRED: because everything about
+    * such a note is carried by this one action, a run that does not make the move applies none
+    * of it — not the edit, not the deck. That is why a deferred move is reported and makes the
+    * run non-clean, rather than being counted as nothing to do.
     */
-  case Retype(key: CardKey, noteId: AnkiNoteId, from: String, to: String)
+  case Retype(
+      key: CardKey,
+      noteId: AnkiNoteId,
+      from: String,
+      to: String,
+      fields: Vector[(String, String)],
+      ownedTags: NonEmptyVector[OwnedTag],
+      preservedTags: Vector[String],
+  )
 
   /** In Anki, not in the markdown. Flagged, never deleted.
     *

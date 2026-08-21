@@ -300,3 +300,106 @@ class AnkiConnectClientTest extends munit.FunSuite:
     assertEquals(anki.noteTypeTemplates("Nope").refusal, AnkiError.NoSuchNoteType("Nope"))
     assertEquals(anki.noteTypeStyling("Nope").refusal, AnkiError.NoSuchNoteType("Nope"))
   }
+
+  // ================================================ moving a note between types ====
+
+  /** The read that decides whether a move is safe at all, over the wire.
+    *
+    * `Obsidian Cloze` IS A CLOZE TYPE AND `Obsidian Cloze Sequence` IS NOT, which is exactly
+    * the pair no name-based or stylesheet-based heuristic gets right — the second has "Cloze"
+    * in its name and `.cloze` in its stylesheet. Both are read here from the shipped
+    * definitions, so a manifest that flipped either flag fails here as well as in
+    * `anki/NoteTypeAssets.test.scala`.
+    */
+  test("whether a note type is cloze survives the wire, for the pair that defeats every heuristic") {
+    val (_, anki) = fixture
+    assertEquals(anki.noteTypeIsCloze("Obsidian Cloze").get, true)
+    assertEquals(anki.noteTypeIsCloze("Obsidian Cloze Sequence").get, false)
+    assertEquals(anki.noteTypeIsCloze("Nope").refusal, AnkiError.NoSuchNoteType("Nope"))
+  }
+
+  /** THE MIGRATION WRITE, over the wire and against the fake's transcription of the add-on.
+    *
+    * Three things are asserted on the collection because Anki destroys all three: the note's
+    * type, its fields — every field of the NEW type, since they are all blanked first — and its
+    * whole tag set, which is replaced rather than merged.
+    *
+    * THE FOREIGN TAG IS THE POINT OF THE `preservedTags` ARGUMENT. `leech` is applied by
+    * Anki's own scheduler and is not the tool's to invent; here it is read off the note and
+    * handed back, which is the only way it survives a call that replaces the tag set outright.
+    */
+  test("a note moves onto another note type, keeping the tags it was handed and nothing else") {
+    val (state, anki) = fixture
+    val id = state.seed(
+      "Basic",
+      Vector("Front" -> "Term", "Back" -> "definition"),
+      Vector("src::n1::term", "sha::deadbeef", "leech"),
+      "Obsidian::Patterns",
+    )
+
+    anki
+      .changeNoteType(
+        AnkiNoteId(id),
+        "Obsidian Basic",
+        Vector("Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling"),
+        NonEmptyVector.of(tag("src::n1::term"), tag("sha::feedface")),
+        preservedTags = Vector("leech"),
+      )
+      .get
+
+    val moved = state.notes(id)
+    assertEquals(moved.model, "Obsidian Basic")
+    assertEquals(
+      moved.fields,
+      Vector("Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling"),
+    )
+    assertEquals(moved.tags.sorted, Vector("leech", "sha::feedface", "src::n1::term"))
+    assert(!moved.tags.contains("sha::deadbeef"), s"the stale hash survived: ${moved.tags}")
+  }
+
+  /** THE TRAP THIS OPERATION EXISTS AROUND, asserted rather than described: a field the new
+    * note type does not declare is dropped SILENTLY, and one it declares but the call does not
+    * name is left EMPTY. Neither produces an error.
+    *
+    * This is why `sync` refuses before it writes when a note type lacks a field the tool
+    * writes: at this layer there is nothing left to notice it.
+    */
+  test("a move silently ignores an unknown field name and silently empties an unnamed one") {
+    val (state, anki) = fixture
+    val id = state.seed("Basic", Vector("Front" -> "Term", "Back" -> "definition"), Vector("src::n1::term"), "Default")
+
+    anki
+      .changeNoteType(
+        AnkiNoteId(id),
+        "Obsidian Basic",
+        Vector("Front" -> "Term", "Contxet" -> "typo"),
+        NonEmptyVector.one(tag("src::n1::term")),
+        preservedTags = Vector.empty,
+      )
+      .get
+
+    assertEquals(
+      state.notes(id).fields,
+      Vector("Front" -> "Term", "Back" -> "", "Context" -> ""),
+      "the wire fake did not reproduce blank-then-fill, so nothing here would catch the trap",
+    )
+  }
+
+  test("a move onto a note type the collection does not have is refused, naming it in Anki's own words") {
+    val (state, anki) = fixture
+    val id = state.seed("Basic", Vector("Front" -> "f"), Vector("src::n1::a"), "Default")
+    anki
+      .changeNoteType(
+        AnkiNoteId(id),
+        "No Such Note Type",
+        Vector("Front" -> "f"),
+        NonEmptyVector.one(tag("src::n1::a")),
+        Vector.empty,
+      )
+      .refusal match
+      case AnkiError.Remote("updateNoteModel", message) =>
+        assert(message.contains("No Such Note Type"), s"the refusal does not name it: $message")
+      case other => fail(s"expected a remote refusal, got $other")
+
+    assertEquals(state.notes(id).model, "Basic", "a refused move changed the note anyway")
+  }

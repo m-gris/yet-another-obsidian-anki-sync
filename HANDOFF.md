@@ -33,7 +33,7 @@ Long messages must go via `--file`; the shell has an alias-guard hook that block
 
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
-`scala-cli test <tool dir>` runs everything. **472 tests, 0 failures, 0 warnings** as of 2026-08-21.
+`scala-cli test <tool dir>` runs everything. **493 tests, 0 failures, 0 warnings** as of 2026-08-21.
 
 ---
 
@@ -43,12 +43,19 @@ Everything except orphan suspension, a per-write field-name preflight, and the `
 — see *Open items*. The reading and writing paths both work end to end against a real
 collection.
 
+⚠️ **Nothing in this tool has touched a live collection since the note types were renamed on
+2026-08-21.** `install-note-types` and `sync --migrate-note-types` have both been driven only
+against the in-process fakes. The live sequence, in order, is: hand-rename the two note types
+in Anki's Tools → Manage Note Types and add `Context` to each by hand → `install-note-types`
+→ `sync --dry-run` → `sync --migrate-note-types`.
+
 - `parser/ObsidianSyntax.scala` — Obsidian dialect (wikilinks, embeds, highlights, task-list rejection) and **the canonical `markupParser`**. Build parsers only from there.
 - `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (the six markers), `CardSpec` (the six card shapes).
 - `anki/` — the `Anki[F]` algebra; `InMemoryAnki`, a working fake that **enforces Anki's real constraints**; and, since 2026-08-19, `AnkiConnectClient` over http4s/Ember plus `FakeAnkiConnect`, an in-process fake AnkiConnect **server** that reproduces the traps rather than the happy path.
 - `plan/` — `VaultScan`, `SyncAction`, `Planner`, `Executor`/`Observer`.
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
 - `cli/` — `inspect`, `sync` and `install-note-types`. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault. `install-note-types` (added 2026-08-21) creates this tool's five note types from `resources/note-types/`; it has NOT been run against a live collection by any agent. `sync` refuses before observing when those note types are missing or lack a field it writes.
+  `sync --migrate-note-types` (added 2026-08-21) additionally moves notes that sit on a DIFFERENT note type from the one the vault asks for — which since the rename is every note synced before that date. It has NOT been run against a live collection either. Without the flag those notes are left alone and reported as *deferred*, which makes the run exit 1 rather than 0.
 
 Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 53 cards, 1 expected failure, 3 deliberate duplicate keys, exit 2.
 
@@ -95,6 +102,16 @@ _Built 2026-08-19 (`47c3ad4`, hardened in `7981a95`) — this section is no long
 
    Residual, hence MITIGATED not ELIMINATED: a stale observation can leave two `sha::` tags. More than one `sha::` reads as "cannot claim unchanged", so the note is rewritten and the extra is cleared. Converges rather than being prevented.
 2. **MITIGATED — tags go inline on create AND on retype.** `addNote` takes them inline. `updateNoteModel` **wipes all tags unless you pass them in the same call** — leaving a note with no `src::` tag, which is not merely unmatched but *unenumerable*: invisible to lookup, reconciler and prune, permanently.
+
+   _Extended 2026-08-21, when the retype half was built._ Read out of the add-on's own source on this machine (`__init__.py:849-899`), `updateNoteModel` is destructive in **three** ways, not one, and each is now covered by a test against both fakes:
+
+   - `anki_note.tags = note.get('tags', [])` is unconditional, so an omitted `tags` key ERASES rather than preserves — the OPPOSITE of `updateNote`, which is the trap: the two actions look alike and their tag semantics are inverted.
+   - `anki_note.fields = [''] * len(new_model['flds'])` blanks every field first, so the whole field set must be sent or fields are silently emptied.
+   - a field name the new note type does not have is silently ignored (case-insensitive match, no `else`), so a typo is an empty field with no error anywhere.
+
+   `SyncAction.Retype` therefore carries the whole field set plus the tag set split into `ownedTags` (minted) and `preservedTags` (echoed verbatim from the observation). One consequence worth knowing: because the write replaces everything at once, it is ATOMIC — unlike an `Update`, there is no window in which the note holds new content under a stale hash, so none of hazard 1's ordering rules apply to it.
+
+   **A fourth thing about it is NOT mitigated and is instead refused.** A card's ordinal means a template index on a standard note type and a cloze number on a cloze one, and nothing here establishes what Anki does with a card whose ordinal the new note type cannot generate — `Collection.update_note` is one line into the compiled Rust backend. `plan/Retyping.scala` admits a move only when both note types are the same kind AND declare the same number of templates, which is the region where the question cannot arise; everything else is refused by name, pointing at Anki's own Change Note Type dialogue. Measuring the behaviour once in a throwaway profile is what would widen that gate.
 3. **ELIMINATED — never call `cardsInfo`. Do not build the pre-check.**
 
    _Superseded 2026-08-19. This entry previously read "a single broken card poisons a whole batch read… needs handling and probably a pre-check."_

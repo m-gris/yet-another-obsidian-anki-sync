@@ -52,6 +52,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     def noteTypeTemplates(noteType: String): Result[Map[String, CardTemplate]] =
       underlying.noteTypeTemplates(noteType)
     def noteTypeStyling(noteType: String): Result[String] = underlying.noteTypeStyling(noteType)
+    def noteTypeIsCloze(noteType: String): Result[Boolean] = underlying.noteTypeIsCloze(noteType)
     def findNotesByTagPrefix(prefix: String): Result[Vector[AnkiNoteId]] =
       underlying.findNotesByTagPrefix(prefix)
     def notesInfo(ids: Vector[AnkiNoteId]): Result[Vector[ObservedNote]] = underlying.notesInfo(ids)
@@ -65,6 +66,20 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     def createNoteType(spec: NoteTypeSpec): Result[Unit] = write(underlying.createNoteType(spec))
 
     def addNote(note: NewNote): Result[AnkiNoteId] = write(underlying.addNote(note))
+
+    /** COUNTED AS A WRITE, and it is the one write in the algebra that is ATOMIC: fields, note
+      * type and the whole tag set land in a single call, so there is no partial state to
+      * interrupt INTO. Interrupting it means it did not happen at all.
+      */
+    def changeNoteType(
+        id: AnkiNoteId,
+        to: String,
+        fields: Vector[(String, String)],
+        ownedTags: NonEmptyVector[OwnedTag],
+        preservedTags: Vector[String],
+    ): Result[Unit] =
+      write(underlying.changeNoteType(id, to, fields, ownedTags, preservedTags))
+
     def updateNoteFields(id: AnkiNoteId, fields: Vector[(String, String)]): Result[Unit] =
       write(underlying.updateNoteFields(id, fields))
     def addTags(ids: Vector[AnkiNoteId], tags: Vector[OwnedTag]): Result[Unit] =
@@ -139,7 +154,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
 
       // Establish the note with its original content, uninterrupted.
       val before = scanOf(k, "Temporal coupling", "OLD BODY.")
-      Executor.run(planOf(before, anki), anki).fold(e => fail(s"setup aborted: $e"), identity)
+      Executor.run(planOf(before, anki), anki, RetypePolicy.Defer).fold(e => fail(s"setup aborted: $e"), identity)
       assertEquals(storedBack(anki), "OLD BODY.", s"[budget=$budget] setup did not take")
 
       // Now edit it, and interrupt the resulting Update after `budget` writes.
@@ -147,13 +162,13 @@ class ExecutorInterruptionTest extends munit.FunSuite:
       val interrupted = planOf(after, anki)
       assertEquals(interrupted.actions.size, 1, s"[budget=$budget] expected exactly one Update")
       Executor
-        .run(interrupted, InterruptAfter(anki, budget))
+        .run(interrupted, InterruptAfter(anki, budget), RetypePolicy.Defer)
         .fold(e => fail(s"[budget=$budget] execution aborted entirely: $e"), identity)
 
       // Recovery: whatever state the interruption left, a later run must repair it. Two
       // passes, because a single pass repairing it is a stronger claim than the law makes.
-      Executor.run(planOf(after, anki), anki).fold(e => fail(s"recovery aborted: $e"), identity)
-      Executor.run(planOf(after, anki), anki).fold(e => fail(s"recovery aborted: $e"), identity)
+      Executor.run(planOf(after, anki), anki, RetypePolicy.Defer).fold(e => fail(s"recovery aborted: $e"), identity)
+      Executor.run(planOf(after, anki), anki, RetypePolicy.Defer).fold(e => fail(s"recovery aborted: $e"), identity)
 
       assertEquals(
         storedBack(anki),
@@ -168,12 +183,12 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   test("CONTROL: with no interruption the update simply applies") {
     val anki = InMemoryAnki()
     val before = scanOf(k, "Temporal coupling", "OLD BODY.")
-    Executor.run(planOf(before, anki), anki).fold(e => fail(s"$e"), identity)
+    Executor.run(planOf(before, anki), anki, RetypePolicy.Defer).fold(e => fail(s"$e"), identity)
 
     val after = scanOf(k, "Temporal coupling", "NEW BODY.")
-    val failures = Executor.run(planOf(after, anki), anki).fold(e => fail(s"$e"), identity)
+    val report = Executor.run(planOf(after, anki), anki, RetypePolicy.Defer).fold(e => fail(s"$e"), identity)
 
-    assert(failures.isEmpty, s"an uninterrupted update reported failures: $failures")
+    assert(report.failures.isEmpty, s"an uninterrupted update reported failures: ${report.failures}")
     assertEquals(storedBack(anki), "NEW BODY.")
   }
 
@@ -185,7 +200,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   test("a note carrying TWO content hashes is treated as changed, and heals") {
     val anki = InMemoryAnki()
     val scan = scanOf(k, "Temporal coupling", "BODY.")
-    Executor.run(planOf(scan, anki), anki).fold(e => fail(s"$e"), identity)
+    Executor.run(planOf(scan, anki), anki, RetypePolicy.Defer).fold(e => fail(s"$e"), identity)
 
     val id = Observer.observe(anki).toOption.get.notes.head.note.id
     anki.addTags(Vector(id), Vector(OwnedTag.sha("deadbeef"))).fold(e => fail(s"$e"), identity)
@@ -193,6 +208,6 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     val plan = planOf(scan, anki)
     assert(plan.actions.nonEmpty, "a note with two content hashes was reported as up to date")
 
-    Executor.run(plan, anki).fold(e => fail(s"$e"), identity)
+    Executor.run(plan, anki, RetypePolicy.Defer).fold(e => fail(s"$e"), identity)
     assertEquals(planOf(scan, anki).actions, Vector.empty, "the ambiguity did not heal")
   }

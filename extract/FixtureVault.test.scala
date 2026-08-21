@@ -113,8 +113,13 @@ class FixtureVaultTest extends munit.FunSuite:
         .plan(index.scan, observed, index.deckOf(deckRoot), newNoteOf)
         .fold(errs => fail(s"plan errors: ${errs.map(_.describe).mkString("\n")}"), identity)
 
-    val first    = planNow()
-    val failures = Executor.run(first, anki).fold(e => fail(s"execute: $e"), identity)
+    val first = planNow()
+    // `RetypePolicy.Apply`: this collection starts empty, so nothing can be on a wrong note
+    // type and no note-type move can arise. Applying rather than deferring means that if one
+    // ever DID arise here it would be attempted and reported, rather than quietly set aside
+    // and then reappearing as a non-empty second plan with no explanation.
+    val failures =
+      Executor.run(first, anki, RetypePolicy.Apply).fold(e => fail(s"execute: $e"), identity).failures
 
     // Cloze sections are not implemented yet, so they arrive as build failures rather than
     // specs — which must not stop the rest of the vault from syncing.

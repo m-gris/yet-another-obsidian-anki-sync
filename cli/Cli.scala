@@ -4,6 +4,7 @@ import cats.data.{NonEmptyVector, Validated}
 import cats.syntax.all.*
 import com.monovore.decline.Opts
 import obsidiananki.anki.DeckPath
+import obsidiananki.plan.RetypePolicy
 import java.nio.file.Paths
 
 /** How the person named the vault to read.
@@ -39,8 +40,21 @@ enum Command:
     */
   case Inspect(vault: VaultSelection, deckRoot: DeckPath, verbose: Boolean)
 
-  /** Reconcile the vault against a collection. Requires a profile, explicitly. */
-  case Sync(vault: VaultSelection, profile: String, deckRoot: DeckPath, dryRun: Boolean)
+  /** Reconcile the vault against a collection. Requires a profile, explicitly.
+    *
+    * `retypePolicy` IS A FLAG AND DEFAULTS TO DEFERRING, which is a judgement rather than an
+    * oversight — [[obsidiananki.plan.RetypePolicy]] carries the reasoning. In short: moving a
+    * note between note types blanks every field and replaces every tag before writing them
+    * back, and the first run that does it will move every note this tool has ever synced. That
+    * is not a thing to do as a side effect of a reconcile nobody framed that way.
+    */
+  case Sync(
+      vault: VaultSelection,
+      profile: String,
+      deckRoot: DeckPath,
+      dryRun: Boolean,
+      retypePolicy: RetypePolicy,
+  )
 
   /** Put this tool's five note types into a collection, and report what is already there.
     *
@@ -136,6 +150,23 @@ object Cli:
         .mapN(Command.Inspect.apply)
     }
 
+  /** OPT-IN, and it maps to a two-case type rather than staying a `Boolean` past this point.
+    *
+    * A bare `Boolean` threaded from here to the executor would arrive as an unnamed positional
+    * argument three functions away, where `run(plan, anki, true)` says nothing about what is
+    * true. The flag is the only place the word "migrate" appears; everything downstream reads
+    * `RetypePolicy.Apply`.
+    */
+  private val retypePolicyOpt: Opts[RetypePolicy] =
+    Opts
+      .flag(
+        "migrate-note-types",
+        "Also move notes that are on a different note type from the one the vault asks for. " +
+          "Off by default: this rewrites every field and every tag of each note it moves.",
+      )
+      .orFalse
+      .map(if _ then RetypePolicy.Apply else RetypePolicy.Defer)
+
   private val sync: Opts[Command] =
     Opts.subcommand("sync", "Reconcile the vault against an Anki collection.") {
       (
@@ -143,6 +174,7 @@ object Cli:
         profileOpt,
         deckRootOpt,
         Opts.flag("dry-run", "Compute and print the plan without applying it.").orFalse,
+        retypePolicyOpt,
       ).mapN(Command.Sync.apply)
     }
 

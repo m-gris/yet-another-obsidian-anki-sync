@@ -51,9 +51,16 @@ object Report:
 
     header ++ failureLines ++ duplicateLines ++ deckLines ++ cardLines
 
-  /** What a plan would do, summarised by action kind then listed. */
-  def plan(p: Plan): Vector[String] =
-    val counts = p.actions.groupBy(kindOf).toVector.sortBy(_._1)
+  /** What a plan would do, summarised by action kind then listed.
+    *
+    * THE POLICY IS A PARAMETER because one action kind reads differently depending on it: a
+    * retype under [[RetypePolicy.Defer]] is planned and will not happen, and a summary line
+    * saying only "move to another note type" would describe work the run is not going to do.
+    * The plan is printed BEFORE it is applied, so this line is what someone reads while
+    * deciding whether to re-run with the flag.
+    */
+  def plan(p: Plan, retypePolicy: RetypePolicy): Vector[String] =
+    val counts = p.actions.groupBy(kindOf(_, retypePolicy)).toVector.sortBy(_._1)
     val header =
       if p.actions.isEmpty then Vector("nothing to do")
       else "actions" +: counts.map((kind, as) => f"  ${as.size}%3d  $kind")
@@ -148,10 +155,46 @@ object Report:
       "like it worked.",
     )
 
-  private def kindOf(a: SyncAction): String = a match
+  /** What was NOT done, and how to ask for it.
+    *
+    * A SEPARATE BLOCK RATHER THAN A COUNT, because the count is already in the plan summary
+    * above and what is missing there is the WHY. The cards are named — up to a limit — so that
+    * someone can see whether the list is the migration they expect or a heading they retagged
+    * by accident.
+    */
+  def deferredRetypes(deferred: Vector[SyncAction.Retype]): Vector[String] =
+    if deferred.isEmpty then Vector.empty
+    else
+      val shown = 10
+      val pairs = deferred.map(r => s"${r.from}  ->  ${r.to}").distinct.sorted
+      val listed = deferred.take(shown).map(r => s"  '${r.key.path.render}'  (${r.from} -> ${r.to})")
+      val elided =
+        if deferred.size <= shown then Vector.empty
+        else Vector(s"  ... and ${deferred.size - shown} more")
+
+      Vector(
+        "",
+        s"NOT DONE: ${deferred.size} note(s) are on a different note type from the one the vault asks for.",
+        "",
+      ) ++ pairs.map("  " + _) ++ Vector("") ++ listed ++ elided ++ Vector(
+        "",
+        "Nothing was written to those notes — not their fields, not their deck, not their tags.",
+        "Moving a note between note types blanks every field and replaces every tag before",
+        "writing them back, so this tool does not do it unless asked. Ask with:",
+        "",
+        "  sync --migrate-note-types ...",
+        "",
+        "Leaving them is safe: a note that is not moved simply stays on the note type it is on,",
+        "and nothing in this tool ever deletes a note.",
+      )
+
+  private def kindOf(a: SyncAction, retypePolicy: RetypePolicy): String = a match
     case _: SyncAction.Create => "create"
     case _: SyncAction.Update => "update"
-    case _: SyncAction.Retype => "retype (NOT APPLIED — unimplemented)"
+    case _: SyncAction.Retype =>
+      retypePolicy match
+        case RetypePolicy.Defer => "move to another note type (NOT APPLIED — see --migrate-note-types)"
+        case RetypePolicy.Apply => "move to another note type"
     case _: SyncAction.Flag   => "flag as orphaned"
     case _: SyncAction.Unflag => "clear orphan flag"
 

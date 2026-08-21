@@ -174,6 +174,28 @@ trait Anki[F[_]]:
   /** A note type's complete stylesheet, exactly as the collection holds it. */
   def noteTypeStyling(noteType: String): F[String]
 
+  /** Whether Anki classes this note type as a CLOZE type.
+    *
+    * NEEDED FOR EXACTLY ONE DECISION, and it is worth saying which so that nobody widens it:
+    * [[obsidiananki.plan.Retyping]] refuses to move a note between two note types unless both
+    * are cloze or neither is. A card's ORDINAL means a template index on a standard type and a
+    * cloze NUMBER on a cloze type, so moving a note across that boundary hands its cards
+    * ordinals the new type cannot generate — and what Anki then does with them is not
+    * established anywhere in this repository.
+    *
+    * IT CANNOT BE INFERRED FROM THE NAME, THE STYLESHEET OR THE TEMPLATES, which is why it is
+    * an operation rather than a heuristic. `Obsidian Cloze Sequence` has "Cloze" in its name,
+    * defines `.cloze` and `.hidden-cloze` in its stylesheet, and is NOT a cloze type — its
+    * front renders `{{Text}}`, a plain field reference. [[NoteTypeManifest]] records the same
+    * warning for the flag this tool AUTHORS; this is the read side of it.
+    *
+    * THE COST, NAMED: the AnkiConnect interpreter answers this from `findModelsByName`, which
+    * returns Anki's whole internal note-type dictionary. That is a larger surface than this
+    * tool otherwise touches. Only the `type` key is read, and its two values were read out of
+    * `anki/consts.py` on this machine on 2026-08-21 — `MODEL_STD = 0`, `MODEL_CLOZE = 1`.
+    */
+  def noteTypeIsCloze(noteType: String): F[Boolean]
+
   /** Create a note type. NOT AN UPSERT — Anki refuses a name that already exists.
     *
     * This is the one operation in the algebra that changes the SHAPE of a collection rather
@@ -204,6 +226,52 @@ trait Anki[F[_]]:
     * which is what the `sha::` tag is for.
     */
   def updateNoteFields(id: AnkiNoteId, fields: Vector[(String, String)]): F[Unit]
+
+  /** Move a note ONTO A DIFFERENT NOTE TYPE, rewriting its fields and its whole tag set.
+    *
+    * THE WHOLE FIELD SET AND THE WHOLE TAG SET ARE PARAMETERS BECAUSE ANKI DESTROYS BOTH.
+    * Read out of the installed add-on's own source on 2026-08-21
+    * (`addons21/2055492159/__init__.py:849-899`, the `updateNoteModel` action):
+    *
+    *   - `anki_note.fields = [''] * len(new_model['flds'])` blanks EVERY field of the new type
+    *     before any value is written, so a field this call does not name is left empty.
+    *   - the write loop matches names CASE-INSENSITIVELY and simply never assigns a name the
+    *     new type does not have — no error, no report. A misspelled field name is therefore a
+    *     silently emptied field.
+    *   - `anki_note.tags = note.get('tags', [])` is UNCONDITIONAL. Omitting `tags` does not
+    *     preserve them, it ERASES them — the opposite of `updateNote`, where omitting the key
+    *     preserves. For this tool an erased tag set is an erased `src::` identity, which makes
+    *     the note not merely unmatched but UNENUMERABLE: invisible to the key lookup, the
+    *     reconciler and prune, permanently, with no later call able to find it again.
+    *
+    * THE TAGS ARE SPLIT IN TWO, and the split is the ownership rule from [[ObservedNote]] made
+    * structural rather than remembered. `ownedTags` are AUTHORED — the `src::` identity and the
+    * new `sha::` content hash. `preservedTags` are ECHOED: raw strings the caller read back off
+    * this very note, passed through verbatim because Anki will otherwise drop them. The tool
+    * still cannot MINT a foreign tag; it can only hand back one it has seen.
+    *
+    * `ownedTags` IS NON-EMPTY so that a call which would leave the note without its identity
+    * cannot be written at all — the same reason [[NewNote.tags]] is non-empty.
+    *
+    * ONE CALL, NOT THREE. Fields, note type and hash all land together or none of them do, so
+    * unlike an [[updateNoteFields]]-then-tag sequence there is no window in which the note
+    * holds new content under a stale hash. Nothing here needs the fields-first-hash-last
+    * ordering that [[obsidiananki.plan.Change.FieldsChanged]] documents.
+    *
+    * WHAT THIS DOES **NOT** PROMISE. Whether an existing card whose ordinal the new note type
+    * cannot generate survives, is orphaned, or is destroyed is NOT established in this
+    * repository: the decision is taken by Anki's Rust backend (`Collection.update_note` in
+    * `anki/collection.py` is a one-line call into it, read on this machine 2026-08-21) and
+    * establishing it needs a write to a real collection. [[obsidiananki.plan.Retyping]] is the
+    * gate that keeps every caller out of that region; this operation itself is unguarded.
+    */
+  def changeNoteType(
+      id: AnkiNoteId,
+      to: String,
+      fields: Vector[(String, String)],
+      ownedTags: NonEmptyVector[OwnedTag],
+      preservedTags: Vector[String],
+  ): F[Unit]
 
   def addTags(ids: Vector[AnkiNoteId], tags: Vector[OwnedTag]): F[Unit]
 

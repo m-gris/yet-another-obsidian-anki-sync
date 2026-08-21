@@ -198,7 +198,7 @@ class MainTest extends munit.FunSuite:
   def runSync(dryRun: Boolean, files: (String, String)*): (FakeAnkiConnect.State, Main.SyncOutcome) =
     val (state, anki) = fixture()
     val outcome = Main
-      .observeAndApply(vaultOf(files*), deckRoot, dryRun, anki)
+      .observeAndApply(vaultOf(files*), deckRoot, dryRun, RetypePolicy.Defer, anki)
       .unsafeRunSync()
     (state, outcome)
 
@@ -220,7 +220,7 @@ class MainTest extends munit.FunSuite:
     assert(tags.exists(_.startsWith("src::")), s"no identity tag: $tags")
     assert(tags.exists(_.startsWith("sha::")), s"no content hash: $tags")
     outcome match
-      case Main.SyncOutcome.Applied(_, failures) => assert(failures.isEmpty, s"$failures")
+      case Main.SyncOutcome.Applied(_, report) => assert(report.failures.isEmpty, s"$report")
       case other                                 => fail(s"expected Applied, got $other")
   }
 
@@ -228,9 +228,9 @@ class MainTest extends munit.FunSuite:
   test("running twice changes nothing the second time") {
     val (state, anki) = fixture()
     val index         = vaultOf("A.md" -> oneCard)
-    Main.observeAndApply(index, deckRoot, dryRun = false, anki).unsafeRunSync()
+    Main.observeAndApply(index, deckRoot, dryRun = false, RetypePolicy.Defer, anki).unsafeRunSync()
     val before  = state.notes.size
-    val outcome = Main.observeAndApply(index, deckRoot, dryRun = false, anki).unsafeRunSync()
+    val outcome = Main.observeAndApply(index, deckRoot, dryRun = false, RetypePolicy.Defer, anki).unsafeRunSync()
     assertEquals(state.notes.size, before, "a second run created another note")
     outcome match
       case Main.SyncOutcome.Applied(plan, _) => assertEquals(plan.actions, Vector.empty)
@@ -281,9 +281,9 @@ class MainTest extends munit.FunSuite:
 
     def code(o: Main.SyncOutcome) = Main.exitCodeFor(Main.verdict(o))
 
-    assertEquals(code(Main.SyncOutcome.Applied(empty, Vector.empty)), ExitCode.Success)
+    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty))), ExitCode.Success)
     assertNotEquals(
-      code(Main.SyncOutcome.Applied(empty, Vector(failure))),
+      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty))),
       ExitCode.Success,
       "a run whose actions failed reported success",
     )
@@ -336,7 +336,7 @@ class MainTest extends munit.FunSuite:
       ),
       AnkiError.Remote("addTags", "refused"),
     )
-    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, Vector(failure)))
+    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty)))
     assert(
       partlyFailed.toUpperCase.contains("FAIL"),
       s"a run whose actions failed does not say so on screen:\n$partlyFailed",
@@ -352,7 +352,7 @@ class MainTest extends munit.FunSuite:
       OrphanInference.SuppressedIncompleteScan("a file could not be read"),
       Vector.empty,
     )
-    Main.verdict(Main.SyncOutcome.Applied(partial, Vector.empty)) match
+    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty))) match
       case Main.Verdict.Clean(_) => fail("a run with orphan inference suppressed reported clean")
       case _                     => ()
   }
@@ -687,7 +687,7 @@ class MainTest extends munit.FunSuite:
     val (state, anki) = fixture()
     state.models = Map.empty
 
-    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, anki)
+    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
       .unsafeRunSync()
 
     outcome match
@@ -715,7 +715,7 @@ class MainTest extends munit.FunSuite:
       fields = NonEmptyVector.of(Marker.BasicFields.Front, Marker.BasicFields.Back)
     )
 
-    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, anki)
+    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
       .unsafeRunSync()
 
     outcome match
@@ -742,14 +742,14 @@ class MainTest extends munit.FunSuite:
     val (state2, anki2) = fixture()
     state2.models = Map.empty
     assert(
-      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, anki2)
+      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Defer, anki2)
         .unsafeRunSync()
         .isInstanceOf[Main.SyncOutcome.NoteTypesNotReady],
       "a dry run planned against a collection it could not write to",
     )
     // Control: the same dry run against a collection that IS ready still plans.
     assert(
-      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, anki)
+      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Defer, anki)
         .unsafeRunSync()
         .isInstanceOf[Main.SyncOutcome.PlannedOnly],
       "the preflight refused a collection that was ready",
@@ -841,4 +841,122 @@ class MainTest extends munit.FunSuite:
     assertEquals(Main.exitCodeForInstall(outcome), ExitCode.Success)
     val lines = Report.noteTypes(outcome).mkString("\n")
     Marker.NoteTypes.All.foreach(n => assert(lines.contains(n), s"'$n' is not in the report:\n$lines"))
+  }
+
+  // ================================================ moving notes between types ====
+
+  /** THE SITUATION THIS WHOLE FEATURE IS FOR, built rather than described.
+    *
+    * A note is synced normally, and then put back onto Anki's stock `Basic` — which is where
+    * every note synced before 2026-08-21 actually sits, because until then this tool wrote to
+    * the stock note types. It keeps its `src::` identity and its `sha::` hash, so it is a note
+    * this tool recognises and would otherwise consider up to date.
+    *
+    * BUILT BY SYNCING FIRST AND THEN MOVING THE NOTE BACK, rather than by writing a `src::` tag
+    * by hand: the tag is a percent-encoded canonicalisation of the heading path, and a
+    * hand-written one that was subtly wrong would make the test pass by producing no plan at
+    * all.
+    */
+  def collectionWithANoteOnTheStockType(): (FakeAnkiConnect.State, AnkiConnectClient[IO], Long) =
+    val (state, anki) = fixture()
+    Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
+      .unsafeRunSync()
+    assertEquals(state.notes.size, 1, "the fixture sync did not create the note")
+
+    state.models += "Basic" -> NoteTypeSpec(
+      name = "Basic",
+      isCloze = false,
+      fields = NonEmptyVector.of("Front", "Back"),
+      templates = NonEmptyVector.one("Card 1" -> CardTemplate("{{Front}}", "{{FrontSide}}{{Back}}")),
+      styling = "",
+    )
+    val (id, note) = state.notes.head
+    state.notes += id -> note.copy(
+      model = "Basic",
+      fields = note.fields.filterNot((name, _) => name == Marker.ContextField),
+      tags = note.tags :+ "leech",
+    )
+    (state, anki, id)
+
+  /** WITHOUT THE FLAG, NOTHING MOVES — and the run says so rather than reporting success.
+    *
+    * Asserted on the collection first: an assertion on the outcome value alone would pass
+    * while the note had in fact been rewritten.
+    */
+  test("sync leaves a note that is on the wrong note type alone, and says what it did not do") {
+    val (state, anki, id) = collectionWithANoteOnTheStockType()
+
+    val outcome = Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
+      .unsafeRunSync()
+
+    assertEquals(state.notes(id).model, "Basic", "the note was moved without being asked")
+
+    val deferred = outcome match
+      case Main.SyncOutcome.Applied(_, report) =>
+        assert(report.failures.isEmpty, s"a deferral was reported as a failure: ${report.failures}")
+        report.deferred
+      case other => fail(s"expected Applied, got $other")
+    assertEquals(deferred.size, 1, "the outstanding move was not reported at all")
+
+    val screen = Main.describeSyncOutcome(outcome).mkString("\n")
+    assert(screen.contains("--migrate-note-types"), s"the flag that would do it is not named:\n$screen")
+    assert(screen.contains("Basic"), s"the note types involved are not named:\n$screen")
+
+    // AND IT IS NOT A CLEAN RUN. The collection does not match the vault, and a green result
+    // would say it does.
+    Main.verdict(outcome) match
+      case Main.Verdict.Clean(_) => fail(s"a run with outstanding moves reported clean:\n$screen")
+      case _                     => ()
+    assertEquals(Main.exitCodeFor(Main.verdict(outcome)), ExitCode.Error)
+  }
+
+  /** WITH THE FLAG, THE NOTE MOVES — and everything the move could have destroyed is checked.
+    *
+    * `Context` is the field this tool's own note types were introduced for, and the stock type
+    * the note was sitting on does not have it, so its presence afterwards is what proves the
+    * move actually happened rather than the note merely being updated in place.
+    */
+  test("sync --migrate-note-types moves the note, keeping its identity and its foreign tags") {
+    val (state, anki, id) = collectionWithANoteOnTheStockType()
+
+    val outcome = Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .unsafeRunSync()
+
+    outcome match
+      case Main.SyncOutcome.Applied(_, report) =>
+        assert(report.failures.isEmpty, s"the move failed: ${report.failures}")
+        assert(report.deferred.isEmpty, s"the move was deferred despite the flag: $report")
+      case other => fail(s"expected Applied, got $other")
+
+    val moved = state.notes(id)
+    assertEquals(moved.model, Marker.NoteTypes.Basic, "the note did not move")
+    assert(
+      moved.fields.exists((name, value) => name == Marker.ContextField && value.nonEmpty),
+      s"the field the new note type exists for was not written: ${moved.fields}",
+    )
+    assert(moved.tags.exists(_.startsWith("src::")), s"the note lost its identity: ${moved.tags}")
+    assert(moved.tags.contains("leech"), s"a foreign tag was destroyed by the move: ${moved.tags}")
+
+    // THE LAW, through the shell: the hash written by the move describes what the move wrote,
+    // so the next run has nothing to do.
+    Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .unsafeRunSync() match
+      case Main.SyncOutcome.Applied(plan, _) =>
+        assertEquals(plan.actions, Vector.empty, "the moved note was planned again")
+      case other => fail(s"expected Applied, got $other")
+  }
+
+  /** A DRY RUN STILL WRITES NOTHING, flag or no flag. The flag says what the run may do, not
+    * whether it is a rehearsal.
+    */
+  test("a dry run with --migrate-note-types moves nothing") {
+    val (state, anki, id) = collectionWithANoteOnTheStockType()
+    Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Apply, anki)
+      .unsafeRunSync()
+    assertEquals(state.notes(id).model, "Basic", "a dry run moved a note")
   }

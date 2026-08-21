@@ -65,13 +65,21 @@ class PlannerTest extends munit.FunSuite:
 
   /** Runs a plan and asserts nothing failed. Use [[runPlanCollecting]] when failures are
     * the point of the test.
+    *
+    * `RetypePolicy.Apply` THROUGHOUT THIS FILE, so that a note-type move is ATTEMPTED rather
+    * than set aside. The opposite policy would make several tests below pass for the wrong
+    * reason — a deferred retype is not a failure and is also not a write, so "nothing failed"
+    * and "the note did not move" would both hold no matter what the executor did.
     */
   def runPlan(p: Plan, anki: InMemoryAnki): Unit =
     val failures = runPlanCollecting(p, anki)
     assert(failures.isEmpty, s"unexpected execution failures: $failures")
 
   def runPlanCollecting(p: Plan, anki: InMemoryAnki): Vector[ExecutionFailure] =
-    Executor.run(p, anki).fold(e => fail(s"execution aborted entirely: $e"), identity)
+    runReport(p, anki, RetypePolicy.Apply).failures
+
+  def runReport(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): ExecutionReport =
+    Executor.run(p, anki, policy).fold(e => fail(s"execution aborted entirely: $e"), identity)
 
   def scanOf(specs: SourcedSpec*): VaultScan = VaultScan.from(specs.toVector, Vector.empty)
 
@@ -174,7 +182,7 @@ class PlannerTest extends munit.FunSuite:
     // would SUCCEED here and the reverse card would never exist.
     val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
     planOf(scanOf(sourced(reversed)), observe(anki)).actions match
-      case Vector(SyncAction.Retype(_, _, from, to)) =>
+      case Vector(SyncAction.Retype(_, _, from, to, _, _, _)) =>
         assertEquals(from, Marker.NoteTypes.Basic)
         assertEquals(to, Marker.NoteTypes.BasicAndReversed)
       case other => fail(s"expected a Retype, got $other")
@@ -354,10 +362,16 @@ class PlannerTest extends munit.FunSuite:
 
   /** A silent no-op here would report "nothing to do" while the reverse card the author
     * asked for never appeared — the exact failure Retype was carved out to prevent,
-    * reintroduced one layer down. Until the AnkiConnect capability is verified it must be
-    * LOUD.
+    * reintroduced one layer down.
+    *
+    * `Obsidian Basic` HAS ONE CARD TEMPLATE AND `Obsidian Basic (and reversed card)` HAS TWO,
+    * so this particular move is one `plan/Retyping.scala` refuses to make: what Anki does with
+    * a card whose ordinal the new note type cannot generate is unestablished, and the second
+    * card's generation is equally unmeasured. The refusal is LOUD and names both note types —
+    * it is not the same thing as the deferral that `RetypePolicy.Defer` produces, which is why
+    * this asserts a failure rather than merely "the note did not move".
     */
-  test("Retype is not silently skipped — it fails loudly as unimplemented") {
+  test("a move between differently-shaped note types is REFUSED, loudly and by name") {
     val anki = InMemoryAnki()
     val k    = key("n1", "A", "Term")
     runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "Term", "def"))), observe(anki)), anki)
@@ -368,9 +382,21 @@ class PlannerTest extends munit.FunSuite:
 
     assertEquals(failures.size, 1, s"expected one reported failure, got $failures")
     failures.head.error match
-      case AnkiError.UnsupportedOperation(what, _) =>
-        assert(what.contains("retype"), s"failure does not name the operation: $what")
+      case AnkiError.UnsupportedOperation(what, why) =>
+        assert(what.contains(Marker.NoteTypes.Basic), s"the source note type is not named: $what")
+        assert(
+          what.contains(Marker.NoteTypes.BasicAndReversed),
+          s"the target note type is not named: $what",
+        )
+        assert(why.contains("template"), s"the reason does not say what differs: $why")
+        assert(why.contains("Change Note Type"), s"no remedy is offered: $why")
       case other => fail(s"expected UnsupportedOperation, got $other")
+
+    assertEquals(
+      observe(anki).notes.head.note.noteType,
+      Marker.NoteTypes.Basic,
+      "a refused move changed the note's type anyway",
+    )
   }
 
   /** RULED: one failing action must not abandon the rest of the plan. */
@@ -430,7 +456,7 @@ class PlannerTest extends munit.FunSuite:
         case SyncAction.Update(k, _, _) => k
         case SyncAction.Flag(k, _)      => k
         case SyncAction.Unflag(k, _)    => k
-        case SyncAction.Retype(k, _, _, _) => k
+        case SyncAction.Retype(k, _, _, _, _, _, _) => k
       })),
       "an already-applied action was scheduled again",
     )

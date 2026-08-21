@@ -1,6 +1,6 @@
 package obsidiananki.anki
 
-import io.circe.{Decoder, Json}
+import io.circe.{Decoder, DecodingFailure, Json}
 import io.circe.syntax.*
 import obsidiananki.model.OwnedTag
 
@@ -245,6 +245,65 @@ object AnkiConnect:
       "cardTemplates" := spec.templates.toVector.map { (name, template) =>
         Json.obj("Name" := name, "Front" := template.front, "Back" := template.back)
       },
+    )
+
+  /** Anki's own value for a CLOZE note type, in the `type` key of a note-type dictionary.
+    *
+    * READ OUT OF `anki/consts.py` ON THIS MACHINE on 2026-08-21 — `MODEL_STD = 0` and
+    * `MODEL_CLOZE = 1` — rather than recalled. The add-on sets exactly this key when
+    * `createModel` is given `isCloze` (`__init__.py:1134-1135`, `m['type'] = MODEL_CLOZE`),
+    * which is the other half of the round trip.
+    */
+  val ClozeModelType: Int = 1
+
+  /** Whether the FIRST model in a `findModelsByName` answer is a cloze type.
+    *
+    * `findModelsByName` takes a LIST of names and answers with a LIST of note-type
+    * dictionaries (`__init__.py:1184-1193`), raising `model was not found: <name>` for any name
+    * it cannot resolve — so an empty list means the request itself asked for nothing, and is
+    * reported here rather than defaulted to `false`. Defaulting would answer "standard" for a
+    * response nobody could read, and "standard" is the answer that lets a migration proceed.
+    *
+    * ONLY THE `type` KEY IS READ. Anki's note-type dictionary is a large internal structure
+    * this tool has no business pinning; decoding it into a record would make every future Anki
+    * release a potential wire break for a fact worth one integer.
+    */
+  val firstModelIsCloze: Decoder[Boolean] = Decoder.instance { cursor =>
+    cursor.as[Vector[Json]].flatMap {
+      case Vector() =>
+        Left(DecodingFailure("findModelsByName answered with no model at all", cursor.history))
+      case models =>
+        models.head.hcursor.downField("type").as[Int].map(_ == ClozeModelType)
+    }
+  }
+
+  /** The `updateNoteModel` parameters for moving one note onto another note type.
+    *
+    * EVERY PARAMETER NAME READ OFF THE ADD-ON INSTALLED ON THIS MACHINE
+    * (`__init__.py:849-899`), not off the documentation: the action takes a single `note`
+    * object carrying `id`, `modelName`, `fields` and `tags`, and raises a `ValueError` when any
+    * of the first three is absent or empty.
+    *
+    * `tags` IS ALWAYS SENT, INCLUDING WHEN IT IS SHORT. `new_tags = note.get('tags', [])`
+    * followed by an unconditional `anki_note.tags = new_tags` means an omitted key ERASES the
+    * note's tags — see [[Anki.changeNoteType]]. There is deliberately no branch here that omits
+    * it: an empty vector would be a bug, and it is [[obsidiananki.plan.SyncAction.Retype]]'s
+    * non-empty owned-tag vector that makes one unconstructable rather than a check at this
+    * layer.
+    */
+  def updateNoteModelParams(
+      id: AnkiNoteId,
+      to: String,
+      fields: Vector[(String, String)],
+      tags: Vector[String],
+  ): Json =
+    Json.obj(
+      "note" := Json.obj(
+        "id" := id.value,
+        "modelName" := to,
+        "fields" := Json.obj(fields.map((name, value) => name := value)*),
+        "tags" := tags,
+      )
     )
 
   /** `getDecks` answers `{"Deck::Name": [cardId, ...]}`. Inverted here to card -> deck. */

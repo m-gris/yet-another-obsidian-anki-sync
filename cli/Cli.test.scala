@@ -50,9 +50,14 @@ class CliTest extends munit.FunSuite:
 
   test("sync WITH a profile parses") {
     parse("sync", "--vault-path", existingDir, "--profile", "POC-test") match
-      case Right(Command.Sync(_, profile, _, dryRun)) =>
+      case Right(Command.Sync(_, profile, _, dryRun, retypePolicy)) =>
         assertEquals(profile, "POC-test")
         assertEquals(dryRun, false)
+        // THE DEFAULT IS THE SAFE ONE, asserted rather than assumed. Without the flag a sync
+        // does not move notes between note types; a default of `Apply` would make the first
+        // ordinary sync after the note types were renamed rewrite every field and every tag of
+        // every note this tool had previously synced, unasked.
+        assertEquals(retypePolicy, RetypePolicy.Defer)
       case other => fail(s"expected a Sync command, got $other")
   }
 
@@ -115,8 +120,8 @@ class CliTest extends munit.FunSuite:
       case Right(Command.Inspect(selection, _, _)) => assertEquals(selection, VaultSelection.Ask)
       case other                                   => fail(s"got $other")
     parse("sync", "--profile", "POC-test") match
-      case Right(Command.Sync(selection, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
-      case other                                   => fail(s"got $other")
+      case Right(Command.Sync(selection, _, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
+      case other                                     => fail(s"got $other")
   }
 
   test("--vault-path names the vault outright, carrying a root that has already been checked") {
@@ -227,22 +232,43 @@ class CliTest extends munit.FunSuite:
   }
 
   test("a plan with no actions says so rather than printing an empty list") {
-    val lines = Report.plan(Plan(Vector.empty, OrphanInference.Computed, Vector.empty))
+    val lines =
+      Report.plan(Plan(Vector.empty, OrphanInference.Computed, Vector.empty), RetypePolicy.Defer)
     assertEquals(lines, Vector("nothing to do"))
   }
 
-  /** A retype is planned but deliberately not applied, so the report must say that rather
-    * than listing it as though it will happen.
+  /** THE PLAN IS PRINTED BEFORE IT IS APPLIED, so the summary line for a note-type move has to
+    * say whether this particular run is going to make it. Under the default policy it is not,
+    * and someone reading the plan needs to know that before deciding whether to re-run.
     */
-  test("a retype is labelled as NOT APPLIED in the plan summary") {
+  test("a note-type move says whether THIS run will make it") {
     val index = indexOf("A.md" -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"))
     val key   = index.scan.specs.head.key
     val plan = Plan(
-      Vector(SyncAction.Retype(key, obsidiananki.anki.AnkiNoteId(1L), "Basic", "Cloze")),
+      Vector(
+        SyncAction.Retype(
+          key = key,
+          noteId = obsidiananki.anki.AnkiNoteId(1L),
+          from = "Basic",
+          to = obsidiananki.model.Marker.NoteTypes.Basic,
+          fields = Vector("Front" -> "One", "Back" -> "Body.", "Context" -> "A"),
+          ownedTags = NonEmptyVector.one(obsidiananki.model.TagCodec.encode(key)),
+          preservedTags = Vector.empty,
+        )
+      ),
       OrphanInference.Computed,
       Vector.empty,
     )
-    assert(Report.plan(plan).mkString("\n").contains("NOT APPLIED"))
+
+    val deferred = Report.plan(plan, RetypePolicy.Defer).mkString("\n")
+    assert(deferred.contains("NOT APPLIED"), s"a deferred move reads as work that will happen:\n$deferred")
+    assert(deferred.contains("--migrate-note-types"), s"the flag that would do it is not named:\n$deferred")
+
+    val applying = Report.plan(plan, RetypePolicy.Apply).mkString("\n")
+    assert(
+      !applying.contains("NOT APPLIED"),
+      s"a move this run WILL make is labelled as one it will not:\n$applying",
+    )
   }
 
   // ================================================ install-note-types ====

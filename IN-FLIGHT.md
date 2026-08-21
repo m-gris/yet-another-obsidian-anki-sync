@@ -68,6 +68,13 @@ keeps its review history.
 2. **Sync and let Marc review a real progressively-revealed list card.** Sync a collision-free
    copy of the fixture vault — everything except `Patterns/Table-Edge-Cases.md`, which holds
    three deliberate duplicate identities.
+
+   ⚠️ **Every note already in `claude-POC-test` is on a note type this tool no longer writes
+   to**, since the five `Obsidian *` names landed. An ordinary `sync` now plans one *move*
+   per such note, leaves it alone, and says so; passing `--migrate-note-types` makes the
+   moves. Added 2026-08-21 and **never run against a live collection** — see HANDOFF's
+   hazard 2 for what the operation destroys if it is called with anything less than the whole
+   field set and the whole tag set.
 3. **Prove, do not assert, that HTML fields arrive as an UPDATE.** Every note will be rewritten
    once now that fields are HTML. That should preserve scheduling; check it in `claude-POC-test`
    rather than claiming it.
