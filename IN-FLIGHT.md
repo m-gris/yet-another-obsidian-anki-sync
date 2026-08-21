@@ -1,7 +1,45 @@
 # In flight — delete this file when the work below has landed
 
-_Rewritten 2026-08-21. The multi-agent run this file used to describe has FINISHED and landed;
-nothing is running now. Everything below is verified, not remembered._
+_Rewritten 2026-08-21. Everything below is verified, not remembered._
+
+## A multi-agent run IS in progress
+
+```
+task id   w25dlhe8v
+run id    wf_eb291fa9-081
+script    ~/.claude/projects/-Users-marc-.../workflows/scripts/obsidian-owned-note-types-wf_eb291fa9-081.js
+resume    Workflow({ scriptPath: <above>, resumeFromRunId: "wf_eb291fa9-081" })
+```
+
+**If a usage limit is near, STOP it deliberately** (`TaskStop`) rather than letting agents die
+mid-slice. A clean stop plus a resume costs nothing; a degraded run costs untangling. The
+previous run survived that twice.
+
+**What it is doing.** Giving the tool its own Anki note types, so it stops writing to the stock
+`Basic` / `Basic (and reversed card)` / `Cloze` that the rest of Marc's collection shares — and
+carrying the heading path onto the card as a visible `Context` field, because a card reading
+"Frontal → Anterior border" cannot be answered without already knowing it means the frontal
+*bone*. Names Marc chose: `Obsidian Basic`, `Obsidian Basic (and reversed card)`,
+`Obsidian Cloze`, `Obsidian Cloze Sequence`, `Obsidian Concept-Descriptor`.
+
+**Why a real field and not the `src::` tag.** The tag carries the CANONICAL path — lowercased,
+percent-encoded — because identity is deliberately severed from display. A tag-derived
+breadcrumb would be permanently lowercase. `Extractor`'s `ancestorTitles` already holds the
+properly cased chain and throws all but its last element away.
+
+**Two renames have no API** — AnkiConnect cannot rename a model. `Cloze Sequence` and
+`3 way Concept-Descriptor` must be renamed by hand in Tools → Manage Note Types. Agents were
+told not to attempt or work around this.
+
+**The acceptance invariant, unchanged:** every `src::` tag in `extract/golden/fixture-cards.txt`
+stays byte-identical. Field values are EXPECTED to move — a field is being added — but a moved
+key is an orphan plus a historyless card.
+
+**Verified before launch, by live probe in `claude-POC-test`:** `updateNoteModel` keeps the
+card's id, its `type`/`queue`/`interval`/`factor`/`reps`, and its review-log entry. So the
+migration does not cost review history. Footgun found while proving it: `getReviewsOfCards`
+returns EMPTY for card ids passed as strings, real entries for the same ids as integers, and
+does not error either way.
 
 ## What landed
 
