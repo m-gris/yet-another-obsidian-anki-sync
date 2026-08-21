@@ -243,3 +243,121 @@ class AnkiConnectTest extends munit.FunSuite:
       "src::a sha::b",
     )
   }
+
+  // ================================================ note types ====
+
+  /** CAPTURED FROM THE LIVE COLLECTION on 2026-08-21, read-only, in profile `claude-POC-test`:
+    * `modelTemplates` for `3 way Concept-Descriptor`. The body below is that response with two
+    * of the three templates removed for length; nothing else was changed.
+    *
+    * TWO THINGS THIS PINS. The response is an OBJECT KEYED BY TEMPLATE NAME, not a list — so
+    * the templates carry no order this tool is entitled to rely on, which is why
+    * `Anki.noteTypeTemplates` answers with a `Map`. And each value's keys are `Front` and
+    * `Back`, capitalised, which is Anki's convention and not this project's.
+    */
+  test("modelTemplates decodes into templates keyed by name") {
+    val body =
+      """{"result": {
+        |  "Card 1: Descriptor+Description -> Concept": {
+        |    "Front": "{{Descriptor}}<br>{{Description}}",
+        |    "Back": "{{FrontSide}}<hr id=answer>{{Concept}}" }
+        |}, "error": null}""".stripMargin
+    assertEquals(
+      AnkiConnect.decodeAs[Map[String, CardTemplate]]("modelTemplates", body),
+      Right(
+        Map(
+          "Card 1: Descriptor+Description -> Concept" -> CardTemplate(
+            "{{Descriptor}}<br>{{Description}}",
+            "{{FrontSide}}<hr id=answer>{{Concept}}",
+          )
+        )
+      ),
+    )
+  }
+
+  /** ALSO CAPTURED LIVE, same day and profile, from `Cloze Sequence`: the stylesheet arrives
+    * WRAPPED IN AN OBJECT under a `css` key, not as a bare string.
+    */
+  test("modelStyling unwraps the css key") {
+    val body = """{"result": {"css": ".card { color: #111; }"}, "error": null}"""
+    assertEquals(
+      AnkiConnect.envelope("modelStyling", body).flatMap(
+        AnkiConnect.modelStylingCss.decodeJson(_).left.map(f => AnkiError.MalformedResponse("modelStyling", f.message))
+      ),
+      Right(".card { color: #111; }"),
+    )
+  }
+
+  /** VERIFIED LIVE, read-only, on 2026-08-21: asking for a note type the collection does not
+    * hold answers `error: "model was not found: <name>"` with a null result, on both
+    * `modelTemplates` and `modelStyling`. The existing classifier already turns that into a
+    * named error rather than an unclassified refusal, and this pins that it keeps doing so for
+    * the two actions added here.
+    */
+  test("a note type that is not in the collection is reported by name") {
+    val body = """{"result": null, "error": "model was not found: Obsidian Basic"}"""
+    assertEquals(
+      AnkiConnect.decodeAs[Map[String, CardTemplate]]("modelTemplates", body),
+      Left(AnkiError.NoSuchNoteType("Obsidian Basic")),
+    )
+  }
+
+  /** THE PARAMETER NAMES ARE ANKI'S, AND THEY WERE READ OFF THE ADD-ON, not off the docs — see
+    * `AnkiConnect.createModelParams`. A test that built the expected JSON from the same
+    * constants the code uses would prove nothing, so every key here is written out as a
+    * literal.
+    */
+  test("createModel is given the parameter names the add-on actually reads") {
+    val spec = NoteTypeSpec(
+      name = "Obsidian Basic",
+      isCloze = false,
+      fields = cats.data.NonEmptyVector.of("Front", "Back", "Context"),
+      templates = cats.data.NonEmptyVector.of("Card 1" -> CardTemplate("{{Front}}", "{{Back}}")),
+      styling = ".card { }",
+    )
+    assertEquals(
+      AnkiConnect.createModelParams(spec),
+      Json.obj(
+        "modelName" := "Obsidian Basic",
+        "inOrderFields" := Vector("Front", "Back", "Context"),
+        "css" := ".card { }",
+        "isCloze" := false,
+        "cardTemplates" := Vector(
+          Json.obj("Name" := "Card 1", "Front" := "{{Front}}", "Back" := "{{Back}}")
+        ),
+      ),
+    )
+
+    // BOTH VALUES OF THE FLAG, because the equality above pins only `false` and a body that
+    // hardcoded `false` would satisfy it — measured, by making exactly that mutation. `isCloze`
+    // is the one property no heuristic recovers: `Cloze Sequence` has "Cloze" in its name,
+    // defines `.cloze` in its stylesheet, and is not a cloze note type.
+    assertEquals(
+      AnkiConnect
+        .createModelParams(spec.copy(isCloze = true))
+        .hcursor
+        .downField("isCloze")
+        .as[Boolean],
+      Right(true),
+    )
+  }
+
+  /** FIELD ORDER IS SENT AS ORDER, which is what `inOrderFields` means. Anki's Sort Field
+    * defaults to field 1, so a reordering here changes which column fills the Browse list —
+    * and `Context` is last on every one of this tool's note types for exactly that reason.
+    */
+  test("createModel sends the fields in the order the note type declares them") {
+    NoteTypeAssets.all.fold(
+      errors => fail(errors.map(_.describe).mkString("; ")),
+      _.foreach { asset =>
+        assertEquals(
+          AnkiConnect
+            .createModelParams(asset.spec)
+            .hcursor
+            .downField("inOrderFields")
+            .as[Vector[String]],
+          Right(asset.spec.fields.toVector),
+        )
+      },
+    )
+  }

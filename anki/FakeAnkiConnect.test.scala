@@ -38,6 +38,20 @@ object FakeAnkiConnect:
 
   final class State:
     var profile: String         = "claude-POC-test"
+
+    /** THE NOTE TYPES THIS COLLECTION HOLDS, state of their own since 2026-08-21.
+      *
+      * Before that, `modelNames` was derived from the models named by existing NOTES and
+      * `modelFieldNames` from the first note using one. That was a fiction with a consequence:
+      * an empty collection appeared to hold no note types at all, and a note type could never
+      * be asked what it looked like until a note already used it. Neither is true of Anki, and
+      * both matter now that the tool creates note types and checks for them before writing.
+      *
+      * DEFAULTS TO THIS TOOL'S FIVE, ALREADY INSTALLED, which is what every pre-existing test
+      * here implicitly assumed. A test wanting a FRESH profile sets this to `Map.empty`.
+      */
+    var models: Map[String, NoteTypeSpec] = InMemoryAnki.defaultNoteTypes
+
     var notes: Map[Long, Note]  = Map.empty
     var decks: Set[String]      = Set("Default")
     var cardDeck: Map[Long, String] = Map.empty
@@ -67,6 +81,15 @@ object FakeAnkiConnect:
   private def fieldsFrom(obj: JsonObject): Vector[(String, String)] =
     obj.keys.toVector.flatMap(k => obj(k).flatMap(_.asString).map(k -> _))
 
+  /** The `modelName` parameter resolved against the collection, or Anki's own refusal. */
+  private def withModel(state: State, params: io.circe.HCursor)(
+      answer: (String, NoteTypeSpec) => Json
+  ): Json =
+    val name = params.downField("modelName").as[String].getOrElse("")
+    state.models.get(name) match
+      case Some(spec) => answer(name, spec)
+      case None       => err(s"model was not found: $name")
+
   def app(state: State): HttpApp[IO] = HttpApp[IO] { request =>
     request.as[Json].map { body =>
       val cursor = body.hcursor
@@ -84,13 +107,75 @@ object FakeAnkiConnect:
         ok(state.profile.asJson)
 
       case "modelNames" =>
-        ok(state.notes.values.map(_.model).toVector.distinct.sorted.asJson)
+        ok(state.models.keys.toVector.sorted.asJson)
 
+      // VERIFIED LIVE 2026-08-21, read-only: a model the collection does not hold is refused
+      // with exactly `model was not found: <name>`, on all three of the actions below.
       case "modelFieldNames" =>
-        val model = p.downField("modelName").as[String].getOrElse("")
-        state.notes.values.find(_.model == model) match
-          case Some(note) => ok(note.fields.map(_._1).asJson)
-          case None       => err(s"model was not found: $model")
+        withModel(state, p) { (_, spec) => ok(spec.fields.toVector.asJson) }
+
+      /** VERIFIED LIVE 2026-08-21, read-only, against `3 way Concept-Descriptor`: an OBJECT
+        * KEYED BY TEMPLATE NAME whose values carry `Front` and `Back`, capitalised. Not a list
+        * — which is why nothing in this tool reads a card ordinal out of this response.
+        */
+      case "modelTemplates" =>
+        withModel(state, p) { (_, spec) =>
+          ok(
+            Json.obj(
+              spec.templates.toVector.map { (name, template) =>
+                name := Json.obj("Front" := template.front, "Back" := template.back)
+              }*
+            )
+          )
+        }
+
+      /** VERIFIED LIVE 2026-08-21, read-only, against `Cloze Sequence`: the stylesheet arrives
+        * WRAPPED under a `css` key rather than as a bare string.
+        */
+      case "modelStyling" =>
+        withModel(state, p) { (_, spec) => ok(Json.obj("css" := spec.styling)) }
+
+      /** READ OUT OF THE INSTALLED ADD-ON'S SOURCE, not exercised — creating a model is a
+        * write, and the session that added this had read-only access to a live collection.
+        * `__init__.py:1120` declares the parameter names used below; `:1122-1127` raise on an
+        * empty field list, an empty template list, and a name that already exists;
+        * `:1149-1151` substitute `Card N` when a template carries no `Name`; `:1155-1156` read
+        * `card['Front']` and `card['Back']`.
+        *
+        * THE PARAMETER NAMES ARE TRANSCRIBED FROM THAT SOURCE RATHER THAN FROM THE CLIENT, so
+        * that a client sending `fields` instead of `inOrderFields` fails here.
+        */
+      case "createModel" =>
+        val name = p.downField("modelName").as[String].getOrElse("")
+        val fields = p.downField("inOrderFields").as[Vector[String]].getOrElse(Vector.empty)
+        val templates = p
+          .downField("cardTemplates")
+          .as[Vector[Json]]
+          .getOrElse(Vector.empty)
+          .map { card =>
+            val c = card.hcursor
+            (
+              c.downField("Name").as[String].getOrElse("Card 1"),
+              CardTemplate(
+                c.downField("Front").as[String].getOrElse(""),
+                c.downField("Back").as[String].getOrElse(""),
+              ),
+            )
+          }
+        if fields.isEmpty then err("Must provide at least one field for inOrderFields")
+        else if templates.isEmpty then err("Must provide at least one card for cardTemplates")
+        else if state.models.contains(name) then err("Model name already exists")
+        else
+          val spec = NoteTypeSpec(
+            name = name,
+            isCloze = p.downField("isCloze").as[Boolean].getOrElse(false),
+            fields = cats.data.NonEmptyVector.fromVectorUnsafe(fields),
+            templates = cats.data.NonEmptyVector.fromVectorUnsafe(templates),
+            styling = p.downField("css").as[String].getOrElse(""),
+          )
+          state.models += name -> spec
+          // The add-on returns the model it created, not null.
+          ok(Json.obj("name" := name))
 
       /** STRICT ABOUT THE QUERY, because a lenient fake here pins nothing.
         *

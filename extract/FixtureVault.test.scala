@@ -84,25 +84,27 @@ class FixtureVaultTest extends munit.FunSuite:
     val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
 
     // THE CLOZE-SEQUENCE OPT-IN IS GONE FROM THIS CALL SITE, and it is worth saying why,
-    // because it was here on purpose and its purpose has NOT been served elsewhere.
+    // because it was here on purpose.
     //
     // WHAT USED TO BE HERE: `InMemoryAnki.defaultNoteTypes + (ClozeSequence -> …)`. The four
     // types in `defaultNoteTypes` were Anki's STOCK four, which is what Marc's collection
     // holds, so opting the fifth in at the call site kept "the collection does not have this
-    // type yet" true and VISIBLE — and what it made visible is a real gap: nothing in the
-    // production path checks, before planning, that the collection HAS the types it is about
-    // to write to. `noteTypeNames` exists on the algebra and grep still finds no production
-    // caller, so the failure is discovered per note at WRITE time, after the plan has been
-    // printed as though it would work.
+    // type yet" true and VISIBLE — and what it made visible was a real gap: nothing in the
+    // production path checked, before planning, that the collection HAD the types it was about
+    // to write to, so the failure was discovered per note at WRITE time, after the plan had
+    // been printed as though it would work.
     //
     // WHY IT CANNOT STAY: Marc ruled on 2026-08-21 that the tool writes only to note types it
     // owns, so ALL FIVE are now `Obsidian *` types and none of them is stock. There is no
-    // longer a "stock collection plus one" to express. `defaultNoteTypes` is now
-    // `Marker.FieldOrder.byNoteType` — the five types the tool owns — so this fake models a
-    // collection in which the installer has already run.
+    // longer a "stock collection plus one" to express. `defaultNoteTypes` now reads the five
+    // manifests under `resources/note-types/`, so this fake models a collection in which the
+    // installer has already run.
     //
-    // ⚠️ THE GAP THE OPT-IN DEMONSTRATED IS STILL OPEN, and nothing in the suite demonstrates
-    // it any more. It belongs to the slice that writes the installer.
+    // THE GAP IT DEMONSTRATED IS CLOSED, and this note is kept rather than deleted so that
+    // nobody re-adds the opt-in to demonstrate it again. `cli/Main.scala`'s `observeAndApply`
+    // runs `NoteTypeInstaller.readiness` before the collection is enumerated and refuses when a
+    // note type is absent or lacks a field this tool writes; `cli/Main.test.scala` drives that
+    // against a collection with no note types at all and asserts that nothing is written.
     val anki = InMemoryAnki()
 
     def planNow(): Plan =

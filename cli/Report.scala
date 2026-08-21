@@ -1,5 +1,6 @@
 package obsidiananki.cli
 
+import obsidiananki.anki.{InstallOutcome, NoteTypeProblem, NoteTypeStatus}
 import obsidiananki.extract.VaultIndex
 import obsidiananki.plan.*
 
@@ -68,6 +69,84 @@ object Report:
       else "" +: "build failures" +: p.failures.map(describeFailure).map("  " + _)
 
     header ++ orphanNote ++ failureLines
+
+  /** What an `install-note-types` run found and what it did.
+    *
+    * EVERY NOTE TYPE GETS A LINE, INCLUDING THE ONES THAT WERE ALREADY FINE. A report that
+    * listed only problems would be indistinguishable, at a glance, from a report that could not
+    * look — and this command's whole job is to say what a collection holds.
+    *
+    * THE RENAME REFUSAL COMES FIRST AND SAYS WHAT WAS NOT DONE. It is the one outcome where
+    * the tool declines to act on anything at all, and the remedy is a manual step in Anki that
+    * no amount of re-running will substitute for.
+    */
+  def noteTypes(outcome: InstallOutcome): Vector[String] =
+    val blocked = outcome.blockedByRename
+    val refusal =
+      if blocked.isEmpty then Vector.empty
+      else
+        Vector(
+          "REFUSED: a note type is still under its old name, so NOTHING was created.",
+          "",
+        ) ++ blocked.map((old, wanted) => s"  rename '$old'  ->  '$wanted'") ++ Vector(
+          "",
+          "Those note types hold notes with review history, and AnkiConnect has no action that",
+          "renames a model — so this is done by hand, in Anki's Tools > Manage Note Types.",
+          "",
+          "Creating them here instead would leave you with TWO note types: a new empty one and",
+          "the old populated one, with every note still on the old and nothing to tell you so.",
+          "",
+        )
+
+    val listed = "note types" +: outcome.before.map { status =>
+      val state = status match
+        case NoteTypeStatus.Absent(_) if outcome.created.contains(status.name) => "CREATED"
+        case NoteTypeStatus.Absent(_)                                          => "absent"
+        case NoteTypeStatus.AwaitingManualRename(_, current)                   => s"AWAITING RENAME FROM '$current'"
+        case NoteTypeStatus.Present(_, drift) if drift.isEmpty                 => "present, matches"
+        case NoteTypeStatus.Present(_, _)                                      => "present, DIFFERS"
+      f"  ${status.name}%-36s $state"
+    }
+
+    val drifts = outcome.before.flatMap {
+      case NoteTypeStatus.Present(asset, drift) if drift.nonEmpty =>
+        s"  ${asset.spec.name}" +: drift.map("    " + _.describe)
+      case _ => Vector.empty
+    }
+    val driftLines =
+      if drifts.isEmpty then Vector.empty
+      else
+        Vector("", "DIFFERENCES — reported, NOT repaired:") ++ drifts ++ Vector(
+          "",
+          "Nothing was written to these. This tool never overwrites a note type it did not",
+          "create: a template or a stylesheet you edited in Anki is yours, and only you know",
+          "whether the repository's version is the one you want.",
+        )
+
+    val failureLines =
+      if outcome.failures.isEmpty then Vector.empty
+      else
+        Vector("", "COULD NOT CREATE:") ++
+          outcome.failures.map((name, error) => s"  '$name': ${error.toString}")
+
+    refusal ++ listed ++ driftLines ++ failureLines
+
+  /** Why `sync` will not write to this collection, and what to do about it. */
+  def noteTypesNotReady(problems: Vector[NoteTypeProblem]): Vector[String] =
+    Vector(
+      "",
+      "REFUSED: this collection is not ready for the note types this tool writes.",
+      "",
+    ) ++ problems.map("  " + _.describe) ++ Vector(
+      "",
+      "Nothing was written. Run `install-note-types --profile <profile>` to create what is",
+      "missing; it reports anything that is present and differs rather than overwriting it.",
+      "",
+      "This is checked BEFORE the plan is computed on purpose. Anki reports a field name it",
+      "does not recognise as \"cannot create note because it is empty\" on create, and as no",
+      "error at all on update — so a plan run against a collection missing a field would look",
+      "like it worked.",
+    )
 
   private def kindOf(a: SyncAction): String = a match
     case _: SyncAction.Create => "create"

@@ -4,9 +4,19 @@ The five Anki note types this tool installs and writes to, one directory each. E
 here is the **exact text that goes into a collection** — a template body, a stylesheet, or the
 `manifest.json` that says which is which.
 
-Nothing in this directory is read by the Scala code yet. The loader, the installer
-(`install-note-types`) and the tests that tie these files to `model/Marker.scala` are a later
-slice. Until then these files are a specification and a backup, not a running system.
+These files are LOADED AND SENT, not merely a specification. `anki/NoteTypeAssets.scala` reads
+them off the classpath, `anki/NoteTypeInstall.scala` creates the missing note types through
+AnkiConnect's `createModel`, and the `install-note-types` command drives that. Two test suites
+tie them to the Scala: `anki/NoteTypeAssets.test.scala` compares every manifest against
+`model/Marker.scala` and every template against its own field list, and
+`anki/NoteTypeInstall.test.scala` drives the installer against the in-memory fake collection.
+
+_Amended 2026-08-21. This paragraph previously said nothing here was read by the Scala code._
+
+What is still NOT done: no agent has run `install-note-types` against a live collection, and
+nobody has reviewed a card produced by one of these note types on a screen. Everything below
+that is described as verified was verified by READING a live collection, never by writing to
+one.
 
 ---
 
@@ -54,7 +64,7 @@ present must refuse and name the pair.
 ## Layout
 
 ```
-note-types/
+resources/note-types/
   README.md                      this file
   basic/
     manifest.json
@@ -89,10 +99,12 @@ note-types/
 two files and one array entry rather than a restructure, and so that no reader has to learn
 two layouts.
 
-**This directory is expected to move to `resources/note-types/`** so that the files can be
-loaded from the classpath under a namespaced path. That move is a plain rename plus one
-`//> using resourceDir ./resources` line in `project.scala`, and it belongs to the slice that
-writes the loader — it is not done here because this slice deliberately changes no Scala.
+**This directory moved here from `obsidian-anki-custom-sync/note-types/` on 2026-08-21**, in
+the commit that added the loader, together with one `//> using resourceDir ./resources` line in
+`project.scala`. The wrapper directory is what namespaces these files on the classpath: pointing
+`resourceDir` at `note-types/` itself would put `/basic/`, `/cloze/` and a bare `/README.md` at
+the classpath ROOT, where a dependency shipping the same path would shadow ours — and a shadowed
+template is not an error, it is a note type whose cards render someone else's markup.
 
 ---
 
@@ -131,8 +143,11 @@ longer be what the collection holds.
 
 ## `manifest.json`
 
-One per type. Intended to be parsed with a **strict decoder and no defaults** — a manifest
-that is missing a key must fail loudly rather than have a plausible value filled in.
+One per type, parsed by `anki/NoteTypeAssets.scala` with a **strict decoder and no defaults**:
+a manifest missing a key fails loudly rather than having a plausible value filled in, and so
+does a manifest carrying a key that is not listed below. The unknown-key half is not fussiness —
+a misspelled `renamdFrom` would otherwise decode cleanly, with the rename hazard described above
+silently disarmed.
 
 ```json
 {

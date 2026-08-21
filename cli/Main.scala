@@ -5,7 +5,16 @@ import cats.effect.{ExitCode, IO}
 import cats.syntax.all.*
 import com.monovore.decline.Opts
 import com.monovore.decline.effect.CommandIOApp
-import obsidiananki.anki.{AnkiConnectClient, AnkiError, DeckPath}
+import obsidiananki.anki.{
+  AnkiConnectClient,
+  AnkiError,
+  AssetError,
+  DeckPath,
+  InstallOutcome,
+  NoteTypeAssets,
+  NoteTypeInstaller,
+  NoteTypeProblem,
+}
 import obsidiananki.extract.{VaultFile, VaultIndex, VaultWalker}
 import obsidiananki.model.CardKey
 import obsidiananki.plan.{
@@ -50,7 +59,7 @@ object Main
     * Named for what the `Left` means rather than for its shape: Anki answered and said no.
     * Being unable to reach Anki at all is not this — it stays a `Throwable` in `IO`.
     */
-  private type Refused[A] = EitherT[IO, AnkiError, A]
+  private[cli] type Refused[A] = EitherT[IO, AnkiError, A]
 
   /** `inspect` and `sync` resolve the vault the SAME way — one call each to the same
     * function, differing only in what they do with the answer.
@@ -68,6 +77,8 @@ object Main
       withVerifiedProfile(profile)(anki =>
         withChosenVault(selection)(sync(_, deckRoot, dryRun, anki))
       )
+    case Command.InstallNoteTypes(profile) =>
+      withVerifiedProfile(profile)(installNoteTypes)
   }
 
   /** Read the vault and say what it holds. Touches no collection. */
@@ -79,6 +90,66 @@ object Main
       _ <- IO.println(s"files:    ${files.size}")
       _ <- Report.inspect(index, verbose).traverse_(IO.println)
     yield exitCodeFor(index)
+
+  // -------------------------------------------------------------- the note types ----
+
+  /** Create this tool's note types in the collection the gate has already confirmed.
+    *
+    * THE ONLY COMMAND THAT CHANGES A COLLECTION'S SHAPE, and the only one that writes without
+    * a vault. `sync` deliberately does not do this on its own — see [[Command.InstallNoteTypes]].
+    *
+    * THE ASSET FAILURE IS ITS OWN EXIT PATH, and it exits 2 rather than 1. If the definitions
+    * in this repository cannot be read then no collection was touched at all, which is exactly
+    * what 2 means here; and the fault is in the build or the packaging rather than in anything
+    * the person did.
+    */
+  private def installNoteTypes(anki: AnkiConnectClient[IO]): IO[ExitCode] =
+    NoteTypeAssets.all match
+      case Left(errors) =>
+        (Vector(
+          "REFUSED: this tool's own note type definitions could not be read.",
+          "",
+        ) ++ errors.map("  " + _.describe) ++ Vector(
+          "",
+          "Nothing was read from the collection and nothing was written. These files ship with",
+          "the tool, so this is a build or packaging fault rather than anything about your vault",
+          "or your collection.",
+        )).traverse_(IO.println).as(ExitCode(2))
+
+      case Right(assets) =>
+        NoteTypeInstaller.install[Refused](anki, assets).value.flatMap {
+          case Left(error) =>
+            Vector(
+              "",
+              "STOPPED: the collection refused a request while its note types were being read.",
+              "",
+              s"  Anki's answer:  ${error.toString}",
+              "",
+              "Some note types may already have been created. Re-running is safe: this command",
+              "creates only what is absent and never overwrites what is there.",
+            ).traverse_(IO.println).as(ExitCode.Error)
+
+          case Right(outcome) =>
+            Report.noteTypes(outcome).traverse_(IO.println) *>
+              IO.pure(exitCodeForInstall(outcome))
+        }
+
+  /** THE EXIT-CODE CONTRACT OF `install-note-types`, in the same three-value shape as
+    * [[exitCodeFor]]:
+    *
+    *   - `2` — the run REFUSED and NOTHING WAS WRITTEN. Exactly one thing reaches it: a note
+    *     type still awaiting its hand-rename, which stops the whole run rather than part of it.
+    *   - `1` — it ran and something is wrong: a note type could not be created, or one is
+    *     present and differs from the repository and was therefore left alone.
+    *   - `0` — every note type is now present and matches. Creating some of them is not a
+    *     problem; that is the command doing its job.
+    *
+    * SPLIT OUT SO IT CAN BE TESTED, for the same reason [[verifyThen]] is.
+    */
+  private[cli] def exitCodeForInstall(outcome: InstallOutcome): ExitCode =
+    if outcome.blockedByRename.nonEmpty then ExitCode(2)
+    else if outcome.isClean then ExitCode.Success
+    else ExitCode.Error
 
   // ------------------------------------------------------------ choosing a vault ----
 
@@ -659,6 +730,28 @@ object Main
     * do" for an empty action vector and would report success over a broken vault.
     */
   private[cli] enum SyncOutcome:
+    /** The collection does not have the note types this run is about to write to.
+      *
+      * A REFUSAL BEFORE THE PLAN IS COMPUTED, not a failure per note afterwards. Two reasons.
+      * A missing note type makes every `addNote` fail, so the plan would be printed as though
+      * it would work and then fail forty-nine times over. And a note type that exists but lacks
+      * a field is WORSE than that: Anki reports an unrecognised field name on create as "cannot
+      * create note because it is empty" — the same message a genuinely empty note gets — and on
+      * update as no error whatsoever.
+      *
+      * IT APPLIES TO `--dry-run` TOO. A dry run against a collection that cannot be written to
+      * would print a plan nobody can apply; saying so is the more useful answer.
+      */
+    case NoteTypesNotReady(problems: Vector[NoteTypeProblem])
+
+    /** This tool's own note type definitions could not be read off the classpath.
+      *
+      * SEPARATE FROM [[NoteTypesNotReady]] because it is a different fact with a different
+      * addressee: nothing is wrong with the collection, and nothing the person can do to their
+      * vault or their profile would fix it. It is a build or packaging fault.
+      */
+    case NoteTypeDefinitionsUnreadable(errors: Vector[AssetError])
+
     case CouldNotObserve(error: AnkiError)
     case RefusedInconsistent(errors: Vector[PlanError])
     case PlannedOnly(plan: Plan)
@@ -693,7 +786,14 @@ object Main
       _ <- (describeSyncOutcome(outcome) ++ describeVerdict(result)).traverse_(IO.println)
     yield exitCodeFor(result)
 
-  /** Observe the collection, plan against it, and — unless this is a dry run — apply it.
+  /** Check the note types, then observe the collection, plan against it, and — unless this is a
+    * dry run — apply it.
+    *
+    * THE NOTE TYPE CHECK IS FIRST, AND IT IS A REFUSAL RATHER THAN A REPAIR. A collection this
+    * tool cannot write to is refused before its notes are enumerated, so the message says what
+    * to do instead of a plan being printed that would fail on every action. `--dry-run` gets no
+    * exemption, for the same reason the profile gate gives it none: a plan computed against a
+    * collection nothing can be written to describes a run that cannot happen.
     *
     * THE PLAN IS PRINTED BEFORE IT IS EXECUTED, on the applying path as well as the dry-run
     * one. It is the only mitigation available here for "the process died mid-write": if the
@@ -708,6 +808,28 @@ object Main
     * Anki-side collision until the vault happened to be clean.
     */
   private[cli] def observeAndApply(
+      index: VaultIndex,
+      deckRoot: DeckPath,
+      dryRun: Boolean,
+      anki: AnkiConnectClient[IO],
+  ): IO[SyncOutcome] =
+    NoteTypeAssets.all match
+      case Left(errors) => IO.pure(SyncOutcome.NoteTypeDefinitionsUnreadable(errors))
+      case Right(assets) =>
+        // THE PREFLIGHT COMES FIRST, before the collection is enumerated and long before
+        // anything is written. It never creates anything: `install-note-types` is the command
+        // that does that, explicitly and on its own.
+        NoteTypeInstaller.readiness[Refused](anki, assets).value.flatMap {
+          case Left(error)                    => IO.pure(SyncOutcome.CouldNotObserve(error))
+          case Right(problems) if problems.nonEmpty =>
+            IO.pure(SyncOutcome.NoteTypesNotReady(problems))
+          case Right(_) => reconcile(index, deckRoot, dryRun, anki)
+        }
+
+  /** Observe, plan, and — unless this is a dry run — apply. The note types have already been
+    * checked by the caller; nothing here re-checks them.
+    */
+  private def reconcile(
       index: VaultIndex,
       deckRoot: DeckPath,
       dryRun: Boolean,
@@ -741,6 +863,20 @@ object Main
     */
   private[cli] def describeSyncOutcome(outcome: SyncOutcome): Vector[String] =
     outcome match
+      case SyncOutcome.NoteTypesNotReady(problems) =>
+        Report.noteTypesNotReady(problems)
+
+      case SyncOutcome.NoteTypeDefinitionsUnreadable(errors) =>
+        Vector(
+          "",
+          "REFUSED: this tool's own note type definitions could not be read.",
+          "",
+        ) ++ errors.map("  " + _.describe) ++ Vector(
+          "",
+          "Nothing was written. These files ship with the tool, so this is a build or packaging",
+          "fault rather than anything about your vault or your collection.",
+        )
+
       case SyncOutcome.CouldNotObserve(error) =>
         Vector(
           "",
@@ -886,6 +1022,14 @@ object Main
     buildFailures ++ orphanNote
 
   private[cli] def verdict(outcome: SyncOutcome): Verdict = outcome match
+    case SyncOutcome.NoteTypesNotReady(problems) =>
+      Verdict.Refusal(
+        s"${problems.size} of this tool's note types are missing or incomplete in this collection"
+      )
+
+    case SyncOutcome.NoteTypeDefinitionsUnreadable(_) =>
+      Verdict.Refusal("this tool's own note type definitions could not be read")
+
     case SyncOutcome.CouldNotObserve(_) =>
       Verdict.Refusal("the collection could not be read")
 

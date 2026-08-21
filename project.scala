@@ -1,4 +1,17 @@
 //> using scala 3.8.4
+// THE FIVE NOTE TYPE DEFINITIONS ARE LOADED FROM THE CLASSPATH, so the directory holding them
+// has to be on it. Everything under `resources/` is copied there verbatim, which is what lets
+// `anki/NoteTypeAssets.scala` read `/note-types/<slug>/manifest.json` and the template and
+// stylesheet files that manifest names.
+//
+// THE WRAPPER DIRECTORY IS THE POINT, not tidiness. Pointing this at `./note-types` directly
+// would put `/basic/`, `/cloze/`, `/cloze-sequence/` and a bare `/README.md` at the ROOT of the
+// classpath, where a dependency shipping the same path would shadow ours — and a shadowed
+// template is not an error, it is a note type whose cards render someone else's markup.
+// Namespacing under `/note-types/` makes that collision implausible rather than merely
+// unlikely. The files were moved here from `obsidian-anki-custom-sync/note-types/` in the same
+// commit that added this line.
+//> using resourceDir ./resources
 //> using dep org.typelevel::laika-core:1.3.2
 //> using dep org.typelevel::cats-core:2.12.0
 //> using dep org.yaml:snakeyaml:2.6

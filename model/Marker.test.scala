@@ -249,9 +249,13 @@ class MarkerTest extends munit.FunSuite:
     *
     * WHAT THIS DOES NOT PROVE, stated so it is not read as more than it is: that
     * `Marker.FieldOrder` agrees with the note types installed in a real collection. The other
-    * half of that contract is `note-types/<slug>/manifest.json`, which `model/` cannot read —
-    * `model/` deliberately depends on nothing. The manifest-versus-Scala comparison belongs to
-    * the slice that writes the installer, and until it exists a disagreement is silent.
+    * half of that contract is `resources/note-types/<slug>/manifest.json`, which `model/`
+    * cannot read — `model/` deliberately depends on nothing. _Amended 2026-08-21: this used to
+    * end "the manifest-versus-Scala comparison belongs to the slice that writes the installer,
+    * and until it exists a disagreement is silent". That slice landed._ The comparison is
+    * `anki/NoteTypeAssets.test.scala`. What remains unproven is the last hop only: that the
+    * live collection matches the manifests, which `install-note-types` reports at run time and
+    * no test can settle.
     */
   test("every spec's field NAMES are exactly its note type's declared field order") {
     val k = aKey("A", "B")

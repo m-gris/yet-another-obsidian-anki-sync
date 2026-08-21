@@ -42,6 +42,21 @@ enum Command:
   /** Reconcile the vault against a collection. Requires a profile, explicitly. */
   case Sync(vault: VaultSelection, profile: String, deckRoot: DeckPath, dryRun: Boolean)
 
+  /** Put this tool's five note types into a collection, and report what is already there.
+    *
+    * NO VAULT, because it reads none: this is about the SHAPE of a collection rather than
+    * about any card in it. It still requires a profile, for the same reason `sync` does — the
+    * one command in this tool that changes a collection's shape must not be able to reach the
+    * wrong collection by omission.
+    *
+    * A SEPARATE COMMAND RATHER THAN SOMETHING `sync` DOES ON ITS OWN. `sync` refuses when the
+    * note types are not there and names this command; it never creates them itself. Creating a
+    * note type is a one-time act of setup that changes what the collection IS, and a tool that
+    * did it as a side effect of the first sync would alter the schema of somebody's collection
+    * without ever having been asked to.
+    */
+  case InstallNoteTypes(profile: String)
+
 object Cli:
 
   /** The vault, named explicitly or left to be chosen.
@@ -131,4 +146,12 @@ object Cli:
       ).mapN(Command.Sync.apply)
     }
 
-  val command: Opts[Command] = inspect orElse sync
+  private val installNoteTypes: Opts[Command] =
+    Opts.subcommand(
+      "install-note-types",
+      "Create this tool's note types in a collection, and report any that already differ.",
+    ) {
+      profileOpt.map(Command.InstallNoteTypes.apply)
+    }
+
+  val command: Opts[Command] = inspect orElse sync orElse installNoteTypes

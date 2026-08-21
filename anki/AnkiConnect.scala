@@ -116,12 +116,24 @@ object AnkiConnect:
     * a genuinely empty note produces the identical message.
     *
     * CONSEQUENCE, STATED PLAINLY BECAUSE IT IS A GAP AND NOT A DESIGN: [[AnkiError
-    * .UnknownField]] is therefore UNREACHABLE through this interpreter, while [[InMemoryAnki]]
-    * raises it on both write paths — so the two interpreters of the same algebra disagree
-    * about that part of the contract. Closing it needs a preflight that checks field names
-    * against each note type before any write, using `noteTypeNames`/`fieldNames`, which is
-    * NOT YET BUILT. Until it is, a wrong field name surfaces as an unhelpful "empty note"
-    * refusal on create, and on update as no error at all.
+    * .UnknownField]] is UNREACHABLE through this interpreter, while [[InMemoryAnki]] raises it
+    * on both write paths — so the two interpreters of the same algebra disagree about that part
+    * of the contract.
+    *
+    * _Amended 2026-08-21. This used to end "closing it needs a preflight … which is NOT YET
+    * BUILT". A preflight now exists and it is worth being exact about what it does and does not
+    * cover._ `obsidiananki.anki.NoteTypeInstaller.readiness` reads `noteTypeNames` and one
+    * `modelFieldNames` per note type, and `cli/Main.scala` runs it before a sync observes the
+    * collection: a note type that is absent, or that does not declare a field this tool writes,
+    * refuses the whole run before anything is written.
+    *
+    * WHAT REMAINS OPEN is narrower than it was. The preflight checks the five note types this
+    * tool OWNS against the field lists it declares; it does not check an individual write's
+    * field names against the note type it names. Those two coincide today, because every write
+    * is built by `CardSpec.fields` and `anki/NoteTypeAssets.test.scala` ties that to the
+    * manifests — but they are different claims, and if a write path ever built field names some
+    * other way, this interpreter would still report the wrong one as "cannot create note
+    * because it is empty" on create and as no error at all on update.
     */
   def classify(action: String, message: String): AnkiError =
     if message.startsWith("cannot create note because it is a duplicate") then
@@ -172,6 +184,68 @@ object AnkiConnect:
     */
   val cardIdsOfNote: Decoder[Vector[AnkiCardId]] =
     Decoder.instance(_.downField("cards").as[Vector[Long]].map(_.map(AnkiCardId.apply)))
+
+  /** One card template as `modelTemplates` reports it: `{"Front": "...", "Back": "..."}`.
+    *
+    * THE KEYS ARE CAPITALISED, and they are Anki's, not ours. Verified on 2026-08-21 by asking
+    * the running add-on for `3 way Concept-Descriptor` in profile `claude-POC-test`, which came
+    * back as an object keyed by template name whose values held exactly `Front` and `Back`.
+    * `createModel` wants the same capitalisation plus a `Name` key.
+    */
+  given Decoder[CardTemplate] = Decoder.forProduct2("Front", "Back")(CardTemplate.apply)
+
+  /** `modelStyling` answers `{"css": "..."}`, not a bare string.
+    *
+    * Verified the same way and on the same day, against `Cloze Sequence`. A decoder reading the
+    * response as a `String` would fail loudly, so this is a convenience rather than a guard —
+    * but the wrapper is easy to forget and the failure it produces names circe rather than
+    * Anki.
+    */
+  val modelStylingCss: Decoder[String] = Decoder.instance(_.downField("css").as[String])
+
+  /** Anki's refusal when `createModel` is given a name the collection already holds.
+    *
+    * VERBATIM, AND IT DOES NOT NAME THE MODEL — `__init__.py:1127` raises
+    * `Exception('Model name already exists')` and `web.py:290` puts `str(exception)` into the
+    * envelope unchanged. Both read out of the add-on installed on this machine rather than
+    * exercised, because exercising it means creating a model.
+    *
+    * NOT MATCHED IN [[classify]], deliberately. [[classify]] sees a message and never the
+    * request, so it could produce only a nameless error; `AnkiConnectClient.createNoteType`
+    * knows which name it asked for and does the mapping there.
+    */
+  val ModelNameAlreadyExists: String = "Model name already exists"
+
+  /** The `createModel` parameters for a note type.
+    *
+    * EVERY PARAMETER NAME HERE WAS READ OFF THE ADD-ON INSTALLED ON THIS MACHINE, not off the
+    * documentation: `__init__.py:1120` declares
+    * `createModel(self, modelName, inOrderFields, cardTemplates, css=None, isCloze=False)`, and
+    * `:1155-1156` reads `card['Front']` and `card['Back']` — capitalised, and required, since a
+    * missing key is a `KeyError`.
+    *
+    * `Name` IS SENT FOR EVERY TEMPLATE, and its absence would NOT be an error: `:1149-1151`
+    * silently substitutes `"Card N"`. That is why it is always sent — a template whose name is
+    * not the one the manifest records is a template `updateModelTemplates` can never find
+    * again, and its failure to find one is a clean-exit no-op rather than a refusal.
+    *
+    * THE TWO EMPTINESS CHECKS AT `:1122-1125` CANNOT FIRE, because [[NoteTypeSpec]] holds both
+    * lists as `NonEmptyVector`. That is the point of the type: a note type with no templates
+    * installs, looks present, and generates no cards.
+    *
+    * SEPARATE FROM THE CLIENT so that the exact body sent is testable without a socket, which
+    * is the same reason every other shape in this file is a pure function.
+    */
+  def createModelParams(spec: NoteTypeSpec): Json =
+    Json.obj(
+      "modelName" := spec.name,
+      "inOrderFields" := spec.fields.toVector,
+      "css" := spec.styling,
+      "isCloze" := spec.isCloze,
+      "cardTemplates" := spec.templates.toVector.map { (name, template) =>
+        Json.obj("Name" := name, "Front" := template.front, "Back" := template.back)
+      },
+    )
 
   /** `getDecks` answers `{"Deck::Name": [cardId, ...]}`. Inverted here to card -> deck. */
   val decksByCard: Decoder[Map[Long, String]] =

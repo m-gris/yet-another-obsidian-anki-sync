@@ -53,7 +53,7 @@ enum Marker:
     *
     * THE INVERSION THE AUTHOR MUST BE TOLD ONCE: EVERYTHING IN THE BODY THAT IS NOT A LIST
     * ITEM IS PRINTED ON THE QUESTION SIDE. Read off the templates rather than predicted —
-    * `note-types/cloze-sequence/templates/cloze-sequence.front.html:2-4` renders
+    * `resources/note-types/cloze-sequence/templates/cloze-sequence.front.html:2-4` renders
     * `<h4>{{Title}}</h4>` plus the WHOLE `{{Text}}` div, and its `:10-14` adds `hidden-cloze`
     * to `#text li` and binds nothing else. `styling.css:22-24` dims that div to `opacity: 0.5`
     * on the question side and the back template's `:46` restores it to 1, which says the same
@@ -110,14 +110,15 @@ object Marker:
     * add-on's own `apiReflect` action list was enumerated live on 2026-08-21 and holds
     * `modelFieldRename` and `modelTemplateRename` but nothing for the model itself. Re-running
     * `apiReflect` is what would confirm it.) The old names are recorded in
-    * `note-types/<type>/manifest.json` under `renamedFrom`, which is what lets an installer
-    * refuse rather than create a second, empty note type beside the populated one.
+    * `resources/note-types/<type>/manifest.json` under `renamedFrom`, which is what lets
+    * `anki/NoteTypeInstall.scala` refuse rather than create a second, empty note type beside
+    * the populated one.
     *
-    * THE OTHER HALF OF THIS CONTRACT IS `note-types/<slug>/manifest.json`, whose `name` key
-    * carries the same five strings. Nothing compares the two yet — the test that does (design
-    * document §4, "T1") belongs to the slice that writes the installer, because it must read
-    * those files and `model/` deliberately depends on nothing. Until then a disagreement is
-    * silent, and a silent disagreement means a write to a note type that does not exist.
+    * THE OTHER HALF OF THIS CONTRACT IS `resources/note-types/<slug>/manifest.json`, whose
+    * `name` key carries the same five strings. _Amended 2026-08-21: this previously said
+    * "nothing compares the two yet". Something now does._ `anki/NoteTypeAssets.test.scala`
+    * compares them as ordered vectors, and it lives there rather than here because it has to
+    * read files and `model/` deliberately depends on nothing.
     */
   object NoteTypes:
     val Basic: String             = "Obsidian Basic"
@@ -128,11 +129,15 @@ object Marker:
     /** The list note type: one card per note, whose items reveal one at a time. */
     val ClozeSequence: String = "Obsidian Cloze Sequence"
 
-    /** All five, IN THE ORDER THE MANIFEST DIRECTORIES ARE LISTED in `note-types/README.md`
-      * (`basic`, `basic-and-reversed`, `cloze`, `cloze-sequence`, `concept-descriptor`), so
-      * that the owed manifest-versus-Scala test can compare two ordered vectors rather than
-      * two sets. A set comparison would pass while the two disagreed about which name belongs
-      * to which directory.
+    /** All five, IN THE ORDER THE MANIFEST DIRECTORIES ARE LISTED in
+      * `resources/note-types/README.md` (`basic`, `basic-and-reversed`, `cloze`,
+      * `cloze-sequence`, `concept-descriptor`), so that `anki/NoteTypeAssets.test.scala` can
+      * compare two ORDERED vectors rather than two sets. A set comparison would pass while the
+      * two disagreed about which name belongs to which directory — which is how the wrong
+      * templates end up on a right-looking note type.
+      *
+      * It is also what `anki/NoteTypeAssets.scala`'s slug table is ordered by, and what the
+      * installer iterates.
       */
     val All: Vector[String] =
       Vector(Basic, BasicAndReversed, Cloze, ClozeSequence, ConceptDescriptor)
@@ -205,9 +210,11 @@ object Marker:
     * then a template change and not a field remapping, and a template copied from a stock type
     * needs no edit.
     *
-    * ⚠️ `anki/InMemoryAnki.scala`'s `defaultNoteTypes` comment claims these names are
-    * "UNVERIFIED against a live collection". That comment is STALE — see the two dates above —
-    * and correcting it belongs to whichever slice next edits that file.
+    * _Amended 2026-08-21. A paragraph here used to warn that `anki/InMemoryAnki.scala`'s
+    * `defaultNoteTypes` comment still called these names "UNVERIFIED against a live
+    * collection". That warning is itself out of date: the sentence it pointed at is gone, and
+    * `defaultNoteTypes` no longer restates any field name — it reads them out of
+    * `resources/note-types/`._
     */
   object BasicFields:
     val Front: String = "Front"
@@ -225,10 +232,17 @@ object Marker:
     * operand silently drops a field (see the warning there); growing a declaration is caught,
     * because `CardSpec.fields` can be compared against it.
     *
-    * NOTHING IN PRODUCTION READS THIS YET, and that is stated rather than hidden: the
-    * installer that will feed it to `createModel` is a later slice. What reads it today is
-    * `model/Marker.test.scala`, which compares it against what `CardSpec.fields` emits — the
-    * test that makes a truncating zip fail rather than pass quietly.
+    * WHAT READS THIS, AND WHAT DOES NOT, STATED EXACTLY — because the installer that landed on
+    * 2026-08-21 does NOT. `createModel` is fed from each type's `manifest.json` under `resources/note-types/`
+    * rather than from here, deliberately: the manifest also carries the templates, the
+    * stylesheet and the `isCloze` flag, and splitting one note type's definition across two
+    * sources is how the two come to disagree. This vector is therefore a DECLARATION that the
+    * manifests are checked against, not the thing that is installed.
+    *
+    * Two tests read it. `model/Marker.test.scala` compares it against what `CardSpec.fields`
+    * emits — the test that makes a truncating zip fail rather than pass quietly — and
+    * `anki/NoteTypeAssets.test.scala` compares it against the manifests. Together those two
+    * close the chain: what a card spec emits, what this declares, what gets installed.
     *
     * [[ContextField]] IS LAST ON EVERY TYPE, for three reasons. Anki's Sort Field defaults to
     * field 1, and a breadcrumb there would fill the Browse list with the same repeated prefix.

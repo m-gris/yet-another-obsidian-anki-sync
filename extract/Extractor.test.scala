@@ -991,7 +991,7 @@ class ExtractorTest extends munit.FunSuite:
   // WHAT THESE FOUR TESTS OBSERVE IS SPEC VALUES AND TAGS. The human's requirement is about
   // what a card DOES ON REVIEW — items revealed one at a time, on one schedule — and NOBODY
   // HAS RENDERED THIS CARD. Where a claim below is about what a person would see, it is
-  // written as a PREDICTION read off `note-types/cloze-sequence/templates/`,
+  // written as a PREDICTION read off `resources/note-types/cloze-sequence/templates/`,
   // never as an observation.
 
   /** Every reason this note refused to build, joined — the channel an author actually reads. */

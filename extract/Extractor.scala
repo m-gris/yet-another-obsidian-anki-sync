@@ -365,7 +365,7 @@ object Extractor:
           // `wrap` then drops the whole `<ul>`. Such a body PASSES B6 (the lead-in paragraph
           // carries it), PASSES `Body.fromExtracted` on the HTML, and PASSES a presence-only
           // check — and ships a note whose Text holds zero `li`, which
-          // `note-types/cloze-sequence/templates/cloze-sequence.front.html:11` then hides none
+          // `resources/note-types/cloze-sequence/templates/cloze-sequence.front.html:11` then hides none
           // of. Silent success.
           //
           // THE ORACLE IS `AsHtml`, NOT `AsText`, AND THE EQUIVALENCE IS EXACT RATHER THAN

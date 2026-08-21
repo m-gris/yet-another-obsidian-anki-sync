@@ -81,6 +81,49 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   def fieldNames(noteType: String): Result[Vector[String]] =
     call[Vector[String]]("modelFieldNames", Json.obj("modelName" := noteType))
 
+  /** VERIFIED LIVE 2026-08-21, read-only, in profile `claude-POC-test`: asked for a model the
+    * collection does not hold, `modelTemplates` answers `error: "model was not found: <name>"`
+    * with a null result — so [[AnkiConnect.classify]]'s `model was not found:` branch turns it
+    * into [[AnkiError.NoSuchNoteType]] rather than an unclassified refusal. `modelStyling`
+    * behaves identically, checked the same way.
+    */
+  def noteTypeTemplates(noteType: String): Result[Map[String, CardTemplate]] =
+    call[Map[String, CardTemplate]]("modelTemplates", Json.obj("modelName" := noteType))
+
+  def noteTypeStyling(noteType: String): Result[String] =
+    call("modelStyling", Json.obj("modelName" := noteType))(using AnkiConnect.modelStylingCss)
+
+  /** NOT ROUTED THROUGH `command`, AND NOT ASSERTED TO ANSWER ANYTHING IN PARTICULAR.
+    *
+    * `createModel` answers with the MODEL IT CREATED, not with null, so
+    * [[AnkiConnect.expectNoResult]] would reject a successful call. (Read out of the add-on's
+    * own source in this repository rather than exercised: `__init__.py:1159-1160` ends
+    * `mm.add(m); return m`, and `web.py:286` puts that return value straight into `result`.)
+    *
+    * The payload is therefore decoded as `Json` and discarded, and it is worth saying what that
+    * costs: `Decoder[Json]` accepts anything, so unlike `addTags` or `changeDeck` a change in
+    * what this action answers would NOT be noticed here. Asserting the shape of a model dict
+    * would mean pinning Anki's internal note-type representation, which is a far larger surface
+    * than this tool has any business depending on.
+    *
+    * WHAT IS RELIED ON IS THE ENVELOPE, NOT THE PAYLOAD: a refusal still arrives as `error`
+    * non-null, which [[AnkiConnect.envelope]] turns into a `Left` on every action alike.
+    *
+    * THE DUPLICATE-NAME REFUSAL IS RE-LABELLED HERE, AND ONLY HERE, because this is the only
+    * place that knows both halves. Anki's message is exactly `Model name already exists` and
+    * does not say WHICH model, so `AnkiConnect.classify` — which sees the message and never the
+    * parameters — could not name it. Mapping it here rather than leaving it as a bare
+    * [[AnkiError.Remote]] is what keeps the two interpreters of this algebra agreeing about the
+    * contract: [[InMemoryAnki]] raises [[AnkiError.NoteTypeExists]] for the same situation.
+    */
+  def createNoteType(spec: NoteTypeSpec): Result[Unit] =
+    call[Json]("createModel", AnkiConnect.createModelParams(spec)).void
+      .leftMap {
+        case AnkiError.Remote("createModel", AnkiConnect.ModelNameAlreadyExists) =>
+          AnkiError.NoteTypeExists(spec.name)
+        case other => other
+      }
+
   // ---------------------------------------------------------------- reading ----
 
   /** Anki's search syntax, where `*` is the wildcard. The prefix is safe to interpolate

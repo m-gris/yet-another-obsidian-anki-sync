@@ -55,9 +55,16 @@ keeps its review history.
 
 ## What is NOT done
 
-1. **Install the `Cloze Sequence` note type** into profile `claude-POC-test`, via AnkiConnect
-   `createModel`, from the four files in `note-types/cloze-sequence/`. Until this exists in the
-   collection, a `#flashcard/sequence` card cannot be written, let alone reviewed.
+1. **Run `install-note-types` against profile `claude-POC-test`.** _Amended 2026-08-21: the
+   CODE now exists — `anki/NoteTypeAssets.scala` reads the five definitions off the classpath
+   and `anki/NoteTypeInstall.scala` creates the missing ones through AnkiConnect's
+   `createModel`. Nobody has run it against a live collection._ Note what a live run will find:
+   both note types awaiting a hand-rename are still under their old names, so it will refuse and
+   create nothing until Marc has renamed them in Tools → Manage Note Types. And once renamed,
+   neither has the `Context` field — `modelFieldNames` was read on 2026-08-21 and answers
+   `[Title, Text]` for `Cloze Sequence` and `[Concept, Descriptor, Description, ThreeWay]` for
+   `3 way Concept-Descriptor` — so that field has to be added by hand as well. `sync` refuses
+   loudly in both cases rather than writing.
 2. **Sync and let Marc review a real progressively-revealed list card.** Sync a collision-free
    copy of the fixture vault — everything except `Patterns/Table-Edge-Cases.md`, which holds
    three deliberate duplicate identities.

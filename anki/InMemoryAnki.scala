@@ -25,9 +25,19 @@ import obsidiananki.model.{Marker, OwnedTag}
   *     tags. There is deliberately no way to create an untagged note here.
   */
 final class InMemoryAnki private (
-    noteTypes: Map[String, Vector[String]],
+    initialNoteTypes: Map[String, NoteTypeSpec],
     allowDuplicate: Boolean,
 ) extends Anki[[A] =>> Either[AnkiError, A]]:
+
+  /** MUTABLE, since 2026-08-21, because `createNoteType` exists.
+    *
+    * A collection's SHAPE can now change during a run, which it could not before. Modelling
+    * that is the whole point: `InMemoryAnki(noteTypes = Map.empty)` is a FRESH PROFILE, into
+    * which the installer must be able to create all five types and after which a write must
+    * succeed — and that sequence is precisely what could not be tested while this was a
+    * constructor-fixed map.
+    */
+  private var noteTypes: Map[String, NoteTypeSpec] = initialNoteTypes
 
   private final case class StoredNote(
       noteType: String,
@@ -79,8 +89,17 @@ final class InMemoryAnki private (
 
   def noteTypeNames: Either[AnkiError, Vector[String]] = Right(noteTypes.keys.toVector.sorted)
 
+  private def noteTypeAt(name: String): Either[AnkiError, NoteTypeSpec] =
+    noteTypes.get(name).toRight(AnkiError.NoSuchNoteType(name))
+
   def fieldNames(noteType: String): Either[AnkiError, Vector[String]] =
-    noteTypes.get(noteType).toRight(AnkiError.NoSuchNoteType(noteType))
+    noteTypeAt(noteType).map(_.fields.toVector)
+
+  def noteTypeTemplates(noteType: String): Either[AnkiError, Map[String, CardTemplate]] =
+    noteTypeAt(noteType).map(_.templates.toVector.toMap)
+
+  def noteTypeStyling(noteType: String): Either[AnkiError, String] =
+    noteTypeAt(noteType).map(_.styling)
 
   def findNotesByTagPrefix(prefix: String): Either[AnkiError, Vector[AnkiNoteId]] =
     val wanted = foldTag(prefix)
@@ -111,15 +130,27 @@ final class InMemoryAnki private (
 
   // ------------------------------------------------------------------ writes ----
 
+  /** ANKI REFUSES A DUPLICATE NAME; `createModel` is not an upsert.
+    *
+    * Modelled here because the alternative a fake could offer — quietly replacing the existing
+    * definition — would let a test prove that an installer "repairs" a note type when against a
+    * real collection it would simply be refused. The installer's own protection is that it
+    * reads `noteTypeNames` first and creates only what is absent; this is the backstop that
+    * makes a caller which skips that step fail rather than appear to work.
+    */
+  def createNoteType(spec: NoteTypeSpec): Either[AnkiError, Unit] =
+    if noteTypes.contains(spec.name) then Left(AnkiError.NoteTypeExists(spec.name))
+    else Right(noteTypes += spec.name -> spec)
+
   private def checkFields(
       noteType: String,
       fields: Vector[(String, String)],
   ): Either[AnkiError, Unit] =
     for
-      known <- noteTypes.get(noteType).toRight(AnkiError.NoSuchNoteType(noteType))
+      known <- noteTypeAt(noteType)
       _ <- fields
         .map(_._1)
-        .find(!known.contains(_))
+        .find(!known.fields.toVector.contains(_))
         .map(f => AnkiError.UnknownField(noteType, f))
         .toLeft(())
     yield ()
@@ -204,39 +235,42 @@ final class InMemoryAnki private (
 
 object InMemoryAnki:
 
-  /** THE FIVE NOTE TYPES THIS TOOL OWNS, with the field list each one declares.
+  /** A COLLECTION INTO WHICH THIS TOOL'S FIVE NOTE TYPES HAVE ALREADY BEEN INSTALLED, read
+    * from the very files `createModel` is given — each type's `manifest.json` under
+    * `resources/note-types/`, and the templates and stylesheets it names.
     *
-    * REPLACED THE FOUR STOCK TYPES ON 2026-08-21, and what the value MEANS changed with it.
-    * It used to hold `Basic`, `Basic (and reversed card)`, `Cloze` and
-    * `3 way Concept-Descriptor` as string literals — a model of a STOCK collection, which is
-    * what Marc's was. Marc then ruled that the tool writes only to note types it owns, so that
-    * changing a template can never reach the rest of his collection, and the four became five
-    * `Obsidian *` types (`model/Marker.scala`, `NoteTypes`). A fake still holding the stock
-    * four would have answered `NoSuchNoteType` to every write in the suite.
+    * DERIVED, NOT RESTATED, AND THE SOURCE OF THE DERIVATION MOVED ON 2026-08-21. It used to
+    * be `Marker.FieldOrder.byNoteType`, which was one step better than the string literals
+    * before it. Reading the manifests instead ties the fake to what a real collection will
+    * actually be given, which closes the disagreement that produces Anki's least helpful
+    * error: a wrong field name is reported on create as "cannot create note because it is
+    * empty", indistinguishable from a genuinely empty note, and on update as no error at all.
     *
-    * IT IS NOW DERIVED, NOT RESTATED. `Marker.FieldOrder.byNoteType` is the same map, and it
-    * is what an installer's `createModel` calls will be built from — so the fake and the
-    * installer cannot disagree about a field name, which is the disagreement that produces
-    * Anki's least helpful error: a wrong field name is reported on create as "cannot create
-    * note because it is empty", indistinguishable from a genuinely empty note, and on update
-    * as no error at all.
+    * THIS IS ALSO THE BROADEST DETECTOR THE PROJECT HAS for a manifest drifting away from
+    * `model/Marker.scala`, and it is worth knowing about because it is not obvious. The fake
+    * refuses a write naming a field its note type does not declare, so a manifest that lost
+    * `Context`, or a manifest whose `name` no longer matches `Marker.NoteTypes`, turns most of
+    * the suite red rather than one test. `anki/NoteTypeAssets.test.scala` is what turns that
+    * into a message a reader can act on.
     *
-    * ⚠️ IT NO LONGER MODELS AN UNINSTALLED COLLECTION, and that is a real loss, named rather
-    * than hidden. `extract/FixtureVault.test.scala` used to opt the `Cloze Sequence` type in
-    * at the call site precisely so that "the collection does not have this type yet" stayed
-    * true and visible — because nothing in the production path checks, before planning, that
-    * the collection HAS the types it is about to write to. `noteTypeNames` exists on the
-    * algebra and grep still finds no production caller. That gap is unchanged and unclosed;
-    * what changed is that this value no longer demonstrates it.
+    * IT THROWS IF THE FILES CANNOT BE READ, deliberately and with every error named. There is
+    * no honest fallback: a fake built from a partially-loaded set of note types would let tests
+    * pass while asserting against a collection shape that does not exist.
     *
-    * THE FIELD NAMES THEMSELVES were verified against a live collection via `modelFieldNames`
-    * on 2026-08-19 and again on 2026-08-21 in profile `claude-POC-test`: stock `Basic` is
-    * `[Front, Back]` and stock `Cloze` is `[Text, Back Extra]`. This comment previously
-    * described them as "UNVERIFIED against a live collection", which was stale on both dates.
+    * ⚠️ IT DOES NOT MODEL AN UNINSTALLED COLLECTION — but that is no longer a loss, because
+    * `InMemoryAnki(noteTypes = Map.empty)` now does, and the installer's tests use it. Before
+    * `createNoteType` existed there was no way to get from one to the other.
     */
-  val defaultNoteTypes: Map[String, Vector[String]] = Marker.FieldOrder.byNoteType
+  val defaultNoteTypes: Map[String, NoteTypeSpec] =
+    NoteTypeAssets.all match
+      case Right(assets) => assets.map(asset => asset.spec.name -> asset.spec).toMap
+      case Left(errors) =>
+        throw new IllegalStateException(
+          "the note type definitions under resources/note-types/ could not be loaded: " +
+            errors.map(_.describe).mkString("; ")
+        )
 
   def apply(
-      noteTypes: Map[String, Vector[String]] = defaultNoteTypes,
+      noteTypes: Map[String, NoteTypeSpec] = defaultNoteTypes,
       allowDuplicate: Boolean = true,
   ): InMemoryAnki = new InMemoryAnki(noteTypes, allowDuplicate)

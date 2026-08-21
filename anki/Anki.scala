@@ -33,6 +33,36 @@ final case class DeckPath(segments: NonEmptyVector[String]):
   /** Anki's own hierarchy separator. */
   def render: String = segments.toVector.mkString("::")
 
+/** One card template's two sides, as Anki holds them.
+  *
+  * THE TEMPLATE'S NAME IS DELIBERATELY NOT IN HERE. `modelTemplates` returns templates keyed by
+  * name, while `createModel` takes them as an ordered list — the name is a key in one shape and
+  * a positional field in the other. Keeping it outside means neither shape carries a redundant
+  * copy that could disagree with its own key.
+  */
+final case class CardTemplate(front: String, back: String)
+
+/** A note type as `createModel` needs it: every file already resolved to its TEXT.
+  *
+  * `fields` AND `templates` ARE NON-EMPTY BY CONSTRUCTION. Anki has no note type with no
+  * fields, and a note type with no templates generates no cards at all — something that looks
+  * installed and produces nothing, which is this project's signature failure shape. Made
+  * unrepresentable rather than checked.
+  *
+  * `templates` IS AN ORDERED VECTOR OF (name, template) PAIRS, never a map, because the order
+  * IS the card ordinal in Anki and a map carries no order.
+  *
+  * `isCloze` IS CARRIED, NEVER INFERRED — see [[NoteTypeManifest]] for the note type that makes
+  * every heuristic get it backwards.
+  */
+final case class NoteTypeSpec(
+    name: String,
+    isCloze: Boolean,
+    fields: NonEmptyVector[String],
+    templates: NonEmptyVector[(String, CardTemplate)],
+    styling: String,
+)
+
 /** A note to create.
   *
   * TAGS ARE PART OF CREATION, NOT A FOLLOW-UP. `addNote` accepts them inline, and B12
@@ -77,6 +107,27 @@ enum AnkiError:
   case TagContainsWhitespace(tag: String)
   case NoSuchNote(id: AnkiNoteId)
   case NoSuchNoteType(name: String)
+
+  /** `createModel` was asked for a name the collection already holds.
+    *
+    * ANKI REFUSES THIS; `createModel` IS NOT AN UPSERT. Both interpreters raise it, which is
+    * worth stating because the sibling case [[UnknownField]] does NOT have that property.
+    *
+    * THE WIRE MESSAGE IS EXACTLY `Model name already exists`, AND IT DOES NOT NAME THE MODEL.
+    * Established in this repository by reading the running add-on's own source rather than by
+    * exercising it (creating a model is a write, and the slice that added this had read-only
+    * access to a live collection): `__init__.py:1126-1127` raises
+    * `Exception('Model name already exists')`, and `web.py:289-290` puts `str(exception)` into
+    * the envelope's `error` field verbatim. So the NAME in this case comes from the request
+    * rather than from the response, which is why the mapping lives in
+    * `AnkiConnectClient.createNoteType` and not in `AnkiConnect.classify` — `classify` sees the
+    * message and never the parameters.
+    *
+    * NEITHER INTERPRETER REACHES IT ON THE HAPPY PATH: [[obsidiananki.anki.NoteTypeInstaller]]
+    * reads `noteTypeNames` and creates only what is absent, so getting here means a note type
+    * appeared between the read and the write, or a caller skipped the survey.
+    */
+  case NoteTypeExists(name: String)
   case UnknownField(noteType: String, field: String)
   case DuplicateNote(firstFieldChecksumOf: String)
 
@@ -108,6 +159,33 @@ trait Anki[F[_]]:
 
   /** Field names of a note type, in the collection's own order. */
   def fieldNames(noteType: String): F[Vector[String]]
+
+  /** The card templates of a note type, KEYED BY TEMPLATE NAME.
+    *
+    * A MAP AND NOT AN ORDERED VECTOR, on purpose. AnkiConnect's `modelTemplates` answers with a
+    * JSON OBJECT keyed by template name, and a JSON object carries no order that this tool is
+    * entitled to rely on — depending on the order circe happened to preserve would be a bet on
+    * an undocumented property of somebody else's serialiser. Card ORDER therefore comes from
+    * [[NoteTypeSpec.templates]], which is ours; what comes back from a collection is only ever
+    * compared by name.
+    */
+  def noteTypeTemplates(noteType: String): F[Map[String, CardTemplate]]
+
+  /** A note type's complete stylesheet, exactly as the collection holds it. */
+  def noteTypeStyling(noteType: String): F[String]
+
+  /** Create a note type. NOT AN UPSERT — Anki refuses a name that already exists.
+    *
+    * This is the one operation in the algebra that changes the SHAPE of a collection rather
+    * than its contents, and the reason it is here is that without it a fresh profile cannot be
+    * synced into at all: the first `addNote` fails because the note type does not exist.
+    *
+    * THERE IS DELIBERATELY NO `updateNoteType`. Repairing a note type in place means overwriting
+    * templates and a stylesheet a person may have edited, and the safe default this tool takes
+    * is that nothing it did not create is silently overwritten — see
+    * [[obsidiananki.anki.NoteTypeInstaller]], which reports differences and changes nothing.
+    */
+  def createNoteType(spec: NoteTypeSpec): F[Unit]
 
   /** Every note carrying a tag under the given prefix.
     *

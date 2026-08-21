@@ -49,11 +49,20 @@ class ExecutorInterruptionTest extends munit.FunSuite:
 
     def noteTypeNames: Result[Vector[String]]                       = underlying.noteTypeNames
     def fieldNames(noteType: String): Result[Vector[String]]        = underlying.fieldNames(noteType)
+    def noteTypeTemplates(noteType: String): Result[Map[String, CardTemplate]] =
+      underlying.noteTypeTemplates(noteType)
+    def noteTypeStyling(noteType: String): Result[String] = underlying.noteTypeStyling(noteType)
     def findNotesByTagPrefix(prefix: String): Result[Vector[AnkiNoteId]] =
       underlying.findNotesByTagPrefix(prefix)
     def notesInfo(ids: Vector[AnkiNoteId]): Result[Vector[ObservedNote]] = underlying.notesInfo(ids)
     def cardsOf(ids: Vector[AnkiNoteId]): Result[Vector[AnkiCardId]]     = underlying.cardsOf(ids)
     def deckOf(card: AnkiCardId): Result[Option[DeckPath]]               = underlying.deckOf(card)
+
+    // COUNTED AS A WRITE, because it is one — it changes the SHAPE of the collection. Nothing
+    // in this suite's plans reaches it (a plan holds card actions, never note type actions),
+    // so it is here to satisfy the algebra and to be interrupted correctly if that ever
+    // changes, rather than because a test drives it today.
+    def createNoteType(spec: NoteTypeSpec): Result[Unit] = write(underlying.createNoteType(spec))
 
     def addNote(note: NewNote): Result[AnkiNoteId] = write(underlying.addNote(note))
     def updateNoteFields(id: AnkiNoteId, fields: Vector[(String, String)]): Result[Unit] =

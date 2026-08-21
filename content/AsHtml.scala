@@ -497,7 +497,7 @@ object AsHtml:
     * is a rule this project picked, not markdown's rule reproduced.
     *
     * THE REASON IS A PREDICTION AND IS WORDED AS ONE. NOBODY HAS RENDERED THIS CARD. Read off
-    * `note-types/cloze-sequence/styling.css`: hiding is `.hidden-cloze { color: transparent;
+    * `resources/note-types/cloze-sequence/styling.css`: hiding is `.hidden-cloze { color: transparent;
     * font-size: 0 }` (lines 12-15) with `.hidden-cloze::before { content: "(...)"; font-size:
     * 20px }` (lines 16-20) — NOT `display: none`. A `<p>`'s user-agent `margin: 1em 0` resolves
     * against its own computed font-size, so `<li><p>x</p></li>` would give an item zero margin

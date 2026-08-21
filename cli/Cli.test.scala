@@ -244,3 +244,32 @@ class CliTest extends munit.FunSuite:
     )
     assert(Report.plan(plan).mkString("\n").contains("NOT APPLIED"))
   }
+
+  // ================================================ install-note-types ====
+
+  test("install-note-types parses and carries the profile") {
+    assertEquals(
+      parse("install-note-types", "--profile", "claude-POC-test"),
+      Right(Command.InstallNoteTypes("claude-POC-test")),
+    )
+  }
+
+  /** THE SAME GUARDRAIL AS `sync`, and for a stronger reason: this is the only command that
+    * changes what a collection IS rather than what it holds. Reaching the wrong one because a
+    * flag was forgotten is exactly the failure the argument exists to prevent.
+    */
+  test("install-note-types WITHOUT a profile is a usage error, not a default") {
+    val result = parse("install-note-types")
+    assert(result.isLeft, "install-note-types ran without a profile")
+    assert(result.left.exists(_.contains("profile")), s"error does not name the profile: $result")
+  }
+
+  /** IT TAKES NO VAULT, because it reads none. Accepting `--vault-path` would suggest the
+    * command's effect depended on which vault was named, and it does not.
+    */
+  test("install-note-types takes no vault") {
+    assert(
+      parse("install-note-types", "--profile", "p", "--vault-path", existingDir).isLeft,
+      "a vault was accepted by a command that reads no vault",
+    )
+  }

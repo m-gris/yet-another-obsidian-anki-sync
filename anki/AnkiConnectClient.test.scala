@@ -215,3 +215,88 @@ class AnkiConnectClientTest extends munit.FunSuite:
     anki.addTags(Vector.empty, Vector(tag("a::b"))).get
     anki.changeDeck(Vector.empty, deck).get
   }
+
+  // ================================================ note types ====
+
+  /** THE ROUND TRIP, through the real request bodies and the real decoders.
+    *
+    * WHAT IT CATCHES that a pure test on `createModelParams` cannot: the fake server reads
+    * `modelName`, `inOrderFields`, `cardTemplates`, `css` and `isCloze` — the parameter names
+    * transcribed from the installed add-on's own source — so a client sending any of them under
+    * a different name creates a note type with no fields, no templates, or the wrong name, and
+    * the read-back below disagrees.
+    *
+    * A FRESH PROFILE, deliberately. `FakeAnkiConnect.State` starts with this tool's five note
+    * types already installed, which is what every other test here assumes; emptying it is what
+    * makes this the case the slice exists for.
+    */
+  test("a note type is created and reads back with the fields, templates and css it was given") {
+    val (state, anki) = fixture
+    state.models = Map.empty
+
+    val spec = NoteTypeSpec(
+      name = "Obsidian Basic",
+      isCloze = false,
+      fields = NonEmptyVector.of("Front", "Back", "Context"),
+      templates = NonEmptyVector.of(
+        "Card 1" -> CardTemplate("{{Front}}", "{{FrontSide}}<hr id=answer>{{Back}}")
+      ),
+      styling = ".card { font-size: 20px; }",
+    )
+
+    assertEquals(anki.noteTypeNames.get, Vector.empty)
+    anki.createNoteType(spec).get
+
+    assertEquals(anki.noteTypeNames.get, Vector("Obsidian Basic"))
+    assertEquals(anki.fieldNames("Obsidian Basic").get, Vector("Front", "Back", "Context"))
+    assertEquals(anki.noteTypeStyling("Obsidian Basic").get, ".card { font-size: 20px; }")
+    assertEquals(
+      anki.noteTypeTemplates("Obsidian Basic").get,
+      Map("Card 1" -> CardTemplate("{{Front}}", "{{FrontSide}}<hr id=answer>{{Back}}")),
+    )
+  }
+
+  /** `isCloze` MUST SURVIVE THE WIRE. It is the one flag no heuristic gets right — `Cloze
+    * Sequence` has "Cloze" in its name, defines `.cloze` in its stylesheet, and is not a cloze
+    * note type — so a client that dropped it would install the wrong kind of note type while
+    * every other assertion still passed.
+    */
+  test("isCloze reaches the collection") {
+    val (state, anki) = fixture
+    state.models = Map.empty
+    val base = NoteTypeSpec(
+      "X",
+      isCloze = false,
+      NonEmptyVector.of("Text"),
+      NonEmptyVector.of("Cloze" -> CardTemplate("{{cloze:Text}}", "{{cloze:Text}}")),
+      "",
+    )
+    anki.createNoteType(base.copy(name = "Plain", isCloze = false)).get
+    anki.createNoteType(base.copy(name = "Clozed", isCloze = true)).get
+    assertEquals(state.models("Plain").isCloze, false)
+    assertEquals(state.models("Clozed").isCloze, true)
+  }
+
+  /** `createModel` IS NOT AN UPSERT, and the refusal is re-labelled with the name the request
+    * asked for — Anki's own message is `Model name already exists` and does not say which.
+    *
+    * This is what keeps the two interpreters of this algebra agreeing: `InMemoryAnki` raises
+    * the same case for the same situation.
+    */
+  test("creating a note type that already exists is refused, and the refusal names it") {
+    val (_, anki) = fixture
+    val spec = NoteTypeSpec(
+      name = "Obsidian Basic",
+      isCloze = false,
+      fields = NonEmptyVector.of("Front"),
+      templates = NonEmptyVector.of("Card 1" -> CardTemplate("{{Front}}", "{{Front}}")),
+      styling = "",
+    )
+    assertEquals(anki.createNoteType(spec).refusal, AnkiError.NoteTypeExists("Obsidian Basic"))
+  }
+
+  test("asking for the templates or the styling of a note type that is not there names it") {
+    val (_, anki) = fixture
+    assertEquals(anki.noteTypeTemplates("Nope").refusal, AnkiError.NoSuchNoteType("Nope"))
+    assertEquals(anki.noteTypeStyling("Nope").refusal, AnkiError.NoSuchNoteType("Nope"))
+  }

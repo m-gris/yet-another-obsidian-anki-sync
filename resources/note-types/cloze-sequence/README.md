@@ -68,8 +68,9 @@ heading chain is empty; `{{#Context}}` then emits nothing at all.
 two under `templates/`. It is a plain note type: no add-on, no Python, and it reviews on
 AnkiMobile and AnkiDroid.
 
-**The installer does not exist yet.** These files are a specification and a backup until the
-slice that writes it lands.
+The installer is `anki/NoteTypeInstall.scala`, driven by the `install-note-types` command. It
+creates only note types that are ABSENT; one that is present and differs from these files is
+reported and left alone. **It has not been run against a live collection by any agent.**
 
 **Template names must match the collection exactly.** AnkiConnect's `updateModelTemplates`
 looks each template up by name and silently skips names it does not recognise (read out of the

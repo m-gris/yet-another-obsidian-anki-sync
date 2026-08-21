@@ -672,3 +672,173 @@ class MainTest extends munit.FunSuite:
 
     assertEquals(result, Right(root))
   }
+
+  // ================================================ the note type preflight ====
+
+  /** THE GAP THIS SLICE CLOSES, at the level of the shell.
+    *
+    * A profile with none of this tool's note types in it is what a NEW Anki profile looks like.
+    * Before the preflight existed, `sync` computed a plan against it, printed the plan as
+    * though it would work, and then failed on every single note.
+    *
+    * ASSERTED ON THE COLLECTION, not only on the outcome value: nothing may be written.
+    */
+  test("sync REFUSES a collection that does not have this tool's note types, and writes nothing") {
+    val (state, anki) = fixture()
+    state.models = Map.empty
+
+    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, anki)
+      .unsafeRunSync()
+
+    outcome match
+      case Main.SyncOutcome.NoteTypesNotReady(problems) =>
+        assertEquals(problems.size, Marker.NoteTypes.All.size)
+      case other => fail(s"expected NoteTypesNotReady, got $other")
+
+    assertEquals(state.notes.size, 0, "notes were written to a collection with no note types")
+    assertEquals(Main.exitCodeFor(Main.verdict(outcome)), ExitCode(2))
+  }
+
+  /** THE SILENT ONE. A note type that EXISTS but lacks a field this tool writes takes an update
+    * happily and stores nothing — Anki reports an unrecognised field name on update as no error
+    * at all. So the preflight looks at fields, not merely at names.
+    *
+    * The shape is not hypothetical: verified live, read-only, on 2026-08-21 in profile
+    * `claude-POC-test`, `modelFieldNames` for `Cloze Sequence` answers `[Title, Text]` and for
+    * `3 way Concept-Descriptor` `[Concept, Descriptor, Description, ThreeWay]` — NEITHER has
+    * `Context`. Renaming those two by hand will therefore not, on its own, make them writable.
+    */
+  test("sync REFUSES when a note type is present but lacks a field this tool writes") {
+    val (state, anki) = fixture()
+    val basic = state.models(Marker.NoteTypes.Basic)
+    state.models += Marker.NoteTypes.Basic -> basic.copy(
+      fields = NonEmptyVector.of(Marker.BasicFields.Front, Marker.BasicFields.Back)
+    )
+
+    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, anki)
+      .unsafeRunSync()
+
+    outcome match
+      case Main.SyncOutcome.NoteTypesNotReady(problems) =>
+        assertEquals(
+          problems,
+          Vector(
+            NoteTypeProblem.FieldsMissing(
+              Marker.NoteTypes.Basic,
+              NonEmptyVector.one(Marker.ContextField),
+            )
+          ),
+        )
+      case other => fail(s"expected NoteTypesNotReady, got $other")
+
+    assertEquals(state.notes.size, 0, "a note was written to a note type missing a field")
+  }
+
+  /** A DRY RUN GETS NO EXEMPTION. Printing a plan that cannot be applied is the less useful
+    * answer, and it is the one that reads as though everything is fine.
+    */
+  test("a dry run is refused too when the note types are not there") {
+    val (_, anki) = fixture()
+    val (state2, anki2) = fixture()
+    state2.models = Map.empty
+    assert(
+      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, anki2)
+        .unsafeRunSync()
+        .isInstanceOf[Main.SyncOutcome.NoteTypesNotReady],
+      "a dry run planned against a collection it could not write to",
+    )
+    // Control: the same dry run against a collection that IS ready still plans.
+    assert(
+      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, anki)
+        .unsafeRunSync()
+        .isInstanceOf[Main.SyncOutcome.PlannedOnly],
+      "the preflight refused a collection that was ready",
+    )
+  }
+
+  test("the refusal names each missing note type and points at install-note-types") {
+    val lines = Report
+      .noteTypesNotReady(Vector(NoteTypeProblem.Missing("Obsidian Basic", None)))
+      .mkString("\n")
+    assert(lines.contains("Obsidian Basic"), lines)
+    assert(lines.contains("install-note-types"), s"no remedy is named:\n$lines")
+    assert(lines.contains("Nothing was written"), lines)
+  }
+
+  /** "Install it" and "rename it" are different remedies. Doing the first when the second was
+    * needed leaves a populated note type stranded beside an empty duplicate, with no error.
+    */
+  test("a note type still under its old name is reported as a RENAME, not as missing") {
+    val lines = Report
+      .noteTypesNotReady(
+        Vector(NoteTypeProblem.Missing("Obsidian Cloze Sequence", Some("Cloze Sequence")))
+      )
+      .mkString("\n")
+    assert(lines.contains("Cloze Sequence"), lines)
+    assert(lines.contains("RENAMED"), s"the message does not say to rename it:\n$lines")
+  }
+
+  // ================================================ install-note-types ====
+
+  def installOutcome(anki: AnkiConnectClient[IO]): InstallOutcome =
+    NoteTypeAssets.all match
+      case Left(errors) => fail(errors.map(_.describe).mkString("; "))
+      case Right(assets) =>
+        NoteTypeInstaller.install[Main.Refused](anki, assets).value.unsafeRunSync() match
+          case Right(outcome) => outcome
+          case Left(error)    => fail(s"install refused: $error")
+
+  test("install-note-types creates every note type a fresh profile is missing") {
+    val (state, anki) = fixture()
+    state.models = Map.empty
+
+    val outcome = installOutcome(anki)
+    assertEquals(outcome.created.toSet, Marker.NoteTypes.All.toSet)
+    assertEquals(state.models.keySet, Marker.NoteTypes.All.toSet)
+    assertEquals(Main.exitCodeForInstall(outcome), ExitCode.Success)
+  }
+
+  /** THE ONE OUTCOME WHERE NOTHING IS CREATED AT ALL, and the exit code has to say so: 2 means
+    * nothing was written, and here that is true.
+    */
+  test("install-note-types refuses entirely, and reports 2, while a hand-rename is pending") {
+    val (state, anki) = fixture()
+    val sequence = state.models(Marker.NoteTypes.ClozeSequence)
+    state.models = Map("Cloze Sequence" -> sequence.copy(name = "Cloze Sequence"))
+
+    val outcome = installOutcome(anki)
+    assertEquals(outcome.blockedByRename, Vector("Cloze Sequence" -> "Obsidian Cloze Sequence"))
+    assertEquals(state.models.keySet, Set("Cloze Sequence"), "something was created despite the refusal")
+    assertEquals(Main.exitCodeForInstall(outcome), ExitCode(2))
+
+    val lines = Report.noteTypes(outcome).mkString("\n")
+    assert(lines.contains("NOTHING was created"), s"the refusal does not say so:\n$lines")
+    assert(lines.contains("Manage Note Types"), s"the manual remedy is not named:\n$lines")
+  }
+
+  /** THE SAFE DEFAULT, at the level of the shell: reported, not repaired, and the exit code is
+    * 1 rather than 0 so a script notices.
+    */
+  test("a note type that differs is reported, left alone, and reported as a problem") {
+    val (state, anki) = fixture()
+    val basic = state.models(Marker.NoteTypes.Basic)
+    val edited = basic.copy(styling = ".card { color: rebeccapurple; }")
+    state.models += Marker.NoteTypes.Basic -> edited
+
+    val outcome = installOutcome(anki)
+    assertEquals(state.models(Marker.NoteTypes.Basic).styling, edited.styling, "the styling was overwritten")
+    assertEquals(Main.exitCodeForInstall(outcome), ExitCode.Error)
+
+    val lines = Report.noteTypes(outcome).mkString("\n")
+    assert(lines.contains("NOT repaired"), s"the report does not say it changed nothing:\n$lines")
+    assert(lines.contains("stylesheet differs"), s"the difference is not named:\n$lines")
+  }
+
+  test("an unchanged collection reports every note type and exits clean") {
+    val (_, anki) = fixture()
+    val outcome = installOutcome(anki)
+    assertEquals(outcome.created, Vector.empty)
+    assertEquals(Main.exitCodeForInstall(outcome), ExitCode.Success)
+    val lines = Report.noteTypes(outcome).mkString("\n")
+    Marker.NoteTypes.All.foreach(n => assert(lines.contains(n), s"'$n' is not in the report:\n$lines"))
+  }

@@ -33,21 +33,22 @@ Long messages must go via `--file`; the shell has an alias-guard hook that block
 
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
-`scala-cli test <tool dir>` runs everything. **305 tests, 0 failures, 0 warnings** as of 2026-08-20.
+`scala-cli test <tool dir>` runs everything. **472 tests, 0 failures, 0 warnings** as of 2026-08-21.
 
 ---
 
 ## State: what is done
 
-Everything except orphan suspension, a field-name preflight, and the `prune` command — see
-*Open items*. The reading and writing paths both work end to end against a real collection.
+Everything except orphan suspension, a per-write field-name preflight, and the `prune` command
+— see *Open items*. The reading and writing paths both work end to end against a real
+collection.
 
 - `parser/ObsidianSyntax.scala` — Obsidian dialect (wikilinks, embeds, highlights, task-list rejection) and **the canonical `markupParser`**. Build parsers only from there.
 - `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (the six markers), `CardSpec` (the six card shapes).
 - `anki/` — the `Anki[F]` algebra; `InMemoryAnki`, a working fake that **enforces Anki's real constraints**; and, since 2026-08-19, `AnkiConnectClient` over http4s/Ember plus `FakeAnkiConnect`, an in-process fake AnkiConnect **server** that reproduces the traps rather than the happy path.
 - `plan/` — `VaultScan`, `SyncAction`, `Planner`, `Executor`/`Observer`.
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
-- `cli/` — `inspect` and `sync` both work. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault.
+- `cli/` — `inspect`, `sync` and `install-note-types`. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault. `install-note-types` (added 2026-08-21) creates this tool's five note types from `resources/note-types/`; it has NOT been run against a live collection by any agent. `sync` refuses before observing when those note types are missing or lack a field it writes.
 
 Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 53 cards, 1 expected failure, 3 deliberate duplicate keys, exit 2.
 
@@ -206,7 +207,7 @@ Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MOD
    changes every content hash once — an UPDATE for every note, so scheduling survives, but the
    run will report the lot.
 2. **Suspend orphans.** Ruled 2026-08-19 and **not yet built**: `Anki[F]` has no `suspend`/`unsuspend` operation, so this is new algebra plus `InMemoryAnki` plus the `AnkiConnect` actions (verified present: `suspend`, `unsuspend`, `suspended`, `areSuspended`). Note the return trip — `Unflag` must unsuspend, and unlike a deck move it does not come free from the existing deck-difference logic.
-3. **Check field names before writing.** `AnkiError.UnknownField` is raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, so the two interpreters of one algebra disagree about the contract. It cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note. Needs a preflight using `noteTypeNames`/`fieldNames`, once per note type.
+3. **Check field names before writing.** _Partly done, 2026-08-21._ `sync` now runs `NoteTypeInstaller.readiness` before it observes the collection — one `modelNames` plus one `modelFieldNames` per note type — and refuses the whole run when a note type is absent or does not declare a field this tool writes. What is still open is narrower: nothing checks an INDIVIDUAL write's field names against the note type it names. The two coincide today, because every write is built by `CardSpec.fields` and `anki/NoteTypeAssets.test.scala` ties that to the manifests. `AnkiError.UnknownField` is still raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, because it cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note.
 4. **The `prune` command** — reads `orphaned::` tags. v0-adjacent.
-5. **Repair-in-place of an existing note type is untested.** The live checks *created* a correct note type on a clean profile rather than repairing the defective one in `POC-test`, which still has the back-side template defect.
+5. **Repair-in-place of an existing note type is NOT BUILT, and that is now a ruling rather than a gap.** _Amended 2026-08-21._ `install-note-types` creates note types that are ABSENT and, for one that is present and differs from `resources/note-types/`, REPORTS the difference and changes nothing. There is no `--repair`, not even behind a flag: repairing means sending a template and a stylesheet over ones a person may have edited by hand in Anki, and only that person knows whether the repository's version is the one they want. If repair is ever built, `updateModelTemplates` looks templates up BY NAME and silently ignores names it does not recognise, so a wrong name is a repair that reports success and changes nothing.
 6. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.
