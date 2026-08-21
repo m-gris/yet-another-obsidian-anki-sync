@@ -3,7 +3,8 @@ package obsidiananki.plan
 import cats.MonadError
 import cats.syntax.all.*
 import obsidiananki.anki.*
-import obsidiananki.model.{OwnedTag, TagCodec}
+import cats.data.NonEmptyVector
+import obsidiananki.model.{KeyError, OwnedTag, TagCodec}
 
 // Reading Anki's current state, and carrying out a plan. Both are written against the
 // algebra rather than a concrete client, so the same code runs against the in-memory
@@ -43,14 +44,76 @@ object Observer:
       ids   <- anki.findNotesByTagPrefix(s"${OwnedTag.SrcPrefix}::")
       notes <- anki.notesInfo(ids)
       decks <- notes.traverse(n => firstDeckOf(anki, n.id))
-    yield ObservedState(
-      notes.zip(decks).flatMap { (note, deck) =>
-        note.tags
-          .find(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.SrcPrefix}::"))
-          .flatMap(TagCodec.decode(_).toOption)
+    yield
+      val resolutions = notes.zip(decks).map(resolve)
+      ObservedState(
+        notes = resolutions.collect { case Right(card) => card },
+        unresolved = resolutions.collect { case Left(problem) => problem },
+      )
+
+  /** Place ONE note, or say why it cannot be placed. Never silently neither.
+    *
+    * ═══ WHY THIS IS A PARTITION AND NOT A FILTER ═══
+    *
+    * This was `.find(…).flatMap(TagCodec.decode(_).toOption).map(…)` — a chain in which BOTH
+    * steps could drop the note without a word. `.find` took an arbitrary tag when a note carried
+    * several, and `.toOption` deleted the decoder's error outright. A dropped note is not merely
+    * mis-filed: it is absent from `ObservedState`, and therefore never updated, never flagged as
+    * gone, never prunable — while the planner, seeing no note for that key, creates a SECOND one.
+    * The note holding the review history goes quiet and diverges, reported by nothing.
+    *
+    * `ObservedState.byKey`'s own docstring already condemned exactly this outcome for the case
+    * of two notes claiming one identity. The rule was written down and broken eleven lines away,
+    * which is why the shape matters more than the two fixes: every note the query returned now
+    * lands in exactly one side of an `Either`, so a future edit cannot reintroduce a silent drop
+    * without deleting a branch that has to be written on purpose.
+    *
+    * ═══ THE CASE-FOLDING ASYMMETRY, WHICH IS DELIBERATE ═══
+    *
+    * The tag is FOUND case-insensitively and DECODED case-sensitively, and the difference is not
+    * an oversight. `OwnedTag.isOwned` treats `SRC::x` as ours precisely because Anki cannot tell
+    * it from `src::x`, so a hand-typed capitalised tag must be recognised as an attempt at
+    * identity rather than passed over as somebody else's tag. It then fails to decode and is
+    * REPORTED — which is the point. Matching case-sensitively here would leave such a note
+    * looking like a note this tool has nothing to do with, and it would vanish again.
+    */
+  private def resolve(note: ObservedNote, deck: Option[DeckPath]): Either[PlanError, ObservedCard] =
+    val prefix = s"${OwnedTag.SrcPrefix}::"
+    note.tags.filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(prefix)) match
+      case Vector(only) =>
+        TagCodec
+          .decode(only)
+          .left
+          .map(err => PlanError.UnreadableIdentityInAnki(note.id, only, reasonFor(err)))
           .map(key => ObservedCard(key, note, deck))
-      }
-    )
+
+      // The query that produced this note matched on the prefix, so an empty result here would
+      // mean the collection changed under the run. Reported as unreadable rather than dropped:
+      // "the note has no identity" is exactly as unplaceable as "its identity is malformed".
+      case Vector() =>
+        Left(
+          PlanError.UnreadableIdentityInAnki(
+            note.id,
+            "",
+            s"the note matched a search for '$prefix' but carries no such tag now",
+          )
+        )
+
+      case several =>
+        Left(
+          PlanError.AmbiguousIdentityInAnki(note.id, NonEmptyVector.fromVectorUnsafe(several))
+        )
+
+  /** The decoder's own words about ONE tag, in a form a person can act on.
+    *
+    * `KeyError` has no `describe` of its own, and this deliberately does not add one: it is a
+    * `model/` type, and `model/` depends on nothing. The wording lives where the message is
+    * built, which is here.
+    */
+  private def reasonFor(err: KeyError): String = err match
+    case KeyError.BlankNoteId              => "the note id part is blank"
+    case KeyError.EmptyHeadingSegment(raw) => s"a heading segment is empty in '$raw'"
+    case KeyError.MalformedTag(_, reason)  => reason
 
   /** A note's deck, via its cards — decks are a per-CARD property while identity is
     * per-note. Taking the first card's deck is the honest simplification while every card

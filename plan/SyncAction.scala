@@ -160,6 +160,35 @@ enum PlanError:
     */
   case DuplicateIdentityInAnki(key: CardKey, first: AnkiNoteId, second: AnkiNoteId)
 
+  /** ONE Anki note carries MORE THAN ONE identity tag, so which card it is cannot be answered.
+    *
+    * The near-twin of [[DuplicateIdentityInAnki]] — that one is two notes claiming one identity,
+    * this is one note claiming two — and it is fatal for the same reason. Whichever tag were
+    * picked, the other key would look unclaimed, a second note would be created for it, and this
+    * note would go on holding review history nobody could see.
+    *
+    * NOT REACHABLE THROUGH THIS TOOL'S OWN WRITES, established by reading every path that writes
+    * tags: creation emits exactly one, an update touches only `sha::`, and a note-type move
+    * rewrites the whole tag set and therefore HEALS this state rather than causing it. It is
+    * reachable by editing tags in Anki, and the likely route is a sympathetic one: a heading is
+    * renamed, the tool orphans the old note and creates a historyless new one, and the person
+    * pastes the new tag onto the old note to rescue their history — without deleting the old.
+    */
+  case AmbiguousIdentityInAnki(noteId: AnkiNoteId, tags: NonEmptyVector[String])
+
+  /** An Anki note's identity tag cannot be DECODED, so the note cannot be placed at all.
+    *
+    * THE WORST OF THE THREE, because such a note does not land in the wrong place — it leaves
+    * the tool's field of view entirely. Until this case existed the decoding failure was thrown
+    * away with `.toOption`, and the note was then never updated, never flagged, never prunable,
+    * and provoked the creation of a duplicate for the very key it had been holding. Nothing
+    * anywhere reported it.
+    *
+    * `reason` is the decoder's own words about THIS tag, carried rather than summarised: the
+    * remedy is manual, and "malformed" without saying WHICH PART is malformed is not a remedy.
+    */
+  case UnreadableIdentityInAnki(noteId: AnkiNoteId, tag: String, reason: String)
+
   def describe: String = this match
     case DuplicateKey(key, first, second) =>
       s"duplicate card key '${key.path.render}' (note '${key.noteId.value}') derived from " +
@@ -167,6 +196,14 @@ enum PlanError:
     case DuplicateIdentityInAnki(key, first, second) =>
       s"two Anki notes claim the card key '${key.path.render}' (note '${key.noteId.value}'): " +
         s"note ids ${first.value} and ${second.value} — open both in Anki and delete one"
+    case AmbiguousIdentityInAnki(noteId, tags) =>
+      s"Anki note ${noteId.value} carries ${tags.length} identity tags, so which card it is " +
+        s"cannot be decided: ${tags.toVector.map("'" + _ + "'").mkString(", ")} — open it in " +
+        "Anki and delete all but the one that belongs to it"
+    case UnreadableIdentityInAnki(noteId, tag, reason) =>
+      s"Anki note ${noteId.value} has an identity tag this tool cannot read: '$tag' ($reason). " +
+        "Until it is fixed the note is invisible to this tool — it will not be updated, will " +
+        "not be reported as gone, and a second note will be created for whatever card it holds"
 
 /** Whether orphans were computed, and if not, why not. Reported rather than silent: a run
   * that could not look for orphans must not be mistaken for a run that found none.

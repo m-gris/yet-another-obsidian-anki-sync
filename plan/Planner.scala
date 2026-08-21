@@ -10,7 +10,27 @@ import obsidiananki.model.{CardKey, CardSpec, OwnedTag, TagCodec}
   * lookup per card: a per-card lookup driven by markdown keys can never find an orphan,
   * because an orphan is a key the markdown does not have.
   */
-final case class ObservedState(notes: Vector[ObservedCard]):
+final case class ObservedState(notes: Vector[ObservedCard], unresolved: Vector[PlanError] = Vector.empty):
+
+  /** CONSERVATION: every note the `src::` query returned is in EXACTLY ONE of `notes` and
+    * `unresolved`. [[Observer.observe]] partitions rather than filters, so this holds by
+    * construction rather than by discipline.
+    *
+    * THIS FIELD EXISTS BECAUSE THERE WAS NOWHERE TO PUT SUCH A NOTE BEFORE, and one whose
+    * identity tag could not be read was therefore DISCARDED between the query and the plan:
+    * found by Anki, dropped on the floor, and thereafter never updated, never flagged, never
+    * prunable — while the tool, believing no note held that key, created a second one. That is
+    * precisely the damage the `byKey` docstring below condemns, arriving from a third direction
+    * and reported by nothing.
+    *
+    * A NOTE HERE IS NOT AN ORPHAN, and must never be filed as one. An orphan is a note whose
+    * identity WAS read and whose key is absent from the markdown. These are notes whose identity
+    * could not be read at all, so nothing is known about where they belong — including whether
+    * they belong anywhere. The remedy is a person's, which is why they travel as [[PlanError]]
+    * rather than as actions.
+    */
+  def isFullyResolved: Boolean = unresolved.isEmpty
+
   /** The lookup from card identity to the note holding it — OR the collisions that make such
     * a lookup a lie.
     *
@@ -152,7 +172,17 @@ object Planner:
     // makes the impossible case impossible to write rather than merely commented against.
     val duplicates = checkUnique(scan.specs)
 
+    // NOTES THAT COULD NOT BE PLACED AT ALL, reported ALONGSIDE the other two rather than
+    // instead of them, so one run tells the author everything. Planning past them is not an
+    // option: a note whose identity cannot be read is a note whose key looks unclaimed, so the
+    // plan would create a duplicate for a card that already exists and already has history.
+    //
+    // ORDERED FIRST because the remedy is the most mechanical — open the note, fix one tag —
+    // and because the other two errors may simply disappear once it is done.
+    val unplaceable = observed.unresolved
+
     observed.byKey match
+      case _ if unplaceable.nonEmpty       => Left(unplaceable ++ duplicates)
       case Left(collisions)                => Left(duplicates ++ collisions)
       case Right(_) if duplicates.nonEmpty => Left(duplicates)
       case Right(byKey) =>
