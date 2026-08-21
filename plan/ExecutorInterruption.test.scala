@@ -65,6 +65,21 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     // changes, rather than because a test drives it today.
     def createNoteType(spec: NoteTypeSpec): Result[Unit] = write(underlying.createNoteType(spec))
 
+    // The three REPAIR operations, counted as writes for the same reason as the line above and
+    // reached by this suite to the same extent: never. They change a collection's SHAPE, so if
+    // a plan ever carries one it must be interruptible like everything else rather than slip
+    // past the budget because a decorator forgot to count it.
+    def addNoteTypeField(noteType: String, field: String): Result[Unit] =
+      write(underlying.addNoteTypeField(noteType, field))
+
+    def setNoteTypeTemplates(
+        noteType: String,
+        templates: Map[String, CardTemplate],
+    ): Result[Unit] = write(underlying.setNoteTypeTemplates(noteType, templates))
+
+    def setNoteTypeStyling(noteType: String, css: String): Result[Unit] =
+      write(underlying.setNoteTypeStyling(noteType, css))
+
     def addNote(note: NewNote): Result[AnkiNoteId] = write(underlying.addNote(note))
 
     /** COUNTED AS A WRITE, and it is the one write in the algebra that is ATOMIC: fields, note

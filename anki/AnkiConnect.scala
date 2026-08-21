@@ -247,6 +247,55 @@ object AnkiConnect:
       },
     )
 
+  /** The `modelFieldAdd` parameters.
+    *
+    * FLAT, NOT WRAPPED IN A `model` OBJECT, and the asymmetry with the two below is Anki's own,
+    * not this file's: `__init__.py:1433` declares `modelFieldAdd(self, modelName, fieldName,
+    * index=None)` while `:1294` and `:1316` each declare a single `model` dictionary. Read off
+    * the add-on installed on this machine, because guessing the wrapper wrong produces a
+    * missing-argument error naming Python rather than naming the mistake.
+    *
+    * `index` IS NOT SENT: omitting it appends, and this tool writes fields by NAME.
+    */
+  def modelFieldAddParams(noteType: String, field: String): Json =
+    Json.obj("modelName" := noteType, "fieldName" := field)
+
+  /** The `updateModelTemplates` parameters.
+    *
+    * THE TEMPLATE MAP IS KEYED BY TEMPLATE NAME, and the add-on resolves each with
+    * `templates.get(ankiTemplate['name'])` (`__init__.py:1302`). A key matching no template in
+    * the collection is skipped IN SILENCE — so this function cannot surface that mistake and
+    * the caller must have ruled it out beforehand. See [[Anki.setNoteTypeTemplates]].
+    *
+    * `Front` AND `Back` ARE CAPITALISED, matching `:1304` and `:1308` and matching
+    * [[createModelParams]] — but here they are the only two keys, with no `Name` inside the
+    * object, because the name is the map KEY rather than a field of the value.
+    */
+  def updateModelTemplatesParams(noteType: String, templates: Map[String, CardTemplate]): Json =
+    Json.obj(
+      "model" := Json.obj(
+        "name" := noteType,
+        "templates" := Json.obj(
+          templates.toVector.map { (name, template) =>
+            name -> Json.obj("Front" := template.front, "Back" := template.back)
+          }*
+        ),
+      )
+    )
+
+  /** The `updateModelStyling` parameters. `__init__.py:1316-1322` — a whole-stylesheet assignment. */
+  def updateModelStylingParams(noteType: String, css: String): Json =
+    Json.obj("model" := Json.obj("name" := noteType, "css" := css))
+
+  /** Anki's refusal when an action names a note type the collection does not hold.
+    *
+    * VERBATIM from `__init__.py:1298` and `:1320` — `'model was not found: {}'.format(...)` — so
+    * unlike [[ModelNameAlreadyExists]] this one DOES name the model. Matched by the client so
+    * that a repair aimed at a type somebody renamed mid-run fails by name rather than as an
+    * opaque remote error.
+    */
+  def modelNotFound(noteType: String): String = s"model was not found: $noteType"
+
   /** Anki's own value for a CLOZE note type, in the `type` key of a note-type dictionary.
     *
     * READ OUT OF `anki/consts.py` ON THIS MACHINE on 2026-08-21 — `MODEL_STD = 0` and

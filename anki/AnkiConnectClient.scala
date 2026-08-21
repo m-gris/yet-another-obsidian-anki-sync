@@ -140,6 +140,35 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
         case other => other
       }
 
+  /** All three repair actions answer `null`, so [[AnkiConnect.expectNoResult]] is the tripwire:
+    * decoding into `Option[Json]` would accept ANY answer, including one shaped like a failure.
+    *
+    * A NOTE TYPE THAT VANISHED BETWEEN THE SURVEY AND THE REPAIR — renamed or deleted in the
+    * Anki window while this ran — comes back as Anki's own "model was not found: <name>", which
+    * is mapped to [[AnkiError.NoteTypeMissing]] so the caller reads a name rather than a remote
+    * string. This is a real race, not a theoretical one: a repair is something a person runs
+    * WITH Anki open in front of them.
+    */
+  def addNoteTypeField(noteType: String, field: String): Result[Unit] =
+    command("modelFieldAdd", AnkiConnect.modelFieldAddParams(noteType, field))
+      .leftMap(missingNoteType(noteType))
+
+  def setNoteTypeTemplates(noteType: String, templates: Map[String, CardTemplate]): Result[Unit] =
+    command("updateModelTemplates", AnkiConnect.updateModelTemplatesParams(noteType, templates))
+      .leftMap(missingNoteType(noteType))
+
+  def setNoteTypeStyling(noteType: String, css: String): Result[Unit] =
+    command("updateModelStyling", AnkiConnect.updateModelStylingParams(noteType, css))
+      .leftMap(missingNoteType(noteType))
+
+  /** Matched on the MESSAGE and not on the action name, because all three repair actions raise
+    * the identical string and mapping them separately would be three copies of one fact.
+    */
+  private def missingNoteType(noteType: String): AnkiError => AnkiError =
+    case AnkiError.Remote(_, message) if message == AnkiConnect.modelNotFound(noteType) =>
+      AnkiError.NoSuchNoteType(noteType)
+    case other => other
+
   // ---------------------------------------------------------------- reading ----
 
   /** Anki's search syntax, where `*` is the wildcard. The prefix is safe to interpolate

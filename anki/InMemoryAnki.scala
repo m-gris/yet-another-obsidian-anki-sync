@@ -150,6 +150,47 @@ final class InMemoryAnki private (
     if noteTypes.contains(spec.name) then Left(AnkiError.NoteTypeExists(spec.name))
     else Right(noteTypes += spec.name -> spec)
 
+  /* The three repair operations, modelled on what Anki ACTUALLY does rather than on what a
+   * caller would like it to do. Each quirk below is reproduced deliberately: a fake that is
+   * kinder than the real thing lets a test prove something a real collection will not honour. */
+
+  /** IDEMPOTENT AND ORDER-PRESERVING, mirroring `__init__.py:1437-1441`, where the add is
+    * guarded by `if fieldName not in fieldMap`. A field already declared stays exactly where it
+    * is; a fake that appended unconditionally would let a duplicate field pass a test.
+    */
+  def addNoteTypeField(noteType: String, field: String): Either[AnkiError, Unit] =
+    withNoteType(noteType) { spec =>
+      if spec.fields.toVector.contains(field) then ()
+      else noteTypes += noteType -> spec.copy(fields = spec.fields :+ field)
+    }
+
+  /** SILENTLY IGNORES A TEMPLATE NAME THE TYPE DOES NOT HAVE, which is the single most important
+    * behaviour in this file to reproduce faithfully. `__init__.py:1301-1303` iterates the
+    * COLLECTION's templates and looks each one up in what it was given, so a caller that renamed
+    * a template in the repository and never in the collection gets a clean exit and no change.
+    *
+    * A fake that instead inserted the unknown template, or refused it, would conceal exactly the
+    * failure [[NoteTypeInstaller.repair]] refuses IN ADVANCE in order to avoid.
+    */
+  def setNoteTypeTemplates(
+      noteType: String,
+      templates: Map[String, CardTemplate],
+  ): Either[AnkiError, Unit] =
+    withNoteType(noteType) { spec =>
+      val updated = spec.templates.map((name, existing) => name -> templates.getOrElse(name, existing))
+      noteTypes += noteType -> spec.copy(templates = updated)
+    }
+
+  def setNoteTypeStyling(noteType: String, css: String): Either[AnkiError, Unit] =
+    withNoteType(noteType)(spec => noteTypes += noteType -> spec.copy(styling = css))
+
+  /** All three repairs fail the same way on a name the collection does not hold — Anki raises
+    * `model was not found` at `__init__.py:1298` and `:1320`, and `getModel` raises for the
+    * field action — so the check lives in one place rather than in three.
+    */
+  private def withNoteType(name: String)(f: NoteTypeSpec => Unit): Either[AnkiError, Unit] =
+    noteTypes.get(name).toRight(AnkiError.NoSuchNoteType(name)).map(f)
+
   private def checkFields(
       noteType: String,
       fields: Vector[(String, String)],

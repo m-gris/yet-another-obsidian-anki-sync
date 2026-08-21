@@ -202,12 +202,63 @@ trait Anki[F[_]]:
     * than its contents, and the reason it is here is that without it a fresh profile cannot be
     * synced into at all: the first `addNote` fails because the note type does not exist.
     *
-    * THERE IS DELIBERATELY NO `updateNoteType`. Repairing a note type in place means overwriting
-    * templates and a stylesheet a person may have edited, and the safe default this tool takes
-    * is that nothing it did not create is silently overwritten — see
-    * [[obsidiananki.anki.NoteTypeInstaller]], which reports differences and changes nothing.
+    * THERE IS NO `updateNoteType` TAKING A WHOLE SPEC, and that part is still deliberate.
+    * Repairing a note type in place means overwriting templates and a stylesheet a person may
+    * have edited, and the safe default this tool takes is that nothing it did not create is
+    * overwritten without being asked. What exists instead is the three NARROW operations below:
+    * each changes exactly one thing, and none is reached unless a human asked for a repair —
+    * see [[obsidiananki.anki.NoteTypeInstaller.repair]].
+    *
+    * AMENDED 2026-08-21, and the reason is worth keeping. This docstring previously said no such
+    * operation existed AT ALL and treated that as the safe position. It was not safe. A note
+    * type that already exists was never touched, so the two types this tool inherited by
+    * hand-rename kept the collection's own templates, which mention no `Context` field. That
+    * field was then computed, written, hashed and synced onto 21 of 43 live notes AND RENDERED
+    * NOWHERE. Refusing to write is only safe when the refusal is VISIBLE; here it produced a
+    * feature that existed everywhere except on the screen. The principle survives; the blanket
+    * prohibition does not.
     */
   def createNoteType(spec: NoteTypeSpec): F[Unit]
+
+  /** Add ONE field to a note type that already exists.
+    *
+    * IDEMPOTENT AT THE FAR END, read out of the add-on installed on this machine rather than
+    * assumed: `__init__.py:1437-1441` guards with `if fieldName not in fieldMap`, so adding a
+    * field that is already there is a no-op rather than an error or a duplicate.
+    *
+    * ONE FIELD PER CALL, because that is the shape of the underlying action and because a
+    * partial failure is then unambiguous — the caller knows exactly which field was added.
+    *
+    * THE `index` PARAMETER IS NOT EXPOSED. Anki appends, and this tool writes fields BY NAME, so
+    * position affects the Browse column order and nothing this tool depends on. Exposing it
+    * would invite reordering a person's fields for cosmetic reasons.
+    */
+  def addNoteTypeField(noteType: String, field: String): F[Unit]
+
+  /** Replace the front and back of templates that ALREADY EXIST, matched BY NAME.
+    *
+    * THREE PROPERTIES OF THE UNDERLYING ACTION THAT A CALLER MUST KNOW, all read out of
+    * `__init__.py:1294-1312` on this machine, none of them inferred:
+    *
+    *   1. IT CANNOT ADD OR REMOVE A TEMPLATE. It iterates the templates the collection already
+    *      holds and updates whichever of them it was given.
+    *   2. A TEMPLATE NAME IT CANNOT FIND IS SILENTLY SKIPPED — `templates.get(name)` then
+    *      `if template:`. No error, no report, a clean exit having done nothing. That is this
+    *      project's signature failure mode arriving through somebody else's API, so a caller
+    *      MUST check the names BEFORE calling rather than trusting the result afterwards; see
+    *      [[NoteTypeDrift.TemplateNamesDiffer]].
+    *   3. AN EMPTY FRONT OR BACK IS IGNORED RATHER THAN WRITTEN — `if qfmt:` / `if afmt:`. A
+    *      template cannot be blanked through this action.
+    */
+  def setNoteTypeTemplates(noteType: String, templates: Map[String, CardTemplate]): F[Unit]
+
+  /** Replace a note type's whole stylesheet.
+    *
+    * WHOLESALE, NOT A MERGE: `__init__.py:1322` is a bare assignment to `ankiModel['css']`, so
+    * anything a person added to that stylesheet by hand is gone. That is why this is reached
+    * only from an explicitly requested repair, and why the repair reports what differs first.
+    */
+  def setNoteTypeStyling(noteType: String, css: String): F[Unit]
 
   /** Every note carrying a tag under the given prefix.
     *

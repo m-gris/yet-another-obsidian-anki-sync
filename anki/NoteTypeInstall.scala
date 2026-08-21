@@ -9,10 +9,20 @@ import cats.syntax.all.*
   *
   * THE SAFE DEFAULT, RULED HERE AND STATED ONCE: **nothing this tool did not create is ever
   * silently overwritten.** A note type that is absent is CREATED; a note type that is present
-  * and differs from the repository is REPORTED and left exactly as it is. There is no repair
-  * path, not even behind a flag, and that is a decision rather than an omission — repairing
-  * means sending a template and a stylesheet over ones a person may have edited by hand in
-  * Anki, and the person who edited them is the only one who knows whether that is wanted.
+  * and differs from the repository is REPORTED and left exactly as it is.
+  *
+  * THERE IS NOW A REPAIR PATH, AND IT IS OPT-IN. Amended 2026-08-21. This comment used to say
+  * there was none "not even behind a flag", and treated that as the conservative position. It
+  * was not conservative, it was silently lossy: the two note types this tool inherited by
+  * hand-rename are PRESENT, so they were never touched, so they kept the collection's own
+  * templates — which mention no `Context` field. That field was then computed, written, hashed
+  * and synced onto 21 of 43 live notes and rendered NOWHERE. A refusal is only safe when it is
+  * VISIBLE, and this one produced a feature that existed everywhere except on the screen.
+  *
+  * The default is unchanged — [[NoteTypeInstaller.install]] still creates only what is absent.
+  * [[NoteTypeInstaller.repair]] runs only when a human asks for it, reports what it will change
+  * before changing it, and VERIFIES BY RE-READING afterwards rather than trusting that the write
+  * landed. That last part is not belt-and-braces; see [[NoteTypeInstaller.repair]].
   *
   * TWO SEPARATE QUESTIONS LIVE IN THIS FILE, and they are deliberately not the same function:
   *
@@ -140,6 +150,67 @@ enum NoteTypeProblem:
       s"'$name' does not have the field(s) ${missing.toVector.map("'" + _ + "'").mkString(", ")}, " +
         "which this tool writes"
 
+/** One change a repair will make to ONE note type. Each maps to exactly one algebra call.
+  *
+  * NOTHING HERE REMOVES OR REORDERS ANYTHING. Anki can delete a field and move a field, and this
+  * tool does neither: a field it does not declare belongs to whoever added it, and field order
+  * affects the Browse column list rather than anything stored. The only additive-vs-destructive
+  * line that IS crossed is a template body and a stylesheet, which is exactly why a repair has
+  * to be asked for.
+  */
+enum RepairAction:
+  /** Declared abstract and satisfied by each case's own parameter, the same way
+    * [[NoteTypeStatus.asset]] is: every action is about one note type, so the accessor belongs
+    * on the sum rather than being re-derived by a match.
+    */
+  def noteType: String
+
+  case AddField(noteType: String, field: String)
+  case ReplaceTemplates(noteType: String, templateNames: Vector[String])
+  case ReplaceStyling(noteType: String)
+
+  def describe: String = this match
+    case AddField(n, f)         => s"'$n': add the field '$f'"
+    case ReplaceTemplates(n, t) => s"'$n': overwrite template(s) ${t.map("'" + _ + "'").mkString(", ")}"
+    case ReplaceStyling(n)      => s"'$n': overwrite the stylesheet"
+
+/** A note type whose difference from the repository a repair CANNOT close.
+  *
+  * Exactly one thing reaches this today, and it is the reason the type exists rather than being
+  * a bare error string: the template NAMES differ. AnkiConnect's `updateModelTemplates` resolves
+  * each template by name and skips names it does not recognise IN SILENCE, so attempting the
+  * repair would return success having changed nothing. Refusing in advance is the only way that
+  * failure is ever visible.
+  */
+final case class RepairRefused(noteType: String, reason: String)
+
+/** What a repair would do, decided WITHOUT talking to Anki.
+  *
+  * PURE, and that is the point: every decision about what to overwrite is testable from a
+  * `Vector[NoteTypeStatus]` alone, and the effectful half below does nothing but carry it out.
+  */
+final case class RepairPlan(
+    actions: Vector[RepairAction],
+    refusals: Vector[RepairRefused],
+    unchanged: Vector[String],
+):
+  def isEmpty: Boolean = actions.isEmpty
+
+/** What a repair actually did, and — the part that matters — what the collection looked like
+  * afterwards when it was read back.
+  */
+final case class RepairOutcome(
+    plan: RepairPlan,
+    applied: Vector[RepairAction],
+    failures: Vector[(RepairAction, AnkiError)],
+    remainingDrift: Vector[(String, Vector[NoteTypeDrift])],
+):
+  /** Every action landed, nothing was refused, and RE-READING THE COLLECTION FOUND NO DIFFERENCE
+    * LEFT. The third clause is the one with teeth — see [[NoteTypeInstaller.repair]].
+    */
+  def isClean: Boolean =
+    failures.isEmpty && plan.refusals.isEmpty && remainingDrift.forall(_._2.isEmpty)
+
 /** The result of an install run. */
 final case class InstallOutcome(
     before: Vector[NoteTypeStatus],
@@ -248,6 +319,120 @@ object NoteTypeInstaller:
     * PER-TYPE FAILURES ARE COLLECTED, NOT FATAL, exactly as `Executor` collects per-action
     * failures: one note type Anki refuses must not abandon the other four.
     */
+  /** Decide what a repair would change, from a survey alone. NO EFFECTS, and no Anki.
+    *
+    * ONE DRIFT CASE IS DELIBERATELY NOT REPAIRED: a [[NoteTypeDrift.FieldsDiffer]] where every
+    * declared field is already present and only the ORDER differs. Anki's field order decides
+    * the Browse column list and nothing this tool stores — it writes fields by name — so
+    * reordering somebody's fields to match a repository would be a cosmetic change to their
+    * collection that they did not ask for. Such a note type therefore stays in `unchanged`, and
+    * the surviving drift is reported rather than closed.
+    *
+    * A FIELD IN THE COLLECTION THAT THE REPOSITORY DOES NOT DECLARE IS NEVER REMOVED, for the
+    * same reason and a stronger one: removing a field DELETES ITS CONTENT from every note of
+    * that type.
+    */
+  def planRepair(statuses: Vector[NoteTypeStatus]): RepairPlan =
+    val present = statuses.collect { case p @ NoteTypeStatus.Present(_, _) => p }
+
+    val perType = present.map { case NoteTypeStatus.Present(asset, drift) =>
+      val name = asset.spec.name
+
+      // Refuse the WHOLE note type, not just its template action: with the names disagreeing
+      // there is no way to know which repository template corresponds to which of the
+      // collection's, so overwriting any of them is a guess.
+      val namesDiffer = drift.collectFirst { case d: NoteTypeDrift.TemplateNamesDiffer => d }
+
+      namesDiffer match
+        case Some(d) =>
+          (Vector.empty[RepairAction], Vector(RepairRefused(name, d.describe)), Vector.empty[String])
+
+        case None =>
+          val addFields = drift.collect { case NoteTypeDrift.FieldsDiffer(declared, inCollection) =>
+            declared.filterNot(inCollection.contains).map(RepairAction.AddField(name, _))
+          }.flatten
+
+          val touchedTemplates =
+            drift.collect { case NoteTypeDrift.TemplateSideDiffers(t, _) => t }.distinct
+
+          val templateAction =
+            if touchedTemplates.isEmpty then Vector.empty
+            else Vector(RepairAction.ReplaceTemplates(name, touchedTemplates))
+
+          val stylingAction =
+            if drift.contains(NoteTypeDrift.StylingDiffers) then Vector(RepairAction.ReplaceStyling(name))
+            else Vector.empty
+
+          val actions = addFields ++ templateAction ++ stylingAction
+          if actions.isEmpty then (Vector.empty, Vector.empty, Vector(name))
+          else (actions, Vector.empty, Vector.empty)
+    }
+
+    RepairPlan(
+      actions = perType.flatMap(_._1),
+      refusals = perType.flatMap(_._2),
+      unchanged = perType.flatMap(_._3),
+    )
+
+  /** Carry out a repair, then READ THE COLLECTION BACK AND COMPARE AGAIN.
+    *
+    * THE RE-READ IS THE POINT OF THIS FUNCTION, not a courtesy. AnkiConnect's
+    * `updateModelTemplates` looks each template up by name and silently ignores a name it does
+    * not recognise (`__init__.py:1301-1303`), and `modelFieldAdd` silently does nothing when the
+    * field is already there. Both answer `null` — success — either way. So "the call returned
+    * without an error" says nothing at all about whether the collection changed, and a repair
+    * that reported success on that basis would be this project's signature defect wearing a
+    * different hat.
+    *
+    * FIELDS FIRST, THEN TEMPLATES, THEN STYLING. A template that references a field the note
+    * type does not have renders as nothing, so the other order leaves a window — brief, but real
+    * if the run fails midway — where the card is live and the breadcrumb is blank.
+    *
+    * PER-ACTION FAILURES ARE COLLECTED RATHER THAN FATAL, matching [[install]]: one note type
+    * Anki refuses must not abandon the rest. The re-read then shows exactly what survived.
+    */
+  def repair[F[_]](anki: Anki[F], assets: Vector[NoteTypeAsset], plan: RepairPlan)(using
+      F: MonadError[F, AnkiError]
+  ): F[RepairOutcome] =
+    val byName = assets.map(a => a.spec.name -> a).toMap
+
+    def perform(action: RepairAction): F[Unit] = action match
+      case RepairAction.AddField(noteType, field) =>
+        anki.addNoteTypeField(noteType, field)
+      case RepairAction.ReplaceTemplates(noteType, _) =>
+        // The WHOLE declared template map is sent, not only the templates reported as differing.
+        // Anki updates what it is given and leaves the rest, so sending all of them is the same
+        // result with one fewer thing to get wrong — and it means a template that drifted
+        // between the survey and now is also corrected.
+        F.fromOption(byName.get(noteType), AnkiError.NoSuchNoteType(noteType))
+          .flatMap(a => anki.setNoteTypeTemplates(noteType, a.spec.templates.toVector.toMap))
+      case RepairAction.ReplaceStyling(noteType) =>
+        F.fromOption(byName.get(noteType), AnkiError.NoSuchNoteType(noteType))
+          .flatMap(a => anki.setNoteTypeStyling(noteType, a.spec.styling))
+
+    val ordered = plan.actions.sortBy {
+      case _: RepairAction.AddField          => 0
+      case _: RepairAction.ReplaceTemplates  => 1
+      case _: RepairAction.ReplaceStyling    => 2
+    }
+
+    ordered
+      .traverse(action => perform(action).attempt.map(_.left.toOption.map(action -> _).toLeft(action)))
+      .flatMap { results =>
+        val touched = (plan.actions.map(_.noteType) ++ plan.refusals.map(_.noteType)).distinct
+        survey(anki, assets.filter(a => touched.contains(a.spec.name))).map { after =>
+          RepairOutcome(
+            plan = plan,
+            applied = results.collect { case Right(action) => action },
+            failures = results.collect { case Left(failure) => failure },
+            remainingDrift = after.map {
+              case NoteTypeStatus.Present(asset, drift) => asset.spec.name -> drift
+              case other                                => other.name -> Vector.empty
+            },
+          )
+        }
+      }
+
   def install[F[_]](anki: Anki[F], assets: Vector[NoteTypeAsset])(using
       F: MonadError[F, AnkiError]
   ): F[InstallOutcome] =
