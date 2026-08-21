@@ -153,12 +153,26 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     */
   def referencesIn(template: String): Set[String] =
     """\{\{([^}]*)\}\}""".r
-      .findAllMatchIn(template)
+      .findAllMatchIn(withoutHtmlComments(template))
       .map(_.group(1))
       .map(_.dropWhile(c => c == '#' || c == '^' || c == '/'))
       .map(ref => ref.split(':').lastOption.getOrElse(ref))
       .map(_.trim)
       .toSet
+
+  /** Strip `<!-- … -->` BEFORE looking for field references.
+    *
+    * WITHOUT THIS, THE "IS THIS FIELD RENDERED ANYWHERE?" TEST IS SATISFIED BY A MENTION INSIDE
+    * A COMMENT — which renders nothing at all. The failure that test exists to prevent is a
+    * field "declared, populated, hashed and synced, and INVISIBLE", and a commented-out
+    * reference produces exactly that while turning the test green. Found by review rather than
+    * by the test itself, which is the point: the check had a hole shaped like its own purpose.
+    *
+    * NOT A GENERAL HTML PARSER, and it does not need to be: these are ten template files this
+    * project writes and owns. Nested comments are not legal HTML and are not attempted here.
+    */
+  def withoutHtmlComments(template: String): String =
+    """(?s)<!--.*?-->""".r.replaceAllIn(template, "")
 
   /** References Anki resolves itself, which are therefore not field names.
     *
@@ -221,6 +235,107 @@ class NoteTypeAssetsTest extends munit.FunSuite:
       assert(
         asset.spec.styling.contains(".context"),
         s"'${asset.spec.name}' has no .context rule, so its breadcrumb would inherit card styling",
+      )
+    }
+  }
+
+  /** A field mentioned ONLY inside an HTML comment is not rendered, and must not count.
+    *
+    * Pins [[withoutHtmlComments]] rather than any asset, because the hole was in the CHECK and
+    * a future edit to the helper would otherwise reopen it silently.
+    */
+  test("a field referred to only inside an HTML comment counts as unreferenced") {
+    assertEquals(referencesIn("<!-- {{Context}} -->"), Set.empty[String])
+    assertEquals(referencesIn("<!-- {{Context}} -->{{Front}}"), Set("Front"))
+    // A multi-line comment, since that is what a disabled block actually looks like.
+    assertEquals(referencesIn("<!--\n  <div>{{Context}}</div>\n-->{{Front}}"), Set("Front"))
+  }
+
+  /** EVERY TEMPLATE'S FRONT, not merely one of them.
+    *
+    * The direction-two test above unions all of a note type's templates together, so a field
+    * rendered by ONE template satisfies it for ALL of them. `Obsidian Concept-Descriptor` has
+    * three templates and `Obsidian Basic (and reversed card)` has two; under the union rule the
+    * breadcrumb could be missing from every card but one and the suite would stay green.
+    *
+    * THE FRONT SPECIFICALLY, because that is what the field is FOR: context you need in order to
+    * answer. Told after the fact that the question meant the frontal BONE, you have already
+    * answered the wrong question.
+    */
+  test("every template's FRONT renders the Context field, not just one template per note type") {
+    assets.foreach { asset =>
+      asset.spec.templates.toVector.foreach { (templateName, template) =>
+        assert(
+          referencesIn(template.front).contains(Marker.ContextField),
+          s"'${asset.spec.name}' template '$templateName' does not render " +
+            s"${Marker.ContextField} on its front, so that card shows no breadcrumb",
+        )
+      }
+    }
+  }
+
+  /** The template must carry the class its own stylesheet styles.
+    *
+    * NOTHING TIED THESE TOGETHER BEFORE. The stylesheet test above proves a `.context` rule
+    * exists; nothing proved a template ever uses it. Renaming the class in a template — or the
+    * rule in a stylesheet — left the whole suite green and the breadcrumb rendering with the
+    * card's own styling: full size, centred, indistinguishable from a title. The breadcrumb
+    * being SUBORDINATE is the entire design; unstyled, it reads as the question.
+    */
+  test("the class a front puts the breadcrumb in is the class its stylesheet styles") {
+    val ContextClass = "context"
+    assets.foreach { asset =>
+      assert(
+        asset.spec.styling.contains(s".$ContextClass"),
+        s"'${asset.spec.name}' stylesheet does not define .$ContextClass",
+      )
+      asset.spec.templates.toVector.foreach { (templateName, template) =>
+        assert(
+          template.front.contains(s"""class="$ContextClass""""),
+          s"'${asset.spec.name}' template '$templateName' renders the breadcrumb without " +
+            s"""class="$ContextClass", so the stylesheet's rule cannot reach it""",
+        )
+      }
+    }
+  }
+
+  /** THE HIGHEST-CONSEQUENCE PLACEMENT IN ANY OF THESE TEMPLATES, and it had no test at all.
+    *
+    * ANKI GENERATES A CARD ONLY WHEN ITS FRONT RENDERS NON-EMPTY. `Obsidian
+    * Concept-Descriptor`'s third card exists only for notes that set `ThreeWay`, which is why
+    * its whole front is wrapped in `{{#ThreeWay}}…{{/ThreeWay}}`.
+    *
+    * Put the `{{#Context}}` block OUTSIDE that wrapper and the front renders the breadcrumb for
+    * every note that has a breadcrumb — which is nearly all of them. The front is then non-empty,
+    * Anki generates a third card that was never meant to exist, and it arrives with no review
+    * history. Moving one block by a few characters silently creates cards.
+    *
+    * SPECIFIC RATHER THAN GENERAL, deliberately: this checks the one card-generating conditional
+    * this project uses. If another is ever introduced, this test does NOT cover it and must be
+    * extended — stated here because a test that looks general and is not is worse than one that
+    * admits its scope.
+    */
+  test("on a conditional template, the Context block sits INSIDE the wrapper that gates the card") {
+    val gated = assets.flatMap { asset =>
+      asset.spec.templates.toVector.collect {
+        case (name, template) if template.front.contains(s"{{#${Marker.ThreeWayField}}}") =>
+          (asset.spec.name, name, template.front)
+      }
+    }
+
+    assert(gated.nonEmpty, "no gated template found — this test has stopped covering anything")
+
+    gated.foreach { (noteType, templateName, front) =>
+      val opensGate  = front.indexOf(s"{{#${Marker.ThreeWayField}}}")
+      val closesGate = front.indexOf(s"{{/${Marker.ThreeWayField}}}")
+      val context    = front.indexOf(s"{{#${Marker.ContextField}}}")
+
+      assert(context >= 0, s"'$noteType' template '$templateName' does not render the breadcrumb")
+      assert(
+        context > opensGate && context < closesGate,
+        s"'$noteType' template '$templateName' renders the breadcrumb OUTSIDE " +
+          s"{{#${Marker.ThreeWayField}}}, so this card would be generated for every note that " +
+          "has a breadcrumb, whether or not it wants a third card",
       )
     }
   }
