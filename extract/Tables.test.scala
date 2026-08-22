@@ -163,7 +163,13 @@ class TablesTest extends munit.FunSuite:
     * broken, and test A would say so.
     */
   private val Hostile: CellDisplay =
-    CellDisplay(cell => "<<" + CellDisplay.Default.text(cell) + ">>")
+    CellDisplay(
+      text = cell => "<<" + CellDisplay.Default.text(cell) + ">>",
+      // HOSTILE IN BOTH PROJECTIONS. The row card's table escapes for itself and so takes
+      // `raw`; if only `text` were hostile, that card would silently fall out of this test's
+      // reach — which is exactly what happened when `raw` was first introduced.
+      raw = cell => "<<" + CellDisplay.Default.text(cell) + ">>",
+    )
 
   private def tableOf(section: Section): Table =
     section.content.collectFirst { case t: Table => t }.getOrElse(fail("no table in the section"))
@@ -239,8 +245,17 @@ class TablesTest extends munit.FunSuite:
           sawRow = true
           val front = fieldValue(spec, Marker.BasicFields.Front)
           val back  = fieldValue(spec, Marker.BasicFields.Back)
-          assert(front.contains("<<"), s"$why — TableRow Front was [$front]")
-          assert(back.contains("<<"), s"$why — TableRow Back was [$back]")
+
+          // THE MARKER ARRIVES ESCAPED HERE, AND THAT IS THE PROOF RATHER THAN A WEAKENING.
+          // A row card is a table assembled inside `content/`, which escapes every value it is
+          // given — so the hostile renderer's `<<` reaches the field as `&lt;&lt;`. Finding it
+          // in that form shows BOTH that the injection got through AND that it was escaped
+          // exactly once; a raw `<<` in this field would mean a value reached the card without
+          // being escaped at all, which is the more serious failure of the two.
+          val marker = "&lt;&lt;"
+          assert(front.contains(marker), s"$why — TableRow Front was [$front]")
+          assert(back.contains(marker), s"$why — TableRow Back was [$back]")
+          assert(!front.contains("<<"), s"a value reached the card unescaped: [$front]")
 
         case other => fail(s"a table produced a spec that is neither a pair nor a row card: $other")
     }
@@ -356,11 +371,15 @@ class TablesTest extends munit.FunSuite:
 
     val rowCard = cards.collectFirst { case (s: CardSpec.TableRow, _) => s }
       .getOrElse(fail(s"expected a row card for row 2 — got $shape"))
-    assertEquals(
-      rowCard.descriptors.toVector,
-      Vector("Benefit" -> "Fan-out", "Cost" -> "Ordering"),
-      "the marker-only column must be absent from the row card's descriptors, not printed " +
-        "on the card as a descriptor literally named '#flashcard'",
+    // ASSERTED ON THE RENDERED TABLE since the row card became one. The property is unchanged:
+    // the marker-only column must be ABSENT, not drawn as a column literally headed '#flashcard'.
+    assert(rowCard.filled.contains("<th>Benefit</th>"), rowCard.filled)
+    assert(rowCard.filled.contains("<th>Cost</th>"), rowCard.filled)
+    assert(rowCard.filled.contains("<td>Fan-out</td>"), rowCard.filled)
+    assert(rowCard.filled.contains("<td>Ordering</td>"), rowCard.filled)
+    assert(
+      !rowCard.filled.contains("flashcard"),
+      s"the marker-only column was drawn as a column of the table: ${rowCard.filled}",
     )
   }
 

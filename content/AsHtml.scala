@@ -372,6 +372,42 @@ object Html:
       case None    => element(Tag.Code, inner)
     element(Tag.Pre, code)
 
+  /** ONE TABLE ROW, drawn with its headers, and any cell may be BLANKED.
+    *
+    * WHY THIS LIVES HERE AND NOT IN `extract/`. It takes RAW text and escapes it, so the only
+    * String-to-Fragment step is still [[escape]]. Built in `extract/` instead, it would have to
+    * concatenate markup around values that were escaped somewhere else — which is exactly the
+    * shape the opaque `Fragment` exists to make impossible, and the shape that would let one
+    * un-escaped value through on the day somebody adds a fourth caller.
+    *
+    * THE BLANK IS MARKUP THIS FILE OWNS, never author text, so it cannot be forged by a table
+    * cell that happens to contain the same characters.
+    *
+    * SHAPE, NOT PROSE. A row card used to render its answer as `"$header: $value"` joined by
+    * newlines — which HTML collapses to spaces, so it arrived as one run-on line. The table is
+    * the point: which column a value sits under is what distinguishes one descriptor from
+    * another, and a joined string throws that away.
+    */
+  def rowTable(headers: Vector[String], cells: Vector[Option[String]]): Fragment =
+    val head = element(
+      Tag.Tr,
+      concat(headers.map(h => element(Tag.Th, escape(h)))),
+    )
+    val body = element(
+      Tag.Tr,
+      concat(cells.map {
+        case Some(value) => element(Tag.Td, escape(value))
+        case None        => element(Tag.Td, blankCell)
+      }),
+    )
+    element(Tag.Table, concat(Vector(head, body)))
+
+  /** The placeholder standing in for a blanked cell. A `Fragment` built from a literal this
+    * file controls — the one place raw markup legitimately becomes a Fragment without passing
+    * through [[escape]], and it contains no author text at all.
+    */
+  private val blankCell: Fragment = """<span class="blank">[&hellip;]</span>"""
+
   /** THE ONE PLACE `{{`, `::` AND `}}` BELONG.
     *
     * The wrapper goes on AFTER escaping — that ordering, and not a remembered special case, is

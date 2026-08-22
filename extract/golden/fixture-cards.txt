@@ -59,8 +59,8 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Frontal⟧
-  field ⟦Back⟧ ⟦Anterior border: Orbital rim\nPosterior border: Coronal suture⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Frontal</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Frontal</td><td>Orbital rim</td><td>Coronal suture</td></tr></table>⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/anterior%20border⟧
@@ -85,8 +85,8 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Parietal⟧
-  field ⟦Back⟧ ⟦Anterior border: Coronal suture\nPosterior border: Lambdoid suture⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Parietal</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Parietal</td><td>Coronal suture</td><td>Lambdoid suture</td></tr></table>⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
@@ -147,8 +147,8 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Queue⟧
-  field ⟦Back⟧ ⟦Benefit: Absorbs load spikes: the producer keeps accepting work while a slow consumer drains the backlog at its own rate.\nCost: Latency becomes unbounded under sustained overload, and the queue itself is state that must be sized, monitored and drained.⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Queue</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Queue</td><td>Absorbs load spikes: the producer keeps accepting work while a slow consumer drains the backlog at its own rate.</td><td>Latency becomes unbounded under sustained overload, and the queue itself is state that must be sized, monitored and drained.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/benefit⟧
@@ -173,8 +173,8 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Pub/Sub⟧
-  field ⟦Back⟧ ⟦Benefit: The producer names an event, not a recipient, so new consumers are added without touching or redeploying the publisher.\nCost: Nobody owns the end-to-end path: a subscriber that silently stops consuming looks identical to one that was never there.⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Pub/Sub</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Pub/Sub</td><td>The producer names an event, not a recipient, so new consumers are added without touching or redeploying the publisher.</td><td>Nobody owns the end-to-end path: a subscriber that silently stops consuming looks identical to one that was never there.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/benefit⟧
@@ -199,8 +199,8 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Request-Response⟧
-  field ⟦Back⟧ ⟦Benefit: The caller learns the outcome synchronously, so errors surface at the call site and can be retried with the original context in hand.\nCost: Availability multiplies down the chain — the caller is only as available as the slowest dependency it blocks on.⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Request-Response</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Request-Response</td><td>The caller learns the outcome synchronously, so errors surface at the call site and can be retried with the original context in hand.</td><td>Availability multiplies down the chain — the caller is only as available as the slowest dependency it blocks on.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
 
 card ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f⟧
@@ -237,8 +237,8 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Retry⟧
-  field ⟦Back⟧ ⟦Purpose: Recovers from transient faults such as a dropped packet or a brief leader election.\nFailure mode: Amplifies load exactly when the dependency is already struggling.⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td>Recovers from transient faults such as a dropped packet or a brief leader election.</td><td>Amplifies load exactly when the dependency is already struggling.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
@@ -263,8 +263,8 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Retry⟧
-  field ⟦Back⟧ ⟦Purpose: Turns an at-most-once delivery into an at-least-once one, which is the cheap half of exactly-once.\nFailure mode: Duplicates reach the receiver, so the handler must be idempotent or it corrupts state.⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td>Turns an at-most-once delivery into an at-least-once one, which is the cheap half of exactly-once.</td><td>Duplicates reach the receiver, so the handler must be idempotent or it corrupts state.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/purpose⟧
@@ -289,8 +289,8 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout⟧
   note ⟦Obsidian Basic⟧
-  field ⟦Front⟧ ⟦Timeout⟧
-  field ⟦Back⟧ ⟦Purpose: Bounds how long a caller holds a connection and a thread waiting on a peer.\nFailure mode: Cannot distinguish a slow peer from a dead one, so it will cancel work that was about to succeed.⟧
+  field ⟦Front⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Timeout</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
+  field ⟦Back⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Timeout</td><td>Bounds how long a caller holds a connection and a thread waiting on a peer.</td><td>Cannot distinguish a slow peer from a dead one, so it will cancel work that was about to succeed.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/range%20partitioning/definition⟧

@@ -204,8 +204,8 @@ enum CardSpec:
     */
   case TableRow(
       key: CardKey,
-      concept: String,
-      descriptors: NonEmptyVector[(String, String)],
+      blanked: String,
+      filled: String,
       context: String,
   )
 
@@ -312,15 +312,20 @@ object CardSpec:
           Marker.ContextField          -> context,
         )
 
-      case TableRow(_, concept, descriptors, context) =>
-        // Joining the descriptors is the minimal honest thing to do here. How this should
-        // actually LOOK is a rendering concern and may be revised when fields are rendered
-        // to HTML; the structure — concept front, all descriptors together on the back — is
-        // what matters, since a benefit divorced from its cost is trivia.
-        val back = descriptors.toVector.map((d, v) => s"$d: $v").mkString("\n")
+      case TableRow(_, blanked, filled, context) =>
+        // TWO RENDERINGS OF ONE TABLE — the same shape with and without its answers — so the
+        // question and the answer differ only by what is filled in. Nothing reflows between
+        // sides, which is the whole reason a row card is a table rather than a list.
+        //
+        // BOTH ARRIVE ALREADY RENDERED, built by `content/`'s `Html.rowTable`. This case
+        // previously joined the descriptors into `"$header: $value"` lines here, with a comment
+        // conceding that how it should LOOK was unresolved. It was resolved by HTML: a newline
+        // inside a field collapses to a space, so that join arrived on the card as one run-on
+        // line. Building markup here would also mean concatenating around values escaped
+        // elsewhere, which is what the opaque `Html.Fragment` exists to prevent.
         Vector(
-          Marker.BasicFields.Front -> concept,
-          Marker.BasicFields.Back  -> back,
+          Marker.BasicFields.Front -> blanked,
+          Marker.BasicFields.Back  -> filled,
           Marker.ContextField      -> context,
         )
 

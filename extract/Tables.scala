@@ -48,7 +48,18 @@ object RowSource:
   * `fromExtractedText` accepts a bare `String` and lives in `model/CardKey.scala`. Only the
   * differential guard in `Tables.test.scala` would notice.
   */
-final case class CellDisplay(text: Cell => String)
+/** TWO PROJECTIONS, NOT ONE, and the second exists because escaping cannot be applied twice.
+  *
+  * `text` is a cell rendered READY TO BE A FIELD — escaped, for production. `raw` is the same
+  * cell UNESCAPED, for the one consumer that escapes for itself: the row card's table is
+  * assembled inside `content/`, where the only way to make an `Html.Fragment` from a String is
+  * to escape it. Handing that an already-escaped value puts `&amp;amp;` on a card.
+  *
+  * BOTH ARE INJECTED TOGETHER so that a test's hostile renderer reaches EVERY rendered field.
+  * When `raw` was not part of this record the row card silently bypassed the injection, and the
+  * vacuity guard in `Tables.test.scala` caught it — which is what that guard is for.
+  */
+final case class CellDisplay(text: Cell => String, raw: Cell => String)
 
 object CellDisplay:
   /** Today's rendering — a SECOND, VERBATIM COPY of [[Tables.cellSource]]'s body.
@@ -65,7 +76,10 @@ object CellDisplay:
     * is stated there too.
     */
   val Default: CellDisplay =
-    CellDisplay(cell => cell.content.collect { case sc: SpanContainer => sc.extractText }.mkString(" ").trim)
+    val plain: Cell => String =
+      cell => cell.content.collect { case sc: SpanContainer => sc.extractText }.mkString(" ").trim
+    // Unescaped BY DEFINITION, so both projections are the same function here.
+    CellDisplay(text = plain, raw = plain)
 
   /** WHAT PRODUCTION INJECTS SINCE S11 — [[Default]]'s text, escaped for an HTML field.
     *
@@ -90,7 +104,13 @@ object CellDisplay:
     * because both honest routes to it cross that file.
     */
   val Escaped: CellDisplay =
-    CellDisplay(cell => C.Html.escape(Default.text(cell)).render)
+    CellDisplay(
+      text = cell => C.Html.escape(Default.text(cell)).render,
+      // `Escaped.text` IS `escape ∘ raw`, so a consumer that escapes for itself gets the same
+      // bytes by taking `raw` — which is what makes the two projections one decomposition
+      // rather than two renderers that could drift.
+      raw = Default.text,
+    )
 
 object Tables:
 
@@ -147,12 +167,17 @@ object Tables:
       // wants the name of a bone. DISPLAY text, not a key segment: it is shown and never keyed,
       // so it cannot move a card's identity however it is written.
       val conceptLabel = headerRow.headOption.map(display.text).getOrElse("")
+      // THE SAME HEADER, UNESCAPED, for the row card's table. Passing the escaped one into
+      // `Html.rowTable` would escape it a second time and put `&amp;amp;` on a card — the
+      // failure the `Fragment` type prevents INSIDE `content/` and cannot prevent at a caller
+      // that hands it something already escaped.
+      val conceptLabelRaw = headerRow.headOption.map(display.raw).getOrElse("")
 
       if descriptorHeaders.isEmpty then Left(SpecError.TableWithoutDescriptors(where))
       else
         Right(
           bodyRows.zipWithIndex.flatMap((row, i) =>
-            cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel, directions)
+            cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel, conceptLabelRaw, directions)
           )
         )
     }
@@ -165,7 +190,22 @@ object Tables:
     * `NonEmptyVector.fromVectorUnsafe` crash on a real vault; this shape makes it
     * unrepresentable.
     */
-  private final case class Descriptor(headerSeg: HeadingSegment, header: String, value: String)
+  /** `header`/`value` are the DISPLAY projection, already escaped by [[CellDisplay.Escaped]] and
+    * ready to be a field. `headerRaw`/`valueRaw` are the same cells UNESCAPED, and exist because
+    * the row card's table is assembled inside `content/` — where escaping happens on the way
+    * into an `Html.Fragment` and cannot be applied twice.
+    *
+    * FOUR PROJECTIONS OF ONE CELL NOW, and the fifth — `headerSeg` — is the IDENTITY one and
+    * must never be conflated with any of them; that severance is what `Tables.test.scala` exists
+    * to hold.
+    */
+  private final case class Descriptor(
+      headerSeg: HeadingSegment,
+      header: String,
+      value: String,
+      headerRaw: String,
+      valueRaw: String,
+  )
 
   /** One row's cards: a pair card per usable descriptor cell, plus a row card when the row
     * carries TWO OR MORE of them.
@@ -182,6 +222,7 @@ object Tables:
       display: CellDisplay,
       context: String,
       conceptLabel: String,
+      conceptLabelRaw: String,
       directions: ThreeFieldDirections,
   ): Vector[(CardSpec, RowSource)] =
     row.headOption.map(cell => (cell, cellSegment(cell))) match
@@ -194,6 +235,8 @@ object Tables:
       case Some((_, Left(_))) => Vector.empty
       case Some((conceptCell, Right(rowSeg))) =>
         val rowConcept = display.text(conceptCell)
+        // UNESCAPED, for the row card's table — see `Descriptor` for why both projections exist.
+        val rowConceptRaw = display.raw(conceptCell)
 
         val pairs: Vector[Descriptor] =
           descriptorHeaders.zip(row.drop(1)).flatMap { (headerCell, valueCell) =>
@@ -215,7 +258,13 @@ object Tables:
             if cellSource(valueCell).isEmpty then None
             else
               cellSegment(headerCell).toOption.map { headerSeg =>
-                Descriptor(headerSeg, display.text(headerCell), display.text(valueCell))
+                Descriptor(
+                  headerSeg,
+                  display.text(headerCell),
+                  display.text(valueCell),
+                  display.raw(headerCell),
+                  display.raw(valueCell),
+                )
               }
           }
 
@@ -259,8 +308,22 @@ object Tables:
             Vector(
               CardSpec.TableRow(
                 key,
-                rowConcept,
-                NonEmptyVector.fromVectorUnsafe(pairs.map(d => d.header -> d.value)),
+                // RAW text in, escaped inside `Html.rowTable`. `CellDisplay.Escaped` is
+                // `Html.escape ∘ Default`, so passing `Default` here and escaping inside
+                // produces byte-identical output while keeping the only String-to-Fragment
+                // step inside `content/`.
+                blanked = C.Html
+                  .rowTable(
+                    conceptLabelRaw +: pairs.map(_.headerRaw),
+                    Some(rowConceptRaw) +: pairs.map(_ => None),
+                  )
+                  .render,
+                filled = C.Html
+                  .rowTable(
+                    conceptLabelRaw +: pairs.map(_.headerRaw),
+                    Some(rowConceptRaw) +: pairs.map(d => Some(d.valueRaw)),
+                  )
+                  .render,
                 context,
               ) -> RowSource.table(SourceKind.TableRow, rowNumber)
             )

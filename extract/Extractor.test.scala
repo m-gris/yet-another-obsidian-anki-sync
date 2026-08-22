@@ -346,19 +346,32 @@ class ExtractorTest extends munit.FunSuite:
       case other => fail(s"expected ThreeField, got $other")
   }
 
-  test("a row card carries ALL of the row's descriptors together") {
+  test("a row card draws the whole row as a table, blanked on the front and filled on the back") {
     val note = extract(messagingTable)
     specFor(note, "messaging / cost / benefit / queue").spec match
-      case CardSpec.TableRow(_, concept, descriptors, _) =>
-        assertEquals(concept, "Queue")
-        // `&amp;` arrived in S11: production injects `CellDisplay.Escaped`, so a cell's text
-        // is escaped for an HTML field. This is the one place the fixture markdown in THIS
-        // file carries a character that escaping moves — `dummy-vault` carries none in any
-        // table cell, which is why the golden does not witness it.
-        assertEquals(
-          descriptors.toVector,
-          Vector("Benefit" -> "Load Absorption", "Cost" -> "Delay &amp; Duplication"),
-        )
+      case CardSpec.TableRow(_, blanked, filled, _) =>
+        // THE SAME TABLE TWICE, differing only in what is filled in. Both carry every header,
+        // so the shape a reviewer reads does not change between question and answer.
+        Vector("Pattern", "Benefit", "Cost").foreach { header =>
+          assert(blanked.contains(s"<th>$header</th>"), s"front lost the '$header' column: $blanked")
+          assert(filled.contains(s"<th>$header</th>"), s"back lost the '$header' column: $filled")
+        }
+
+        // The concept is given on both sides; it is the thing being asked ABOUT.
+        assert(blanked.contains("<td>Queue</td>"), blanked)
+
+        // Every descriptor value is hidden on the front and present on the back.
+        assert(!blanked.contains("Load Absorption"), s"front gave the answer away: $blanked")
+        assert(blanked.contains("[&hellip;]"), s"front has no blank at all: $blanked")
+        assert(filled.contains("<td>Load Absorption</td>"), filled)
+
+        // ESCAPED EXACTLY ONCE. This cell is the only place the fixture markdown in THIS file
+        // carries a character that escaping moves — `dummy-vault` carries none in any table
+        // cell, so the golden does not witness it. Double-escaping would put `&amp;amp;` on the
+        // card, and is the live hazard when a value escaped by `CellDisplay` is handed to
+        // `Html.rowTable`, which escapes what it is given.
+        assert(filled.contains("Delay &amp; Duplication"), filled)
+        assert(!filled.contains("&amp;amp;"), s"the value was escaped twice: $filled")
       case other => fail(s"expected TableRow, got $other")
   }
 

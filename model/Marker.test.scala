@@ -201,7 +201,7 @@ class MarkerTest extends munit.FunSuite:
     // The row card is a plain Basic: concept on the front, all descriptors on the back.
     assertEquals(
       CardSpec
-        .TableRow(k, "Queue", NonEmptyVector.of(("Benefit", "Absorption"), ("Cost", "Delay")), "ctx")
+        .TableRow(k, "<table><tr><th>P</th></tr><tr><td>Queue</td></tr></table>", "<table></table>", "ctx")
         .noteTypeName,
       NoteTypes.Basic,
     )
@@ -326,7 +326,7 @@ class MarkerTest extends munit.FunSuite:
         NonEmptyVector.of(ClozeDeletion(1, ClozeGroup.Unlabelled("x"), Vector("x"))),
         "ctx",
       ),
-      CardSpec.TableRow(k, "Queue", NonEmptyVector.of(("Benefit", "Absorption")), "ctx"),
+      CardSpec.TableRow(k, "<table></table>", "<table></table>", "ctx"),
       CardSpec.Sequence(k, "Title", body("<ul><li>a</li></ul>"), "ctx"),
     )
 

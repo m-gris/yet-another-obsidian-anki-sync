@@ -41,3 +41,43 @@
    expects a third with no indication of what kind of thing it should be. */
 .asking { margin-top: 0.9em; }
 .asking .label::after { content: ""; margin-right: 0; }
+
+/* ═══ THE TABLE FORM ═══
+   A ROW card is one whole table row, drawn as a table with its values blanked. Its note
+   type is the plain one, which had no table rules at all, so a table sent to it rendered as
+   unruled columns. A card built from a table shows the table, with the part being asked for blanked. The SHAPE
+   IS PART OF THE KNOWLEDGE, and front/back throws it away: which column a value sits under is
+   exactly what "anterior border" versus "posterior border" means.
+
+   THE SAME TABLE IS DRAWN ON BOTH SIDES, and only the blank fills in. Nothing moves between
+   question and answer, so the eye does not have to re-parse a new layout while recalling. */
+table {
+  margin: 0 auto;
+  border-collapse: collapse;
+}
+table th,
+table td {
+  border: 1px solid #d8d8d8;
+  padding: 0.45em 0.9em;
+  text-align: left;
+}
+table th {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85em;
+  background: #f6f6f6;
+}
+
+/* The cell being asked for. Sized so the row does not resize when the answer appears — a table
+   that reflows on reveal makes the eye chase it. */
+.blank { color: #9a9a9a; letter-spacing: 0.08em; }
+
+/* The cell that was blanked, once revealed. Marked so the answer is findable at a glance in a
+   table where every other cell was already visible. */
+.answer { font-weight: 700; }
+
+.nightMode table th, .night_mode table th { background: #2a2a2a; }
+.nightMode table th, .nightMode table td,
+.night_mode table th, .night_mode table td { border-color: #444; }
+.nightMode .blank, .night_mode .blank { color: #8a8a8a; }
