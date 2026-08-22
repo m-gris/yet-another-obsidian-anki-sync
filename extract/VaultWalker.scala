@@ -111,11 +111,18 @@ object Decks:
     * A note at the vault root has NO folders, so with the default shape it lands in the root
     * deck rather than one of its own. The `.md` suffix comes off the file name here, at the
     * one place that knows the string is a path.
+    *
+    * SPLITTING ONLY — trimming and dropping blanks belong to [[compose]] and are NOT repeated
+    * here. This function used to do both, and a mutation removing them changed no test at all:
+    * `compose` normalises whatever it is handed, because a `DeckSource` can also be built by
+    * hand. Two places normalising the same values are free to disagree, and unobservable code
+    * is where the disagreement would hide. The same mutation applied to `compose`'s trim kills
+    * four tests, which is what "the normalisation lives there" means.
     */
   def sourceFor(relativeFilePath: String, headings: Vector[String]): DeckSource =
     val parts = relativeFilePath.split('/').toVector
     DeckSource(
-      folders = parts.dropRight(1).map(_.trim).filter(_.nonEmpty),
+      folders = parts.dropRight(1),
       fileName = parts.lastOption.getOrElse("").stripSuffix(".md"),
       headings = headings,
     )
