@@ -1,7 +1,7 @@
 # In flight — delete this file when the work below has landed
 
 _Rewritten 2026-08-22. Everything here was checked, not remembered. **Nothing is running.**
-Working tree clean under `obsidian-anki-custom-sync/`; 542 tests, 0 failures._
+Working tree clean under `obsidian-anki-custom-sync/`; 549 tests, 0 failures._
 
 ## Where things stand
 
@@ -35,12 +35,15 @@ Verified live against profile `claude-POC-test`, not asserted:
 
 ## OPEN — work with no decision left in it
 
-4. **A `#flashcard/table` section can yield ZERO cards and say nothing**, by one route that is
-   still open: the only descriptor column has a header that cannot be turned into a key, so the
-   column is dropped silently (`extract/Tables.scala`, the `cellSegment(headerCell).toOption`).
-   `TableWithoutDescriptors` does not fire, because a Cell IS present. Refuse it the same way.
-   _The empty-rows route is now covered for `rows`, and is deliberately NOT an error otherwise —
-   a table with a header and no rows yet is work in progress._
+4. ~~**A `#flashcard/table` section can yield ZERO cards and say nothing.**~~ **CLOSED
+   2026-08-22** (`1632133`, `257596c`). The gate in `extract/Tables.scala` is now "at least one
+   descriptor column whose header can name a card" rather than "at least one descriptor
+   column", so a blank or marker-only header refuses instead of dropping its column in silence.
+   Measured on a scratch vault: before, `inspect` said 0 cards, 0 failures, `scan: complete`,
+   exit 0; after, it names the file, the line and the remedy, exit 1. A table with one unusable
+   column among usable ones is unaffected — that is the control test.
+   _The empty-rows route is deliberately NOT an error except under `rows` — a table with a
+   header and no rows yet is work in progress._
 5. **Composable deck path.** Marc's ruling: folder path, file name and heading path are
    COMPLEMENTARY segments of one deck path, each optional — `Obsidian::System-Design::
    Replication::Read-your-writes consistency`. Today only the folder path is used. Build the
