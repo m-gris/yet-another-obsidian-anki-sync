@@ -492,6 +492,36 @@ class TablesTest extends munit.FunSuite:
     )
   }
 
+  /** The third and last branch of the refusal's explanation, and it was written UNTESTED.
+    *
+    * MEASURED, not assumed: corrupting this branch's text left all 548 tests green, which is
+    * the control mutant for the two tests above doing their job AND the reason this test
+    * exists. A message nothing reads is a message free to become wrong.
+    */
+  test("several descriptor columns that can none of them name a card are counted in the refusal") {
+    val error = refusalOf(
+      sectionOf(
+        """|# T
+           |
+           |Intro.
+           |
+           |## Marked #flashcard/table
+           |
+           || Pattern | #flashcard |     |
+           || ------- | ---------- | --- |
+           || Queue   | Absorbs    | Yes |
+           |""".stripMargin
+      )
+    )
+    error match
+      case SpecError.TableWithoutDescriptors(_, what) =>
+        assert(
+          what.contains("all 2 of its descriptor columns"),
+          s"the message must count the columns it is talking about — got: $what",
+        )
+      case other => fail(s"expected TableWithoutDescriptors, got $other")
+  }
+
   /** THE CONTROL. The gate is "no column can name a card", not "some column cannot" — one
     * unusable column among usable ones must still produce cards, or the refusal above would
     * be a table-destroying overreach rather than a report.
@@ -520,6 +550,17 @@ class TablesTest extends munit.FunSuite:
       cards.map((spec, _) => spec.key.path.render),
       Vector("t / queue / cost"),
       "the usable column must still yield its pair card",
+    )
+    // AND THE VALUE, WHICH IS THE POINT. The unusable column is skipped when building cards
+    // but must still occupy its POSITION, because a value cell is matched to its header by
+    // index. Dropping it from the column vector pairs `Cost` with the ignored column's value
+    // and produces a card that is wrong rather than missing — the failure the key assertion
+    // above cannot see.
+    val (spec, _) = cards.head
+    assertEquals(
+      fieldValue(spec, "Description"),
+      "Delay",
+      s"the surviving column took the wrong row cell — columns slid left: ${spec.fields}",
     )
   }
 

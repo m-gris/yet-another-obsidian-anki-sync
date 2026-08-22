@@ -1,6 +1,5 @@
 package obsidiananki.extract
 
-import cats.data.NonEmptyVector
 import laika.ast.*
 import obsidiananki.content as C
 import obsidiananki.model.*
