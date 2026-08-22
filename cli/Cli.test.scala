@@ -254,6 +254,8 @@ class CliTest extends munit.FunSuite:
           fields = Vector("Front" -> "One", "Back" -> "Body.", "Context" -> "A"),
           ownedTags = NonEmptyVector.one(obsidiananki.model.TagCodec.encode(key)),
           preservedTags = Vector.empty,
+          // This test is about what the REPORT says, not about decks; no move to carry.
+          deck = None,
         )
       ),
       OrphanInference.Computed,

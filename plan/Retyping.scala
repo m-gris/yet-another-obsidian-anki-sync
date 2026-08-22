@@ -141,4 +141,4 @@ object Retyping:
 
   /** Every note type named by a retype in this plan, both sides, de-duplicated. */
   def noteTypesIn(plan: Plan): Vector[String] =
-    plan.actions.collect { case SyncAction.Retype(_, _, from, to, _, _, _) => Vector(from, to) }.flatten.distinct
+    plan.actions.collect { case SyncAction.Retype(_, _, from, to, _, _, _, _) => Vector(from, to) }.flatten.distinct

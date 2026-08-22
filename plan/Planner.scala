@@ -289,6 +289,13 @@ object Planner:
               // content being written, and any `sha::` or `orphaned::` it held before is gone
               // by the same write. The key is present in the markdown — that is why this
               // branch was reached at all — so an `orphaned::` tag on it was stale.
+              // DECIDED ABOVE THE BRANCH, ON PURPOSE. This used to be computed only in the
+              // `else`, so a note that changed BOTH its note type and its folder had its deck
+              // silently left behind: the run reported itself clean, and the NEXT run moved the
+              // deck unasked — breaking "a second run changes nothing" rather than hiding
+              // behind it. Both branches now answer the same question before choosing.
+              val deckDiffers = !existing.deck.contains(deck)
+
               if existing.note.noteType != sourced.spec.noteTypeName then
                 Vector(
                   SyncAction.Retype(
@@ -299,11 +306,16 @@ object Planner:
                     fields = sourced.spec.fields,
                     ownedTags = NonEmptyVector.of(TagCodec.encode(key), OwnedTag.sha(sha)),
                     preservedTags = existing.note.tags.filterNot(OwnedTag.isOwned),
+                    // TRAVELS WITH THE MOVE, so one action is still one whole note. Emitting a
+                    // companion `Update` instead would be smaller here and wrong there: the
+                    // executor sets retypes aside BY TYPE when a run is not asked to make them,
+                    // and could not know a sibling Update belonged to a deferred note — so a
+                    // deferred run would move the deck of a note whose fields it did not write.
+                    deck = Option.when(deckDiffers)(deck),
                   )
                 )
               else
                 val fieldsDiffer = !existing.recordedSha.contains(sha)
-                val deckDiffers  = !existing.deck.contains(deck)
 
                 val changes = Vector(
                   Option.when(fieldsDiffer)(Change.FieldsChanged(sourced.spec.fields, sha)),

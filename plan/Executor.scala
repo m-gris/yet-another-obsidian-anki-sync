@@ -244,7 +244,7 @@ object Executor:
             anki.cardsOf(Vector(noteId)).flatMap(anki.changeDeck(_, to))
         }
 
-      case SyncAction.Retype(key, noteId, from, to, fields, ownedTags, preservedTags) =>
+      case SyncAction.Retype(key, noteId, from, to, fields, ownedTags, preservedTags, deck) =>
         // ONE WRITE, carrying the whole field set and the whole tag set, because Anki blanks
         // and replaces both — see `anki/Anki.scala`'s `changeNoteType`. It is therefore
         // atomic in a way an Update is not: there is no window in which the note holds new
@@ -262,7 +262,14 @@ object Executor:
                   AnkiError.UnsupportedOperation(what, s"${refusal.describe} — ${refusal.remedy}")
                 )
               case None =>
-                anki.changeNoteType(noteId, to, fields, ownedTags, preservedTags)
+                // NOTE TYPE FIRST, DECK SECOND, and the order follows this file's own rule:
+                // leave work to be REDONE rather than work believed done. Interrupted between
+                // the two, the note is on its new type and its deck is still wrong — which the
+                // next run can see and plan, because the note types now agree so the deck
+                // comparison is reached. The reverse order would move the deck of a note whose
+                // type never changed, and the run would look half-applied with no way to tell.
+                anki.changeNoteType(noteId, to, fields, ownedTags, preservedTags) *>
+                  deck.fold(F.unit)(d => anki.cardsOf(Vector(noteId)).flatMap(anki.changeDeck(_, d)))
 
           // NOT REACHABLE from `run`, which reads the shape of every note type the plan names
           // before it applies anything. Raising rather than defaulting is still the right

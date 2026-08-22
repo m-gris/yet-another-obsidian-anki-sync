@@ -1036,7 +1036,7 @@ object Main
   private def keyOf(a: SyncAction): CardKey = a match
     case SyncAction.Create(key, _)                => key
     case SyncAction.Update(key, _, _)             => key
-    case SyncAction.Retype(key, _, _, _, _, _, _) => key
+    case SyncAction.Retype(key, _, _, _, _, _, _, _) => key
     case SyncAction.Flag(key, _)                  => key
     case SyncAction.Unflag(key, _)                => key
 

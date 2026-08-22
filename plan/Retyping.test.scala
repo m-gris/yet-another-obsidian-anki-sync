@@ -211,7 +211,7 @@ class RetypingTest extends munit.FunSuite:
     seedOnOldType(anki, "Basic", k, Vector("Front" -> "Temporal coupling", "Back" -> "All up at once."))
 
     planOf(scanOf(basicSpec), anki).actions match
-      case Vector(SyncAction.Retype(planned, _, from, to, fields, ownedTags, preservedTags)) =>
+      case Vector(SyncAction.Retype(planned, _, from, to, fields, ownedTags, preservedTags, _)) =>
         assertEquals(planned, k)
         assertEquals(from, "Basic")
         assertEquals(to, Marker.NoteTypes.Basic)

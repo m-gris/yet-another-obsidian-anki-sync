@@ -80,15 +80,29 @@ enum SyncAction:
     *
     * A CONTENT EDIT MADE IN THE SAME RUN TRAVELS WITH IT, because `fields` is the spec's
     * current field set rather than whatever the note held before — so a heading that was both
-    * retagged and rewritten needs no accompanying [[Update]]. What does NOT travel with it is a
-    * DECK move: a note that changed folder AND note type gets only this action, and the deck
-    * move is planned by the next run once the note types agree. That is convergent rather than
-    * lossy, and it keeps this action a single write.
+    * retagged and rewritten needs no accompanying [[Update]]. SO DOES A DECK MOVE, via `deck`.
+    *
+    * THAT LAST PART IS A CORRECTION, MADE 2026-08-22, and the argument it replaces is worth
+    * keeping because it was wrong in an instructive way. This comment used to say a deck move
+    * "does NOT travel with it", and that the next run would plan it "once the note types agree
+    * — convergent rather than lossy". Convergent it was. What it also was: SILENT. `deckDiffers`
+    * was computed only in the branch this action is the alternative to, so a note that changed
+    * folder AND note type had its deck left wrong while the run reported itself CLEAN and exited
+    * zero. The next run then moved the deck without being asked — which breaks the standing
+    * property that a second run changes nothing, rather than hiding behind it.
+    *
+    * It mattered more than it looked. Deck changes are rare only while a vault is small and
+    * still: notes and folders move constantly in a living one, and if decks are ever derived
+    * from the heading path as well, every ancestor rename becomes a deck move.
+    *
+    * `deck` IS AN `Option` BECAUSE MOST RETYPES DO NOT MOVE ANYTHING. `None` means the note is
+    * already where the vault says it should be, which keeps the executor from issuing a write
+    * that changes nothing.
     *
     * THE COROLLARY IS THE THING TO KNOW WHEN THE MOVE IS DEFERRED: because everything about
     * such a note is carried by this one action, a run that does not make the move applies none
-    * of it — not the edit, not the deck. That is why a deferred move is reported and makes the
-    * run non-clean, rather than being counted as nothing to do.
+    * of it — not the edit, not the tags, not the deck. That is why a deferred move is reported
+    * and makes the run non-clean, rather than being counted as nothing to do.
     */
   case Retype(
       key: CardKey,
@@ -98,6 +112,7 @@ enum SyncAction:
       fields: Vector[(String, String)],
       ownedTags: NonEmptyVector[OwnedTag],
       preservedTags: Vector[String],
+      deck: Option[DeckPath],
   )
 
   /** In Anki, not in the markdown. Flagged, never deleted.

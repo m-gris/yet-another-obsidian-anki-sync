@@ -174,6 +174,68 @@ class PlannerTest extends munit.FunSuite:
       case other => fail(s"edited AND moved should be ONE Update, got $other")
   }
 
+  /** A NOTE THAT CHANGED BOTH ITS FOLDER AND ITS NOTE TYPE MUST ARRIVE IN BOTH PLACES.
+    *
+    * The defect this pins: `deckDiffers` used to be computed only in the branch taken when the
+    * note type MATCHES, so a note that changed both had its deck silently left behind. The run
+    * reported itself clean and exited zero; the NEXT run then moved the deck unasked, which
+    * breaks "a second run changes nothing" rather than hiding behind it.
+    *
+    * THE POLICY MUST BE `Apply`. Under `Defer` the move is set aside, so "the deck did not move"
+    * holds no matter what the executor does and the test proves nothing.
+    *
+    * THE TWO NOTE TYPES MUST BE SAME-SHAPE. `Retyping` refuses a move between types with
+    * different cloze-ness or template counts, and a refusal would make this go green for the
+    * wrong reason — the deck would be unmoved because NOTHING happened.
+    */
+  test("a note that moved folder AND changed note type arrives in the new deck, in one run") {
+    val anki = InMemoryAnki()
+    val k    = key("n1", "A", "B")
+
+    // Start: a one-way card, in the default deck.
+    runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "f", "body"))), observe(anki)), anki)
+
+    // Then BOTH change at once: the marker becomes `sequence`, and the file moves folder.
+    //
+    // `1way` -> `sequence` IS THE PAIR TO USE, and not an arbitrary choice: `Retyping` refuses
+    // a move between note types whose cloze-ness or template COUNT differ, and of this tool's
+    // five types these two are the only same-shape pair — both standard, both one template.
+    // Any other pair is refused, the run fails loudly, and the test would prove nothing about
+    // decks because nothing would have moved.
+    val moved   = deck("Obsidian", "Patterns")
+    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext)
+    val plan = Planner
+      .plan(scanOf(sourced(retyped)), observe(anki), _ => moved, newNoteOf)
+      .fold(e => fail(s"$e"), identity)
+
+    assertEquals(plan.actions.size, 1, s"expected ONE action carrying the whole note: ${plan.actions}")
+    runPlan(plan, anki)
+
+    // ASSERTED ON ANKI, not on the plan: the question is where the card ended up.
+    val after = observe(anki).notes.head
+    assertEquals(after.note.noteType, retyped.noteTypeName, "the note type did not change")
+    assertEquals(after.deck, Some(moved), "the note type moved but the card was left in its old deck")
+
+    // AND THE LAW HOLDS. This is the half the old behaviour broke: it converged, but only by
+    // doing unrequested work on a later run.
+    val second = Planner
+      .plan(scanOf(sourced(retyped)), observe(anki), _ => moved, newNoteOf)
+      .fold(e => fail(s"$e"), identity)
+    assertEquals(second.actions, Vector.empty, s"a second run still had work to do: ${second.actions}")
+  }
+
+  test("a retype that does NOT move folders carries no deck, so no pointless write is issued") {
+    val anki = InMemoryAnki()
+    val k    = key("n1", "A", "B")
+    runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "f", "body"))), observe(anki)), anki)
+
+    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext)
+    planOf(scanOf(sourced(retyped)), observe(anki)).actions match
+      case Vector(r: SyncAction.Retype) =>
+        assertEquals(r.deck, None, "a deck move was planned for a note that never moved")
+      case other => fail(s"expected a single Retype, got $other")
+  }
+
   test("a marker change becomes a Retype, never a silent field update") {
     val anki = InMemoryAnki()
     val k    = key("n1", "A", "Term")
@@ -184,7 +246,7 @@ class PlannerTest extends munit.FunSuite:
     // would SUCCEED here and the reverse card would never exist.
     val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
     planOf(scanOf(sourced(reversed)), observe(anki)).actions match
-      case Vector(SyncAction.Retype(_, _, from, to, _, _, _)) =>
+      case Vector(SyncAction.Retype(_, _, from, to, _, _, _, _)) =>
         assertEquals(from, Marker.NoteTypes.Basic)
         assertEquals(to, Marker.NoteTypes.BasicAndReversed)
       case other => fail(s"expected a Retype, got $other")
@@ -458,7 +520,7 @@ class PlannerTest extends munit.FunSuite:
         case SyncAction.Update(k, _, _) => k
         case SyncAction.Flag(k, _)      => k
         case SyncAction.Unflag(k, _)    => k
-        case SyncAction.Retype(k, _, _, _, _, _, _) => k
+        case SyncAction.Retype(k, _, _, _, _, _, _, _) => k
       })),
       "an already-applied action was scheduled again",
     )
