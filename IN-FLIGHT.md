@@ -1,7 +1,7 @@
 # In flight — delete this file when the work below has landed
 
 _Rewritten 2026-08-22. Everything here was checked, not remembered. **Nothing is running.**
-Working tree clean under `obsidian-anki-custom-sync/`; 549 tests, 0 failures._
+Working tree clean under `obsidian-anki-custom-sync/`; 574 tests, 0 failures._
 
 ## Where things stand
 
@@ -44,10 +44,19 @@ Verified live against profile `claude-POC-test`, not asserted:
    column among usable ones is unaffected — that is the control test.
    _The empty-rows route is deliberately NOT an error except under `rows` — a table with a
    header and no rows yet is work in progress._
-5. **Composable deck path.** Marc's ruling: folder path, file name and heading path are
-   COMPLEMENTARY segments of one deck path, each optional — `Obsidian::System-Design::
-   Replication::Read-your-writes consistency`. Today only the folder path is used. Build the
-   mechanism and expose the choice; do not pick one and defend it (REQUIREMENTS.md item 11).
+5. ~~**Composable deck path.**~~ **CLOSED 2026-08-22** (`2dd3ff9`, `b4b967c`, `7cd080a`,
+   `7d18960`, `9c3cafd`). `inspect` and `sync` take `--deck-from`, a list naming which of a
+   card's folder path, file name and heading path become deck levels — `folders`, `file`,
+   `headings`, or `none` for one flat deck. The default is `folders`, which is where every
+   already-synced card sits.
+   Marc's worked example is `--deck-from folders,headings`, giving
+   `Obsidian::System-Design::Replication::Read-your-writes consistency`; the file name is left
+   out because this vault's H1 already carries it, and selecting both would repeat it. That
+   repeat is shown rather than de-duplicated — a rule dropping it would also drop a heading
+   that genuinely repeats its parent.
+   Verified live against `claude-POC-test`, dry-run only: the default shape plans **no deck
+   move at all** for the 43 synced cards, and `folders,headings` plans **43 moves and no
+   content change**.
 6. **`prune`** — the command that deletes flagged cards after the list has been reviewed.
 7. **A formatter, and a keybinding** — re-indent nested lists to four spaces so `ListIndent`
    stops refusing them. Marc: "probably trivial", separate session.
