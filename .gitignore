@@ -1,0 +1,12 @@
+# Build output
+.scala-build/
+target/
+*.class
+
+# Editor and build-server state
+.bsp/
+.metals/
+.idea/
+
+# OS
+.DS_Store
