@@ -26,10 +26,25 @@ enum TwoFieldDirections:
   * is TWO directions: recall the concept, and recall the description.
   */
 enum ThreeFieldDirections:
-  /** `#flashcard/3way` — recall the concept; recall the description. */
+  /** `#flashcard/table/1way` — recall the DESCRIPTION only.
+    *
+    * The one direction that is always wanted: given the thing and the aspect, what is the
+    * value? Reachable only through a table marker; no heading token selects it, because a
+    * heading that wants one direction writes `#flashcard/1way` and gets a two-field card.
+    *
+    * IT SUBTRACTS A CARD, and that is worth knowing before choosing it: a table already synced
+    * under the default has a concept-recall card WITH REVIEW HISTORY, and moving that table to
+    * `1way` retires it. The gate is therefore written so that a note which has never been told
+    * either way keeps the card — see [[ValueOnlyField]].
+    */
+  case ValueOnly
+
+  /** `#flashcard/3way`, `#flashcard/table` and `#flashcard/table/2way` — recall the concept;
+    * recall the description.
+    */
   case Default
 
-  /** `#flashcard/3way/all` — additionally recall the descriptor. */
+  /** `#flashcard/3way/all` and `#flashcard/table/3way` — additionally recall the descriptor. */
   case All
 
 /** The marker on a heading, parsed. */
@@ -37,7 +52,7 @@ enum Marker:
   case TwoField(directions: TwoFieldDirections)
   case ThreeField(directions: ThreeFieldDirections)
   case Cloze
-  case Table
+  case Table(directions: ThreeFieldDirections)
 
   /** `#flashcard/sequence` — the body's list items are revealed ONE AT A TIME, as ONE note on
     * ONE schedule.
@@ -213,6 +228,16 @@ object Marker:
     */
   val ConceptLabelField: String = "ConceptLabel"
 
+  /** Set when a table asked for `1way`, suppressing the concept-recall card.
+    *
+    * INVERTED ON PURPOSE — the template tests `{{^ValueOnly}}`, so an EMPTY value means "show
+    * that card". Written the other way round, every note synced before this field existed would
+    * have an empty gate the moment the note type gained it, so its concept-recall card would
+    * render blank until the next sync, and Anki's Tools > Empty Cards would offer to DELETE
+    * cards holding real review history. Empty must mean the status quo.
+    */
+  val ValueOnlyField: String = "ValueOnly"
+
   /** Field names carried over from Anki's stock note types.
     *
     * THESE NAMES WERE VERIFIED against a live collection via `modelFieldNames`, twice, by
@@ -286,7 +311,10 @@ object Marker:
     val ClozeSequence: Vector[String] = ClozeSequenceFields :+ ContextField
 
     val ConceptDescriptor: Vector[String] =
-      ConceptDescriptorFields :+ ThreeWayField :+ ContextField :+ ConceptLabelField
+      // NEW FIELDS GO LAST, in the order they were introduced: Anki's `modelFieldAdd` appends,
+      // so any other position leaves a repaired collection permanently reporting a field-order
+      // difference this tool declines to fix.
+      ConceptDescriptorFields :+ ThreeWayField :+ ContextField :+ ConceptLabelField :+ ValueOnlyField
 
     /** Keyed by note type name, so a consumer holding a `CardSpec` can ask
       * `FieldOrder.byNoteType(spec.noteTypeName)`.
@@ -320,7 +348,13 @@ object Marker:
     case "#flashcard/3way"     => Some(ThreeField(ThreeFieldDirections.Default))
     case "#flashcard/3way/all" => Some(ThreeField(ThreeFieldDirections.All))
     case "#flashcard/cloze"    => Some(Cloze)
-    case "#flashcard/table"    => Some(Table)
+    // THE TABLE FAMILY. Bare `#flashcard/table` keeps meaning exactly what it meant before the
+    // family existed, so no vault has to be edited and no card moves; the variants are how a
+    // table asks for more or fewer directions.
+    case "#flashcard/table"      => Some(Table(ThreeFieldDirections.Default))
+    case "#flashcard/table/1way" => Some(Table(ThreeFieldDirections.ValueOnly))
+    case "#flashcard/table/2way" => Some(Table(ThreeFieldDirections.Default))
+    case "#flashcard/table/3way" => Some(Table(ThreeFieldDirections.All))
     case "#flashcard/sequence" => Some(Sequence)
     case _                     => None
 
@@ -338,7 +372,7 @@ object Marker:
   extension (m: Marker)
     /** The Anki note type this marker's note is created with.
       *
-      * [[Marker.Table]] has none: a table row yields notes of two DIFFERENT types — pair
+      * [[Marker.Table(ThreeFieldDirections.Default)]] has none: a table row yields notes of two DIFFERENT types — pair
       * cards use the concept-descriptor type, the row card uses Basic — so the note type is
       * a property of the emitted spec, not of the marker.
       */
@@ -348,4 +382,4 @@ object Marker:
       case ThreeField(_)                        => Some(NoteTypes.ConceptDescriptor)
       case Cloze                                => Some(NoteTypes.Cloze)
       case Sequence                             => Some(NoteTypes.ClozeSequence)
-      case Table                                => None
+      case Table(_)                                => None

@@ -200,7 +200,11 @@ object Extractor:
 
     if marker == Marker.Table then
       bodyBlocks(where, ownBody(section))
-        .flatMap(_ => Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles))
+        // The SAFETY walk, which runs for a table section too and only needs to reach the
+        // refusals — the directions it passes are irrelevant to that and never reach a card.
+        .flatMap(_ =>
+          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, ThreeFieldDirections.Default)
+        )
     else for
       lowered <- bodyBlocks(where, ownBody(section))
 
@@ -355,7 +359,8 @@ object Extractor:
         // because an inexhaustive match is a build error here. It is given the same argument
         // the live call site is given, so a future "simplification" that collapses that `if`
         // does not silently start emitting contextless table cards.
-        case Marker.Table => Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles)
+        case Marker.Table(directions) =>
+          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, directions)
 
         case Marker.Sequence =>
           // ── THE REFUSAL, AND THE ONE PLACE IN THIS PROJECT THAT GATES ON A RENDERER ──────

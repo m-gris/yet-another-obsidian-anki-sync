@@ -141,9 +141,13 @@ class TablesTest extends munit.FunSuite:
     * sentinel, but no assertion in this file reads it: these tests are about the identity /
     * display severance, and a breadcrumb is neither.
     */
-  private def cardsOf(section: Section, display: CellDisplay): Vector[(CardSpec, RowSource)] =
+  private def cardsOf(
+      section: Section,
+      display: CellDisplay,
+      directions: ThreeFieldDirections = ThreeFieldDirections.Default,
+  ): Vector[(CardSpec, RowSource)] =
     Tables
-      .fromSection(baseKey, section, display, Vector("T", "Grid"))
+      .fromSection(baseKey, section, display, Vector("T", "Grid"), directions)
       .fold(e => fail(s"fromSection: $e"), identity)
 
   /** The hostile display projection.

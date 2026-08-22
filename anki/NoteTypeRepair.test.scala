@@ -46,7 +46,9 @@ class NoteTypeRepairTest extends munit.FunSuite:
       // Both fields this tool derives are stripped, which is what a note type inherited by
       // hand-rename actually looks like: it predates them.
       fields = NonEmptyVector.fromVectorUnsafe(
-        ours.fields.toVector.filterNot(f => f == Marker.ContextField || f == Marker.ConceptLabelField)
+        ours.fields.toVector.filterNot(f =>
+          f == Marker.ContextField || f == Marker.ConceptLabelField || f == Marker.ValueOnlyField
+        )
       ),
       templates = ours.templates.map { (templateName, template) =>
         templateName -> CardTemplate(
@@ -130,7 +132,7 @@ class NoteTypeRepairTest extends munit.FunSuite:
     // Both derived fields, in DECLARED order — which is also the order Anki will append them.
     assertEquals(
       added,
-      Vector(Marker.ContextField, Marker.ConceptLabelField),
+      Vector(Marker.ContextField, Marker.ConceptLabelField, Marker.ValueOnlyField),
       s"plan was ${plan.actions.map(_.describe)}",
     )
     assertEquals(plan.refusals, Vector.empty)

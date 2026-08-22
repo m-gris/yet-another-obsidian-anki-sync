@@ -45,6 +45,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
   field ⟦ConceptLabel⟧ ⟦Bone⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/posterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -54,6 +55,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
   field ⟦ConceptLabel⟧ ⟦Bone⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal⟧
   note ⟦Obsidian Basic⟧
@@ -69,6 +71,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
   field ⟦ConceptLabel⟧ ⟦Bone⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/posterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -78,6 +81,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
   field ⟦ConceptLabel⟧ ⟦Bone⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal⟧
   note ⟦Obsidian Basic⟧
@@ -129,6 +133,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/bene
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -138,6 +143,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
   note ⟦Obsidian Basic⟧
@@ -153,6 +159,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -162,6 +169,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub⟧
   note ⟦Obsidian Basic⟧
@@ -177,6 +185,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -186,6 +195,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response⟧
   note ⟦Obsidian Basic⟧
@@ -213,6 +223,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -222,6 +233,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
@@ -237,6 +249,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -246,6 +259,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
@@ -261,6 +275,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -270,6 +285,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout⟧
   note ⟦Obsidian Basic⟧
@@ -285,6 +301,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Exactly one descriptor column⟧
   field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/hash%20partitioning/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -294,6 +311,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Exactly one descriptor column⟧
   field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/consistent%20hashing/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -303,6 +321,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Exactly one descriptor column⟧
   field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -312,6 +331,7 @@ card ⟦src::fix-consistency::consistency/definition⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -321,6 +341,7 @@ card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -330,6 +351,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Consistency › Session guarantees⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -339,6 +361,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Consistency › Session guarantees⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -372,6 +395,7 @@ card ⟦src::fix-linearizability::linearizability/definition⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -381,6 +405,7 @@ card ⟦src::fix-linearizability::linearizability/cost⟧
   field ⟦ThreeWay⟧ ⟦1⟧
   field ⟦Context⟧ ⟦⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -390,6 +415,7 @@ card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%2
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -399,6 +425,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -408,6 +435,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -417,6 +445,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -426,6 +455,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication%20trade%20availability%20for%20durability%3f⟧
   note ⟦Obsidian Basic⟧

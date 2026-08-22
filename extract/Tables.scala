@@ -130,6 +130,7 @@ object Tables:
       section: Section,
       display: CellDisplay,
       contextTitles: Vector[String],
+      directions: ThreeFieldDirections,
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
     val where   = key.path.render
     val context = CardContext.render(contextTitles)
@@ -151,7 +152,7 @@ object Tables:
       else
         Right(
           bodyRows.zipWithIndex.flatMap((row, i) =>
-            cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel)
+            cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel, directions)
           )
         )
     }
@@ -181,6 +182,7 @@ object Tables:
       display: CellDisplay,
       context: String,
       conceptLabel: String,
+      directions: ThreeFieldDirections,
   ): Vector[(CardSpec, RowSource)] =
     row.headOption.map(cell => (cell, cellSegment(cell))) match
       // A row with no cells at all names nothing.
@@ -240,7 +242,7 @@ object Tables:
               rowConcept,
               d.header,
               body,
-              ThreeFieldDirections.Default,
+              directions,
               context,
               conceptLabel,
             ) -> RowSource.table(SourceKind.TablePair, rowNumber)

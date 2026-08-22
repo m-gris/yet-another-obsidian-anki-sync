@@ -21,8 +21,59 @@ class MarkerTest extends munit.FunSuite:
       Some(Marker.ThreeField(ThreeFieldDirections.All)),
     )
     assertEquals(parsed("Bones #flashcard/cloze"), Some(Marker.Cloze))
-    assertEquals(parsed("Cost / benefit #flashcard/table"), Some(Marker.Table))
+    assertEquals(parsed("Cost / benefit #flashcard/table"), Some(Marker.Table(ThreeFieldDirections.Default)))
     assertEquals(parsed("Path of blood #flashcard/sequence"), Some(Marker.Sequence))
+  }
+
+  /** THE TABLE FAMILY, and the property that matters most is the DEFAULT.
+    *
+    * Bare `#flashcard/table` must keep meaning exactly what it meant before the family existed.
+    * Any other choice would silently change what every already-marked table produces — adding
+    * cards nobody asked for, or retiring cards that hold review history — on the next sync
+    * after an upgrade, with no edit to any vault.
+    */
+  test("bare #flashcard/table is the two-direction default, unchanged by the family") {
+    assertEquals(
+      parsed("Cost / benefit #flashcard/table"),
+      Some(Marker.Table(ThreeFieldDirections.Default)),
+    )
+    assertEquals(
+      parsed("Cost / benefit #flashcard/table/2way"),
+      Some(Marker.Table(ThreeFieldDirections.Default)),
+      "the explicit 2way must mean the same as the bare marker, or upgrading a vault to the " +
+        "explicit form would change what it produces",
+    )
+  }
+
+  test("the table family selects one, two or three directions") {
+    assertEquals(parsed("T #flashcard/table/1way"), Some(Marker.Table(ThreeFieldDirections.ValueOnly)))
+    assertEquals(parsed("T #flashcard/table/2way"), Some(Marker.Table(ThreeFieldDirections.Default)))
+    assertEquals(parsed("T #flashcard/table/3way"), Some(Marker.Table(ThreeFieldDirections.All)))
+  }
+
+  /** An unknown qualifier is a LOUD failure, not a silent fallback to the default. A typo like
+    * `#flashcard/table/2ways` must not quietly produce the default set of cards.
+    */
+  test("an unrecognised table qualifier is refused, never defaulted") {
+    assert(Marker.parse("T #flashcard/table/2ways").isLeft)
+    assert(Marker.parse("T #flashcard/table/all").isLeft)
+  }
+
+  /** THE GATE IS INVERTED, AND THAT IS THE SAFETY PROPERTY. `ValueOnly` is EMPTY for the two
+    * variants that keep the concept-recall card, so a note synced before the field existed —
+    * whose value is empty — keeps that card rather than having it render blank and become a
+    * candidate for Anki's Tools > Empty Cards, which would delete real review history.
+    */
+  test("only the one-direction variant sets the gate that hides the concept card") {
+    def valueOnlyOf(d: ThreeFieldDirections): String =
+      val spec = CardSpec.ThreeField(
+        aKey("T", "Row"), "c", "d", body("v"), d, "ctx", "Kind",
+      )
+      spec.fields.toMap.apply(Marker.ValueOnlyField)
+
+    assertEquals(valueOnlyOf(ThreeFieldDirections.ValueOnly), "1")
+    assertEquals(valueOnlyOf(ThreeFieldDirections.Default), "")
+    assertEquals(valueOnlyOf(ThreeFieldDirections.All), "")
   }
 
   test("3way and 3way/all are DIFFERENT variants, not the same one") {
@@ -72,7 +123,7 @@ class MarkerTest extends munit.FunSuite:
   test("a table marker has no single note type") {
     // Its rows yield notes of two different types, so the note type belongs to the emitted
     // spec rather than to the marker.
-    assertEquals(Marker.Table.noteTypeName, None)
+    assertEquals(Marker.Table(ThreeFieldDirections.Default).noteTypeName, None)
   }
 
   test("B7: the concept-descriptor field order is Concept, Descriptor, Description") {

@@ -8,7 +8,8 @@
     "Description",
     "ThreeWay",
     "Context",
-    "ConceptLabel"
+    "ConceptLabel",
+    "ValueOnly"
   ],
   "styling": "styling.css",
   "templates": [

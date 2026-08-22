@@ -201,7 +201,7 @@ class InMemoryAnkiTest extends munit.FunSuite:
     assert(anki.noteTypeNames.fold(_ => Nil, identity).contains(Marker.NoteTypes.ConceptDescriptor))
     assertEquals(
       anki.fieldNames(Marker.NoteTypes.ConceptDescriptor),
-      Right(Vector("Concept", "Descriptor", "Description", "ThreeWay", "Context", "ConceptLabel")),
+      Right(Vector("Concept", "Descriptor", "Description", "ThreeWay", "Context", "ConceptLabel", "ValueOnly")),
     )
     assert(anki.fieldNames("No Such Type").isLeft)
   }

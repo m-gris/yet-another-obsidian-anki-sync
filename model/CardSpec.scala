@@ -284,12 +284,18 @@ object CardSpec:
 
       case ThreeField(_, concept, descriptor, description, directions, context, conceptLabel) =>
         val threeWay = directions match
-          case ThreeFieldDirections.All     => "1"
-          case ThreeFieldDirections.Default => ""
+          case ThreeFieldDirections.All       => "1"
+          case ThreeFieldDirections.Default   => ""
+          case ThreeFieldDirections.ValueOnly => ""
+        val valueOnly = directions match
+          case ThreeFieldDirections.ValueOnly => "1"
+          case ThreeFieldDirections.Default   => ""
+          case ThreeFieldDirections.All       => ""
         Marker.ConceptDescriptorFields.zip(Vector(concept, descriptor, description.value)) :+
           (Marker.ThreeWayField -> threeWay) :+
           (Marker.ContextField -> context) :+
-          (Marker.ConceptLabelField -> conceptLabel)
+          (Marker.ConceptLabelField -> conceptLabel) :+
+          (Marker.ValueOnlyField -> valueOnly)
 
       case Cloze(_, text, _, context) =>
         // The body ALREADY CARRIES its `{{cN::…}}` deletions: `Cloze.renderWithDeletions`
