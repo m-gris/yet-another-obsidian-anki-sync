@@ -339,3 +339,32 @@ trait Anki[F[_]]:
   def deckOf(card: AnkiCardId): F[Option[DeckPath]]
 
   def changeDeck(cards: Vector[AnkiCardId], deck: DeckPath): F[Unit]
+
+  /** Take cards OUT of the review queue without changing anything else about them.
+    *
+    * WHAT SUSPENSION IS, precisely, because the alternatives all lose something this does not:
+    * a suspended card keeps its deck, its interval, its ease, its due date and its whole review
+    * log, and is simply never shown. Unsuspending puts it back exactly where it was. It is the
+    * only mechanism Anki has that removes a card from study while destroying nothing.
+    *
+    * WHY IT IS NEEDED. A card whose heading has gone gets an `orphaned::` tag today and NOTHING
+    * else, so it stays in the daily rotation and goes on asking a question the vault no longer
+    * answers. Ruled 2026-08-19; unbuilt until now.
+    *
+    * PER CARD, WHILE FLAGGING IS PER NOTE, and that asymmetry is Anki's rather than this file's:
+    * identity lives on the note and scheduling lives on the card, so a three-field note has up
+    * to three cards to suspend. This is the same impedance point [[cardsOf]] exists for.
+    *
+    * IDEMPOTENT AT THE FAR END — suspending an already-suspended card is a no-op — so a re-run
+    * that suspends the same orphan again costs a call and changes nothing.
+    */
+  def suspend(cards: Vector[AnkiCardId]): F[Unit]
+
+  /** Put cards back in the queue, with the scheduling they had when they left it.
+    *
+    * THE OTHER HALF OF [[suspend]], AND NOT OPTIONAL. A heading that comes back must bring its
+    * card back with it; without this the flag would be cleared, the card would look live in
+    * every report, and it would never be shown again — a worse state than the one suspension
+    * was introduced to fix, because it looks fixed.
+    */
+  def unsuspend(cards: Vector[AnkiCardId]): F[Unit]

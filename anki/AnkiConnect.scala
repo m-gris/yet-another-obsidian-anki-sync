@@ -296,6 +296,35 @@ object AnkiConnect:
     */
   def modelNotFound(noteType: String): String = s"model was not found: $noteType"
 
+  /** The `suspend` and `unsuspend` parameters. Both take one list of card ids.
+    *
+    * `__init__.py:1041` declares `suspend(self, cards, suspend=True)` and `:1060` declares
+    * `unsuspend(self, cards)` as a call straight through to it. The flag is NOT sent from here:
+    * the two actions are separate names in the algebra, and passing a boolean would let a
+    * caller ask one of them to do the other's job.
+    */
+  def suspendParams(cards: Vector[AnkiCardId]): Json =
+    Json.obj("cards" := cards.map(_.value))
+
+  /** THE TWO ACTIONS ANSWER DIFFERENT SHAPES, which is why they are not decoded the same way.
+    *
+    * `suspend` RETURNS A BOOLEAN — `False` when it found nothing to change, `True` otherwise
+    * (`__init__.py:1046-1058`). `unsuspend` has no `return` statement at all, so Python answers
+    * `None` and the envelope carries `null`. Read off the add-on installed on this machine;
+    * decoding either as the other fails loudly, which is how this was found.
+    *
+    * FALSE IS NOT A FAILURE, and must never be treated as one: it means every card named was
+    * already in the state asked for. That is the ordinary result of a second run.
+    *
+    * AND THE BOOLEAN CANNOT BE TRUSTED AS "SOMETHING CHANGED" ANYWAY. `:1042-1044` iterates
+    * `cards` while removing from it, which skips elements — a real bug in the add-on, not a
+    * simplification here. A mixed list therefore keeps some already-suspended cards, the
+    * early-out at `:1046` does not fire, and the answer is `True` although nothing changed.
+    * Harmless, because suspending a suspended card is a no-op; recorded so that nobody later
+    * builds a report on that boolean.
+    */
+  val suspendResult: Decoder[Boolean] = Decoder[Boolean]
+
   /** Anki's own value for a CLOZE note type, in the `type` key of a note-type dictionary.
     *
     * READ OUT OF `anki/consts.py` ON THIS MACHINE on 2026-08-21 — `MODEL_STD = 0` and

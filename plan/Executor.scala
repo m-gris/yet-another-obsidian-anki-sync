@@ -277,11 +277,26 @@ object Executor:
               )
             )
 
+      // TAG THEN SUSPEND, AND THE ORDER IS THE PESSIMISTIC ONE. Interrupted between the two,
+      // the note is tagged and still in the rotation — visible, findable, and put right by the
+      // next run. The reverse leaves a card suspended with nothing saying why, which is a card
+      // that has silently stopped being studied and cannot be found by searching for orphans.
+      //
+      // SUSPENSION IS PER CARD, THE TAG IS PER NOTE. A three-field note has up to three cards
+      // and all of them must leave the queue: suspending one of three would leave the heading's
+      // other directions still being asked.
       case SyncAction.Flag(key, noteId) =>
-        anki.addTags(Vector(noteId), Vector(OwnedTag.orphaned(key)))
+        anki.addTags(Vector(noteId), Vector(OwnedTag.orphaned(key))) *>
+          anki.cardsOf(Vector(noteId)).flatMap(anki.suspend)
 
+      // UNSUSPEND FIRST, THEN CLEAR THE TAG — the mirror of the above, and pessimistic for the
+      // same reason. Interrupted here, the card is back in the queue and still tagged: it gets
+      // studied and still appears in the orphan list, which is noisy and harmless. Clearing the
+      // tag first would leave a suspended card that nothing reports and no later run repairs,
+      // because an untagged live card is indistinguishable from a healthy one.
       case SyncAction.Unflag(key, noteId) =>
-        anki.removeTags(Vector(noteId), Vector(OwnedTag.orphaned(key)))
+        anki.cardsOf(Vector(noteId)).flatMap(anki.unsuspend) *>
+          anki.removeTags(Vector(noteId), Vector(OwnedTag.orphaned(key)))
 
   /** Replace whichever tag currently occupies one of OUR prefixes, leaving every other tag
     * alone.

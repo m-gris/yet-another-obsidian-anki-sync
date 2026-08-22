@@ -80,6 +80,12 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     def setNoteTypeStyling(noteType: String, css: String): Result[Unit] =
       write(underlying.setNoteTypeStyling(noteType, css))
 
+    // COUNTED AS WRITES, and unlike the note-type operations these ARE reached by this suite:
+    // a Flag now tags AND suspends, so an interruption can land between the two. That is the
+    // partial state the ordering in `Executor` is chosen to make recoverable.
+    def suspend(cards: Vector[AnkiCardId]): Result[Unit]   = write(underlying.suspend(cards))
+    def unsuspend(cards: Vector[AnkiCardId]): Result[Unit] = write(underlying.unsuspend(cards))
+
     def addNote(note: NewNote): Result[AnkiNoteId] = write(underlying.addNote(note))
 
     /** COUNTED AS A WRITE, and it is the one write in the algebra that is ATOMIC: fields, note

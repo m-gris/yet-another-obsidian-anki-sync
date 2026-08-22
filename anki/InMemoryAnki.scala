@@ -317,6 +317,30 @@ final class InMemoryAnki private (
   def changeDeck(cards: Vector[AnkiCardId], deck: DeckPath): Either[AnkiError, Unit] =
     Right(cards.foreach(c => cardDecks += c.value -> deck))
 
+  /** SUSPENSION IS A FACT SEPARATE FROM THE DECK, and modelling it that way is the point.
+    *
+    * In Anki a suspended card keeps its deck, its interval, its ease and its whole review log —
+    * `suspended(card)` is nothing but `card.queue == -1` (`__init__.py:1065-1067`). A fake that
+    * moved the card, or forgot its deck, would let a test prove suspension is lossless when the
+    * real thing had quietly cost something. So it is one flag, beside state nothing else touches.
+    *
+    * IDEMPOTENT IN BOTH DIRECTIONS, as Anki is: suspending twice, or unsuspending a card that
+    * was never suspended, changes nothing and reports nothing.
+    */
+  private var suspendedCards: Set[Long] = Set.empty
+
+  def suspend(cards: Vector[AnkiCardId]): Either[AnkiError, Unit] =
+    Right(suspendedCards ++= cards.map(_.value))
+
+  def unsuspend(cards: Vector[AnkiCardId]): Either[AnkiError, Unit] =
+    Right(suspendedCards --= cards.map(_.value))
+
+  /** Test affordance rather than part of the algebra: nothing in this tool ASKS whether a card
+    * is suspended, so an operation for it would have no caller. A test needs it to assert an
+    * outcome rather than an interaction.
+    */
+  def isSuspended(card: AnkiCardId): Boolean = suspendedCards.contains(card.value)
+
   /** Test affordance: a person applying a tag of their own inside Anki.
     *
     * Not part of the algebra — the tool can never do this. It exists so a test can set up

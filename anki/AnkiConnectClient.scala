@@ -164,6 +164,26 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   /** Matched on the MESSAGE and not on the action name, because all three repair actions raise
     * the identical string and mapping them separately would be three copies of one fact.
     */
+  /** The boolean is DISCARDED, deliberately — see [[AnkiConnect.suspendResult]]. It is decoded
+    * rather than ignored so that a shape change fails loudly, and then thrown away because
+    * `false` means "already suspended", which is the ordinary result of a second run and not
+    * something a caller should be able to mistake for a failure.
+    *
+    * AN EMPTY LIST IS NOT SENT. Anki answers `false` for one, harmlessly, but a call that cannot
+    * change anything is a call worth not making — and `Flag` on a note whose cards could not be
+    * read would otherwise reach here silently.
+    */
+  def suspend(cards: Vector[AnkiCardId]): Result[Unit] =
+    if cards.isEmpty then EitherT.pure(())
+    else call("suspend", AnkiConnect.suspendParams(cards))(using AnkiConnect.suspendResult).void
+
+  /** ANSWERS `null`, NOT A BOOLEAN, unlike its twin: `__init__.py:1060` calls through without
+    * returning. Decoded with the null-asserting helper for that reason.
+    */
+  def unsuspend(cards: Vector[AnkiCardId]): Result[Unit] =
+    if cards.isEmpty then EitherT.pure(())
+    else command("unsuspend", AnkiConnect.suspendParams(cards))
+
   private def missingNoteType(noteType: String): AnkiError => AnkiError =
     case AnkiError.Remote(_, message) if message == AnkiConnect.modelNotFound(noteType) =>
       AnkiError.NoSuchNoteType(noteType)

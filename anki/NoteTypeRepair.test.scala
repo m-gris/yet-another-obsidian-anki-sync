@@ -116,6 +116,8 @@ class NoteTypeRepairTest extends munit.FunSuite:
       cardsOf,
       deckOf,
       changeDeck,
+      suspend,
+      unsuspend,
     }
 
   // ══════════════════════════════════ planning, with no Anki at all ══════
