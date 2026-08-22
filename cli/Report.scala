@@ -239,7 +239,30 @@ object Report:
 
   private def kindOf(a: SyncAction, retypePolicy: RetypePolicy): String = a match
     case _: SyncAction.Create => "create"
-    case _: SyncAction.Update => "update"
+
+    // AN UPDATE IS TWO DIFFERENT EVENTS AND USED TO BE ONE WORD. `SyncAction.Update` carries a
+    // field change, a deck change, or both, and until decks became something a person composes
+    // deliberately (`--deck-from`) the deck half was rare enough that "update" covered it. It is
+    // not rare any more: the first run after changing the deck shape moves every card in the
+    // collection, and a summary reading "43 update" invites the reader to believe their content
+    // was rewritten. Naming the two apart costs one line, and is the difference between a report
+    // that is read and one that is skimmed.
+    case SyncAction.Update(_, _, changes) =>
+      val fields = changes.exists { case _: Change.FieldsChanged => true; case _ => false }
+      val deck   = changes.exists { case _: Change.DeckChanged => true; case _ => false }
+      (fields, deck) match
+        case (true, false) => "update"
+        case (false, true) => "move to another deck"
+        case (true, true)  => "update, and move to another deck"
+        // AN ASSERTION, NOT A FALLBACK. `changes` is a `NonEmptyVector` over a sum with exactly
+        // these two cases, so one of the flags is always set. A default of "update" here would
+        // turn a third case somebody adds later into a silently mislabelled line.
+        case (false, false) =>
+          sys.error(
+            s"an Update carried changes that are neither a field change nor a deck change — a " +
+              s"case was added to Change without teaching the report about it: $changes"
+          )
+
     case _: SyncAction.Retype =>
       retypePolicy match
         case RetypePolicy.Defer => "move to another note type (NOT APPLIED — see --migrate-note-types)"

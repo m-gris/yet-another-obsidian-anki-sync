@@ -2,7 +2,7 @@ package obsidiananki.cli
 
 import cats.data.NonEmptyVector
 import com.monovore.decline.Command as DeclineCommand
-import obsidiananki.anki.DeckPath
+import obsidiananki.anki.{AnkiNoteId, DeckPath}
 import obsidiananki.extract.{DeckShape, VaultFile, VaultWalker}
 import obsidiananki.plan.*
 
@@ -391,4 +391,61 @@ class CliTest extends munit.FunSuite:
       case Right(Command.Sync(_, _, _, shape, _, _)) =>
         assertEquals(shape, DeckShape(folders = false, fileName = false, headings = true))
       case other => fail(s"got $other")
+  }
+
+  // ================================================ what an "update" actually is ====
+
+  /** `SyncAction.Update` carries a field change, a deck change, or both, and the summary used
+    * to call all three "update".
+    *
+    * IT MATTERED LITTLE UNTIL `--deck-from` EXISTED and matters a lot now: the first run after
+    * changing the deck shape moves every card in the collection and rewrites the content of
+    * none, and a line reading "43 update" tells the reader the opposite of what happened.
+    * Measured against a live collection before this was split: 43 cards moved deck and the
+    * summary said "43 update".
+    */
+  private def updateLine(changes: Change*): String =
+    val index = indexOf("A.md" -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"))
+    val key   = index.scan.specs.head.key
+    val plan = Plan(
+      Vector(
+        SyncAction.Update(key, AnkiNoteId(1L), NonEmptyVector.fromVectorUnsafe(changes.toVector))
+      ),
+      OrphanInference.Computed,
+      Vector.empty,
+    )
+    Report.plan(plan, RetypePolicy.Defer).mkString("\n")
+
+  private val movedDeck: Change =
+    Change.DeckChanged(Some(DeckPath(NonEmptyVector.one("Old"))), DeckPath(NonEmptyVector.one("New")))
+
+  private val rewroteFields: Change =
+    Change.FieldsChanged(Vector("Front" -> "f", "Back" -> "b"), "sha::deadbeef")
+
+  test("a note that only moved deck is not reported as content having been rewritten") {
+    val line = updateLine(movedDeck)
+    assert(line.contains("move to another deck"), s"a deck move is not named as one:\n$line")
+    assert(
+      !line.contains("1  update"),
+      s"a deck move is still being counted as a content update:\n$line",
+    )
+  }
+
+  test("a note whose fields changed is still an update") {
+    val line = updateLine(rewroteFields)
+    assert(line.contains("update"), s"a field change is not named as one:\n$line")
+    assert(
+      !line.contains("move to another deck"),
+      s"a field change claims the card also moved deck:\n$line",
+    )
+  }
+
+  /** BOTH IS ITS OWN LINE rather than being filed under whichever came first — a card that
+    * moved AND was rewritten is two facts, and dropping either is the thing this split exists
+    * to stop.
+    */
+  test("a note that both changed and moved says both") {
+    val line = updateLine(rewroteFields, movedDeck)
+    assert(line.contains("update"), s"the content change went missing:\n$line")
+    assert(line.contains("move to another deck"), s"the deck move went missing:\n$line")
   }
