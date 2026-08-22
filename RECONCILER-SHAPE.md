@@ -1,6 +1,6 @@
 # Reconciler Shape
 
-_The proposed shape of the sync action model: what the reconciler may conclude, and what it structurally may not. **Status: PROPOSED, not ratified.** The shape below is agreed between the implementing and reviewing agents; it is recorded here so it survives the conversation. It is not a design document — the design documents live in [`../srs-obsidian-anki/`](../srs-obsidian-anki/) and only Marc changes those._
+_The proposed shape of the sync action model: what the reconciler may conclude, and what it structurally may not. **Status: PROPOSED, not ratified.** The shape below is agreed between the implementing and reviewing agents; it is recorded here so it survives the conversation. It is not a design document — the design documents live in [`docs/`](docs/) and only Marc changes those._
 
 **Blocked on, and deliberately not settled here:** the tag encoding (B1), what a heading-path segment is (B5), what "the section body" means once a heading has children (B6), and the note type's field order versus Anki's duplicate check (B7). No types are written until those are ruled on.
 
@@ -54,7 +54,7 @@ This section proposed a `Relink(orphanKey, orphanNoteId, candidateKey, confidenc
 
 **Marc cut automatic rename detection from v0** on 2026-08-19, judging it a subsystem rather than a feature. With nothing to produce a proposal, the case had no owner, and it was removed from the code the same day. Note that the case as implemented never carried the `confidence` field this section specifies — it was written with three fields and the drift went unnoticed, which is its own small illustration of why a proposed shape is not a design document.
 
-An orphan is now **suspended** rather than left in rotation, so reconciling a rename by hand is lossless: the card keeps its full review history and restoring the heading restores the card. See *Deletion* and *Deliberately deferred* in [`../srs-obsidian-anki/CARD-MODEL.md`](../srs-obsidian-anki/CARD-MODEL.md), which is the ratified record and carries what was learned while exploring detection.
+An orphan is now **suspended** rather than left in rotation, so reconciling a rename by hand is lossless: the card keeps its full review history and restoring the heading restores the card. See *Deletion* and *Deliberately deferred* in [`docs/CARD-MODEL.md`](docs/CARD-MODEL.md), which is the ratified record and carries what was learned while exploring detection.
 
 ### 4. `Unflag` closes the orphan set's first hole
 

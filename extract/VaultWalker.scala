@@ -44,7 +44,7 @@ final case class DeckSource(folders: Vector[String], fileName: String, headings:
 
 /** Which parts of a card's location become deck levels.
   *
-  * RULED BY MARC, 2026-08-22 (`srs-obsidian-anki/REQUIREMENTS.md` item 11): folder path, file
+  * RULED BY MARC, 2026-08-22 (`docs/REQUIREMENTS.md` item 11): folder path, file
   * name and heading path are COMPLEMENTARY segments of one deck path, each optional. How decks
   * are shaped is a way of thinking, not a correctness property, so the mechanism is exposed
   * rather than a preference embedded.

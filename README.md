@@ -35,13 +35,14 @@ before you re-word a heading you have been reviewing for six months.
 From the repository root:
 
 ```bash
-just install-sync-tool
+just install
 ```
 
 That packages the tool into a single executable at `target/obsidian-anki-sync` and symlinks it
 into `~/.local/bin`, which is on your `PATH`. The link points *at* the build output, so
-`just build-sync-tool` afterwards updates the installed command in place. `just
-uninstall-sync-tool` removes the link and leaves the executable.
+`just build` afterwards updates the installed command in place. `just uninstall` removes the
+link and leaves the executable. `just demo` runs `inspect` over the fixture vault, as a check
+that a build works end to end.
 
 The executable is a self-contained JAR with a shell preamble — it carries every dependency and
 the five note-type definitions, but still needs a JVM to run. It is **not** a GraalVM native
@@ -334,9 +335,9 @@ Named here so their absence is not mistaken for a promise:
 
 | File | What is in it |
 |---|---|
-| `../srs-obsidian-anki/REQUIREMENTS.md` | what this must do and must not, with each claim marked as stated, verified or inferred |
-| `../srs-obsidian-anki/CARD-MODEL.md` | the card model, markers and identity scheme in full |
-| `../srs-obsidian-anki/LEARNING-MODEL.md` | the pedagogy the card shapes come from |
+| `docs/REQUIREMENTS.md` | what this must do and must not, with each claim marked as stated, verified or inferred |
+| `docs/CARD-MODEL.md` | the card model, markers and identity scheme in full |
+| `docs/LEARNING-MODEL.md` | the pedagogy the card shapes come from |
 | `HANDOFF.md` | how the code is laid out, and the AnkiConnect behaviours it defends against |
 | `FIXTURES.md` | what every file in `dummy-vault/` and `hostile-vaults/` is for, and which are meant to fail |
 | `NOTE-TYPES-AND-CONTEXT-DESIGN.md` | why the note types are shaped as they are |
@@ -345,7 +346,7 @@ Named here so their absence is not mistaken for a promise:
 ## Running the tests
 
 ```bash
-just test-sync-tool
+just test
 ```
 
 `dummy-vault/` contains deliberate failures and deliberate duplicate identities. They are
