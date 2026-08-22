@@ -13,7 +13,7 @@
 }
 
 .context {
-  font-size: 0.6em;
+  font-size: 1em;
   line-height: 1.35;
   color: #8a8a8a;
   text-align: left;
@@ -25,3 +25,9 @@
   color: #8f8f8f;
   border-bottom-color: #3a3a3a;
 }
+
+/* The two halves of the breadcrumb, so which is which is legible at a glance:
+   the DECK is where the card is filed (its folder in the vault), the rest is
+   where it sits INSIDE the note. */
+.context .deck { opacity: 0.75; }
+.context .sep  { opacity: 0.55; }

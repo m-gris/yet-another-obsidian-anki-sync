@@ -14,6 +14,8 @@ Card identity is **derived** from `(frontmatter id, heading path)` and stored as
 
 A survey of all 92 Obsidian spaced-repetition plugins found that **none generates concept–descriptor cards**, and that Obsidian_to_Anki — the only bridge that could carry a custom note type — is dead and delisted. Hence a standalone sync tool, decided over an Obsidian plugin.
 
+How things look and how they are filed are options to compose, not decisions the tool makes for you; identity, history and refusing-rather-than-guessing are not, because an option to be silently wrong is a defect with a switch on it.
+
 Deferred, not rejected: the MOC and authored route, new-card position pushing, the typed-edge graph, structure cards, and ordered-list disclosure.
 
 ---
@@ -23,6 +25,8 @@ Deferred, not rejected: the MOC and authored route, new-card position pushing, t
 Every requirement carries an evidence class — **stated**, **verified**, **unratified**, or **derived** — because an earlier round of machine-generated documents had several assertions absorbed as settled preferences without anyone confirming them. That failure recurred during this session and is annotated wherever it happened.
 
 **Accepted.** Authoring happens in nvim; reviewing in a GUI is fine. Cards live inside the documents they come from rather than in a parallel representation. A concept–descriptor–description note type exists and works, with three retrieval directions of which two are default. New material enters sequentially and reviews interleave. Scheduling is delegated to FSRS. Files stay plain text, locally owned and version-controlled. Metadata in the notes is a cost to minimise rather than a veto — and in the event, the design needs none: identity is derived from text already present, with the binding stored in Anki, which is a derived artifact and can carry bookkeeping the source should not.
+
+**Composability — stated 2026-08-22.** Presentation and organisation are options the reviewer composes into a personal setup; correctness is not. Identity, review history, and refusing rather than guessing are rigid, because being wrong there costs data and an option to be silently wrong is a defect with a switch on it. Deck shape, what appears on a card, and which lens you review through are soft, because there is no single right way to organise knowledge. Where a decision is presentational, the mechanism is exposed rather than a preference embedded — and the failure to watch for is defending a taste as though it were an invariant.
 
 **Rejected.** Automatic mastery gating with computed thresholds — though the *need* for gating is real and experienced, and only the mechanism is thrown out. Deck hierarchy as a lock, since a deck supplies a set rather than an order. "Master the high level before seeing details" in its strong form. Obsidian-only review. Generating cards from a parallel YAML file. And org-mode, whose format is better suited but whose review tooling is Emacs-resident.
 
@@ -106,6 +110,37 @@ The key is **derived** from text already present — `(frontmatter id, heading p
 The marker count in the markdown is therefore zero, and stays zero regardless of card count. This is only possible because the note shape is committed to — general-purpose tools cannot assume it, which is why every one of them mints and writes an identifier instead.
 
 Full treatment, including failure modes, in [CARD-MODEL.md](./CARD-MODEL.md).
+
+**11. Presentation and organisation are COMPOSABLE OPTIONS; correctness is not.** **[stated]** _Added 2026-08-22._
+
+There are many defensible ways to organise knowledge, and this tool must not pick one and call
+it the answer. The reviewer should be able to compose the features into a personal setup. Strong
+conventions and contracts remain necessary — the point is not that everything is negotiable, but
+that the negotiable and the non-negotiable are different sets and must not be confused.
+
+The line runs between them like this:
+
+| Rigid — being wrong costs data | Soft — it is how you think |
+| --- | --- |
+| card identity and its binding to a note | how decks are shaped |
+| review history and scheduling | what appears on a card, and where |
+| refusing rather than guessing | which lens you review through |
+| no silent success | which markers you use, and how much you mark |
+
+An option to be silently wrong is a defect with a switch on it, so nothing in the left column
+becomes configurable. Everything in the right column is a mechanism to be exposed rather than a
+preference to be embedded.
+
+WHY THIS IS WRITTEN DOWN RATHER THAN ASSUMED: it was got wrong in the other direction on
+2026-08-22. Deck shape had been settled as "decks mirror folder paths, filing only", and a
+request to derive decks from the HEADING path instead was argued down as though it violated a
+contract. It does not — it is a second strategy for deriving a deck, and which one suits a
+person is theirs to decide. The two also COMPOSE with the on-card breadcrumb rather than
+competing with it: the deck decides what can be studied in isolation, the breadcrumb decides
+what can be read while answering, and either may be wanted without the other.
+
+The general failure to watch for is defending a taste as though it were an invariant. When a
+decision is presentational or organisational, build the mechanism and expose the choice.
 
 ### Rejected
 

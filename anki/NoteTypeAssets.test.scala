@@ -181,7 +181,7 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     * `{{Contex}}` renders nothing and reports nothing, which is the failure shape this whole
     * project is built against.
     */
-  val ankiSpecialReferences: Set[String] = Set("FrontSide")
+  val ankiSpecialReferences: Set[String] = Set("FrontSide", "Deck")
 
   /** DIRECTION ONE: a template may not refer to a field the note type does not declare.
     *
@@ -336,6 +336,21 @@ class NoteTypeAssetsTest extends munit.FunSuite:
         s"'$noteType' template '$templateName' renders the breadcrumb OUTSIDE " +
           s"{{#${Marker.ThreeWayField}}}, so this card would be generated for every note that " +
           "has a breadcrumb, whether or not it wants a third card",
+      )
+
+      // THE PROPERTY THAT ACTUALLY MATTERS, asserted as a whole rather than per-element:
+      // NOTHING may render outside the gate. Anki generates a card whenever its front is
+      // non-empty, so a single stray character out here — a heading, a rule, a breadcrumb that
+      // does not depend on any field — generates a third card for every note of this type.
+      //
+      // Strengthened when the breadcrumb stopped being conditional. It renders `{{Deck}}`, which
+      // is never empty, so from that point on "the breadcrumb is outside the gate" and "this
+      // card is generated for every note" became the same sentence.
+      assert(
+        front.trim.startsWith(s"{{#${Marker.ThreeWayField}}}") &&
+          front.trim.endsWith(s"{{/${Marker.ThreeWayField}}}"),
+        s"'$noteType' template '$templateName' has content outside its " +
+          s"{{#${Marker.ThreeWayField}}} gate, which generates a card for every note: $front",
       )
     }
   }
