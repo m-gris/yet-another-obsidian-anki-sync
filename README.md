@@ -26,18 +26,40 @@ before you re-word a heading you have been reviewing for six months.
 - **Anki**, running, with the **AnkiConnect** add-on installed (it listens on
   `http://localhost:8765`). The tool never launches Anki and never switches your profile for
   you — it checks that the profile you named is the one already open, and refuses otherwise.
-- **[scala-cli](https://scala-cli.virtuslab.org)** and a **JVM 17**. There is no packaged
-  binary yet; you run it from source.
+- **A JVM 17** on your `PATH`, to run it.
+- **[scala-cli](https://scala-cli.virtuslab.org)** and **[just](https://just.systems)**, to
+  build it.
+
+## Building it
+
+From the repository root:
+
+```bash
+just install-sync-tool
+```
+
+That packages the tool into a single executable at `target/obsidian-anki-sync` and symlinks it
+into `~/.local/bin`, which is on your `PATH`. The link points *at* the build output, so
+`just build-sync-tool` afterwards updates the installed command in place. `just
+uninstall-sync-tool` removes the link and leaves the executable.
+
+The executable is a self-contained JAR with a shell preamble — it carries every dependency and
+the five note-type definitions, but still needs a JVM to run. It is **not** a GraalVM native
+image: measured on one machine, the assembly starts in 0.57s against 1.01s for `scala-cli run`,
+and a native image would reach roughly a tenth of that — but this program parses YAML through
+snakeyaml, which resolves classes by reflection, the one thing native-image cannot see without
+being told. The failure mode is a binary that builds and then breaks on a path only a live run
+reaches. Half a second does not pay for that.
+
+You can also skip the build entirely and run from source, which is what the test suite does:
+`scala-cli run . -- inspect --vault-path ~/my-vault` from this directory.
 
 ## Getting started
-
-`<tool>` below is the path to this directory. scala-cli takes it as an argument, so you can run
-these from anywhere.
 
 **1. Create the note types.** Once per Anki profile, before the first sync.
 
 ```bash
-scala-cli run <tool> -- install-note-types --profile 'My Profile'
+obsidian-anki-sync install-note-types --profile 'My Profile'
 ```
 
 This creates five note types of the tool's own — it never writes to Anki's stock `Basic`,
@@ -50,13 +72,13 @@ line, and it is opt-in because a template you improved inside Anki is yours.
 profile and can be run at any time.
 
 ```bash
-scala-cli run <tool> -- inspect --vault-path ~/my-vault
+obsidian-anki-sync inspect --vault-path ~/my-vault
 ```
 
 **3. See what would change in Anki, without changing it.**
 
 ```bash
-scala-cli run <tool> -- sync --vault-path ~/my-vault --profile 'My Profile' --dry-run
+obsidian-anki-sync sync --vault-path ~/my-vault --profile 'My Profile' --dry-run
 ```
 
 **4. Do it.** Drop `--dry-run`.
@@ -307,7 +329,6 @@ Named here so their absence is not mistaken for a promise:
 - `prune`, the command that deletes flagged cards
 - rename detection, deliberately cut — a rename is an orphan plus a create
 - pushing new-card position, so introduction order follows an authored route
-- a packaged binary
 
 ## Reading further
 
@@ -324,7 +345,7 @@ Named here so their absence is not mistaken for a promise:
 ## Running the tests
 
 ```bash
-scala-cli test <tool>
+just test-sync-tool
 ```
 
 `dummy-vault/` contains deliberate failures and deliberate duplicate identities. They are

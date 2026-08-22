@@ -23,6 +23,19 @@
 //> using dep org.http4s::http4s-ember-client:0.23.36
 //> using dep org.http4s::http4s-circe:0.23.36
 //> using dep io.circe::circe-parser:0.14.16
+// A LOGGING BACKEND, PRESENT ONLY SO THAT NOTHING IS PRINTED BY ACCIDENT. http4s brings
+// `slf4j-api` with no binding, and slf4j then writes FOUR WARNING LINES to stderr on every
+// single run that contacts Anki — "Failed to load class StaticLoggerBinder" and friends. That is
+// the first thing a person sees from the packaged binary, and it says nothing about their vault.
+//
+// `slf4j-simple` PINNED TO `error` RATHER THAN `slf4j-nop`, and the difference is the point. A
+// no-op binding would silence a genuine failure as thoroughly as it silences the warnings. This
+// keeps the error channel open. It costs nothing to do so: measured on 2026-08-22 by running a
+// full `sync --dry-run` against a live collection with this backend at DEBUG, ember logged
+// NOTHING AT ALL on the healthy path, so `error` is silent in ordinary use rather than merely
+// quiet. The level is set by `resources/simplelogger.properties`, which is read from the
+// classpath and therefore survives packaging — a `-D` on the command line would not.
+//> using dep org.slf4j:slf4j-simple:2.0.18
 //> using test.dep org.scalameta::munit:1.3.5
 //> using test.dep org.scalameta::munit-scalacheck:1.3.0
 // AN INEXHAUSTIVE MATCH IS AN ERROR, NOT A WARNING. Scala reports one as a warning and the
