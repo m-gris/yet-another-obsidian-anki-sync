@@ -4,7 +4,7 @@ import cats.data.NonEmptyVector
 import obsidiananki.anki.DeckPath
 import obsidiananki.model.*
 import obsidiananki.parser.ObsidianSyntax
-import obsidiananki.plan.{BuildFailure, VaultScan}
+import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef, VaultScan}
 
 /** One markdown file's path and contents.
   *
@@ -177,19 +177,55 @@ object VaultWalker:
       def unreadable(reason: String): Unit =
         failures += BuildFailure.FileUnreadable(file.relativePath, reason)
 
+      // ONE FILE'S TROUBLE MUST NOT COST THE WHOLE VAULT ITS ORPHAN INFERENCE. `unreadable`
+      // does exactly that — every `FileUnreadable` degrades the entire scan — so it is now
+      // reserved for the one situation that earns it: WE CANNOT TELL WHAT THE FILE OWNS. That
+      // is true when its frontmatter will not parse, and when it declares an id we cannot use;
+      // in both cases the file may have produced Anki notes under an id we are unable to read,
+      // and flagging those as orphans would suspend live cards.
+      //
+      // Everything else below is reported and SCOPED. A card's identity is
+      // `(frontmatter id, heading path)`, so a file whose frontmatter READS FINE and simply has
+      // no id has never produced a note and owns nothing; and a file whose id is good but whose
+      // markdown will not parse owns only notes under THAT id, which can be suppressed by
+      // themselves. _Reordered 2026-08-22: the parse now happens before the id is demanded, so
+      // "does this file even want cards" can be asked of a document that has no id._
       Frontmatter.read(file.content) match
         case Left(err) => unreadable(s"frontmatter: $err")
         case Right((keys, split)) =>
-          val body = split.body
+          val body   = split.body
+          val parsed = ObsidianSyntax.markupParser.parse(body)
           keys.get("id").map(NoteId.fromFrontmatter) match
-            // No id means no cards — but SAID, not skipped. Silently dropping a whole
-            // file is the same omission the design guards against everywhere else, and
-            // it also costs us the ability to group observed keys by note.
-            case None          => unreadable("no 'id' in frontmatter, so no cards can be keyed")
+            // NO ID. Whether that is a mistake depends entirely on whether the file asked for
+            // cards, and only the parsed document can say. A note with marked headings is an
+            // author who will get nothing and must be told; a note without them is ordinary
+            // prose — the vast majority of any real vault — and saying anything at all about it
+            // is the noise that stops a report being read.
+            case None =>
+              parsed match
+                case Right(doc) if Extractor.hasMarkedHeading(doc.content) =>
+                  failures += BuildFailure.MarkedWithoutNoteId(
+                    file.relativePath,
+                    "has #flashcard heading(s) but no 'id' in its frontmatter, so its cards " +
+                      "cannot be keyed — add an id to the frontmatter",
+                  )
+                // Asked for nothing we can see, and owns nothing, having no id. Stays quiet.
+                case Right(_) | Left(_) => ()
+
             case Some(Left(e)) => unreadable(s"unusable id: $e")
             case Some(Right(noteId)) =>
-              ObsidianSyntax.markupParser.parse(body) match
-                case Left(err) => unreadable(s"markdown: ${err.toString.take(200)}")
+              parsed match
+                // THE ID IS GOOD, SO THE BLAST RADIUS IS THIS NOTE. Every key this file could
+                // own begins with `noteId`, and `KeyUnderivableInFile` suppresses exactly those
+                // from orphan inference while the rest of the vault carries on. This was a
+                // `FileUnreadable` until 2026-08-22, which threw away every other file's orphan
+                // inference over one file's syntax error.
+                case Left(err) =>
+                  failures += BuildFailure.KeyUnderivableInFile(
+                    noteId,
+                    SourceRef(file.relativePath, 0, SourceKind.Heading),
+                    s"markdown: ${err.toString.take(200)}",
+                  )
                 case Right(doc) =>
                   val note =
                     Extractor.fromDocument(
