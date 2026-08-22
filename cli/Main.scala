@@ -831,7 +831,7 @@ object Main
   /** Reconcile the vault against the collection the gate has already confirmed.
     *
     * The vault is read FIRST: a filesystem failure then aborts before the collection is read
-    * at all, and a wrong `--deck-root` or vault path shows up as `cards: 0` on screen before
+    * at all, and a wrong `--deck-root` or vault path shows up as `notes: 0` on screen before
     * a plan full of orphan flags rather than after it.
     */
   private def sync(
@@ -848,7 +848,7 @@ object Main
       // Aligned with inspect's value column. The gate has already printed `profile:` above.
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")
-      _ <- IO.println(s"cards:    ${index.scan.specs.size}")
+      _ <- IO.println(s"notes:    ${index.scan.specs.size}")
       outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, anki)
       result = verdict(outcome)
       _ <- (describeSyncOutcome(outcome) ++ describeVerdict(result)).traverse_(IO.println)

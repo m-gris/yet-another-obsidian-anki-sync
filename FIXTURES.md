@@ -14,7 +14,7 @@ Obsidian body syntax.
 ⚠️ **It is NOT wholly a happy path, and this paragraph used to claim it was.** _Amended
 2026-08-21, from a run of `inspect --vault-path dummy-vault` rather than from memory._ Two
 of its twelve notes are deliberate traps that a well-meaning tidy-up would silently retire,
-so the vault as it stands **cannot be synced at all** — the run reports 12 files, 55 cards,
+so the vault as it stands **cannot be synced at all** — the run reports 12 files, 55 notes,
 **2 expected failures** and **3 deliberate duplicate keys**, and exits 2:
 
 - `Patterns/Shallow-Nesting.md` — its two-space list indentation IS the fixture. Re-indent

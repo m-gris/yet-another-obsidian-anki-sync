@@ -70,9 +70,11 @@ rewrites the templates; the by-hand field addition the old text called for is no
   _Two sentences here claiming these commands "have NOT been run against a live collection by any agent" were removed on 2026-08-21: `IN-FLIGHT.md` says they have. See the contradiction flagged above; nothing in this session measured a collection either way._
 
 Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 12 files,
-55 cards, 2 expected failures, 3 deliberate duplicate keys, `scan: complete`, exit 2. _Corrected
-2026-08-21 by running exactly that command and copying what it printed; the line previously said
-53 cards and 1 failure._ The two failures are both fixtures doing their job: the under-indented
+55 notes, 2 expected failures, 3 deliberate duplicate keys, `scan: complete`, exit 2.
+_Corrected 2026-08-21 by running exactly that command and copying what it printed; the line
+previously said 53 cards and 1 failure. Corrected again 2026-08-22: the tool itself printed
+`cards:` for a count of NOTES, and now prints `notes:`. One note carries as many cards as its
+note type has templates — measured against `claude-POC-test`, 43 notes and 82 cards._ The two failures are both fixtures doing their job: the under-indented
 nested list in `Patterns/Shallow-Nesting.md`, and the descriptor-less table in the first section
 of `Patterns/Table-Edge-Cases.md`.
 

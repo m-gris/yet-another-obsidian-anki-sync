@@ -16,13 +16,21 @@ object Report:
     * FAILURES ARE REPORTED BEFORE SUCCESSES, and the counts are always shown even when zero.
     * A run that produced nothing must look different from a run that was never asked to do
     * anything, and both must look different from a run that failed quietly.
+    *
+    * IT COUNTS NOTES, AND USED TO CALL THEM CARDS. One `CardSpec` becomes exactly one Anki
+    * NOTE, and a note generates as many cards as its note type has templates: a `2way` heading
+    * is one note and two cards, a cloze with three groups is one note and three. Measured
+    * against the test collection on 2026-08-22 — 43 notes carrying the identity tag, 82 cards —
+    * while this line said "cards: 43". The vault cannot be asked how many CARDS it implies
+    * without counting cloze groups and reading each note type's template count, so the honest
+    * fix is to name what is actually being counted rather than to invent the other number.
     */
   def inspect(index: VaultIndex, verbose: Boolean): Vector[String] =
     val scan  = index.scan
     val specs = scan.specs
 
     val header = Vector(
-      s"cards:    ${specs.size}",
+      s"notes:    ${specs.size}",
       s"failures: ${scan.failures.size}",
       s"scan:     ${if scan.canInferOrphans then "complete" else "PARTIAL — orphans cannot be computed"}",
     )
@@ -42,14 +50,14 @@ object Report:
         val byDeck = specs.groupBy(s => index.decks.get(s.key).map(_.render).getOrElse("?"))
         "" +: "decks" +: byDeck.toVector.sortBy(_._1).map((deck, ss) => f"  ${ss.size}%3d  $deck")
 
-    val cardLines =
+    val noteLines =
       if !verbose || specs.isEmpty then Vector.empty
       else
-        "" +: "cards" +: specs.sortBy(_.key.path.render).map { s =>
+        "" +: "notes" +: specs.sortBy(_.key.path.render).map { s =>
           f"  ${s.spec.noteTypeName}%-26s ${s.key.path.render}"
         }
 
-    header ++ failureLines ++ duplicateLines ++ deckLines ++ cardLines
+    header ++ failureLines ++ duplicateLines ++ deckLines ++ noteLines
 
   /** What a plan would do, summarised by action kind then listed.
     *

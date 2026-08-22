@@ -199,8 +199,24 @@ class CliTest extends munit.FunSuite:
     */
   test("the report always states counts, even when everything is zero") {
     val lines = Report.inspect(indexOf(), verbose = false).mkString("\n")
-    assert(lines.contains("cards:    0"), lines)
+    assert(lines.contains("notes:    0"), lines)
     assert(lines.contains("failures: 0"), lines)
+  }
+
+  /** THE COUNT IS OF NOTES AND MUST SAY SO. One spec becomes one Anki NOTE, and a note carries
+    * as many cards as its note type has templates — the fixture below is a single `2way`
+    * heading, so it is one note and two cards. Reported as "cards: 1" that was wrong twice
+    * over: the wrong word, and a number nobody could reconcile with what Anki shows them.
+    * Measured against the test collection on 2026-08-22: 43 notes, 82 cards, line read "43".
+    */
+  test("the count is labelled notes, because that is what one spec becomes") {
+    val index = indexOf("A.md" -> note("n1", "# A\n\nx\n\n## One #flashcard/2way\n\nBody.\n"))
+    val lines = Report.inspect(index, verbose = true).mkString("\n")
+    assert(lines.contains("notes:    1"), s"the count is not labelled notes:\n$lines")
+    assert(
+      !lines.contains("cards:"),
+      s"something is still counting notes and calling them cards:\n$lines",
+    )
   }
 
   test("a partial scan SAYS orphans cannot be computed") {
