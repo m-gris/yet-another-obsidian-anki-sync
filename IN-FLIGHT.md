@@ -1,87 +1,89 @@
 # In flight — delete this file when the work below has landed
 
-_Rewritten 2026-08-21, after the note-type work was verified against a live collection.
-Everything here was checked, not remembered. **Nothing is running now.**_
+_Rewritten 2026-08-22. Everything here was checked, not remembered. **Nothing is running.**
+Working tree clean under `obsidian-anki-custom-sync/`; 542 tests, 0 failures._
 
-## Verified against `claude-POC-test`, end to end
+## Where things stand
 
-The whole sequence has been run and its results measured, rather than asserted:
+Card identity has not moved once across everything below: no `src::` line in
+`extract/golden/fixture-cards.txt` has changed, so every note is an UPDATE and keeps its review
+history. That is the acceptance invariant and it still holds.
 
-```
-install-note-types --profile claude-POC-test            # survey; writes nothing
-install-note-types --profile claude-POC-test --repair   # adds Context, rewrites templates + css
-sync --vault-path <copy of dummy-vault> --profile claude-POC-test --migrate-note-types
-```
+Verified live against profile `claude-POC-test`, not asserted:
 
-Measured before and after the migration, by capturing every note and card and comparing:
+- table cards render as **tables with the asked-for cell blanked**, the same table on both sides
+- the row card renders as one table (was a run-on line)
+- orphans are **suspended** and recover when the heading returns
+- a broken table section no longer retires the cards it produced
 
-| | |
-|---|---|
-| notes | 43 before, 43 after |
-| identities lost or gained | **none** |
-| notes moved to a new note type | 21 |
-| **card ids changed** | **0** |
-| **cards whose scheduling moved** | **0** (`type`, `queue`, `interval`, `factor`, `reps`) |
-| notes still on a stock Anki note type | 0 |
-| notes with a populated `Context` | 38 of 43 |
+## OPEN — decisions only Marc can make
 
-The five empty `Context` values are correct, not missed: they are two-level paths such as
-`consistency/definition`, where the single ancestor is already shown as the card's Concept.
-Repeating it would be noise, and `{{#Context}}` renders nothing when the field is empty.
+1. **Should sync report cards that will render blank?** Switching a table to fewer directions
+   leaves cards whose front is empty. Anki keeps them and shows "The front of this card is
+   blank" until Tools → Empty Cards is run. Options: say nothing (Anki's own message is clear),
+   or have sync count them and say so. **There are 4 such cards in `claude-POC-test` right now**,
+   left by a `3way` experiment.
+2. **Content-duplicate report.** Two cards with identical fields under different keys trip
+   nothing: `allowDuplicate` is on, uniqueness is checked by key, nothing compares content. It
+   also silently weakens the hash-based repair hint, which only fires when exactly one card
+   matches a hash. Cheap to detect. Refusing would be wrong — two tables legitimately defining
+   one term is the author's business — so it would have to be a report. Marc raised this as
+   "shouldn't we have dedup?".
+3. **Row scope at `2way`/`3way`** — a row card that blanks the CONCEPT rather than the values
+   ("which bone has these two borders?"). Needs a second template on the plain note type. Not
+   designed.
 
-Both commands are IDEMPOTENT, checked by re-running: the second sync plans nothing at all, and
-the second install reports all five note types matching.
+## OPEN — work with no decision left in it
 
-The motivating card now reads `Body shapes › Cranial bones and their sutures` above
-`Frontal` / `Anterior border`, which is the whole point of the exercise — "Frontal" alone could
-have meant the bone, the lobe or the cortex.
-
-## What is NOT done
-
-1. **The adversarial reviewers' findings — 25 still open**, of the 27 the workflow's verify phase
-   produced. The two BLOCKING ones are fixed (`c244a08`, `bac5902`, `c20c723`). What remains is
-   mostly the same failure this project keeps producing — **nine untrue prose claims** in
-   comments and documents — plus real test gaps, the sharpest being that NOTHING ties
-   `class="context"` in the ten template files to the `.context` rule in the five stylesheets, so
-   renaming the class passes the whole suite and the breadcrumb silently renders as a title.
-   The full list is in the workflow journal at
-   `~/.claude/projects/-Users-marc-.../subagents/workflows/wf_eb291fa9-081/journal.jsonl`
-   (read the `result` key, not `value`).
-2. **Orphan suspension** — ruled 2026-08-19, still NOT BUILT. `Anki[F]` has no `suspend` /
-   `unsuspend`, and `Unflag` must unsuspend.
-3. **`prune` command.**
-4. **A formatter, and a keybinding for it** — Marc's suggestion. It would re-indent a vault's
-   nested lists to four spaces so the refusal in `ListIndent` becomes rare rather than merely
-   informative. Marc's view: "probably trivial", to be done later.
-5. **`ZZ-probe-delete-me`** — a note type left in `claude-POC-test` by a migration probe.
-   AnkiConnect has no delete-model action, so removing it means Tools → Manage Note Types.
-   Harmless if left.
+4. **A `#flashcard/table` section can yield ZERO cards and say nothing**, by one route that is
+   still open: the only descriptor column has a header that cannot be turned into a key, so the
+   column is dropped silently (`extract/Tables.scala`, the `cellSegment(headerCell).toOption`).
+   `TableWithoutDescriptors` does not fire, because a Cell IS present. Refuse it the same way.
+   _The empty-rows route is now covered for `rows`, and is deliberately NOT an error otherwise —
+   a table with a header and no rows yet is work in progress._
+5. **Composable deck path.** Marc's ruling: folder path, file name and heading path are
+   COMPLEMENTARY segments of one deck path, each optional — `Obsidian::System-Design::
+   Replication::Read-your-writes consistency`. Today only the folder path is used. Build the
+   mechanism and expose the choice; do not pick one and defend it (REQUIREMENTS.md item 11).
+6. **`prune`** — the command that deletes flagged cards after the list has been reviewed.
+7. **A formatter, and a keybinding** — re-indent nested lists to four spaces so `ListIndent`
+   stops refusing them. Marc: "probably trivial", separate session.
+8. **Recovery tiers 3 and 4** — matching a broken identity tag by SIMILAR content when the body
+   was edited too. Tiers 1 and 2 (exact hash, exact fields) are built. Anything fuzzy may only
+   RANK candidates, never apply one.
+9. **`ZZ-probe-delete-me`** — a note type left in `claude-POC-test` by a migration probe.
+   AnkiConnect has no delete-model action; Tools → Manage Note Types.
 
 ## Rulings that are settled — do not reopen
 
-- **The list marker is EXPLICIT, never inferred from the body.** The tool can see that a list is
-  present; it can never see whether the ORDER is the knowledge. A bulleted answer shown WHOLE is
-  legitimate and different from one revealed step by step.
-- **Progressive disclosure only where the list is the ANSWER.**
-- **Under-indented nested lists are REFUSED, not repaired.** Repair is impossible, not merely
-  awkward: the parser has already consumed the indentation. See `extract/ListIndent.scala`.
-- **The tool writes only to its OWN five note types**, never to Anki's stock ones.
-- **A note type that already exists is never overwritten without `--repair`.** But note the
-  amendment recorded in `anki/NoteTypeInstall.scala`: refusing *always*, with no opt-in at all,
-  was not the safe position — it is what let `Context` be written to 21 notes and rendered on
-  none of them.
+- **The list marker is EXPLICIT.** The tool can see a list is present; it can never see whether
+  the ORDER is the knowledge.
+- **Under-indented nested lists are REFUSED, not repaired.** The parser has already consumed the
+  indentation, so repair would be a guess.
+- **The tool writes only to its OWN five note types**, never Anki's stock ones.
+- **A note type that already exists is never overwritten without `--repair`.**
+- **Suspending an orphan is a POSTCONDITION of flagging, not an invariant.** Anki records no
+  authorship for a suspended card, so the tool cannot tell its own suspension from Marc's, and
+  an invariant it cannot enforce would be a claim of ownership it does not have. It never
+  re-suspends and never warns. See HANDOFF.md § "Things that look like bugs and are not".
+- **New note-type fields go LAST in a manifest.** `modelFieldAdd` APPENDS, so any other position
+  leaves a repaired collection permanently reporting a field-order difference.
+- **Gate fields are INVERTED — empty means the old behaviour.** Written the other way round,
+  every note predating a field would render blank between the note type gaining it and the next
+  sync, and Anki would offer to delete cards holding real history.
+- **Presentation and organisation are composable OPTIONS; correctness is not.** REQUIREMENTS.md
+  item 11. An option to be silently wrong is a defect with a switch on it.
 - **Never touch profile `User 1`** or `/Users/marc/srs-in-obsidian-test/`.
 
 ## Fixtures that must not be "tidied"
 
-- `dummy-vault/Patterns/Shallow-Nesting.md` — its two-space nesting IS the fixture. Re-indenting
-  it silently retires the check.
+- `dummy-vault/Patterns/Shallow-Nesting.md` — its two-space nesting IS the fixture.
 - `dummy-vault/Patterns/Table-Edge-Cases.md` — deliberate duplicate identities. Excluded from a
   live sync by copying the vault and deleting this file; leaving it in aborts the plan.
 
-## Known-false claims in ratified documents
+## Method that has been catching real defects
 
-`srs-obsidian-anki/CARD-MODEL.md` §Lists still says progressive disclosure "cannot be expressed
-by one Anki note" and "requires generating N notes". Both are false, and the second is the
-opposite of what is wanted — N notes are scheduled independently, which destroys the sequencing.
-Amending it is Marc's call, dated.
+Write the test, then MUTATE the production code and check the test dies — with a control mutant
+that must survive. It has caught a wrong assertion, a hollow ordering test, and a verification
+step that reported intentions rather than readings. **Commit before mutating**: the restore step
+is `git checkout`.
