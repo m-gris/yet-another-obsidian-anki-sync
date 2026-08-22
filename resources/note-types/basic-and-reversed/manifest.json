@@ -4,7 +4,8 @@
   "fields": [
     "Front",
     "Back",
-    "Context"
+    "Context",
+    "SameShape"
   ],
   "styling": "styling.css",
   "templates": [

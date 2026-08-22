@@ -725,7 +725,7 @@ class MainTest extends munit.FunSuite:
           Vector(
             NoteTypeProblem.FieldsMissing(
               Marker.NoteTypes.Basic,
-              NonEmptyVector.one(Marker.ContextField),
+              NonEmptyVector.of(Marker.ContextField, Marker.SameShapeField),
             )
           ),
         )

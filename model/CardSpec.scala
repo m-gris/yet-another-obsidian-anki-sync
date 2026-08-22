@@ -280,6 +280,9 @@ object CardSpec:
           Marker.BasicFields.Front -> front,
           Marker.BasicFields.Back  -> back.value,
           Marker.ContextField      -> context,
+          // EMPTY: a heading's question and its answer are different things, so the answer
+          // belongs BENEATH the question in the ordinary way.
+          Marker.SameShapeField -> "",
         )
 
       case ThreeField(_, concept, descriptor, description, directions, context, conceptLabel) =>
@@ -327,6 +330,11 @@ object CardSpec:
           Marker.BasicFields.Front -> blanked,
           Marker.BasicFields.Back  -> filled,
           Marker.ContextField      -> context,
+          // The two sides ARE one table, so the answer REPLACES the question rather than
+          // appearing beneath it. Last, matching the declared order — new fields are appended,
+          // because Anki's `modelFieldAdd` appends and any other position leaves a repaired
+          // collection permanently reporting a field-order difference.
+          Marker.SameShapeField -> "1",
         )
 
       case Sequence(_, title, text, context) =>

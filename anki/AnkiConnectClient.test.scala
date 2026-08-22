@@ -341,7 +341,7 @@ class AnkiConnectClientTest extends munit.FunSuite:
       .changeNoteType(
         AnkiNoteId(id),
         "Obsidian Basic",
-        Vector("Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling"),
+        Vector("Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling", "SameShape" -> ""),
         NonEmptyVector.of(tag("src::n1::term"), tag("sha::feedface")),
         preservedTags = Vector("leech"),
       )
@@ -351,7 +351,7 @@ class AnkiConnectClientTest extends munit.FunSuite:
     assertEquals(moved.model, "Obsidian Basic")
     assertEquals(
       moved.fields,
-      Vector("Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling"),
+      Vector("Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling", "SameShape" -> ""),
     )
     assertEquals(moved.tags.sorted, Vector("leech", "sha::feedface", "src::n1::term"))
     assert(!moved.tags.contains("sha::deadbeef"), s"the stale hash survived: ${moved.tags}")
@@ -380,7 +380,7 @@ class AnkiConnectClientTest extends munit.FunSuite:
 
     assertEquals(
       state.notes(id).fields,
-      Vector("Front" -> "Term", "Back" -> "", "Context" -> ""),
+      Vector("Front" -> "Term", "Back" -> "", "Context" -> "", "SameShape" -> ""),
       "the wire fake did not reproduce blank-then-fill, so nothing here would catch the trap",
     )
   }

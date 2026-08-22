@@ -238,6 +238,20 @@ object Marker:
     */
   val ValueOnlyField: String = "ValueOnly"
 
+  /** Set when a card's two sides are TWO RENDERINGS OF ONE THING rather than a question and its
+    * answer — today, a table with its values blanked and the same table filled in.
+    *
+    * WHAT IT CHANGES. The ordinary answer side is `{{FrontSide}}`, a rule, then the answer: the
+    * question stays on screen and the answer appears beneath it. That is right when the two are
+    * different things. It is wrong when they are the same table twice, because the reviewer then
+    * sees the blanked table AND the filled one stacked, and has to work out that they are one
+    * table rather than two. The answer should REPLACE the question, not follow it.
+    *
+    * INVERTED, like [[ValueOnlyField]] and for the same reason: EMPTY means the ordinary
+    * stacked layout, so every note that predates the field keeps the behaviour it had.
+    */
+  val SameShapeField: String = "SameShape"
+
   /** Field names carried over from Anki's stock note types.
     *
     * THESE NAMES WERE VERIFIED against a live collection via `modelFieldNames`, twice, by
@@ -298,7 +312,7 @@ object Marker:
     */
   object FieldOrder:
     val Basic: Vector[String] =
-      Vector(BasicFields.Front, BasicFields.Back, ContextField)
+      Vector(BasicFields.Front, BasicFields.Back, ContextField, SameShapeField)
 
     /** The same three names as [[Basic]] — see the note at [[BasicFields]] for why the two
       * types deliberately share a field list.

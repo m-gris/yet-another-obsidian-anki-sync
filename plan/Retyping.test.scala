@@ -439,6 +439,7 @@ class RetypingTest extends munit.FunSuite:
         Marker.BasicFields.Front -> "Term",
         Marker.BasicFields.Back  -> "",
         Marker.ContextField      -> "",
+        Marker.SameShapeField    -> "",
       ),
       "the fake did not reproduce the blank-then-fill behaviour, so nothing here would catch it",
     )

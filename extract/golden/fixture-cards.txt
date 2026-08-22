@@ -30,12 +30,14 @@ card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
   field ⟦Front⟧ ⟦Layers of the epidermis⟧
   field ⟦Back⟧ ⟦<p>Named from the outside inwards:</p><ul><li>stratum corneum</li><li>stratum granulosum</li><li>stratum spinosum</li><li>stratum basale</li></ul>⟧
   field ⟦Context⟧ ⟦Body shapes⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/running%20the%20test%20suite⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Running the test suite⟧
   field ⟦Back⟧ ⟦<p>From the tool directory:</p><pre><code>scala-cli test .</code></pre><p>The suite is the only thing that proves a refactor kept its promises.</p>⟧
   field ⟦Context⟧ ⟦Body shapes⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -62,6 +64,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Front⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Frontal</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Frontal</td><td>Orbital rim</td><td>Coronal suture</td></tr></table>⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/anterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -88,6 +91,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Front⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Parietal</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Bone</th><th>Anterior border</th><th>Posterior border</th></tr><tr><td>Parietal</td><td>Coronal suture</td><td>Lambdoid suture</td></tr></table>⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
   note ⟦Obsidian Cloze⟧
@@ -150,6 +154,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
   field ⟦Front⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Queue</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Queue</td><td>Absorbs load spikes: the producer keeps accepting work while a slow consumer drains the backlog at its own rate.</td><td>Latency becomes unbounded under sustained overload, and the queue itself is state that must be sized, monitored and drained.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -176,6 +181,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub�
   field ⟦Front⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Pub/Sub</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Pub/Sub</td><td>The producer names an event, not a recipient, so new consumers are added without touching or redeploying the publisher.</td><td>Nobody owns the end-to-end path: a subscriber that silently stops consuming looks identical to one that was never there.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -202,18 +208,21 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦Front⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Request-Response</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Pattern</th><th>Benefit</th><th>Cost</th></tr><tr><td>Request-Response</td><td>The caller learns the outcome synchronously, so errors surface at the call site and can be retried with the original context in hand.</td><td>Availability multiplies down the chain — the caller is only as available as the slowest dependency it blocks on.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦What does W + R &gt; N buy you?⟧
   field ⟦Back⟧ ⟦<p>With N replicas, writing to W and reading from R such that W + R &gt; N forces the read set\nand the write set to intersect. The reader therefore always sees at least one replica\nholding the latest acknowledged write, which is what makes the read strongly consistent.</p>⟧
   field ⟦Context⟧ ⟦Quorums⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-quorums::quorums/why%20do%20sloppy%20quorums%20weaken%20consistency%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why do sloppy quorums weaken consistency?⟧
   field ⟦Back⟧ ⟦<p>A sloppy quorum accepts writes on any W reachable nodes, not necessarily the N nodes that\nown the key. The write and read sets are then drawn from different populations, so the\noverlap guarantee is lost until hinted handoff has returned the data to its home replicas.</p>⟧
   field ⟦Context⟧ ⟦Quorums⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -240,6 +249,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Front⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td>Recovers from transient faults such as a dropped packet or a brief leader election.</td><td>Amplifies load exactly when the dependency is already struggling.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -266,6 +276,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Front⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Retry</td><td>Turns an at-most-once delivery into an at-least-once one, which is the cheap half of exactly-once.</td><td>Duplicates reach the receiver, so the handler must be idempotent or it corrupts state.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/purpose⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -292,6 +303,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦Front⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Timeout</td><td><span class="blank">[&hellip;]</span></td><td><span class="blank">[&hellip;]</span></td></tr></table>⟧
   field ⟦Back⟧ ⟦<table><tr><th>Mechanism</th><th>Purpose</th><th>Failure mode</th></tr><tr><td>Timeout</td><td>Bounds how long a caller holds a connection and a thread waiting on a peer.</td><td>Cannot distinguish a slow peer from a dead one, so it will cancel work that was about to succeed.</td></tr></table>⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦SameShape⟧ ⟦1⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/range%20partitioning/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -368,24 +380,28 @@ card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
   field ⟦Front⟧ ⟦Temporal coupling⟧
   field ⟦Back⟧ ⟦<p>Two components are temporally coupled when one can only do its work while the other\nis available at that same moment. A synchronous HTTP call couples caller to callee in\ntime; putting a queue between them removes that coupling at the cost of latency and\nordering guarantees.</p>⟧
   field ⟦Context⟧ ⟦Coupling⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/afferent%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Afferent coupling⟧
   field ⟦Back⟧ ⟦<p>The number of other modules that depend on a given module. High afferent coupling makes\na module expensive to change, because every change has to stay compatible with many\ncallers — it is a measure of responsibility, not of quality.</p>⟧
   field ⟦Context⟧ ⟦Coupling⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20make%20a%20module%20fragile%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why does high efferent coupling make a module fragile?⟧
   field ⟦Back⟧ ⟦<p>Efferent coupling counts the modules a given module depends on. Each dependency is a way\nfor someone else's change to break it, so a module that reaches out to many others fails\nfor reasons that have nothing to do with its own code.</p>⟧
   field ⟦Context⟧ ⟦Coupling⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/why%20is%20connascence%20of%20meaning%20harder%20to%20maintain%20than%20connascence%20of%20name%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why is connascence of meaning harder to maintain than connascence of name?⟧
   field ⟦Back⟧ ⟦<p>Connascence of name is visible: rename the thing and a compiler or a grep finds every\nsite. Connascence of meaning lives in a shared convention — a magic value, an agreed\nencoding — that nothing in the code records, so the matching sites cannot be found\nmechanically.</p>⟧
   field ⟦Context⟧ ⟦Coupling⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -462,18 +478,21 @@ card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication
   field ⟦Front⟧ ⟦Why does synchronous replication trade availability for durability?⟧
   field ⟦Back⟧ ⟦<p>The leader cannot acknowledge a write until at least one follower has confirmed\nit, so a slow or unreachable follower stalls every writer. You buy the guarantee\nthat an acknowledged write survives leader loss — see Durability and\nFailover — by giving up availability during partitions, which is exactly the\ntension CAP describes.</p>⟧
   field ⟦Context⟧ ⟦Replication⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Read-your-writes consistency⟧
   field ⟦Back⟧ ⟦<p>A guarantee that a client always sees its own prior writes, even when reads are\nserved by lagging replicas. It is strictly weaker than\nConsistency Models: other clients may still observe the old\nvalue. Typical implementations:</p><ul><li><p>Route reads to the leader for a short window after a write.</p><ul><li>Simple, but concentrates read load on one node.</li></ul></li><li><p>Pin the client to a replica whose applied log position is at least the\nposition returned by its last write.</p><ul><li>Needs the server to hand the client a version token, e.g. <code>last_lsn</code>.</li></ul></li></ul>⟧
   field ⟦Context⟧ ⟦Replication⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up%20after%20a%20network%20partition%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦How does a follower catch up after a network partition?⟧
   field ⟦Back⟧ ⟦<p>It reconnects and asks the leader for everything after the last log position it\ndurably applied; the leader replays from that offset if the segment still exists,\notherwise the follower must take a fresh snapshot. See Write-Ahead Log for\nwhy the position, not the wall clock, is the resume point.</p><pre><code class="language-sql">SELECT client_addr, state, sent_lsn, replay_lsn,\n       sent_lsn - replay_lsn AS lag_bytes\nFROM pg_stat_replication;</code></pre><p>A follower whose <code>replay_lsn</code> stops advancing while <code>sent_lsn</code> moves is applying\ntoo slowly, not disconnected — a distinction Monitoring dashboards routinely\nblur.</p>⟧
   field ⟦Context⟧ ⟦Replication⟧
+  field ⟦SameShape⟧ ⟦⟧
 
 fail ⟦KeyKnown⟧ ⟦src::fix-shallow-nesting::shallow%20nesting/why%20is%20a%20sloppy%20quorum%20weaker%20than%20a%20strict%20one%3f⟧
 fail ⟦KeyKnown⟧ ⟦src::fix-table-edges::table%20edge%20cases/concept%20column%20only%2c%20no%20descriptor%20columns⟧

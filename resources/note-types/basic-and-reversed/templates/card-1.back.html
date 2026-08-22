@@ -1,5 +1,5 @@
-{{FrontSide}}
+{{^SameShape}}{{FrontSide}}
 
 <hr id=answer>
 
-{{Back}}
+{{/SameShape}}{{#SameShape}}<div class="context"><span class="deck">{{Deck}}</span>{{#Context}}<span class="sep"> › </span>{{Context}}{{/Context}}</div>{{/SameShape}}{{Back}}
