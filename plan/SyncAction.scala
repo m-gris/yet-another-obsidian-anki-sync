@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath, NewNote}
-import obsidiananki.model.{CardKey, OwnedTag}
+import obsidiananki.model.{CardKey, OwnedTag, TagCodec}
 
 /** What the reconciler concluded, and what it may not conclude.
   *
@@ -174,7 +174,11 @@ enum PlanError:
     * renamed, the tool orphans the old note and creates a historyless new one, and the person
     * pastes the new tag onto the old note to rescue their history — without deleting the old.
     */
-  case AmbiguousIdentityInAnki(noteId: AnkiNoteId, tags: NonEmptyVector[String])
+  case AmbiguousIdentityInAnki(
+        noteId: AnkiNoteId,
+        tags: NonEmptyVector[String],
+        looksLike: Option[CardKey],
+      )
 
   /** An Anki note's identity tag cannot be DECODED, so the note cannot be placed at all.
     *
@@ -187,7 +191,12 @@ enum PlanError:
     * `reason` is the decoder's own words about THIS tag, carried rather than summarised: the
     * remedy is manual, and "malformed" without saying WHICH PART is malformed is not a remedy.
     */
-  case UnreadableIdentityInAnki(noteId: AnkiNoteId, tag: String, reason: String)
+  case UnreadableIdentityInAnki(
+        noteId: AnkiNoteId,
+        tag: String,
+        reason: String,
+        looksLike: Option[CardKey],
+      )
 
   def describe: String = this match
     case DuplicateKey(key, first, second) =>
@@ -196,14 +205,40 @@ enum PlanError:
     case DuplicateIdentityInAnki(key, first, second) =>
       s"two Anki notes claim the card key '${key.path.render}' (note '${key.noteId.value}'): " +
         s"note ids ${first.value} and ${second.value} — open both in Anki and delete one"
-    case AmbiguousIdentityInAnki(noteId, tags) =>
+    case AmbiguousIdentityInAnki(noteId, tags, looksLike) =>
       s"Anki note ${noteId.value} carries ${tags.length} identity tags, so which card it is " +
         s"cannot be decided: ${tags.toVector.map("'" + _ + "'").mkString(", ")} — open it in " +
-        "Anki and delete all but the one that belongs to it"
-    case UnreadableIdentityInAnki(noteId, tag, reason) =>
+        "Anki and delete all but the one that belongs to it" + suggestionText(looksLike)
+    case UnreadableIdentityInAnki(noteId, tag, reason, looksLike) =>
       s"Anki note ${noteId.value} has an identity tag this tool cannot read: '$tag' ($reason). " +
         "Until it is fixed the note is invisible to this tool — it will not be updated, will " +
-        "not be reported as gone, and a second note will be created for whatever card it holds"
+        "not be reported as gone, and a second note will be created for whatever card it holds" +
+        suggestionText(looksLike)
+
+  /** The half of the message that makes the other half actionable.
+    *
+    * THE ENCODED TAG IS PRINTED IN FULL, and that is the whole reason this exists. The encoding
+    * escapes spaces, `/`, `:` and Anki's two wildcard characters `_` and `*` — see
+    * [[obsidiananki.model.TagCodec]] for why each is required — so `Cost / benefit` becomes
+    * `cost%20%2f%20benefit`. Telling somebody to "fix the tag" without giving them the string is
+    * telling them to do something they cannot reliably do; a near-miss puts the note straight
+    * back into the state being reported.
+    *
+    * IT SAYS "LOOKS LIKE" AND STOPS THERE. The tool does not make the change, and the wording
+    * must not imply it did. Where this suggestion comes from — a content hash that still matches
+    * a card the vault produces — is evidence rather than a guess, but acting on it would move
+    * review history between cards, silently and irreversibly, on the strength of the tool's own
+    * reading of an ambiguous situation. That is a person's decision.
+    *
+    * SILENT WHEN THERE IS NOTHING TO SAY. No candidate, or several, prints nothing at all rather
+    * than a hedge: a list of maybes is how a report stops being read.
+    */
+  private def suggestionText(looksLike: Option[CardKey]): String =
+    looksLike.fold("") { key =>
+      s". Its content still matches the card '${key.path.render}' in note " +
+        s"'${key.noteId.value}', so it is most likely that card — if you agree, the tag it " +
+        s"should carry is: ${TagCodec.encode(key).value}"
+    }
 
 /** Whether orphans were computed, and if not, why not. Reported rather than silent: a run
   * that could not look for orphans must not be mistaken for a run that found none.

@@ -77,14 +77,20 @@ object Observer:
     * REPORTED — which is the point. Matching case-sensitively here would leave such a note
     * looking like a note this tool has nothing to do with, and it would vanish again.
     */
-  private def resolve(note: ObservedNote, deck: Option[DeckPath]): Either[PlanError, ObservedCard] =
+  private def resolve(
+      note: ObservedNote,
+      deck: Option[DeckPath],
+  ): Either[UnplaceableNote, ObservedCard] =
+    def unplaceable(problem: IdentityProblem) =
+      UnplaceableNote(note.id, problem, recordedShaOf(note))
+
     val prefix = s"${OwnedTag.SrcPrefix}::"
     note.tags.filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(prefix)) match
       case Vector(only) =>
         TagCodec
           .decode(only)
           .left
-          .map(err => PlanError.UnreadableIdentityInAnki(note.id, only, reasonFor(err)))
+          .map(err => unplaceable(IdentityProblem.Unreadable(only, reasonFor(err))))
           .map(key => ObservedCard(key, note, deck))
 
       // The query that produced this note matched on the prefix, so an empty result here would
@@ -92,17 +98,29 @@ object Observer:
       // "the note has no identity" is exactly as unplaceable as "its identity is malformed".
       case Vector() =>
         Left(
-          PlanError.UnreadableIdentityInAnki(
-            note.id,
-            "",
-            s"the note matched a search for '$prefix' but carries no such tag now",
+          unplaceable(
+            IdentityProblem.Unreadable(
+              "",
+              s"the note matched a search for '$prefix' but carries no such tag now",
+            )
           )
         )
 
       case several =>
-        Left(
-          PlanError.AmbiguousIdentityInAnki(note.id, NonEmptyVector.fromVectorUnsafe(several))
-        )
+        Left(unplaceable(IdentityProblem.Ambiguous(NonEmptyVector.fromVectorUnsafe(several))))
+
+  /** The content hash the last successful sync recorded on this note, if exactly one is there.
+    *
+    * DUPLICATED FROM [[ObservedCard.recordedSha]] RATHER THAN SHARED, and the duplication is
+    * forced: that one is an extension on a note that HAS been placed, and this is needed for one
+    * that has not. Both refuse to choose between two hashes for the same reason — a note carrying
+    * two says nothing trustworthy about what it holds.
+    */
+  private def recordedShaOf(note: ObservedNote): Option[String] =
+    note.tags.filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.ShaPrefix}::")) match
+      case Vector(only) =>
+        Some(only.drop(OwnedTag.ShaPrefix.length + 2).toLowerCase(java.util.Locale.ROOT))
+      case _ => None
 
   /** The decoder's own words about ONE tag, in a form a person can act on.
     *

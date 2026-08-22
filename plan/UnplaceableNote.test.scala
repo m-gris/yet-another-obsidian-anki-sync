@@ -70,6 +70,12 @@ class UnplaceableNoteTest extends munit.FunSuite:
   val k1: CardKey = key("n1", "Coupling", "Temporal coupling")
   val k2: CardKey = key("n1", "Coupling", "Afferent coupling")
 
+  /** The finished message for the first unplaceable note, composed the way a run composes it:
+    * observation reports the FACT, the planner turns it into ADVICE by consulting the vault.
+    */
+  def messageFor(anki: InMemoryAnki, specs: Vector[SourcedSpec] = Vector.empty): String =
+    Planner.identityErrorFor(observe(anki).unresolved.head, specs).describe
+
   def observe(anki: InMemoryAnki): ObservedState =
     Observer.observe[Result](anki).fold(e => fail(s"observe failed: $e"), identity)
 
@@ -133,14 +139,142 @@ class UnplaceableNoteTest extends munit.FunSuite:
   test("a note with an unreadable identity is REPORTED, where it used to be discarded") {
     val observed = observe(noteWithUnreadableIdentity())
     assertEquals(observed.notes, Vector.empty, "an unreadable note was resolved to a card anyway")
-    assertEquals(observed.unresolved.size, 1, s"got ${observed.unresolved.map(_.describe)}")
+    assertEquals(observed.unresolved.size, 1, s"got ${observed.unresolved.map(_.problem)}")
     assert(!observed.isFullyResolved)
   }
 
   test("a note with two identities is REPORTED, rather than one tag arbitrarily winning") {
     val observed = observe(noteWithTwoIdentities())
     assertEquals(observed.notes, Vector.empty, "one of two identity tags was picked")
-    assertEquals(observed.unresolved.size, 1, s"got ${observed.unresolved.map(_.describe)}")
+    assertEquals(observed.unresolved.size, 1, s"got ${observed.unresolved.map(_.problem)}")
+  }
+
+  // ══════════════════════════════ recovering what the note used to be ══════
+
+  /** THE RECOVERY THAT IS NOT A GUESS.
+    *
+    * `sha::` is a hash of the note type and every field value, written by the last successful
+    * sync. A broken note whose hash still matches a card the vault produces today is identified
+    * by sixty-four bits agreeing — the same assumption "nothing to do" already rests on for
+    * every note in the collection.
+    */
+  test("a note whose content still matches a vault card is identified by its content hash") {
+    val spec = specOf(k1, "back")
+    val anki = InMemoryAnki()
+    anki
+      .addNote(
+        NewNote(
+          noteType = spec.spec.noteTypeName,
+          deck = deck,
+          fields = spec.spec.fields,
+          // The identity is broken; the content hash is intact and correct.
+          tags = NonEmptyVector.of(
+            OwnedTag.unsafeFromString("src::n1"),
+            OwnedTag.sha(Planner.contentHash(spec.spec)),
+          ),
+        )
+      )
+      .fold(e => fail(s"$e"), identity)
+
+    val error = Planner.identityErrorFor(observe(anki).unresolved.head, Vector(spec))
+    error match
+      case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) =>
+        assertEquals(looksLike, Some(k1), "the content hash did not identify the card")
+      case other => fail(s"wrong error: $other")
+
+    // AND THE MESSAGE HANDS OVER THE FINISHED TAG. Nobody can type one of these by hand — the
+    // encoding escapes spaces, slashes, colons and Anki's wildcards — so a suggestion that named
+    // the card without printing the tag would still leave the person stuck.
+    val message = error.describe
+    assert(message.contains(TagCodec.encode(k1).value), s"no tag to copy in: $message")
+
+    // THE WORDING MUST STAY TENTATIVE. The tool did not make this change and must not read as
+    // though it had, nor as an instruction: the evidence is strong, and the decision is still
+    // the reader's because acting on it moves review history between cards.
+    assert(
+      message.contains("most likely") && message.contains("if you agree"),
+      s"reads as a statement of fact rather than a suggestion: $message",
+    )
+  }
+
+  /** SILENT WHEN IT DOES NOT KNOW. The body was edited after the tag broke, so the recorded hash
+    * matches nothing — and a report that guessed anyway would be worse than one that did not,
+    * because acting on it moves review history onto the wrong card.
+    */
+  test("a note whose content has since changed gets no suggestion rather than a wrong one") {
+    val anki = InMemoryAnki()
+    anki
+      .addNote(
+        NewNote(
+          noteType = specOf(k1, "back").spec.noteTypeName,
+          deck = deck,
+          fields = specOf(k1, "back").spec.fields,
+          tags = NonEmptyVector.of(
+            OwnedTag.unsafeFromString("src::n1"),
+            OwnedTag.sha("0000000000000000"),
+          ),
+        )
+      )
+      .fold(e => fail(s"$e"), identity)
+
+    val error = Planner.identityErrorFor(observe(anki).unresolved.head, Vector(specOf(k1, "edited")))
+    error match
+      case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) => assertEquals(looksLike, None)
+      case other                                                  => fail(s"wrong error: $other")
+    assert(!error.describe.toLowerCase.contains("looks like"), error.describe)
+  }
+
+  /** For a note carrying SEVERAL identities the vault answers directly, and better than a hash
+    * could: of the keys claimed, exactly one still exists.
+    */
+  test("of two identity tags, the one the vault still has a card for is named") {
+    val anki = noteWithTwoIdentities()
+    // Only k2 remains in the vault, so the note is most likely k2's.
+    val error = Planner.identityErrorFor(observe(anki).unresolved.head, Vector(specOf(k2, "back")))
+    error match
+      case PlanError.AmbiguousIdentityInAnki(_, _, looksLike) => assertEquals(looksLike, Some(k2))
+      case other                                              => fail(s"wrong error: $other")
+  }
+
+  test("when BOTH claimed keys still exist, nothing is suggested") {
+    val anki  = noteWithTwoIdentities()
+    val error = Planner.identityErrorFor(
+      observe(anki).unresolved.head,
+      Vector(specOf(k1, "back"), specOf(k2, "back")),
+    )
+    error match
+      case PlanError.AmbiguousIdentityInAnki(_, _, looksLike) =>
+        assertEquals(looksLike, None, "picked one of two live candidates")
+      case other => fail(s"wrong error: $other")
+  }
+
+  /** Two cards hashing alike is the one way the hash could mislead, so it must decline rather
+    * than take the first. Same posture as `recordedSha` refusing to choose between two hashes.
+    */
+  test("when two vault cards share a content hash, nothing is suggested") {
+    val spec     = specOf(k1, "back")
+    val twin     = specOf(k2, "back") // identical fields, so an identical hash
+    assertEquals(Planner.contentHash(spec.spec), Planner.contentHash(twin.spec), "test premise broken")
+
+    val anki = InMemoryAnki()
+    anki
+      .addNote(
+        NewNote(
+          noteType = spec.spec.noteTypeName,
+          deck = deck,
+          fields = spec.spec.fields,
+          tags = NonEmptyVector.of(
+            OwnedTag.unsafeFromString("src::n1"),
+            OwnedTag.sha(Planner.contentHash(spec.spec)),
+          ),
+        )
+      )
+      .fold(e => fail(s"$e"), identity)
+
+    Planner.identityErrorFor(observe(anki).unresolved.head, Vector(spec, twin)) match
+      case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) =>
+        assertEquals(looksLike, None, "picked one of two cards with the same content")
+      case other => fail(s"wrong error: $other")
   }
 
   // ══════════════════════════════════════════ what the planner does ══════
@@ -173,7 +307,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
     * manual — this tool cannot repair a tag it cannot read.
     */
   test("the report names the note id, the offending tag, and the remedy") {
-    val message = observe(noteWithUnreadableIdentity()).unresolved.head.describe
+    val message = messageFor(noteWithUnreadableIdentity())
     assert(message.contains("src::n1"), message)
     assert(message.toLowerCase.contains("cannot read"), message)
     assert(message.toLowerCase.contains("second note"), message)
@@ -208,7 +342,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
     // branch, and it is still reported — just with a reason that names nothing the person can
     // act on. Measured: mutating the search to be case-sensitive left this test green until
     // this line was added.
-    val message = observed.unresolved.head.describe
+    val message = messageFor(anki)
     assert(
       message.contains("SRC::n1::coupling"),
       s"the report does not name the tag the person has to fix: $message",

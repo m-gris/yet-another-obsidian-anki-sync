@@ -1,8 +1,32 @@
 package obsidiananki.plan
 
 import cats.data.NonEmptyVector
-import obsidiananki.anki.{DeckPath, NewNote, ObservedNote}
+import obsidiananki.anki.{AnkiNoteId, DeckPath, NewNote, ObservedNote}
 import obsidiananki.model.{CardKey, CardSpec, OwnedTag, TagCodec}
+
+/** Why ONE note could not be placed. A fact about the note, carrying no advice.
+  *
+  * SEPARATE FROM [[PlanError]] ON PURPOSE. Observation knows what a note looks like and knows
+  * nothing about the vault; only the planner holds both sides, and only the planner can say
+  * "this looks like the card at …". Building the finished error here would either mean the
+  * observer guessing without evidence, or the planner rewriting a message it did not compose.
+  */
+enum IdentityProblem:
+  case Ambiguous(tags: NonEmptyVector[String])
+  case Unreadable(tag: String, reason: String)
+
+/** A note the identity search found and nothing could place.
+  *
+  * `recordedSha` is carried because it is the strongest evidence available for what this note
+  * USED to be: the content hash the last successful sync wrote. It is a fact about the note, so
+  * it is gathered here; what it is worth is decided by the planner, which can compare it against
+  * the vault.
+  */
+final case class UnplaceableNote(
+    id: AnkiNoteId,
+    problem: IdentityProblem,
+    recordedSha: Option[String],
+)
 
 /** What Anki currently holds, as the planner needs to see it.
   *
@@ -10,7 +34,10 @@ import obsidiananki.model.{CardKey, CardSpec, OwnedTag, TagCodec}
   * lookup per card: a per-card lookup driven by markdown keys can never find an orphan,
   * because an orphan is a key the markdown does not have.
   */
-final case class ObservedState(notes: Vector[ObservedCard], unresolved: Vector[PlanError] = Vector.empty):
+final case class ObservedState(
+    notes: Vector[ObservedCard],
+    unresolved: Vector[UnplaceableNote] = Vector.empty,
+):
 
   /** CONSERVATION: every note the `src::` query returned is in EXACTLY ONE of `notes` and
     * `unresolved`. [[Observer.observe]] partitions rather than filters, so this holds by
@@ -137,6 +164,57 @@ object Planner:
     * sibling headings under one ancestor, two table rows with the same first cell, or a
     * table cell that happens to coincide with a nested heading.
     */
+  /** Turn "this note could not be placed" into a message a person can act on, by asking the
+    * vault what the note most likely is.
+    *
+    * ═══ THE SUGGESTION IS EVIDENCE, NOT A GUESS ═══
+    *
+    * `sha::` is a hash of the note type and every field value, written by the last successful
+    * sync ([[contentHash]]). So a note whose identity is unreadable but whose hash still matches
+    * a card the vault produces today is not being GUESSED at — sixty-four bits agree. The only
+    * way to be wrong is for two different cards to hash identically, which is the same
+    * assumption "nothing to do" already rests on for every note in the collection.
+    *
+    * IT WORKS ONLY WHILE THE CONTENT IS UNCHANGED. Edit the body after breaking the tag and the
+    * hash no longer matches, and this correctly offers nothing rather than something. Matching
+    * on similar CONTENT is the designed next tier and is not built; when it is, it must stay on
+    * the suggest side of the line, because a similarity score is exactly the guess this is not.
+    *
+    * ═══ WHY IT NEVER APPLIES ITSELF ═══
+    *
+    * A wrong rebind moves review history onto the wrong card, silently and irreversibly. So this
+    * only ever NAMES the card and prints the tag that would bind it; a person types nothing and
+    * decides everything. Printing the tag is the point — the encoding escapes spaces, slashes,
+    * colons and Anki's two wildcard characters, so a correct tag cannot be written out by hand.
+    *
+    * AMBIGUITY IS ANSWERED FROM THE VAULT FIRST. When a note carries several identity tags, the
+    * useful question is which of them the vault still has a card for — a stronger signal than
+    * the hash, and it needs no hash at all. The hash is the fallback for when that is still
+    * undecided, which is why the two are tried in this order.
+    */
+  private[plan] def identityErrorFor(
+      note: UnplaceableNote,
+      specs: Vector[SourcedSpec],
+  ): PlanError =
+    def byRecordedHash: Option[CardKey] =
+      note.recordedSha.flatMap { sha =>
+        specs.filter(s => contentHash(s.spec) == sha) match
+          case Vector(only) => Some(only.key)
+          case _            => None // none matched, or several did: say nothing rather than pick
+      }
+
+    note.problem match
+      case IdentityProblem.Unreadable(tag, reason) =>
+        PlanError.UnreadableIdentityInAnki(note.id, tag, reason, byRecordedHash)
+
+      case IdentityProblem.Ambiguous(tags) =>
+        val live = specs.map(_.key).toSet
+        val claimed = tags.toVector.flatMap(TagCodec.decode(_).toOption).filter(live.contains).distinct
+        val suggestion = claimed match
+          case Vector(only) => Some(only)
+          case _            => byRecordedHash
+        PlanError.AmbiguousIdentityInAnki(note.id, tags, suggestion)
+
   def checkUnique(specs: Vector[SourcedSpec]): Vector[PlanError] =
     specs
       .groupBy(_.key)
@@ -179,7 +257,7 @@ object Planner:
     //
     // ORDERED FIRST because the remedy is the most mechanical — open the note, fix one tag —
     // and because the other two errors may simply disappear once it is done.
-    val unplaceable = observed.unresolved
+    val unplaceable = observed.unresolved.map(identityErrorFor(_, scan.specs))
 
     observed.byKey match
       case _ if unplaceable.nonEmpty       => Left(unplaceable ++ duplicates)
