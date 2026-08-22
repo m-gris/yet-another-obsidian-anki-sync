@@ -50,7 +50,7 @@ class CliTest extends munit.FunSuite:
 
   test("sync WITH a profile parses") {
     parse("sync", "--vault-path", existingDir, "--profile", "POC-test") match
-      case Right(Command.Sync(_, profile, _, dryRun, retypePolicy)) =>
+      case Right(Command.Sync(_, profile, _, _, dryRun, retypePolicy)) =>
         assertEquals(profile, "POC-test")
         assertEquals(dryRun, false)
         // THE DEFAULT IS THE SAFE ONE, asserted rather than assumed. Without the flag a sync
@@ -98,11 +98,11 @@ class CliTest extends munit.FunSuite:
 
   test("the deck root defaults to Obsidian and accepts a nested path") {
     parse("inspect", "--vault-path", existingDir) match
-      case Right(Command.Inspect(_, deckRoot, _)) => assertEquals(deckRoot.render, "Obsidian")
-      case other                                  => fail(s"got $other")
+      case Right(Command.Inspect(_, deckRoot, _, _)) => assertEquals(deckRoot.render, "Obsidian")
+      case other                                     => fail(s"got $other")
     parse("inspect", "--vault-path", existingDir, "--deck-root", "My::Root") match
-      case Right(Command.Inspect(_, deckRoot, _)) => assertEquals(deckRoot.render, "My::Root")
-      case other                                  => fail(s"got $other")
+      case Right(Command.Inspect(_, deckRoot, _, _)) => assertEquals(deckRoot.render, "My::Root")
+      case other                                     => fail(s"got $other")
   }
 
   test("an empty deck root is refused") {
@@ -117,16 +117,16 @@ class CliTest extends munit.FunSuite:
     */
   test("with no --vault-path, both commands parse to a request to ASK") {
     parse("inspect") match
-      case Right(Command.Inspect(selection, _, _)) => assertEquals(selection, VaultSelection.Ask)
+      case Right(Command.Inspect(selection, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
       case other                                   => fail(s"got $other")
     parse("sync", "--profile", "POC-test") match
-      case Right(Command.Sync(selection, _, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
+      case Right(Command.Sync(selection, _, _, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
       case other                                     => fail(s"got $other")
   }
 
   test("--vault-path names the vault outright, carrying a root that has already been checked") {
     parse("inspect", "--vault-path", existingDir) match
-      case Right(Command.Inspect(VaultSelection.AtPath(root), _, _)) =>
+      case Right(Command.Inspect(VaultSelection.AtPath(root), _, _, _)) =>
         assertEquals(
           root.render,
           java.nio.file.Paths.get(existingDir).toAbsolutePath.normalize.toString,
@@ -147,7 +147,7 @@ class CliTest extends munit.FunSuite:
           message.contains("Obsidian") || message.contains(VaultRoot.MarkerDirectory),
           s"the refusal does not explain what was missing: $message",
         )
-      case Right(Command.Inspect(selection, _, _)) =>
+      case Right(Command.Inspect(selection, _, _, _)) =>
         fail(s"a bad --vault-path parsed instead of being refused, as $selection")
       case Right(other) => fail(s"got $other")
   }
@@ -311,4 +311,84 @@ class CliTest extends munit.FunSuite:
       parse("install-note-types", "--profile", "p", "--vault-path", existingDir).isLeft,
       "a vault was accepted by a command that reads no vault",
     )
+  }
+
+  // ================================================ --deck-from ====
+
+  private def shapeOf(args: String*): DeckShape =
+    parse(("inspect" +: "--vault-path" +: existingDir +: args)*) match
+      case Right(Command.Inspect(_, _, shape, _)) => shape
+      case other                                  => fail(s"got $other")
+
+  /** THE DEFAULT IS LOAD-BEARING, not a convenience. Every card in an already-synced
+    * collection sits in a folder-derived deck, so any other default would greet it with a deck
+    * move for every note.
+    */
+  test("--deck-from defaults to folders, the arrangement every synced collection already has") {
+    assertEquals(shapeOf(), DeckShape.FoldersOnly)
+    assertEquals(shapeOf(), DeckShape(folders = true, fileName = false, headings = false))
+  }
+
+  test("--deck-from selects the named sources and only those") {
+    assertEquals(
+      shapeOf("--deck-from", "folders,headings"),
+      DeckShape(folders = true, fileName = false, headings = true),
+    )
+    assertEquals(
+      shapeOf("--deck-from", "file"),
+      DeckShape(folders = false, fileName = true, headings = false),
+    )
+    assertEquals(
+      shapeOf("--deck-from", "folders,file,headings"),
+      DeckShape(folders = true, fileName = true, headings = true),
+    )
+  }
+
+  test("--deck-from tolerates spacing and case, since a shell script will have both") {
+    assertEquals(
+      shapeOf("--deck-from", " Folders , HEADINGS "),
+      DeckShape(folders = true, fileName = false, headings = true),
+    )
+  }
+
+  /** 'none' is a word rather than an empty value, because "one flat deck" is a real way to
+    * work while an empty value is how an unset shell variable arrives.
+    */
+  test("--deck-from none selects nothing, and an empty value is refused") {
+    assertEquals(
+      shapeOf("--deck-from", "none"),
+      DeckShape(folders = false, fileName = false, headings = false),
+    )
+    assert(parse("inspect", "--vault-path", existingDir, "--deck-from", "").isLeft)
+  }
+
+  test("--deck-from none cannot be combined with a source, since it means the absence of one") {
+    assert(parse("inspect", "--vault-path", existingDir, "--deck-from", "none,folders").isLeft)
+  }
+
+  /** REFUSED RATHER THAN IGNORED. A typo silently dropped would file every card somewhere the
+    * author did not choose, and the only symptom would be decks that look slightly wrong.
+    */
+  test("an unknown source is refused, and the message names it and the alternatives") {
+    parse("inspect", "--vault-path", existingDir, "--deck-from", "folders,headinsg") match
+      case Left(help) =>
+        val text = help.toString
+        assert(text.contains("headinsg"), s"the message must name the typo — got: $text")
+        assert(text.contains("headings"), s"the message must name what was meant — got: $text")
+      case other => fail(s"a misspelt source was accepted: $other")
+  }
+
+  test("the same option is available on sync, not only on inspect") {
+    parse(
+      "sync",
+      "--vault-path",
+      existingDir,
+      "--profile",
+      "POC-test",
+      "--deck-from",
+      "headings",
+    ) match
+      case Right(Command.Sync(_, _, _, shape, _, _)) =>
+        assertEquals(shape, DeckShape(folders = false, fileName = false, headings = true))
+      case other => fail(s"got $other")
   }

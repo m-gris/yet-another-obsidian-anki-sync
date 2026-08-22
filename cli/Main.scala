@@ -73,21 +73,26 @@ object Main
     * reading: the vault's files are opened by `sync`, after the choice.
     */
   def main: Opts[IO[ExitCode]] = Cli.command.map {
-    case Command.Inspect(selection, deckRoot, verbose) =>
-      withChosenVault(selection)(inspect(_, deckRoot, verbose))
-    case Command.Sync(selection, profile, deckRoot, dryRun, retypePolicy) =>
+    case Command.Inspect(selection, deckRoot, deckShape, verbose) =>
+      withChosenVault(selection)(inspect(_, deckRoot, deckShape, verbose))
+    case Command.Sync(selection, profile, deckRoot, deckShape, dryRun, retypePolicy) =>
       withVerifiedProfile(profile)(anki =>
-        withChosenVault(selection)(sync(_, deckRoot, dryRun, retypePolicy, anki))
+        withChosenVault(selection)(sync(_, deckRoot, deckShape, dryRun, retypePolicy, anki))
       )
     case Command.InstallNoteTypes(profile, repair) =>
       withVerifiedProfile(profile)(installNoteTypes(_, repair))
   }
 
   /** Read the vault and say what it holds. Touches no collection. */
-  private def inspect(vault: VaultRoot, deckRoot: DeckPath, verbose: Boolean): IO[ExitCode] =
+  private def inspect(
+      vault: VaultRoot,
+      deckRoot: DeckPath,
+      deckShape: DeckShape,
+      verbose: Boolean,
+  ): IO[ExitCode] =
     for
       files <- readVault(vault)
-      index = VaultWalker.scan(files, deckRoot, DeckShape.FoldersOnly)
+      index = VaultWalker.scan(files, deckRoot, deckShape)
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")
       _ <- Report.inspect(index, verbose).traverse_(IO.println)
@@ -832,13 +837,14 @@ object Main
   private def sync(
       vault: VaultRoot,
       deckRoot: DeckPath,
+      deckShape: DeckShape,
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
       anki: AnkiConnectClient[IO],
   ): IO[ExitCode] =
     for
       files <- readVault(vault)
-      index = VaultWalker.scan(files, deckRoot, DeckShape.FoldersOnly)
+      index = VaultWalker.scan(files, deckRoot, deckShape)
       // Aligned with inspect's value column. The gate has already printed `profile:` above.
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")

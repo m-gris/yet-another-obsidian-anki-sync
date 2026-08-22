@@ -4,6 +4,7 @@ import cats.data.{NonEmptyVector, Validated}
 import cats.syntax.all.*
 import com.monovore.decline.Opts
 import obsidiananki.anki.DeckPath
+import obsidiananki.extract.DeckShape
 import obsidiananki.plan.RetypePolicy
 import java.nio.file.Paths
 
@@ -38,7 +39,7 @@ enum Command:
   /** Read the vault and report what it would produce. Touches NO collection at all, so it
     * needs no profile: it answers "what does my vault say?" rather than "what would change?".
     */
-  case Inspect(vault: VaultSelection, deckRoot: DeckPath, verbose: Boolean)
+  case Inspect(vault: VaultSelection, deckRoot: DeckPath, deckShape: DeckShape, verbose: Boolean)
 
   /** Reconcile the vault against a collection. Requires a profile, explicitly.
     *
@@ -52,6 +53,7 @@ enum Command:
       vault: VaultSelection,
       profile: String,
       deckRoot: DeckPath,
+      deckShape: DeckShape,
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
   )
@@ -144,10 +146,65 @@ object Cli:
           case None      => Validated.invalidNel("deck-root must not be empty")
       }
 
+  /** The names `--deck-from` accepts, in the order they nest. */
+  private val deckSourceNames: Vector[String] = Vector("folders", "file", "headings")
+
+  /** WHICH parts of a card's location become deck levels.
+    *
+    * ONE LIST RATHER THAN THREE FLAGS, because the three are one decision. `--deck-from
+    * folders,headings` states the whole arrangement in one place; three independent flags
+    * would let a reader of a script work the deck out only by holding all three in their head.
+    *
+    * THE DEFAULT IS THE ARRANGEMENT EVERY EXISTING COLLECTION ALREADY HAS. See
+    * [[obsidiananki.extract.DeckShape.FoldersOnly]]: any other default would greet a synced
+    * collection with a deck move for every note.
+    *
+    * `none` IS SPELT OUT RATHER THAN BEING THE EMPTY STRING. "Put every card in one deck" is a
+    * real way to work and should be sayable in a word, while an empty value really can be a
+    * mistake — an unset shell variable — so that stays refused.
+    */
+  private val deckShapeOpt: Opts[DeckShape] =
+    Opts
+      .option[String](
+        "deck-from",
+        "Which parts of a card's location become deck levels, comma-separated: " +
+          s"${deckSourceNames.mkString(", ")} — or 'none' for one flat deck. Default: folders",
+      )
+      .withDefault("folders")
+      .mapValidated { raw =>
+        val names   = raw.split(",").toVector.map(_.trim.toLowerCase).filter(_.nonEmpty)
+        val unknown = names.filterNot(n => n == "none" || deckSourceNames.contains(n))
+        if names.isEmpty then
+          Validated.invalidNel(
+            s"deck-from must name at least one of ${deckSourceNames.mkString(", ")}, or 'none'"
+          )
+        else if unknown.nonEmpty then
+          Validated.invalidNel(
+            s"deck-from: unknown source ${unknown.map(u => s"'$u'").mkString(", ")} — " +
+              s"expected any of ${deckSourceNames.mkString(", ")}, or 'none'"
+          )
+        else if names.contains("none") && names.sizeIs > 1 then
+          Validated.invalidNel(
+            "deck-from: 'none' means no source at all, so it cannot be combined with another"
+          )
+        else
+          Validated.valid(
+            DeckShape(
+              folders = names.contains("folders"),
+              fileName = names.contains("file"),
+              headings = names.contains("headings"),
+            )
+          )
+      }
+
   private val inspect: Opts[Command] =
     Opts.subcommand("inspect", "Report what the vault would produce. Touches no collection.") {
-      (vaultSelectionOpt, deckRootOpt, Opts.flag("verbose", "List every card.").orFalse)
-        .mapN(Command.Inspect.apply)
+      (
+        vaultSelectionOpt,
+        deckRootOpt,
+        deckShapeOpt,
+        Opts.flag("verbose", "List every card.").orFalse,
+      ).mapN(Command.Inspect.apply)
     }
 
   /** OPT-IN, and it maps to a two-case type rather than staying a `Boolean` past this point.
@@ -173,6 +230,7 @@ object Cli:
         vaultSelectionOpt,
         profileOpt,
         deckRootOpt,
+        deckShapeOpt,
         Opts.flag("dry-run", "Compute and print the plan without applying it.").orFalse,
         retypePolicyOpt,
       ).mapN(Command.Sync.apply)
