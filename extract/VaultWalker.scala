@@ -23,33 +23,123 @@ final case class VaultFile(relativePath: String, content: String)
 final case class VaultIndex(scan: VaultScan, decks: Map[CardKey, DeckPath]):
   def deckOf(root: DeckPath): CardKey => DeckPath = key => decks.getOrElse(key, root)
 
-/** Mapping a vault folder path onto an Anki deck path. */
+/** Every deck level a card's location COULD contribute, in document order.
+  *
+  * The ingredients, not the dish. A [[DeckShape]] decides which of them are used, and holding
+  * them apart is what lets the scan stay one thing while the deck is a preference — the scan
+  * carries this, and the deck is composed from it afterwards.
+  *
+  * `headings` IS THE SECTION CHAIN AND NOT THE CARD KEY'S PATH. Two differences, both
+  * load-bearing:
+  *
+  *   - It is DISPLAY TITLES, so a deck reads `Read-your-writes consistency` and not the
+  *     canonical `read-your-writes consistency` the key carries. Same argument as
+  *     [[CardContext]], which took the same decision for the on-card breadcrumb.
+  *   - It STOPS AT THE MARKED HEADING. A table's card keys continue into the row concept and
+  *     the column header; following them would mint a deck per table row, which is the
+  *     cardinality the "the file is not a deck level" note below exists to avoid. Every card a
+  *     marked heading produces shares that heading's deck.
+  */
+final case class DeckSource(folders: Vector[String], fileName: String, headings: Vector[String])
+
+/** Which parts of a card's location become deck levels.
+  *
+  * RULED BY MARC, 2026-08-22 (`srs-obsidian-anki/REQUIREMENTS.md` item 11): folder path, file
+  * name and heading path are COMPLEMENTARY segments of one deck path, each optional. How decks
+  * are shaped is a way of thinking, not a correctness property, so the mechanism is exposed
+  * rather than a preference embedded.
+  *
+  * THERE IS NO ORDERING FREEDOM, and that is deliberate rather than an omission. The three
+  * sources nest in document order — a file lives in a folder, a heading lives in a file — so a
+  * deck that put the heading above the folder would describe a containment that does not
+  * exist. What is optional is WHICH sources appear, not their order.
+  *
+  * The overlap between `fileName` and `headings` is the AUTHOR'S to resolve, not this type's.
+  * A vault whose every file opens with an H1 restating its own name — which `dummy-vault` does,
+  * all twelve — yields `…::Replication::Replication::Read-your-writes consistency` with both
+  * selected. That is a legible consequence of the composition asked for, so it is left visible
+  * instead of being silently de-duplicated: a rule that dropped a repeat would also drop a
+  * heading that genuinely repeats its parent, and the author could not tell which had happened.
+  */
+final case class DeckShape(folders: Boolean, fileName: Boolean, headings: Boolean)
+
+object DeckShape:
+
+  /** What the tool did before the shape was configurable, and still the default.
+    *
+    * THE DEFAULT MUST NOT MOVE CARDS. Every card already synced sits in a folder-derived deck,
+    * so any other default would greet an existing collection with a deck move for every note.
+    * Nothing is lost by that — a deck move keeps scheduling — but a run that reports hundreds
+    * of changes nobody asked for is a run that stops being read.
+    */
+  val FoldersOnly: DeckShape = DeckShape(folders = true, fileName = false, headings = false)
+
+/** Mapping a card's location onto an Anki deck path. */
 object Decks:
+
+  /** Compose the deck a card belongs in from the parts its [[DeckShape]] selects.
+    *
+    * Returns the reason on the left rather than dropping a bad segment, because a deck path
+    * silently shorter than asked for is a card filed somewhere the author did not choose and
+    * would have to notice by eye.
+    */
+  def compose(root: DeckPath, shape: DeckShape, source: DeckSource): Either[String, DeckPath] =
+    // NAMED ALONGSIDE THE VALUES, so a refusal can say "heading 'A::B'" rather than "'A::B'".
+    // A message that does not say which of three sources produced the segment sends the
+    // author looking through a folder tree for a string that is in a heading.
+    val selected: Vector[(String, String)] =
+      (if shape.folders then source.folders.map("folder" -> _) else Vector.empty) ++
+        (if shape.fileName then Vector("file name" -> source.fileName) else Vector.empty) ++
+        (if shape.headings then source.headings.map("heading" -> _) else Vector.empty)
+
+    // TRIMMED BEFORE ANYTHING ELSE, because Anki trims deck names itself: leaving the padding
+    // on would have the tool believe in a deck named `" Spaced "` that Anki calls `"Spaced"`,
+    // and every run would then try to move the card into a deck it is already in.
+    val trimmed = selected.map((kind, value) => (kind, value.trim)).filter((_, value) => value.nonEmpty)
+
+    // CHECKED OVER THE SELECTION AND NOT OVER THE SOURCE. A `::` in a segment the shape does
+    // not use cannot reach a deck path, so refusing it would be the tool objecting to
+    // something it is not looking at.
+    trimmed.find((_, value) => value.contains("::")) match
+      case Some((kind, value)) =>
+        Left(s"$kind '$value' contains '::', which is Anki's deck separator")
+      case None =>
+        Right(DeckPath(NonEmptyVector.fromVectorUnsafe(root.segments.toVector ++ trimmed.map(_._2))))
+
+  /** Split a vault-relative file path into the deck levels it could contribute.
+    *
+    * A note at the vault root has NO folders, so with the default shape it lands in the root
+    * deck rather than one of its own. The `.md` suffix comes off the file name here, at the
+    * one place that knows the string is a path.
+    */
+  def sourceFor(relativeFilePath: String, headings: Vector[String]): DeckSource =
+    val parts = relativeFilePath.split('/').toVector
+    DeckSource(
+      folders = parts.dropRight(1).map(_.trim).filter(_.nonEmpty),
+      fileName = parts.lastOption.getOrElse("").stripSuffix(".md"),
+      headings = headings,
+    )
 
   /** FOLDER path to deck path, under a root prefix. THE FILE IS NOT A DECK LEVEL.
     *
     * Making the file a level would give every concept its own two-card deck — hundreds of
     * them. The root prefix isolates synced cards from any deck made by hand, so the subtree
-    * can be deleted and rebuilt without touching anything else.
+    * can be deleted and rebuilt without touching anything else. Both remain true of the
+    * DEFAULT shape; selecting the file name or the headings is how an author asks for the
+    * other arrangement, having seen what it costs.
     *
     * Decks carry FILING ONLY, never learning order: study scope comes from filtered decks
     * over tags and introduction order from new-card position. Conflating the three is what
     * sank the earlier design.
+    *
+    * DELEGATES RATHER THAN REIMPLEMENTS, and that is the point of keeping it. The default
+    * shape must place every already-synced card exactly where this function put it, forever;
+    * two bodies that merely agree today would be free to drift, and the drift would show up as
+    * a deck move for every note in a collection. One body cannot drift. What is left here is a
+    * NAME for the folder-only arrangement and the reasoning behind it.
     */
   def fromRelativePath(root: DeckPath, relativeFilePath: String): Either[String, DeckPath] =
-    val folders = relativeFilePath.split('/').toVector.dropRight(1).map(_.trim).filter(_.nonEmpty)
-    // "::" is Anki's own deck separator. A folder containing it would silently create deeper
-    // nesting than the vault actually has, so it is refused rather than reinterpreted.
-    folders.find(_.contains("::")) match
-      case Some(bad) =>
-        Left(s"folder name '$bad' contains '::', which is Anki's deck separator")
-      case None =>
-        // Dropping the file name is the rule: a note at the vault root lands in the root
-        // deck rather than one of its own.
-        Right(
-          if folders.isEmpty then root
-          else DeckPath(NonEmptyVector.fromVectorUnsafe(root.segments.toVector ++ folders))
-        )
+    compose(root, DeckShape.FoldersOnly, sourceFor(relativeFilePath, Vector.empty))
 
 /** Turning a whole vault into a scan. */
 object VaultWalker:
