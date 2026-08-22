@@ -29,7 +29,15 @@ Verified live against profile `claude-POC-test`, not asserted:
    matches a hash. Cheap to detect. Refusing would be wrong — two tables legitimately defining
    one term is the author's business — so it would have to be a report. Marc raised this as
    "shouldn't we have dedup?".
-3. **Row scope at `2way`/`3way`** — a row card that blanks the CONCEPT rather than the values
+3. **Carry a note's Obsidian tags onto its Anki notes.** Requested by Marc 2026-08-22, on
+   learning that they do not: the tool owns only the `src::`, `sha::` and `orphaned::` prefixes
+   and preserves foreign tags it finds, but it never reads a note's frontmatter `tags`. So an
+   Obsidian tag cannot currently drive an Anki filtered deck, which is the obvious way to want
+   to study a subset. Not designed. The questions it opens: whether tags are copied verbatim or
+   namespaced (an unprefixed tag from the vault is indistinguishable from one added by hand in
+   Anki, and the tool must not later delete somebody's own tag believing it owned it), and what
+   happens when a tag is REMOVED in the vault.
+4. **Row scope at `2way`/`3way`** — a row card that blanks the CONCEPT rather than the values
    ("which bone has these two borders?"). Needs a second template on the plain note type. Not
    designed.
 
