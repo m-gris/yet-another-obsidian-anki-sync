@@ -21,7 +21,7 @@ class MarkerTest extends munit.FunSuite:
       Some(Marker.ThreeField(ThreeFieldDirections.All)),
     )
     assertEquals(parsed("Bones #flashcard/cloze"), Some(Marker.Cloze))
-    assertEquals(parsed("Cost / benefit #flashcard/table"), Some(Marker.Table(ThreeFieldDirections.Default)))
+    assertEquals(parsed("Cost / benefit #flashcard/table"), Some(Marker.Table(ThreeFieldDirections.Default, TableScope.Both)))
     assertEquals(parsed("Path of blood #flashcard/sequence"), Some(Marker.Sequence))
   }
 
@@ -35,20 +35,45 @@ class MarkerTest extends munit.FunSuite:
   test("bare #flashcard/table is the two-direction default, unchanged by the family") {
     assertEquals(
       parsed("Cost / benefit #flashcard/table"),
-      Some(Marker.Table(ThreeFieldDirections.Default)),
+      Some(Marker.Table(ThreeFieldDirections.Default, TableScope.Both)),
     )
     assertEquals(
       parsed("Cost / benefit #flashcard/table/2way"),
-      Some(Marker.Table(ThreeFieldDirections.Default)),
+      Some(Marker.Table(ThreeFieldDirections.Default, TableScope.Both)),
       "the explicit 2way must mean the same as the bare marker, or upgrading a vault to the " +
         "explicit form would change what it produces",
     )
   }
 
   test("the table family selects one, two or three directions") {
-    assertEquals(parsed("T #flashcard/table/1way"), Some(Marker.Table(ThreeFieldDirections.ValueOnly)))
-    assertEquals(parsed("T #flashcard/table/2way"), Some(Marker.Table(ThreeFieldDirections.Default)))
-    assertEquals(parsed("T #flashcard/table/3way"), Some(Marker.Table(ThreeFieldDirections.All)))
+    assertEquals(parsed("T #flashcard/table/1way"), Some(Marker.Table(ThreeFieldDirections.ValueOnly, TableScope.Both)))
+    assertEquals(parsed("T #flashcard/table/2way"), Some(Marker.Table(ThreeFieldDirections.Default, TableScope.Both)))
+    assertEquals(parsed("T #flashcard/table/3way"), Some(Marker.Table(ThreeFieldDirections.All, TableScope.Both)))
+  }
+
+  /** SCOPE IS THE SECOND AXIS, and independent of direction.
+    *
+    * Measured on a live collection before this existed: a table marked bare produced 8 cell
+    * cards AND 2 row cards, and the row cards were a constant regardless of direction. So a row
+    * card is not a fourth "way" — it is a different question about the same row, and the two
+    * choices compose rather than laddering.
+    */
+  test("scope selects cells, rows, or both — independently of direction") {
+    assertEquals(parsed("T #flashcard/table"), Some(Marker.Table(ThreeFieldDirections.Default, TableScope.Both)))
+    assertEquals(parsed("T #flashcard/table/cells"), Some(Marker.Table(ThreeFieldDirections.Default, TableScope.CellsOnly)))
+    assertEquals(parsed("T #flashcard/table/3way/cells"), Some(Marker.Table(ThreeFieldDirections.All, TableScope.CellsOnly)))
+    assertEquals(parsed("T #flashcard/table/rows"), Some(Marker.Table(ThreeFieldDirections.Default, TableScope.RowsOnly)))
+  }
+
+  /** NAMING A DIRECTION ALONGSIDE `rows` IS REFUSED, not accepted and ignored.
+    *
+    * With no cell cards there is nothing for a direction to apply to, so such a marker would
+    * name a choice that changes nothing at all — and a marker whose qualifier does nothing is
+    * exactly the silent no-op this project treats as a defect rather than a convenience.
+    */
+  test("a direction alongside rows-only is refused, since it could not apply to anything") {
+    assert(Marker.parse("T #flashcard/table/2way/rows").isLeft)
+    assert(Marker.parse("T #flashcard/table/3way/rows").isLeft)
   }
 
   /** An unknown qualifier is a LOUD failure, not a silent fallback to the default. A typo like
@@ -123,7 +148,7 @@ class MarkerTest extends munit.FunSuite:
   test("a table marker has no single note type") {
     // Its rows yield notes of two different types, so the note type belongs to the emitted
     // spec rather than to the marker.
-    assertEquals(Marker.Table(ThreeFieldDirections.Default).noteTypeName, None)
+    assertEquals(Marker.Table(ThreeFieldDirections.Default, TableScope.Both).noteTypeName, None)
   }
 
   test("B7: the concept-descriptor field order is Concept, Descriptor, Description") {

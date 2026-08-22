@@ -155,6 +155,20 @@ enum SpecError:
     */
   case ListNestingUnreadable(headingPath: String, what: String)
 
+  /** `#flashcard/table/rows` on a table that yields NO row card.
+    *
+    * A row card is emitted only for a row carrying TWO OR MORE usable descriptor cells: with one
+    * it would be byte-identical to that row's single cell card, differing only in key — two notes
+    * holding the same fact, on two schedules, forever, with nothing comparing content across keys
+    * to notice. So `rows` on a one-descriptor table asks for the only card kind the table cannot
+    * produce, and the honest answer is nothing at all.
+    *
+    * REFUSED RATHER THAN LEFT SILENT, because "an explicit marker that yields zero cards" is the
+    * dual of silent card creation and the reason [[TableWithoutDescriptors]] exists. Without this
+    * the author marks a heading, sees a clean run, and believes it synced.
+    */
+  case TableRowsWithoutRows(headingPath: String, what: String)
+
 /** What will become exactly one Anki note.
   *
   * TABLE KEYS EXTEND THE HEADING PATH rather than forming a parallel key shape. A pair card

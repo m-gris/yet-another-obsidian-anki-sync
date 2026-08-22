@@ -47,12 +47,32 @@ enum ThreeFieldDirections:
   /** `#flashcard/3way/all` and `#flashcard/table/3way` — additionally recall the descriptor. */
   case All
 
+/** WHICH CARDS A TABLE ROW YIELDS — the second axis, independent of direction.
+  *
+  * Direction says how many ways a single cell is asked. Scope says whether the cards are about
+  * CELLS, about the WHOLE ROW, or both. They are genuinely independent, which is why this is not
+  * a fourth "way": measured on a live collection, a table marked bare already produced 8 cell
+  * cards AND 2 row cards, and the row cards were a constant regardless of direction. A single
+  * ladder would weld the two together and make "the whole row only" inexpressible.
+  */
+enum TableScope:
+  /** Cell cards AND a row card — what a bare `#flashcard/table` has always produced. */
+  case Both
+
+  /** `…/cells` — no row card. For a table whose columns are independent facts. */
+  case CellsOnly
+
+  /** `…/rows` — the row card alone. For a table where the CLUSTER is the knowledge and asking
+    * about one column at a time would test something the author does not care about.
+    */
+  case RowsOnly
+
 /** The marker on a heading, parsed. */
 enum Marker:
   case TwoField(directions: TwoFieldDirections)
   case ThreeField(directions: ThreeFieldDirections)
   case Cloze
-  case Table(directions: ThreeFieldDirections)
+  case Table(directions: ThreeFieldDirections, scope: TableScope)
 
   /** `#flashcard/sequence` — the body's list items are revealed ONE AT A TIME, as ONE note on
     * ONE schedule.
@@ -362,13 +382,29 @@ object Marker:
     case "#flashcard/3way"     => Some(ThreeField(ThreeFieldDirections.Default))
     case "#flashcard/3way/all" => Some(ThreeField(ThreeFieldDirections.All))
     case "#flashcard/cloze"    => Some(Cloze)
-    // THE TABLE FAMILY. Bare `#flashcard/table` keeps meaning exactly what it meant before the
-    // family existed, so no vault has to be edited and no card moves; the variants are how a
-    // table asks for more or fewer directions.
-    case "#flashcard/table"      => Some(Table(ThreeFieldDirections.Default))
-    case "#flashcard/table/1way" => Some(Table(ThreeFieldDirections.ValueOnly))
-    case "#flashcard/table/2way" => Some(Table(ThreeFieldDirections.Default))
-    case "#flashcard/table/3way" => Some(Table(ThreeFieldDirections.All))
+    // ═══ THE TABLE FAMILY: a direction and a scope, enumerated rather than composed ═══
+    //
+    // Bare `#flashcard/table` keeps meaning exactly what it meant before the family existed, so
+    // no vault has to be edited and no card moves.
+    //
+    // LISTED IN FULL RATHER THAN PARSED COMPOSITIONALLY, deliberately. Splitting on `/` and
+    // accepting known qualifiers in any order would also admit `…/cells/cells` and
+    // `…/1way/2way`, each of which would need its own refusal; enumerating makes every legal
+    // marker visible in one place and every other spelling refused by the existing catch-all.
+    case "#flashcard/table"            => Some(Table(ThreeFieldDirections.Default, TableScope.Both))
+    case "#flashcard/table/1way"       => Some(Table(ThreeFieldDirections.ValueOnly, TableScope.Both))
+    case "#flashcard/table/2way"       => Some(Table(ThreeFieldDirections.Default, TableScope.Both))
+    case "#flashcard/table/3way"       => Some(Table(ThreeFieldDirections.All, TableScope.Both))
+    case "#flashcard/table/cells"      => Some(Table(ThreeFieldDirections.Default, TableScope.CellsOnly))
+    case "#flashcard/table/1way/cells" => Some(Table(ThreeFieldDirections.ValueOnly, TableScope.CellsOnly))
+    case "#flashcard/table/2way/cells" => Some(Table(ThreeFieldDirections.Default, TableScope.CellsOnly))
+    case "#flashcard/table/3way/cells" => Some(Table(ThreeFieldDirections.All, TableScope.CellsOnly))
+
+    // NO `…/<direction>/rows` SPELLING EXISTS, and its absence is the point rather than an
+    // omission: with no cell cards there is nothing for a direction to apply to, so the marker
+    // would name a choice that changes nothing. Falling through to the catch-all makes it a
+    // loud refusal instead of a silent no-op.
+    case "#flashcard/table/rows"       => Some(Table(ThreeFieldDirections.Default, TableScope.RowsOnly))
     case "#flashcard/sequence" => Some(Sequence)
     case _                     => None
 
@@ -386,7 +422,7 @@ object Marker:
   extension (m: Marker)
     /** The Anki note type this marker's note is created with.
       *
-      * [[Marker.Table(ThreeFieldDirections.Default)]] has none: a table row yields notes of two DIFFERENT types — pair
+      * [[Marker.Table(ThreeFieldDirections.Default, TableScope.Both)]] has none: a table row yields notes of two DIFFERENT types — pair
       * cards use the concept-descriptor type, the row card uses Basic — so the note type is
       * a property of the emitted spec, not of the marker.
       */
@@ -396,4 +432,4 @@ object Marker:
       case ThreeField(_)                        => Some(NoteTypes.ConceptDescriptor)
       case Cloze                                => Some(NoteTypes.Cloze)
       case Sequence                             => Some(NoteTypes.ClozeSequence)
-      case Table(_)                                => None
+      case Table(_, _)                              => None

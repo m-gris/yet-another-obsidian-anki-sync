@@ -145,9 +145,10 @@ class TablesTest extends munit.FunSuite:
       section: Section,
       display: CellDisplay,
       directions: ThreeFieldDirections = ThreeFieldDirections.Default,
+      scope: TableScope = TableScope.Both,
   ): Vector[(CardSpec, RowSource)] =
     Tables
-      .fromSection(baseKey, section, display, Vector("T", "Grid"), directions)
+      .fromSection(baseKey, section, display, Vector("T", "Grid"), directions, scope)
       .fold(e => fail(s"fromSection: $e"), identity)
 
   /** The hostile display projection.

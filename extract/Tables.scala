@@ -151,6 +151,7 @@ object Tables:
       display: CellDisplay,
       contextTitles: Vector[String],
       directions: ThreeFieldDirections,
+      scope: TableScope,
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
     val where   = key.path.render
     val context = CardContext.render(contextTitles)
@@ -175,11 +176,21 @@ object Tables:
 
       if descriptorHeaders.isEmpty then Left(SpecError.TableWithoutDescriptors(where))
       else
-        Right(
-          bodyRows.zipWithIndex.flatMap((row, i) =>
-            cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel, conceptLabelRaw, directions)
-          )
+        val cards = bodyRows.zipWithIndex.flatMap((row, i) =>
+          cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel, conceptLabelRaw, directions, scope)
         )
+
+        // ASKED FOR ROW CARDS AND GOT NONE. Reported rather than returned empty: an explicit
+        // marker that yields zero cards is the dual of silent card creation, and the author
+        // would otherwise see a clean run and believe the section synced. The two shapes that
+        // reach here are a table whose rows all carry fewer than two usable descriptor cells,
+        // and a table with no body rows at all — the message names which.
+        if scope == TableScope.RowsOnly && cards.isEmpty then
+          val what =
+            if bodyRows.isEmpty then "the table has no rows yet"
+            else s"every row has fewer than two usable descriptor cells (${descriptorHeaders.size} column(s) declared)"
+          Left(SpecError.TableRowsWithoutRows(where, what))
+        else Right(cards)
     }
 
   /** One descriptor column of one row, projected ONCE into all three things it feeds.
@@ -224,6 +235,7 @@ object Tables:
       conceptLabel: String,
       conceptLabelRaw: String,
       directions: ThreeFieldDirections,
+      scope: TableScope,
   ): Vector[(CardSpec, RowSource)] =
     row.headOption.map(cell => (cell, cellSegment(cell))) match
       // A row with no cells at all names nothing.
@@ -302,7 +314,8 @@ object Tables:
         // single pair card. The threshold and the construction below read the SAME vector,
         // and `.map` is size-preserving, so the guard and `fromVectorUnsafe` cannot skew.
         val rowCard =
-          if pairs.size < 2 then Vector.empty
+          if scope == TableScope.CellsOnly then Vector.empty
+          else if pairs.size < 2 then Vector.empty
           else
             val key = base.copy(path = HeadingPath(base.path.segments :+ rowSeg))
             Vector(
@@ -328,7 +341,9 @@ object Tables:
               ) -> RowSource.table(SourceKind.TableRow, rowNumber)
             )
 
-        pairCards ++ rowCard
+        // `rows` DROPS THE CELL CARDS, which is the whole point of asking for it: the cluster
+        // is the knowledge and a column at a time tests something the author does not want.
+        if scope == TableScope.RowsOnly then rowCard else pairCards ++ rowCard
 
   private def firstTable(section: Section): Option[Table] =
     section.content.collectFirst { case t: Table => t }

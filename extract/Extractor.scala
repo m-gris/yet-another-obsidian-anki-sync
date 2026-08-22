@@ -147,6 +147,10 @@ object Extractor:
         s"write the items as a list, or use #flashcard/1way or #flashcard/2way if the answer " +
         s"is meant to be shown whole"
     case SpecError.ListNestingUnreadable(p, what) => s"$what, at '$p'"
+    case SpecError.TableRowsWithoutRows(p, what) =>
+      s"#flashcard/table/rows at '$p' asks only for whole-row cards, but $what — a row card " +
+        "needs two or more descriptor columns, since with one it would merely duplicate that " +
+        "row's single cell card. Drop '/rows' to get the cell cards instead"
 
   /** A marked heading yields ONE spec for most markers and MANY for a table — n pair cards
     * plus a row card per row. Each carries the source kind it should be reported as, so a
@@ -203,7 +207,7 @@ object Extractor:
         // The SAFETY walk, which runs for a table section too and only needs to reach the
         // refusals — the directions it passes are irrelevant to that and never reach a card.
         .flatMap(_ =>
-          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, ThreeFieldDirections.Default)
+          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, ThreeFieldDirections.Default, TableScope.Both)
         )
     else for
       lowered <- bodyBlocks(where, ownBody(section))
@@ -359,8 +363,8 @@ object Extractor:
         // because an inexhaustive match is a build error here. It is given the same argument
         // the live call site is given, so a future "simplification" that collapses that `if`
         // does not silently start emitting contextless table cards.
-        case Marker.Table(directions) =>
-          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, directions)
+        case Marker.Table(directions, scope) =>
+          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, directions, scope)
 
         case Marker.Sequence =>
           // ── THE REFUSAL, AND THE ONE PLACE IN THIS PROJECT THAT GATES ON A RENDERER ──────
