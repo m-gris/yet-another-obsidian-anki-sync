@@ -418,3 +418,88 @@ class MarkerTest extends munit.FunSuite:
     // And the slash inside the heading is still encoded, not posing as a separator.
     assert(TagCodec.encode(pair).value.contains("%2f"))
   }
+
+  // ------------------------------------------------- the documented marker list ----
+
+  /** Locate `model/Marker.scala`, by the walk-up idiom `FixtureVaultTest` already uses, so the
+    * test does not depend on which directory the runner happened to start in.
+    */
+  private def markerSource: String =
+    val candidates = Iterator
+      .iterate(java.nio.file.Paths.get(sys.props("user.dir")).toAbsolutePath)(_.getParent)
+      .takeWhile(_ != null)
+      .take(6)
+      .flatMap(dir =>
+        Iterator(
+          dir.resolve("model/Marker.scala"),
+          dir.resolve("obsidian-anki-custom-sync/model/Marker.scala"),
+        )
+      )
+    val path = candidates
+      .find(java.nio.file.Files.exists(_))
+      .getOrElse(fail(s"model/Marker.scala not found from ${sys.props("user.dir")}"))
+    java.nio.file.Files.readString(path)
+
+  /** Every marker token the PARSER accepts, read out of its own `case` literals.
+    *
+    * READING THE SOURCE IS THE POINT, and it is the only way to get this set exhaustively:
+    * `fromToken` is a match over string literals, so there is no value anywhere to enumerate.
+    * A test that generated candidate tokens from a vocabulary written here would catch a new
+    * COMBINATION of existing words and miss a new word entirely, which is precisely the case
+    * where the help would go quiet about a feature.
+    *
+    * It costs a coupling to one line's shape — `case "#flashcard…" =>`. If that shape ever
+    * changes, this test finds nothing and passes, so the assertion below is written to fail
+    * loudly on an empty extraction rather than to compare two empty sets and call it agreement.
+    */
+  private def parserTokens: Set[String] =
+    """case\s+"(#flashcard[^"]*)"""".r
+      .findAllMatchIn(markerSource)
+      .map(_.group(1))
+      .toSet
+
+  test("every marker the parser accepts is documented, and every documented one parses") {
+    val documented = Marker.Documented.map(_._1).toSet
+    val parser     = parserTokens
+
+    assert(
+      parser.sizeIs > 5,
+      s"only ${parser.size} marker literals were found in Marker.scala — the extraction is " +
+        "broken, so this test is proving nothing. Fix the regex, do NOT delete the assertion.",
+    )
+
+    assertEquals(
+      parser.diff(documented),
+      Set.empty[String],
+      "these markers are ACCEPTED by the parser and named in no help text — add them to " +
+        "Marker.Documented, which is what `--help` prints",
+    )
+    assertEquals(
+      documented.diff(parser),
+      Set.empty[String],
+      "these markers are DOCUMENTED but the parser rejects them — `--help` is sending people " +
+        "to write headings that will never make a card",
+    )
+  }
+
+  /** The set comparison above is on strings, so it would still pass if a documented token were
+    * spelt right and refused for some other reason. This drives the actual parser.
+    */
+  test("each documented marker parses when written on a real heading") {
+    Marker.Documented.foreach { (token, gloss) =>
+      assertEquals(
+        parsed(s"Some heading $token").isDefined,
+        true,
+        s"'$token', documented as \"$gloss\", is not accepted on a heading",
+      )
+    }
+  }
+
+  test("the documented list has no duplicates and no empty gloss") {
+    val tokens = Marker.Documented.map(_._1)
+    assertEquals(tokens.distinct.size, tokens.size, s"a marker is listed twice: $tokens")
+    assert(
+      Marker.Documented.forall((_, gloss) => gloss.trim.nonEmpty),
+      "a marker is documented with a blank description",
+    )
+  }

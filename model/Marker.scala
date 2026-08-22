@@ -376,6 +376,38 @@ object Marker:
   def stripMarker(headingText: String): String =
     MarkerPattern.replaceAllIn(headingText, "").trim.replaceAll("\\s+", " ")
 
+  /** EVERY MARKER THIS TOOL ACCEPTS, with the one-line gloss `--help` prints for it.
+    *
+    * IT LIVES HERE, BESIDE [[fromToken]], AND NOT IN THE CLI, because the failure it exists to
+    * prevent is drift — in both directions. A help text naming a marker the parser rejects
+    * sends someone to write a heading that will never make a card. A marker the parser accepts
+    * that no help mentions is worse, because nothing anywhere would ever say it existed.
+    *
+    * ANYONE ADDING A `case` BELOW MUST ADD A ROW HERE, and the build fails otherwise:
+    * `model/Marker.test.scala` reads the `case` string literals out of THIS FILE and compares
+    * the two sets, so neither list can quietly outgrow the other.
+    *
+    * ORDERED FOR A READER rather than alphabetically — the plain markers first, then the table
+    * family, which is where the combinations are.
+    */
+  val Documented: Vector[(String, String)] = Vector(
+    "#flashcard/1way"             -> "heading -> body",
+    "#flashcard/2way"             -> "heading <-> body",
+    "#flashcard/3way"             -> "concept / descriptor / description, asked two ways",
+    "#flashcard/3way/all"         -> "the same, asked three ways",
+    "#flashcard/cloze"            -> "==highlights== blanked out, one card per group",
+    "#flashcard/sequence"         -> "a list revealed one item at a time, on one schedule",
+    "#flashcard/table"            -> "a card per table cell, plus one per whole row",
+    "#flashcard/table/1way"       -> "cells and rows, each cell asked one way",
+    "#flashcard/table/2way"       -> "cells and rows, each cell asked two ways (the default)",
+    "#flashcard/table/3way"       -> "cells and rows, each cell asked three ways",
+    "#flashcard/table/cells"      -> "cell cards only, no whole-row card",
+    "#flashcard/table/1way/cells" -> "cell cards only, asked one way",
+    "#flashcard/table/2way/cells" -> "cell cards only, asked two ways",
+    "#flashcard/table/3way/cells" -> "cell cards only, asked three ways",
+    "#flashcard/table/rows"       -> "whole-row cards only, no cell cards",
+  )
+
   private def fromToken(token: String): Option[Marker] = token match
     case "#flashcard/1way"     => Some(TwoField(TwoFieldDirections.Forward))
     case "#flashcard/2way"     => Some(TwoField(TwoFieldDirections.Both))

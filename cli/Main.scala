@@ -53,7 +53,7 @@ import scala.jdk.CollectionConverters.*
 object Main
     extends CommandIOApp(
       name = "obsidian-anki-sync",
-      header = "Sync marked headings in an Obsidian vault into Anki.",
+      header = Help.header,
     ):
 
   /** The effect [[AnkiConnectClient]] speaks: an `IO` that may carry a REFUSAL from Anki.
