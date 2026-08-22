@@ -139,8 +139,8 @@ object Extractor:
     case SpecError.AmbiguousClozeDeletion(p, t) =>
       s"two unlabelled '==$t==' highlights at '$p' cannot be told apart — label them, e.g. ==1|$t=="
     case SpecError.TableWithoutTable(p)      => s"table marker with no table at '$p'"
-    case SpecError.TableWithoutDescriptors(p) =>
-      s"table at '$p' has a concept column but no descriptor columns, so it yields no cards"
+    case SpecError.TableWithoutDescriptors(p, what) =>
+      s"table at '$p' yields no cards: $what"
     case SpecError.UnsupportedContent(p, what) => s"$what, at '$p'"
     case SpecError.SequenceWithoutItems(p, what) =>
       s"#flashcard/sequence at '$p' asks for a list revealed one item at a time, but $what — " +

@@ -82,13 +82,21 @@ enum SpecError:
   /** A `#flashcard/table` section with no table in its body. */
   case TableWithoutTable(headingPath: String)
 
-  /** A table with a concept column but NO descriptor columns.
+  /** A table with no descriptor column this tool can name a card after.
+    *
+    * TWO SHAPES REACH HERE AND `what` SAYS WHICH. Either the header row declares no descriptor
+    * column at all, or it declares some and every one of their header cells canonicalises to
+    * empty — blank, or holding nothing but a `#flashcard` marker. The second shape used to be
+    * SILENT: a header cell is a card's KEY SEGMENT, so one that canonicalises to empty names
+    * nothing, and a table whose only descriptor column has such a header emits no pair card
+    * and — with fewer than two descriptors surviving — no row card either, while the header
+    * row was non-empty at the `Cell` level so nothing fired.
     *
     * Reported rather than silently producing nothing. An explicit marker that yields zero
     * cards is the dual of the silent card creation the whole design guards against: the
     * author asked for cards and got none, with no indication why.
     */
-  case TableWithoutDescriptors(headingPath: String)
+  case TableWithoutDescriptors(headingPath: String, what: String)
 
   /** Content in a card body that this tool does not put on a card.
     *

@@ -151,6 +151,23 @@ class TablesTest extends munit.FunSuite:
       .fromSection(baseKey, section, display, Vector("T", "Grid"), directions, scope)
       .fold(e => fail(s"fromSection: $e"), identity)
 
+  /** The mirror of `cardsOf` for the sections that must be REFUSED.
+    *
+    * It fails on a `Right` — INCLUDING an empty one, which is the whole point. Every refusal
+    * tested below replaced a path that used to return `Right(Vector.empty)`, so a test that
+    * merely asserted "no cards" would have passed before the refusal existed and would keep
+    * passing if it were deleted.
+    */
+  private def refusalOf(
+      section: Section,
+      display: CellDisplay = CellDisplay.Default,
+      directions: ThreeFieldDirections = ThreeFieldDirections.Default,
+      scope: TableScope = TableScope.Both,
+  ): SpecError =
+    Tables
+      .fromSection(baseKey, section, display, Vector("T", "Grid"), directions, scope)
+      .fold(identity, cards => fail(s"expected a refusal, got ${cards.size} card(s): $cards"))
+
   /** The hostile display projection.
     *
     * DERIVED FROM THE PRODUCTION RENDERER rather than written out again, so it cannot drift
@@ -407,4 +424,186 @@ class TablesTest extends munit.FunSuite:
       CellDisplay.Default,
     )
     assertEquals(cards, Vector.empty, "a row whose concept has no derivable segment names nothing")
+  }
+
+  // ================================================ F: a table that can name nothing ====
+
+  /** ==Why these are refusals and not empty results==
+    *
+    * A marked heading is an explicit request for cards. When the answer is "none, ever,
+    * whatever you write in the rows", returning `Right(Vector.empty)` reports a clean run to
+    * an author who asked for cards and got silence — the same failure mode as creating a card
+    * nobody asked for, in the other direction.
+    *
+    * `refusalOf` fails on ANY `Right`, empty included, because each of these inputs returned
+    * `Right(Vector.empty)` before the gate existed.
+    */
+  private def oneUnusableDescriptorColumn: Section =
+    sectionOf(
+      """|# T
+         |
+         |Intro.
+         |
+         |## Marked #flashcard/table
+         |
+         || Pattern | #flashcard |
+         || ------- | ---------- |
+         || Queue   | Absorbs    |
+         || Topic   | Fan-out    |
+         |""".stripMargin
+    )
+
+  test("a table whose only descriptor column cannot name a card is refused, not left empty") {
+    val error = refusalOf(oneUnusableDescriptorColumn)
+    error match
+      case SpecError.TableWithoutDescriptors(_, what) =>
+        // THE COLUMN COUNT MUST BE IN THE MESSAGE. Without it the author reads "no descriptor
+        // columns" about a table that visibly has two, and looks for the wrong thing.
+        assert(
+          what.contains("one descriptor column"),
+          s"the message must say the column exists but cannot be named — got: $what",
+        )
+      case other => fail(s"expected TableWithoutDescriptors, got $other")
+  }
+
+  /** The BLANK header is the shape that turns up in a real vault — `| Bone | |` — where the
+    * marker-only header of test E is a fixture-shaped input. Both canonicalise to empty, so
+    * both must be refused by the same gate; this pins that they are, rather than leaving the
+    * common one covered only by inference from the rare one.
+    */
+  test("a blank descriptor header is refused on the same grounds as a marker-only one") {
+    val error = refusalOf(
+      sectionOf(
+        """|# T
+           |
+           |Intro.
+           |
+           |## Marked #flashcard/table
+           |
+           || Pattern |     |
+           || ------- | --- |
+           || Queue   | Yes |
+           |""".stripMargin
+      )
+    )
+    assert(
+      error.isInstanceOf[SpecError.TableWithoutDescriptors],
+      s"a blank header must refuse, not silently yield nothing — got $error",
+    )
+  }
+
+  /** THE CONTROL. The gate is "no column can name a card", not "some column cannot" — one
+    * unusable column among usable ones must still produce cards, or the refusal above would
+    * be a table-destroying overreach rather than a report.
+    *
+    * Test E already asserts the shape of that output; what this adds is the assertion that
+    * the SECTION IS NOT REFUSED, which E cannot make because `cardsOf` fails on a `Left`
+    * with a message about the harness rather than about the gate.
+    */
+  test("one unusable column among usable ones does not refuse the table") {
+    val cards = cardsOf(
+      sectionOf(
+        """|# T
+           |
+           |Intro.
+           |
+           |## Marked #flashcard/table
+           |
+           || Pattern | #flashcard | Cost  |
+           || ------- | ---------- | ----- |
+           || Queue   | ignored    | Delay |
+           |""".stripMargin
+      ),
+      CellDisplay.Default,
+    )
+    assertEquals(
+      cards.map((spec, _) => spec.key.path.render),
+      Vector("t / queue / cost"),
+      "the usable column must still yield its pair card",
+    )
+  }
+
+  // ================================================ G: rows-only with no row to give ====
+
+  /** `#flashcard/table/rows` asks for whole-row cards and nothing else. A row card needs TWO
+    * usable descriptor cells — with one it would be byte-identical to that row's single cell
+    * card — so on a one-descriptor table the marker asks for the only card kind the table
+    * cannot produce.
+    *
+    * VERIFIED LIVE WHEN THE SCOPE LANDED, BUT NEVER PINNED BY A TEST until here: the gate at
+    * `Tables.fromSection` was reachable only through the CLI, so deleting it would have left
+    * every suite green.
+    */
+  test("rows-only on a one-descriptor table is refused, naming what is missing") {
+    val error = refusalOf(
+      sectionOf(
+        """|# T
+           |
+           |Intro.
+           |
+           |## Marked #flashcard/table/rows
+           |
+           || Pattern | Benefit |
+           || ------- | ------- |
+           || Queue   | Absorbs |
+           |""".stripMargin
+      ),
+      scope = TableScope.RowsOnly,
+    )
+    error match
+      case SpecError.TableRowsWithoutRows(_, what) =>
+        assert(
+          what.contains("fewer than two usable descriptor cells"),
+          s"the message must say why no row card exists — got: $what",
+        )
+        assert(
+          what.contains("1 of 1"),
+          s"the message must count the columns that can name a card — got: $what",
+        )
+      case other => fail(s"expected TableRowsWithoutRows, got $other")
+  }
+
+  /** The other shape that reaches the same gate: a header with no body rows yet. It is an
+    * error ONLY under `rows`, and the message must not blame the column count for it.
+    */
+  test("rows-only on a table with no rows yet says the rows are missing, not the columns") {
+    val error = refusalOf(
+      sectionOf(
+        """|# T
+           |
+           |Intro.
+           |
+           |## Marked #flashcard/table/rows
+           |
+           || Pattern | Benefit | Cost |
+           || ------- | ------- | ---- |
+           |""".stripMargin
+      ),
+      scope = TableScope.RowsOnly,
+    )
+    error match
+      case SpecError.TableRowsWithoutRows(_, what) =>
+        assertEquals(what, "the table has no rows yet")
+      case other => fail(s"expected TableRowsWithoutRows, got $other")
+  }
+
+  /** THE CONTROL FOR G. A table with no body rows is WORK IN PROGRESS under every other
+    * scope, not an error — refusing it would make the tool shout at half-written notes.
+    */
+  test("a table with no rows yet is not an error under the default scope") {
+    val cards = cardsOf(
+      sectionOf(
+        """|# T
+           |
+           |Intro.
+           |
+           |## Marked #flashcard/table
+           |
+           || Pattern | Benefit | Cost |
+           || ------- | ------- | ---- |
+           |""".stripMargin
+      ),
+      CellDisplay.Default,
+    )
+    assertEquals(cards, Vector.empty, "a header-only table yields nothing and refuses nothing")
   }

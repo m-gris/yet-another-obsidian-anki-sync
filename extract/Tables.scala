@@ -159,8 +159,12 @@ object Tables:
       val headerRow = rowCells(table.head.content).headOption.getOrElse(Vector.empty)
       val bodyRows  = rowCells(table.body.content)
 
-      // The first column names the concept; the remaining headers are the descriptors.
-      val descriptorHeaders = headerRow.drop(1)
+      // The first column names the concept; the remaining headers are the descriptors. Each is
+      // paired HERE, ONCE, with the key segment its header yields, so the emptiness gate below
+      // and the pair-card construction in `cardsForRow` read the same decision instead of
+      // deriving it twice and risking two answers.
+      val descriptorColumns =
+        headerRow.drop(1).map(cell => DescriptorColumn(cell, cellSegment(cell).toOption))
 
       // AND THE FIRST HEADER IS KEPT, where it used to be read for its position and thrown
       // away. It names what the rows ARE — `Bone` over `Frontal`, `Parietal` — so without it a
@@ -174,10 +178,25 @@ object Tables:
       // that hands it something already escaped.
       val conceptLabelRaw = headerRow.headOption.map(display.raw).getOrElse("")
 
-      if descriptorHeaders.isEmpty then Left(SpecError.TableWithoutDescriptors(where))
+      // NO USABLE DESCRIPTOR COLUMN, AND THE TWO WAYS THAT HAPPENS ARE ONE REFUSAL. The gate
+      // is "at least one column whose header can name a card", not "at least one column": a
+      // header that canonicalises to empty is a key segment that does not exist, so its column
+      // can never produce a pair card, and with no pairs surviving no row card either. Both
+      // shapes are therefore a table that CANNOT produce a card, whatever its rows say, and
+      // both are known before a single row is read.
+      if descriptorColumns.forall(_.segment.isEmpty) then
+        val what =
+          if descriptorColumns.isEmpty then "it has a concept column but no descriptor columns"
+          else if descriptorColumns.sizeIs == 1 then
+            "its one descriptor column has a header that is blank, or holds nothing but a " +
+              "marker, so it cannot name a card — give the column a heading"
+          else
+            s"all ${descriptorColumns.size} of its descriptor columns have headers that are " +
+              "blank, or hold nothing but a marker, so none can name a card — give them headings"
+        Left(SpecError.TableWithoutDescriptors(where, what))
       else
         val cards = bodyRows.zipWithIndex.flatMap((row, i) =>
-          cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel, conceptLabelRaw, directions, scope)
+          cardsForRow(key, descriptorColumns, row, i + 1, display, context, conceptLabel, conceptLabelRaw, directions, scope)
         )
 
         // ASKED FOR ROW CARDS AND GOT NONE. Reported rather than returned empty: an explicit
@@ -188,10 +207,28 @@ object Tables:
         if scope == TableScope.RowsOnly && cards.isEmpty then
           val what =
             if bodyRows.isEmpty then "the table has no rows yet"
-            else s"every row has fewer than two usable descriptor cells (${descriptorHeaders.size} column(s) declared)"
+            else
+              // BOTH COUNTS, because they can differ: a column whose header canonicalises to
+              // empty is declared but can never name a card, so quoting only the declared
+              // total would say "3 columns" about a table that has one.
+              s"every row has fewer than two usable descriptor cells " +
+                s"(${descriptorColumns.count(_.segment.isDefined)} of ${descriptorColumns.size} " +
+                s"declared column(s) can name a card)"
           Left(SpecError.TableRowsWithoutRows(where, what))
         else Right(cards)
     }
+
+  /** A DECLARED descriptor column, paired once with the key segment its header yields.
+    *
+    * `segment` is `None` for a header that canonicalises to empty — blank, or nothing but a
+    * `#flashcard` marker — which is a column that can never name a card.
+    *
+    * SUCH COLUMNS ARE CARRIED, NOT FILTERED OUT, because a value cell is matched to its header
+    * BY POSITION (`zip` against `row.drop(1)`). Dropping the unusable ones from this vector
+    * would slide every later column's values under the wrong header — a silently wrong card
+    * rather than a missing one.
+    */
+  private final case class DescriptorColumn(cell: Cell, segment: Option[HeadingSegment])
 
   /** One descriptor column of one row, projected ONCE into all three things it feeds.
     *
@@ -227,7 +264,7 @@ object Tables:
     */
   private def cardsForRow(
       base: CardKey,
-      descriptorHeaders: Vector[Cell],
+      descriptorColumns: Vector[DescriptorColumn],
       row: Vector[Cell],
       rowNumber: Int,
       display: CellDisplay,
@@ -251,7 +288,7 @@ object Tables:
         val rowConceptRaw = display.raw(conceptCell)
 
         val pairs: Vector[Descriptor] =
-          descriptorHeaders.zip(row.drop(1)).flatMap { (headerCell, valueCell) =>
+          descriptorColumns.zip(row.drop(1)).flatMap { (column, valueCell) =>
             // THE HEADER GATE IS AN IDENTITY GATE, AND THIS ONE CHANGES OUTPUT — for exactly
             // one input class, ruled rather than discovered. A header cell whose text is
             // non-empty but canonicalises to empty after marker stripping (in practice, a
@@ -261,20 +298,20 @@ object Tables:
             // own. That is incoherent, so it is now excluded outright. `dummy-vault` does not
             // contain the input; `Tables.test.scala` test E pins it.
             //
-            // NOTE what stays silent: a table whose ONLY descriptor column has such a header
-            // still yields zero cards with nothing said, because `descriptorHeaders` is
-            // non-empty at the `Cell` level so `TableWithoutDescriptors` does not fire. Same
-            // silence as before for that input — no regression, no improvement.
+            // THE DECISION IS READ HERE, NOT MADE HERE — `column.segment` was computed once in
+            // `fromSection`, which is also what the whole-table refusal gates on. When EVERY
+            // column fails this test the section is refused outright rather than returning an
+            // empty vector, so the silence this comment used to record is gone.
             //
             // The VALUE cell gates on the frozen projection, never on `display`.
             if cellSource(valueCell).isEmpty then None
             else
-              cellSegment(headerCell).toOption.map { headerSeg =>
+              column.segment.map { headerSeg =>
                 Descriptor(
                   headerSeg,
-                  display.text(headerCell),
+                  display.text(column.cell),
                   display.text(valueCell),
-                  display.raw(headerCell),
+                  display.raw(column.cell),
                   display.raw(valueCell),
                 )
               }
