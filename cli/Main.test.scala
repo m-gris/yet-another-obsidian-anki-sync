@@ -4,7 +4,7 @@ import cats.data.NonEmptyVector
 import cats.effect.{ExitCode, IO}
 import cats.effect.unsafe.implicits.global
 import obsidiananki.anki.*
-import obsidiananki.extract.{VaultFile, VaultWalker}
+import obsidiananki.extract.{DeckShape, VaultFile, VaultWalker}
 import obsidiananki.model.*
 import obsidiananki.plan.*
 import org.http4s.{HttpApp, Uri}
@@ -39,7 +39,7 @@ class MainTest extends munit.FunSuite:
   val deckRoot: DeckPath = DeckPath(NonEmptyVector.one("Obsidian"))
 
   def vaultOf(files: (String, String)*) =
-    VaultWalker.scan(files.toVector.map(VaultFile.apply.tupled), deckRoot)
+    VaultWalker.scan(files.toVector.map(VaultFile.apply.tupled), deckRoot, DeckShape.FoldersOnly)
 
   def note(id: String, body: String) = s"---\nid: $id\n---\n\n$body"
 

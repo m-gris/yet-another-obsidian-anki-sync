@@ -12,8 +12,9 @@ class VaultWalkerTest extends munit.FunSuite:
   def deck(path: String): DeckPath =
     Decks.fromRelativePath(root, path).fold(e => fail(s"deck mapping failed: $e"), identity)
 
-  def scan(files: (String, String)*): VaultIndex =
-    VaultWalker.scan(files.toVector.map(VaultFile.apply.tupled), root)
+  def scan(files: (String, String)*): VaultIndex = scanWith(DeckShape.FoldersOnly, files*)
+  def scanWith(shape: DeckShape, files: (String, String)*): VaultIndex =
+    VaultWalker.scan(files.toVector.map(VaultFile.apply.tupled), root, shape)
 
   def note(id: String, body: String): String = s"---\nid: $id\n---\n\n$body"
 
@@ -131,8 +132,8 @@ class VaultWalkerTest extends munit.FunSuite:
       "B.md" -> note("n2", "# B\n\ny\n\n## Two #flashcard/1way\n\nBody.\n"),
       "A.md" -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"),
     )
-    val first  = VaultWalker.scan(files.map(VaultFile.apply.tupled), root)
-    val second = VaultWalker.scan(files.map(VaultFile.apply.tupled), root)
+    val first  = VaultWalker.scan(files.map(VaultFile.apply.tupled), root, DeckShape.FoldersOnly)
+    val second = VaultWalker.scan(files.map(VaultFile.apply.tupled), root, DeckShape.FoldersOnly)
     assertEquals(first.scan.specs.map(_.key), second.scan.specs.map(_.key))
   }
 
@@ -275,4 +276,93 @@ class VaultWalkerTest extends munit.FunSuite:
       composed(DeckShape(folders = false, fileName = false, headings = true), blank),
       "Obsidian::Replication::Marked",
     )
+  }
+
+  // ================================================ the walk composes per CARD ====
+
+  val withHeadings: DeckShape = DeckShape(folders = true, fileName = false, headings = true)
+
+  /** THE REASON THE COMPOSITION MOVED FROM THE FILE TO THE CARD. Two cards in one file share a
+    * folder and a file name but not a heading chain, so a deck derived per file cannot tell
+    * them apart and a deck derived per card must.
+    */
+  test("two cards in one file land in DIFFERENT decks when headings are selected") {
+    val index = scanWith(
+      withHeadings,
+      "System-Design/Replication.md" -> note(
+        "n1",
+        "# Replication\n\nx\n\n## Sync tradeoff #flashcard/1way\n\nBody.\n\n" +
+          "## Read-your-writes #flashcard/1way\n\nBody.\n",
+      ),
+    )
+    assertEquals(
+      index.scan.specs.map(s => index.decks(s.key).render).sorted,
+      Vector(
+        "Obsidian::System-Design::Replication::Read-your-writes",
+        "Obsidian::System-Design::Replication::Sync tradeoff",
+      ),
+    )
+  }
+
+  test("a nested heading chain becomes a nested deck") {
+    val index = scanWith(
+      withHeadings,
+      "System-Design/Consistency.md" -> note(
+        "n1",
+        "# Consistency\n\nx\n\n## Session guarantees\n\ny\n\n### Monotonic reads\n\nz\n\n" +
+          "#### Definition #flashcard/1way\n\nBody.\n",
+      ),
+    )
+    assertEquals(
+      index.scan.specs.map(s => index.decks(s.key).render),
+      Vector(
+        "Obsidian::System-Design::Consistency::Session guarantees::Monotonic reads::Definition"
+      ),
+    )
+  }
+
+  /** THE BLAST RADIUS OF AN UNMAPPABLE DECK IS NOW THE CARD, where it used to be the file.
+    *
+    * The check used to run before the file was parsed, so it could only report
+    * `FileUnreadable` — which costs the WHOLE SCAN its ability to infer orphans, across every
+    * other file in the vault. Composed per card, the key is in hand, so the affected card is
+    * reported individually and everything else keeps working. Three separate claims, asserted
+    * separately below because two of them would pass on their own for the wrong reason.
+    */
+  test("one heading carrying Anki's separator costs one card, not the file and not the scan") {
+    val index = scanWith(
+      withHeadings,
+      "A.md" -> note(
+        "n1",
+        "# A\n\nx\n\n## Fine #flashcard/1way\n\nBody.\n\n## Bad::Heading #flashcard/1way\n\nBody.\n",
+      ),
+    )
+    assertEquals(
+      index.scan.specs.map(_.key.path.render),
+      Vector("a / fine"),
+      "the sibling card was lost along with the bad one",
+    )
+    assertEquals(
+      index.scan.failedKeys.map(_.path.render),
+      Set("a / bad::heading"),
+      "the refused card must keep its KEY, so its Anki note is sheltered from orphaning",
+    )
+    assert(
+      index.scan.canInferOrphans,
+      "one bad heading degraded the whole scan — that is the per-file behaviour this replaced",
+    )
+  }
+
+  /** THE CONTROL. The same file under the default shape has nothing wrong with it: the heading
+    * that carries `::` never reaches a deck path, so both cards sync.
+    */
+  test("the same heading is no problem at all when headings are not selected") {
+    val index = scan(
+      "A.md" -> note(
+        "n1",
+        "# A\n\nx\n\n## Fine #flashcard/1way\n\nBody.\n\n## Bad::Heading #flashcard/1way\n\nBody.\n",
+      )
+    )
+    assertEquals(index.scan.specs.size, 2)
+    assertEquals(index.scan.failures, Vector.empty)
   }

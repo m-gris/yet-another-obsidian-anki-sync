@@ -3,7 +3,7 @@ package obsidiananki.cli
 import cats.data.NonEmptyVector
 import com.monovore.decline.Command as DeclineCommand
 import obsidiananki.anki.DeckPath
-import obsidiananki.extract.{VaultFile, VaultWalker}
+import obsidiananki.extract.{DeckShape, VaultFile, VaultWalker}
 import obsidiananki.plan.*
 
 class CliTest extends munit.FunSuite:
@@ -189,7 +189,7 @@ class CliTest extends munit.FunSuite:
   val deckRoot: DeckPath = DeckPath(NonEmptyVector.one("Obsidian"))
 
   def indexOf(files: (String, String)*) =
-    VaultWalker.scan(files.toVector.map(VaultFile.apply.tupled), deckRoot)
+    VaultWalker.scan(files.toVector.map(VaultFile.apply.tupled), deckRoot, DeckShape.FoldersOnly)
 
   def note(id: String, body: String) = s"---\nid: $id\n---\n\n$body"
 

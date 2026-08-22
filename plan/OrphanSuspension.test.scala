@@ -3,6 +3,7 @@ package obsidiananki.plan
 import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
+import obsidiananki.plan.SectionChain.NoSectionChain
 
 /** A CARD WHOSE HEADING IS GONE MUST LEAVE THE REVIEW QUEUE, AND COME BACK IF THE HEADING DOES.
   *
@@ -53,6 +54,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     SourcedSpec(
       CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both, "Coupling"),
       SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
     )
 
   def newNoteOf(s: SourcedSpec, d: DeckPath, sha: String): NewNote =

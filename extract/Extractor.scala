@@ -113,6 +113,12 @@ object Extractor:
                         specs += SourcedSpec(
                           spec,
                           ref.copy(kind = src.kind, detail = src.detail),
+                          // `nextTitles`, NOT `ancestorTitles`: the chain a deck is built from
+                          // ends AT the marked heading, so the deck a `#flashcard` heading
+                          // produces is named after that heading. It is the same vector the
+                          // recursive descent below passes on, so a card and the cards under
+                          // it agree about where they sit.
+                          sectionTitles = nextTitles,
                         )
                       }
                     case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))

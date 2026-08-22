@@ -16,7 +16,7 @@ import obsidiananki.anki.{
   NoteTypeInstaller,
   NoteTypeProblem,
 }
-import obsidiananki.extract.{VaultFile, VaultIndex, VaultWalker}
+import obsidiananki.extract.{DeckShape, VaultFile, VaultIndex, VaultWalker}
 import obsidiananki.model.CardKey
 import obsidiananki.plan.{
   ExecutionReport,
@@ -87,7 +87,7 @@ object Main
   private def inspect(vault: VaultRoot, deckRoot: DeckPath, verbose: Boolean): IO[ExitCode] =
     for
       files <- readVault(vault)
-      index = VaultWalker.scan(files, deckRoot)
+      index = VaultWalker.scan(files, deckRoot, DeckShape.FoldersOnly)
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")
       _ <- Report.inspect(index, verbose).traverse_(IO.println)
@@ -838,7 +838,7 @@ object Main
   ): IO[ExitCode] =
     for
       files <- readVault(vault)
-      index = VaultWalker.scan(files, deckRoot)
+      index = VaultWalker.scan(files, deckRoot, DeckShape.FoldersOnly)
       // Aligned with inspect's value column. The gate has already printed `profile:` above.
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")

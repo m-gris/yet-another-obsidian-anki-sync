@@ -63,7 +63,7 @@ class FixtureVaultTest extends munit.FunSuite:
     * and the message must name which rows collided, not merely that something did.
     */
   test("the fixture vault's deliberate collision IS rejected, legibly") {
-    val index  = VaultWalker.scan(loadVault(), deckRoot)
+    val index  = VaultWalker.scan(loadVault(), deckRoot, DeckShape.FoldersOnly)
     val errors = Planner.checkUnique(index.scan.specs)
 
     assert(errors.nonEmpty, "the deliberate duplicate-row-concept collision was not caught")
@@ -76,12 +76,12 @@ class FixtureVaultTest extends munit.FunSuite:
   // ================================================ the law, on real specs ====
 
   test("the fixture vault extracts cards at all") {
-    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
+    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
     assert(index.scan.specs.sizeIs > 20, s"only ${index.scan.specs.size} specs extracted")
   }
 
   test("LAW on REAL specs: plan, apply, and the next plan is empty") {
-    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
+    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
 
     // THE CLOZE-SEQUENCE OPT-IN IS GONE FROM THIS CALL SITE, and it is worth saying why,
     // because it was here on purpose.
@@ -130,7 +130,7 @@ class FixtureVaultTest extends munit.FunSuite:
   }
 
   test("every tag derived from the real vault is one Anki will actually store") {
-    val index = VaultWalker.scan(loadVault(), deckRoot)
+    val index = VaultWalker.scan(loadVault(), deckRoot, DeckShape.FoldersOnly)
     // The default note types are now the tool's own five — see the long note above.
     val anki = InMemoryAnki()
     index.scan.specs.foreach { s =>
@@ -143,7 +143,7 @@ class FixtureVaultTest extends munit.FunSuite:
   }
 
   test("decks follow the folder structure of the real vault") {
-    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
+    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
     val rendered = index.decks.values.map(_.render).toSet
     assert(rendered.contains("Obsidian::System-Design"), s"got $rendered")
     assert(rendered.contains("Obsidian::Patterns::Nested::Deep"), s"got $rendered")
@@ -154,7 +154,7 @@ class FixtureVaultTest extends munit.FunSuite:
     * above could be passing simply because most of the vault silently produced nothing.
     */
   test("the real vault's build failures are all accounted for") {
-    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
+    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
     val reasons = index.scan.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }
     reasons.foreach { r =>
       assert(
@@ -178,7 +178,7 @@ class FixtureVaultTest extends munit.FunSuite:
     * author to the wrong place, which no unit test on a frontmatter-free string can catch.
     */
   test("an under-indented nested list is refused, quoting the file's own line numbers") {
-    val index  = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot)
+    val index  = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
     val nested = index.scan.failures.collect {
       case BuildFailure.KeyKnown(_, ref, reason) if reason.contains("nested list") => (ref, reason)
     }

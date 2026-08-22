@@ -3,6 +3,7 @@ package obsidiananki.plan
 import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
+import obsidiananki.plan.SectionChain.NoSectionChain
 
 /** Interruption DURING a single action, which is the gap every other suite leaves open.
   *
@@ -132,6 +133,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
         SourcedSpec(
           CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, "Coupling"),
           SourceRef("Note.md", 1, SourceKind.Heading),
+          NoSectionChain,
         )
       ),
       Vector.empty,

@@ -151,8 +151,13 @@ object VaultWalker:
     *   - a card that failed to build keeps its KEY, so it is excluded individually
     *   - a heading that yields no key suppresses its whole NOTE
     *   - a file that cannot be read at all degrades the SCAN, and no orphan set is produced
+    *
+    * `shape` HAS NO DEFAULT. A default here would be a behavioural choice that production
+    * could stop making without anything failing, while every test kept exercising the one the
+    * default names — the shadow-path shape this project already has a scar from. Callers that
+    * want the old arrangement ask for [[DeckShape.FoldersOnly]] by name.
     */
-  def scan(files: Vector[VaultFile], deckRoot: DeckPath): VaultIndex =
+  def scan(files: Vector[VaultFile], deckRoot: DeckPath, shape: DeckShape): VaultIndex =
     val specs    = Vector.newBuilder[obsidiananki.plan.SourcedSpec]
     val failures = Vector.newBuilder[BuildFailure]
     val decks    = Map.newBuilder[CardKey, DeckPath]
@@ -165,35 +170,51 @@ object VaultWalker:
       def unreadable(reason: String): Unit =
         failures += BuildFailure.FileUnreadable(file.relativePath, reason)
 
-      Decks.fromRelativePath(deckRoot, file.relativePath) match
-        case Left(reason) => unreadable(reason)
-        case Right(deck) =>
-          Frontmatter.read(file.content) match
-            case Left(err) => unreadable(s"frontmatter: $err")
-            case Right((keys, split)) =>
-              val body = split.body
-              keys.get("id").map(NoteId.fromFrontmatter) match
-                // No id means no cards — but SAID, not skipped. Silently dropping a whole
-                // file is the same omission the design guards against everywhere else, and
-                // it also costs us the ability to group observed keys by note.
-                case None          => unreadable("no 'id' in frontmatter, so no cards can be keyed")
-                case Some(Left(e)) => unreadable(s"unusable id: $e")
-                case Some(Right(noteId)) =>
-                  ObsidianSyntax.markupParser.parse(body) match
-                    case Left(err) => unreadable(s"markdown: ${err.toString.take(200)}")
-                    case Right(doc) =>
-                      val note =
-                        Extractor.fromDocument(
-                          noteId,
-                          fileName,
-                          file.relativePath,
-                          doc.content,
-                          body,
-                          split.bodyFirstLine,
-                        )
-                      specs ++= note.specs
-                      failures ++= note.failures
-                      note.specs.foreach(s => decks += s.key -> deck)
+      Frontmatter.read(file.content) match
+        case Left(err) => unreadable(s"frontmatter: $err")
+        case Right((keys, split)) =>
+          val body = split.body
+          keys.get("id").map(NoteId.fromFrontmatter) match
+            // No id means no cards — but SAID, not skipped. Silently dropping a whole
+            // file is the same omission the design guards against everywhere else, and
+            // it also costs us the ability to group observed keys by note.
+            case None          => unreadable("no 'id' in frontmatter, so no cards can be keyed")
+            case Some(Left(e)) => unreadable(s"unusable id: $e")
+            case Some(Right(noteId)) =>
+              ObsidianSyntax.markupParser.parse(body) match
+                case Left(err) => unreadable(s"markdown: ${err.toString.take(200)}")
+                case Right(doc) =>
+                  val note =
+                    Extractor.fromDocument(
+                      noteId,
+                      fileName,
+                      file.relativePath,
+                      doc.content,
+                      body,
+                      split.bodyFirstLine,
+                    )
+                  failures ++= note.failures
+
+                  // COMPOSED PER CARD, WHERE IT USED TO BE PER FILE, because the heading chain
+                  // differs between two cards in one file. A card whose deck cannot be built
+                  // is NOT kept: a spec with no entry in `decks` would fall back to the root
+                  // deck through `VaultIndex.deckOf` and be filed somewhere nobody chose.
+                  //
+                  // ITS BLAST RADIUS IS THE CARD, and it moved there from the file. The check
+                  // used to run before parsing, so a folder carrying `::` reported one
+                  // `FileUnreadable` and cost the whole scan its ability to infer orphans.
+                  // Reporting `KeyKnown` per card is strictly better on both counts: the keys
+                  // ARE known here, so the affected notes can be sheltered individually and
+                  // the rest of the vault keeps its orphan inference. It is also the only
+                  // shape that can express a refusal caused by ONE heading.
+                  note.specs.foreach { s =>
+                    Decks.compose(deckRoot, shape, Decks.sourceFor(file.relativePath, s.sectionTitles)) match
+                      case Right(deck) =>
+                        specs += s
+                        decks += s.key -> deck
+                      case Left(reason) =>
+                        failures += BuildFailure.KeyKnown(s.key, s.source, s"deck: $reason")
+                  }
     }
 
     VaultIndex(VaultScan.from(specs.result(), failures.result()), decks.result())

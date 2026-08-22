@@ -3,6 +3,7 @@ package obsidiananki.plan
 import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
+import obsidiananki.plan.SectionChain.NoSectionChain
 
 /** TWO ANKI NOTES CLAIMING ONE CARD IDENTITY.
   *
@@ -42,6 +43,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
     SourcedSpec(
       CardSpec.TwoField(k, "front", body(back), TwoFieldDirections.Forward, "Coupling"),
       SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
     )
 
   def newNoteOf(s: SourcedSpec, d: DeckPath, sha: String): NewNote =

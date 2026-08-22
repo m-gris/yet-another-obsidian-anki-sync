@@ -30,9 +30,28 @@ final case class SourceRef(file: String, line: Int, kind: SourceKind, detail: Op
 
 /** A spec together with its provenance. Provenance is a wrapper rather than a field of
   * [[CardSpec]] because a spec is about card CONTENT; where it came from is a different
-  * concern, needed only for diagnostics.
+  * concern.
+  *
+  * _Amended 2026-08-22: this said provenance was "needed only for diagnostics". It has a
+  * second consumer now — a deck path can be composed from where a card sits in its document._
+  *
+  * `sectionTitles` IS THE HEADING CHAIN FROM THE FILE'S TOP HEADING DOWN TO THE MARKED ONE,
+  * as DISPLAY text. Three things it deliberately is not:
+  *
+  *   - not the card key's path, which is canonicalised — case-folded and whitespace-collapsed
+  *     — so a deck built from it would read in permanent lowercase. Same argument, and the
+  *     same answer, as `extract/CardContext.scala` reached for the on-card breadcrumb.
+  *   - not extended by a table's row concept or column header, though the KEY is. Following
+  *     the key that far would mint a deck per table row. Every card one marked heading
+  *     produces shares that heading's chain.
+  *   - not a deck. It is one ingredient; `extract/VaultWalker.scala`'s `DeckShape` decides
+  *     whether it is used at all, and the default does not use it.
+  *
+  * NO DEFAULT VALUE, deliberately. A default would let a test construct a spec whose chain is
+  * silently empty while production always fills it, and the deck built from that spec would be
+  * correct by accident in the test and wrong in the field.
   */
-final case class SourcedSpec(spec: CardSpec, source: SourceRef):
+final case class SourcedSpec(spec: CardSpec, source: SourceRef, sectionTitles: Vector[String]):
   def key: CardKey = spec.key
 
 /** A card that could not be built.

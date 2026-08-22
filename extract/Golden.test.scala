@@ -305,7 +305,7 @@ class GoldenTest extends munit.FunSuite:
       .toVector
       .map(p => VaultFile(vaultRoot.relativize(p).toString, Files.readString(p)))
       .sortBy(_.relativePath)
-    VaultWalker.scan(files, DeckPath(NonEmptyVector.one("Obsidian")))
+    VaultWalker.scan(files, DeckPath(NonEmptyVector.one("Obsidian")), DeckShape.FoldersOnly)
 
   lazy val actualCards: Vector[CardRecord] =
     // ONLY key, noteTypeName and fields. No match on CardSpec — see the class comment.
