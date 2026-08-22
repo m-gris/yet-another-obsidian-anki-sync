@@ -168,3 +168,91 @@ class OrphanSuspensionTest extends munit.FunSuite:
     assertEquals(report.failures, Vector.empty)
     cardsOf(anki).foreach(c => assert(anki.isSuspended(c), "a second run un-suspended an orphan"))
   }
+
+  // ══════════════════════ a broken section is not a deleted one ══════════
+
+  /** THE WORST FAILURE THIS FILE GUARDS, and it was live until 2026-08-22.
+    *
+    * A build failure is recorded at the key of the SECTION that failed. A table's cards are
+    * keyed DEEPER — `…/cost / benefit` fails while its cards are `…/cost / benefit/queue/cost`
+    * — and the orphan check compared keys for EQUALITY, so every card the section had ever
+    * produced looked deleted. Measured against the fixture vault: pasting an image into ONE
+    * cell flagged 15 live cards, and since suspension landed it also took all 15 out of review.
+    * The run reported "1 card could not be built" and never mentioned the fifteen.
+    *
+    * The rule was already written down beside the check — "a card that merely failed to build
+    * is not absent from the markdown" — and the check did not implement it.
+    */
+  test("a card under a section that FAILED to build is not flagged as deleted") {
+    val anki    = InMemoryAnki()
+    val section = key("n1", "Coupling")
+    val card    = key("n1", "Coupling", "Temporal coupling")
+
+    runSync(anki, scanOf(specOf(card)))
+    cardsOf(anki).foreach(c => assert(!anki.isSuspended(c), "setup: nothing should be suspended"))
+
+    // The section is now BROKEN rather than gone: nothing built, and the failure is recorded
+    // at the section's own key — one segment shallower than the card's.
+    val broken = VaultScan.from(
+      Vector.empty,
+      Vector(BuildFailure.KeyKnown(section, SourceRef("Note.md", 1, SourceKind.Heading), "boom")),
+    )
+    val plan = Planner
+      .plan(broken, observe(anki), _ => deck, newNoteOf)
+      .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
+
+    assertEquals(
+      plan.actions,
+      Vector.empty,
+      s"a broken section flagged its own live cards as deleted: ${plan.actions}",
+    )
+  }
+
+  /** THE OTHER HALF, so the fix cannot be "never flag anything". A card whose section builds
+    * FINE and which is simply gone from the markdown must still be flagged and suspended.
+    */
+  test("a card that is genuinely gone is still flagged, even while a SIBLING section fails") {
+    val anki    = InMemoryAnki()
+    val gone    = key("n1", "Coupling", "Temporal coupling")
+    val broken  = key("n2", "Elsewhere")
+
+    runSync(anki, scanOf(specOf(gone)))
+
+    // A failure under a DIFFERENT note entirely. It must not shelter this card.
+    val scan = VaultScan.from(
+      Vector.empty,
+      Vector(BuildFailure.KeyKnown(broken, SourceRef("Other.md", 1, SourceKind.Heading), "boom")),
+    )
+    val plan = Planner
+      .plan(scan, observe(anki), _ => deck, newNoteOf)
+      .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
+
+    assert(
+      plan.actions.exists(_.isInstanceOf[SyncAction.Flag]),
+      s"a genuinely deleted card was not flagged: ${plan.actions}",
+    )
+  }
+
+  /** The shelter is by ANCESTRY, not by prefix of the rendered string. `Coupling` must not
+    * shelter `Couplings`, which is a different heading that merely starts the same way.
+    */
+  test("a sibling whose name merely STARTS THE SAME is not sheltered") {
+    val anki = InMemoryAnki()
+    val card = key("n1", "Couplings", "Temporal coupling")
+    runSync(anki, scanOf(specOf(card)))
+
+    val scan = VaultScan.from(
+      Vector.empty,
+      Vector(
+        BuildFailure.KeyKnown(key("n1", "Coupling"), SourceRef("Note.md", 1, SourceKind.Heading), "boom")
+      ),
+    )
+    val plan = Planner
+      .plan(scan, observe(anki), _ => deck, newNoteOf)
+      .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
+
+    assert(
+      plan.actions.exists(_.isInstanceOf[SyncAction.Flag]),
+      s"'Coupling' sheltered 'Couplings', which is a different heading: ${plan.actions}",
+    )
+  }

@@ -348,10 +348,43 @@ object Planner:
             // Built AND failed-but-keyed. A card that merely failed to build is not absent
             // from the markdown — it is present and broken, and flagging it would send a live
             // card to the prune list.
-            val accountedFor = scan.builtKeys ++ scan.failedKeys
-            val suppressed   = scan.suppressedNoteIds
+            //
+            // ═══ AND EVERYTHING BENEATH A FAILED KEY IS ALSO ACCOUNTED FOR ═══
+            //
+            // The rule above was right and the check was too narrow: it compared keys for
+            // EQUALITY, while a failure is recorded at the key of the SECTION that failed
+            // (`extract/Extractor.scala`, the `KeyKnown` in the marked-heading branch) and a
+            // table's cards are keyed one or two segments DEEPER — `…/cost / benefit` fails,
+            // while its cards are `…/cost / benefit/queue/benefit`. Those deeper keys matched
+            // nothing in `accountedFor`, so every card the section had ever produced was read
+            // as deleted.
+            //
+            // MEASURED, not reasoned about: pasting an image into ONE cell of one table in the
+            // fixture vault flagged 15 live cards, and — since orphan suspension landed — also
+            // SUSPENDED them, taking them out of review with their history intact but invisible.
+            // The run reported "1 card could not be built" and said nothing about the fifteen.
+            //
+            // THE SAFE DIRECTION OF ERROR, stated because this suppresses as well as protects: a
+            // card genuinely deleted from a table WHOSE SECTION ALSO FAILS is now not flagged
+            // this run. That is correct rather than merely convenient — while the section is
+            // broken the tool cannot tell a deleted row from one it failed to read — and it
+            // converges: the moment the section builds again, a genuinely absent card is flagged
+            // as it always was.
+            val failed      = scan.failedKeys
+            val suppressed  = scan.suppressedNoteIds
+            val builtKeys   = scan.builtKeys
+
+            def underAFailedSection(card: CardKey): Boolean =
+              failed.exists { f =>
+                f.noteId == card.noteId &&
+                  f.path.segments.length < card.path.segments.length &&
+                  card.path.segments.toVector.startsWith(f.path.segments.toVector)
+              }
+
             val orphans = observed.notes.filter { card =>
-              !accountedFor.contains(card.key) &&
+              !builtKeys.contains(card.key) &&
+              !failed.contains(card.key) &&
+              !underAFailedSection(card.key) &&
               !suppressed.contains(card.key.noteId) &&
               !card.isFlaggedOrphan
             }
