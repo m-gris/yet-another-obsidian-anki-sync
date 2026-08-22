@@ -72,9 +72,30 @@ enum BuildFailure:
     */
   case KeyUnderivableInFile(noteId: NoteId, source: SourceRef, reason: String)
 
+  /** The file has MARKED HEADINGS but no `id` in its frontmatter, so its cards cannot be keyed.
+    *
+    * The author asked for cards and will get none, so this is loud. But it does NOT degrade the
+    * scan, and that distinction is the whole reason this case exists apart from
+    * [[FileUnreadable]].
+    *
+    * A card's identity is `(frontmatter id, heading path)`. A file with no id has therefore
+    * never produced an Anki note, and cannot own a single observed key — so there is nothing
+    * for orphan inference to be confused about, and no reason to give up computing it across
+    * the whole vault. _Added 2026-08-22. Before it, a file with no id was reported as
+    * `FileUnreadable`, which suppressed orphan inference for EVERY OTHER FILE; the stated
+    * reason was that it "costs us the ability to group observed keys by note", which is true
+    * of unreadable frontmatter and false of frontmatter that is perfectly readable and simply
+    * has no id._
+    */
+  case MarkedWithoutNoteId(file: String, reason: String)
+
   /** Neither key nor note id could be derived — missing or unreadable frontmatter. Observed
     * keys cannot even be GROUPED by file, so no orphan inference is possible at all and the
     * scan as a whole degrades to partial.
+    *
+    * NOT the same as "no id". Frontmatter that cannot be PARSED might have carried an id we
+    * failed to read, so we genuinely do not know what the file owns. Frontmatter that parses
+    * and has no id tells us exactly what it owns: nothing. See [[MarkedWithoutNoteId]].
     */
   case FileUnreadable(file: String, reason: String)
 

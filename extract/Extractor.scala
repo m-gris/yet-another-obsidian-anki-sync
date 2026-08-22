@@ -22,6 +22,27 @@ object Extractor:
     * @param fileName used as the fallback concept when a marked heading has no ancestor
     * @param filePath for diagnostics only
     */
+  /** Does this document ask for any cards at all?
+    *
+    * ANSWERED FROM THE PARSED TREE, never by searching the raw text, and the difference is not
+    * academic: this repository's own `How to write cards.md` shows every marker inside a fenced
+    * code block, and a vault will collect more documents like it. A fence is not a `Section`,
+    * so it cannot be mistaken for a marked heading here, where a textual scan for `#flashcard`
+    * would report each example as a card the author had asked for and been denied.
+    *
+    * A heading whose marker is UNRECOGNISED counts as asking, deliberately. `#flashcard/2-way`
+    * is a typo rather than prose, and the caller's whole job is to tell "this file wants cards"
+    * apart from "this file is ordinary writing".
+    */
+  def hasMarkedHeading(root: RootElement): Boolean =
+    def go(element: Element): Boolean = element match
+      case section: Section =>
+        Marker.parse(section.header.extractText).fold(_ => true, _.isDefined)
+        || section.content.exists(go)
+      case container: BlockContainer => container.content.exists(go)
+      case _                         => false
+    root.content.exists(go)
+
   def fromDocument(
       noteId: NoteId,
       fileName: String,

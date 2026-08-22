@@ -366,3 +366,94 @@ class VaultWalkerTest extends munit.FunSuite:
     assertEquals(index.scan.specs.size, 2)
     assertEquals(index.scan.failures, Vector.empty)
   }
+
+  // ============================== a file's trouble stays that file's trouble ====
+
+  /** ==Why this section exists==
+    *
+    * `scan: PARTIAL` means NO orphan can be computed anywhere in the vault. Until 2026-08-22 a
+    * file with no `id` produced exactly that, so a single ordinary note — prose, a template, a
+    * README — switched off orphan detection for every other file. In a real vault most notes
+    * are not card sources, so the tool arrived permanently partial and permanently noisy.
+    *
+    * The rule now: DEGRADE ONLY WHEN WE CANNOT TELL WHAT A FILE OWNS. A card's identity is
+    * `(frontmatter id, heading path)`, so a file whose frontmatter reads fine and has no id has
+    * never produced an Anki note and owns nothing — there is nothing to be confused about.
+    */
+  test("an ordinary note with no id is not a failure at all, and does not degrade the scan") {
+    val index = scan(
+      "Card.md"  -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"),
+      "Prose.md" -> "# Just thinking\n\nNo frontmatter, no markers, not a card source.\n",
+    )
+    assertEquals(index.scan.specs.size, 1)
+    assertEquals(index.scan.failures, Vector.empty, "an ordinary note was reported as a failure")
+    assert(index.scan.canInferOrphans, "one id-less prose note switched off orphan inference")
+  }
+
+  /** THE OTHER HALF, and the reason the case above cannot simply be "ignore files with no id".
+    * Marking a heading is asking for cards. Getting none, silently, is the failure mode this
+    * whole design exists to prevent.
+    */
+  test("a note that asks for cards but has no id is reported, loudly, WITHOUT degrading") {
+    val index = scan(
+      "Card.md"   -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"),
+      "Wanted.md" -> "# B\n\nx\n\n## Two #flashcard/2way\n\nBody.\n",
+    )
+    assertEquals(index.scan.specs.size, 1, "the good file's card was lost")
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkedWithoutNoteId(f, _) => f },
+      Vector("Wanted.md"),
+    )
+    assert(index.scan.canInferOrphans, "a keyless marked file must not cost the vault its orphans")
+  }
+
+  /** THE DISTINCTION THAT MAKES THE TWO TESTS ABOVE POSSIBLE, and the one a textual search for
+    * `#flashcard` would get wrong. A marker inside a fenced code block is DOCUMENTATION — this
+    * repository's own `How to write cards.md` is written that way, and so is anything a vault
+    * accumulates that explains the syntax. Such a file asks for nothing and must stay silent.
+    */
+  test("a marker inside a code fence is documentation, not a request for cards") {
+    val index = scan(
+      "How to write cards.md" -> ("# How to write cards\n\nWrite a heading like this:\n\n"
+        + "````markdown\n## A term #flashcard/2way\n\nIts definition.\n````\n")
+    )
+    assertEquals(index.scan.specs, Vector.empty)
+    assertEquals(index.scan.failures, Vector.empty, "a fenced example was read as a real marker")
+    assert(index.scan.canInferOrphans)
+  }
+
+  /** Markdown that will not parse, in a file whose id IS readable. Every key such a file could
+    * own begins with that id, so those keys can be suppressed by themselves and the rest of the
+    * vault keeps its orphan inference. This was a `FileUnreadable` until 2026-08-22.
+    */
+  test("a file with a good id but unparseable markdown suppresses only its own note") {
+    val index = scan(
+      "Good.md" -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"),
+      "Bad.md"  -> note("n2", "# B\n\n" + ("[" * 400) + "\n"),
+    )
+    assertEquals(index.scan.specs.size, 1, "the readable file's card was lost with the bad one")
+    assert(
+      index.scan.canInferOrphans,
+      "one file's syntax error threw away the whole vault's orphan inference",
+    )
+  }
+
+  /** THE ONE THAT STILL DEGRADES, and it should. Frontmatter that will not parse might have
+    * carried an id we failed to read, so the file may own Anki notes under a name we cannot
+    * see — and flagging those as orphans would suspend live cards. Not knowing is different
+    * from knowing there is nothing.
+    */
+  test("frontmatter that cannot be parsed still degrades the scan") {
+    val index = scan(
+      "Good.md" -> note("n1", "# A\n\nx\n\n## One #flashcard/1way\n\nBody.\n"),
+      "Bad.md"  -> "---\nid: x\n  bad: [unclosed\n---\n\n# B\n",
+    )
+    assert(!index.scan.canInferOrphans, "unreadable frontmatter must still suppress orphans")
+    assert(
+      index.scan.failures.exists {
+        case BuildFailure.FileUnreadable(_, _) => true
+        case _                                 => false
+      },
+      s"expected a FileUnreadable, got ${index.scan.failures}",
+    )
+  }
