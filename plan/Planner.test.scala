@@ -103,6 +103,8 @@ class PlannerTest extends munit.FunSuite:
           body("Operations appear instantaneous."),
           ThreeFieldDirections.All,
           testContext,
+          // Built from headings, so nothing names the concept's kind.
+          "",
         )
       ),
     )

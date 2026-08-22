@@ -85,16 +85,33 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     }
   }
 
-  /** Anki's Sort Field defaults to field 1; a breadcrumb there would fill the Browse list with
-    * the same repeated prefix. Asserted against the MANIFEST rather than against `Marker`,
-    * which `model/Marker.test.scala` already covers — the point here is the installed shape.
+  /** Anki's Sort Field defaults to FIELD 1, so a breadcrumb there would fill the Browse list
+    * with the same repeated prefix. That — not "last" — is the property.
+    *
+    * WEAKENED FROM "ends with Context" ON 2026-08-22, deliberately, when a second derived field
+    * was added after it. The old wording asserted a position when the requirement is only that
+    * this field is not the one Anki sorts by, and it made an ordinary addition look like a
+    * violation. Order is otherwise not load-bearing: this tool writes fields BY NAME, and the
+    * order in a collection decides the Browse columns rather than anything stored.
+    *
+    * THE ORDERING RULE THAT IS REAL, and which cost a debugging round to learn: Anki's
+    * `modelFieldAdd` APPENDS. So a field added to an existing note type lands at the end
+    * whatever the manifest says, and a manifest that declares it anywhere else leaves every
+    * repaired collection permanently reporting a field-order difference this tool declines to
+    * fix. New fields therefore go LAST in the manifest, in the order they were introduced.
     */
-  test("every installed note type ends with the Context field") {
+  test("no note type sorts by a derived field, and every one declares Context") {
+    val derived = Set(Marker.ContextField, Marker.ConceptLabelField)
     assets.foreach { asset =>
-      assertEquals(
-        asset.spec.fields.last,
-        Marker.ContextField,
-        s"'${asset.spec.name}' does not end with the Context field",
+      val fields = asset.spec.fields.toVector
+      assert(
+        fields.contains(Marker.ContextField),
+        s"'${asset.spec.name}' has no ${Marker.ContextField} field",
+      )
+      assert(
+        !derived.contains(fields.head),
+        s"'${asset.spec.name}' sorts by '${fields.head}', a field this tool derives — Anki's " +
+          "Sort Field is field 1, so the Browse list would repeat the same prefix on every row",
       )
     }
   }

@@ -7,7 +7,8 @@
     "Descriptor",
     "Description",
     "ThreeWay",
-    "Context"
+    "Context",
+    "ConceptLabel"
   ],
   "styling": "styling.css",
   "templates": [

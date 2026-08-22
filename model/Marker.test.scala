@@ -132,7 +132,7 @@ class MarkerTest extends munit.FunSuite:
     )
     assertEquals(
       CardSpec
-        .ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, "ctx")
+        .ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, "ctx", "Bone")
         .noteTypeName,
       NoteTypes.ConceptDescriptor,
     )
@@ -189,6 +189,9 @@ class MarkerTest extends munit.FunSuite:
       description = body("Operations appear instantaneous."),
       directions = directions,
       context = "System design",
+      // A card built from HEADINGS, so nothing names the concept's kind. The table-built
+      // sibling in `Tables.test.scala` is where a real label is asserted.
+      conceptLabel = "",
     )
 
   test("a three-field spec emits its content fields in the ruled order") {
@@ -226,6 +229,8 @@ class MarkerTest extends munit.FunSuite:
       description = body("Load absorption."),
       directions = ThreeFieldDirections.Default,
       context = "Messaging \u203a Cost / benefit",
+      // FROM A TABLE, so the first column\'s header names what the concept is.
+      conceptLabel = "Pattern",
     )
     assertEquals(spec.noteTypeName, Marker.NoteTypes.ConceptDescriptor)
     assertEquals(spec.fields.map(_._1).take(3), Marker.ConceptDescriptorFields)
@@ -262,8 +267,8 @@ class MarkerTest extends munit.FunSuite:
     val representatives: Vector[CardSpec] = Vector(
       CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Forward, "ctx"),
       CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Both, "ctx"),
-      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, "ctx"),
-      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.All, "ctx"),
+      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, "ctx", "Bone"),
+      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.All, "ctx", "Bone"),
       CardSpec.Cloze(
         k,
         body("text"),
@@ -283,10 +288,17 @@ class MarkerTest extends munit.FunSuite:
     }
   }
 
-  test("Context is the LAST field of every note type, and every note type has one") {
+  test("no note type sorts by a derived field, and every one declares Context") {
     Marker.NoteTypes.All.foreach { nt =>
       val order = Marker.FieldOrder.byNoteType(nt)
-      assertEquals(order.last, Marker.ContextField, s"'$nt' does not end with the Context field")
+      assert(order.contains(Marker.ContextField), s"'$nt' has no ${Marker.ContextField} field")
+      // Anki's Sort Field is field 1; a derived value there repeats down the Browse list.
+      // WEAKENED FROM `order.last` on 2026-08-22 — see the twin in `anki/NoteTypeAssets.test`
+      // for why position is not the property, and for the append rule that IS one.
+      assert(
+        !Set(Marker.ContextField, Marker.ConceptLabelField).contains(order.head),
+        s"'$nt' sorts by '${order.head}', which this tool derives",
+      )
       assertEquals(
         order.count(_ == Marker.ContextField),
         1,

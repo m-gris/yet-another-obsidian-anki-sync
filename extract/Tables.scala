@@ -140,11 +140,18 @@ object Tables:
       // The first column names the concept; the remaining headers are the descriptors.
       val descriptorHeaders = headerRow.drop(1)
 
+      // AND THE FIRST HEADER IS KEPT, where it used to be read for its position and thrown
+      // away. It names what the rows ARE — `Bone` over `Frontal`, `Parietal` — so without it a
+      // card asks "anterior border: orbital rim" and expects "Frontal" while never saying it
+      // wants the name of a bone. DISPLAY text, not a key segment: it is shown and never keyed,
+      // so it cannot move a card's identity however it is written.
+      val conceptLabel = headerRow.headOption.map(display.text).getOrElse("")
+
       if descriptorHeaders.isEmpty then Left(SpecError.TableWithoutDescriptors(where))
       else
         Right(
           bodyRows.zipWithIndex.flatMap((row, i) =>
-            cardsForRow(key, descriptorHeaders, row, i + 1, display, context)
+            cardsForRow(key, descriptorHeaders, row, i + 1, display, context, conceptLabel)
           )
         )
     }
@@ -173,6 +180,7 @@ object Tables:
       rowNumber: Int,
       display: CellDisplay,
       context: String,
+      conceptLabel: String,
   ): Vector[(CardSpec, RowSource)] =
     row.headOption.map(cell => (cell, cellSegment(cell))) match
       // A row with no cells at all names nothing.
@@ -234,6 +242,7 @@ object Tables:
               body,
               ThreeFieldDirections.Default,
               context,
+              conceptLabel,
             ) -> RowSource.table(SourceKind.TablePair, rowNumber)
           }
         }

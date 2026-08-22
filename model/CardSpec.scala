@@ -183,6 +183,7 @@ enum CardSpec:
       description: Body,
       directions: ThreeFieldDirections,
       context: String,
+      conceptLabel: String,
   )
 
   /** `#flashcard/cloze` — one note holding ALL of the section's deletions, so adding a
@@ -238,7 +239,7 @@ object CardSpec:
     /** Every spec knows its own key. */
     def key: CardKey = spec match
       case TwoField(k, _, _, _, _)      => k
-      case ThreeField(k, _, _, _, _, _) => k
+      case ThreeField(k, _, _, _, _, _, _) => k
       case Cloze(k, _, _, _)            => k
       case TableRow(k, _, _, _)         => k
       case Sequence(k, _, _, _)         => k
@@ -249,7 +250,7 @@ object CardSpec:
     def noteTypeName: String = spec match
       case TwoField(_, _, _, TwoFieldDirections.Forward, _) => Marker.NoteTypes.Basic
       case TwoField(_, _, _, TwoFieldDirections.Both, _)    => Marker.NoteTypes.BasicAndReversed
-      case ThreeField(_, _, _, _, _, _)                     => Marker.NoteTypes.ConceptDescriptor
+      case ThreeField(_, _, _, _, _, _, _)                  => Marker.NoteTypes.ConceptDescriptor
       case Cloze(_, _, _, _)                                => Marker.NoteTypes.Cloze
       // The row card is a plain Basic: concept on the front, all descriptors on the back.
       case TableRow(_, _, _, _)                             => Marker.NoteTypes.Basic
@@ -281,13 +282,14 @@ object CardSpec:
           Marker.ContextField      -> context,
         )
 
-      case ThreeField(_, concept, descriptor, description, directions, context) =>
+      case ThreeField(_, concept, descriptor, description, directions, context, conceptLabel) =>
         val threeWay = directions match
           case ThreeFieldDirections.All     => "1"
           case ThreeFieldDirections.Default => ""
         Marker.ConceptDescriptorFields.zip(Vector(concept, descriptor, description.value)) :+
           (Marker.ThreeWayField -> threeWay) :+
-          (Marker.ContextField -> context)
+          (Marker.ContextField -> context) :+
+          (Marker.ConceptLabelField -> conceptLabel)
 
       case Cloze(_, text, _, context) =>
         // The body ALREADY CARRIES its `{{cN::…}}` deletions: `Cloze.renderWithDeletions`

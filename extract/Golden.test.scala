@@ -642,12 +642,20 @@ class GoldenTest extends munit.FunSuite:
     * symptom would follow — the note types wrap the field in `{{#Context}}…{{/Context}}`, so
     * an empty value renders as nothing at all rather than as an empty rule.
     */
-  test("every card carries a Context field, and it is the LAST field") {
+  test("every card carries a Context field, exactly once") {
+    // BY NAME, NOT BY POSITION. This asserted `names.last` until 2026-08-22, when a second
+    // derived field was added after it — and a positional assertion turned an ordinary addition
+    // into a failure while proving nothing extra. Position is not the property: the tool writes
+    // fields by NAME, and Anki's `modelFieldAdd` appends regardless of what a manifest declares.
+    //
+    // EXACTLY ONCE, because "at least once" would pass for a card carrying two Context fields,
+    // which is a shape the field-order contract exists to make impossible.
     golden.cards.foreach { c =>
       val names = c.fields.map(_._1)
-      assert(
-        names.lastOption.contains(escape(Marker.ContextField)),
-        s"card ⟦${c.tag}⟧ does not end with a ${Marker.ContextField} field: $names",
+      assertEquals(
+        names.count(_ == escape(Marker.ContextField)),
+        1,
+        s"card ⟦${c.tag}⟧ does not carry exactly one ${Marker.ContextField} field: $names",
       )
     }
   }
@@ -664,12 +672,14 @@ class GoldenTest extends munit.FunSuite:
     * moves, change the literal BY HAND and say here which fixture caused it.
     */
   test("exactly five cards have an empty Context, and they are the five under an H1") {
-    // Read positionally off the LAST field, whose name the test above already pinned. A
-    // name lookup with a fallback would report "empty" for a card that had no Context field
-    // at all — the two are different failures and must not collapse into one.
+    // Looked up BY NAME and FAILING when absent, never defaulting. A lookup with a fallback
+    // would report "empty" for a card that has no Context field at all, and those are different
+    // failures that must not collapse into one. (Positional until 2026-08-22 — see the test
+    // above for why position stopped being the property.)
     val contexts = golden.cards.map { c =>
-      val (name, value) = c.fields.lastOption.getOrElse(fail(s"card \u27e6${c.tag}\u27e7 has no fields"))
-      assertEquals(name, escape(Marker.ContextField), s"last field of \u27e6${c.tag}\u27e7")
+      val value = c.fields
+        .collectFirst { case (name, v) if name == escape(Marker.ContextField) => v }
+        .getOrElse(fail(s"card ⟦${c.tag}⟧ has no ${Marker.ContextField} field"))
       c.tag -> value
     }
     val (empty, nonEmpty) = contexts.partition(_._2.isEmpty)

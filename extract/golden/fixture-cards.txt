@@ -44,6 +44,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Description⟧ ⟦Orbital rim⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
+  field ⟦ConceptLabel⟧ ⟦Bone⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/posterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -52,6 +53,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Description⟧ ⟦Coronal suture⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
+  field ⟦ConceptLabel⟧ ⟦Bone⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal⟧
   note ⟦Obsidian Basic⟧
@@ -66,6 +68,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Description⟧ ⟦Coronal suture⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
+  field ⟦ConceptLabel⟧ ⟦Bone⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/posterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -74,6 +77,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Description⟧ ⟦Lambdoid suture⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Body shapes › Cranial bones and their sutures⟧
+  field ⟦ConceptLabel⟧ ⟦Bone⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal⟧
   note ⟦Obsidian Basic⟧
@@ -124,6 +128,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/bene
   field ⟦Description⟧ ⟦Absorbs load spikes: the producer keeps accepting work while a slow consumer drains the backlog at its own rate.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦ConceptLabel⟧ ⟦Pattern⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -132,6 +137,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost
   field ⟦Description⟧ ⟦Latency becomes unbounded under sustained overload, and the queue itself is state that must be sized, monitored and drained.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦ConceptLabel⟧ ⟦Pattern⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
   note ⟦Obsidian Basic⟧
@@ -146,6 +152,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
   field ⟦Description⟧ ⟦The producer names an event, not a recipient, so new consumers are added without touching or redeploying the publisher.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦ConceptLabel⟧ ⟦Pattern⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -154,6 +161,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
   field ⟦Description⟧ ⟦Nobody owns the end-to-end path: a subscriber that silently stops consuming looks identical to one that was never there.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦ConceptLabel⟧ ⟦Pattern⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub⟧
   note ⟦Obsidian Basic⟧
@@ -168,6 +176,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦Description⟧ ⟦The caller learns the outcome synchronously, so errors surface at the call site and can be retried with the original context in hand.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦ConceptLabel⟧ ⟦Pattern⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -176,6 +185,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦Description⟧ ⟦Availability multiplies down the chain — the caller is only as available as the slowest dependency it blocks on.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Messaging Patterns › Cost / benefit⟧
+  field ⟦ConceptLabel⟧ ⟦Pattern⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response⟧
   note ⟦Obsidian Basic⟧
@@ -202,6 +212,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Description⟧ ⟦Recovers from transient faults such as a dropped packet or a brief leader election.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦ConceptLabel⟧ ⟦Mechanism⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -210,6 +221,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Description⟧ ⟦Amplifies load exactly when the dependency is already struggling.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦ConceptLabel⟧ ⟦Mechanism⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
@@ -224,6 +236,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Description⟧ ⟦Turns an at-most-once delivery into an at-least-once one, which is the cheap half of exactly-once.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦ConceptLabel⟧ ⟦Mechanism⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -232,6 +245,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Description⟧ ⟦Duplicates reach the receiver, so the handler must be idempotent or it corrupts state.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦ConceptLabel⟧ ⟦Mechanism⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
@@ -246,6 +260,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦Description⟧ ⟦Bounds how long a caller holds a connection and a thread waiting on a peer.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦ConceptLabel⟧ ⟦Mechanism⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -254,6 +269,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦Description⟧ ⟦Cannot distinguish a slow peer from a dead one, so it will cancel work that was about to succeed.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Duplicate row concepts⟧
+  field ⟦ConceptLabel⟧ ⟦Mechanism⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout⟧
   note ⟦Obsidian Basic⟧
@@ -268,6 +284,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦Description⟧ ⟦Keys are split into contiguous intervals, so a scan over neighbouring keys touches few partitions.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Exactly one descriptor column⟧
+  field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/hash%20partitioning/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -276,6 +293,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦Description⟧ ⟦A hash of the key selects the partition, spreading load evenly but destroying key locality.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Exactly one descriptor column⟧
+  field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/consistent%20hashing/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -284,6 +302,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦Description⟧ ⟦Keys and nodes map onto one ring, so adding a node moves only the keys between it and its predecessor.⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Table Edge Cases › Exactly one descriptor column⟧
+  field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
 
 card ⟦src::fix-consistency::consistency/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -292,6 +311,7 @@ card ⟦src::fix-consistency::consistency/definition⟧
   field ⟦Description⟧ ⟦<p>A consistency model is a contract between a storage system and its clients stating which\ninterleavings of reads and writes the system is allowed to expose. It is a restriction on\nthe set of histories the system may produce, not a property of any single operation.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -300,6 +320,7 @@ card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   field ⟦Description⟧ ⟦<p>Stronger models forbid more histories, which makes application reasoning easier but forces\nmore coordination between replicas. Weaker models permit anomalies in exchange for lower\nlatency and continued availability while the network is partitioned.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -308,6 +329,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   field ⟦Description⟧ ⟦<p>Once a client has observed a value, later reads within the same session never return an\nolder one. The guarantee is scoped to the session, so two different clients may still\ndisagree about which value is current.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Consistency › Session guarantees⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -316,6 +338,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   field ⟦Description⟧ ⟦<p>A client whose requests are spread across replicas can read a fresh value from an\nup-to-date replica and then a stale one from a lagging replica, so time appears to run\nbackwards. Sticky routing or a per-session version token prevents it.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Consistency › Session guarantees⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -348,6 +371,7 @@ card ⟦src::fix-linearizability::linearizability/definition⟧
   field ⟦Description⟧ ⟦<p>Every operation appears to take effect atomically at a single instant between its\ninvocation and its response, and that instant respects real time. Once a write is\nacknowledged, every later read — from any client — must observe it or a newer value.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -356,6 +380,7 @@ card ⟦src::fix-linearizability::linearizability/cost⟧
   field ⟦Description⟧ ⟦<p>A linearizable read or write has to be confirmed by a quorum before it can respond, so its\nlatency is bounded below by the slowest link in that quorum. During a network partition the\nminority side must refuse requests rather than answer from state it cannot vouch for.</p>⟧
   field ⟦ThreeWay⟧ ⟦1⟧
   field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -364,6 +389,7 @@ card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%2
   field ⟦Description⟧ ⟦<p>Sequential consistency only requires that all replicas agree on <em>some</em> total order that\npreserves each client's program order. Linearizability adds the real-time constraint: an\noperation that completed before another started must be ordered before it.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -372,6 +398,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   field ⟦Description⟧ ⟦<p>When a network partition splits a distributed system, the system must choose between\nanswering with possibly stale data and refusing to answer at all. Consistency and\navailability cannot both be preserved while the partition lasts.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -380,6 +407,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   field ⟦Description⟧ ⟦<p>Treating the C-versus-A choice as a permanent architectural setting rather than a\nper-partition decision. Outside a partition a system can offer both, so the tradeoff only\nbecomes real once messages start being dropped.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -388,6 +416,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   field ⟦Description⟧ ⟦<p>A subset of replicas large enough that any two such subsets share at least one member.\nRequiring every read and every write to reach a quorum makes the newest accepted value\nvisible to every subsequent reader.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -396,6 +425,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   field ⟦Description⟧ ⟦<p>Sizing the quorum against the number of live nodes instead of the configured replica count.\nAs nodes fail the quorum shrinks with them, two disjoint groups can each believe they hold\na majority, and split-brain follows.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦Multi-Topic⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication%20trade%20availability%20for%20durability%3f⟧
   note ⟦Obsidian Basic⟧

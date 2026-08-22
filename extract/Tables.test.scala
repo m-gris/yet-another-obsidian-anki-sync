@@ -226,7 +226,7 @@ class TablesTest extends munit.FunSuite:
     var sawRow = false
     hostile.foreach { (spec, _) =>
       spec match
-        case CardSpec.ThreeField(_, concept, descriptor, description, _, _) =>
+        case CardSpec.ThreeField(_, concept, descriptor, description, _, _, _) =>
           assert(concept.contains("<<"), s"$why — ThreeField concept was [$concept]")
           assert(descriptor.contains("<<"), s"$why — ThreeField descriptor was [$descriptor]")
           assert(description.value.contains("<<"), s"$why — ThreeField description was [$description]")

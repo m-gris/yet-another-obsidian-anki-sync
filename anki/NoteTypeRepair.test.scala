@@ -43,7 +43,11 @@ class NoteTypeRepairTest extends munit.FunSuite:
   def asInheritedByRename(name: String): NoteTypeSpec =
     val ours = assetNamed(name).spec
     ours.copy(
-      fields = NonEmptyVector.fromVectorUnsafe(ours.fields.toVector.filterNot(_ == "Context")),
+      // Both fields this tool derives are stripped, which is what a note type inherited by
+      // hand-rename actually looks like: it predates them.
+      fields = NonEmptyVector.fromVectorUnsafe(
+        ours.fields.toVector.filterNot(f => f == Marker.ContextField || f == Marker.ConceptLabelField)
+      ),
       templates = ours.templates.map { (templateName, template) =>
         templateName -> CardTemplate(
           front = template.front.replace("{{Context}}", "").replace("""<div class="context"></div>""", ""),
@@ -121,7 +125,12 @@ class NoteTypeRepairTest extends munit.FunSuite:
     val plan = NoteTypeInstaller.planRepair(surveyOf(anki))
 
     val added = plan.actions.collect { case RepairAction.AddField(n, f) if n == ConceptDescriptor => f }
-    assertEquals(added, Vector("Context"), s"plan was ${plan.actions.map(_.describe)}")
+    // Both derived fields, in DECLARED order — which is also the order Anki will append them.
+    assertEquals(
+      added,
+      Vector(Marker.ContextField, Marker.ConceptLabelField),
+      s"plan was ${plan.actions.map(_.describe)}",
+    )
     assertEquals(plan.refusals, Vector.empty)
   }
 

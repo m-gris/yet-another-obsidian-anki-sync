@@ -326,6 +326,11 @@ object Extractor:
                 body,
                 directions,
                 CardContext.render(ancestorTitles.dropRight(1)),
+                // EMPTY, AND THAT IS NOT AN OMISSION. The label names what KIND of thing the
+                // concept is, and only a table has anywhere to say it: its first column's header.
+                // Here the concept is an ancestor HEADING, which names the thing itself and never
+                // its kind. The templates guard on the field, so empty renders nothing at all.
+                "",
               ) -> RowSource.heading
             )
           )

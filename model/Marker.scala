@@ -197,6 +197,22 @@ object Marker:
     */
   val ThreeWayField: String = "ThreeWay"
 
+  /** What KIND of thing the Concept is — the first column's header, for a card built from a
+    * table.
+    *
+    * WHY IT EXISTS. A table's first column heads the rows, and its header names what those rows
+    * ARE: `Bone` over `Frontal`, `Parietal`. That header was read to find where the descriptor
+    * columns start and then discarded, so a card asked "anterior border: orbital rim" and
+    * expected "Frontal" without ever saying it wanted the name of a BONE. The same loss as a
+    * missing breadcrumb, one level in: context the reader needs to answer, thrown away because
+    * the tool had already used it for something else.
+    *
+    * EMPTY FOR A CARD BUILT FROM HEADINGS rather than from a table, where the concept comes from
+    * an ancestor heading and nothing names its kind. The templates guard on it, so an empty
+    * value renders nothing rather than a stray colon.
+    */
+  val ConceptLabelField: String = "ConceptLabel"
+
   /** Field names carried over from Anki's stock note types.
     *
     * THESE NAMES WERE VERIFIED against a live collection via `modelFieldNames`, twice, by
@@ -270,7 +286,7 @@ object Marker:
     val ClozeSequence: Vector[String] = ClozeSequenceFields :+ ContextField
 
     val ConceptDescriptor: Vector[String] =
-      ConceptDescriptorFields :+ ThreeWayField :+ ContextField
+      ConceptDescriptorFields :+ ThreeWayField :+ ContextField :+ ConceptLabelField
 
     /** Keyed by note type name, so a consumer holding a `CardSpec` can ask
       * `FieldOrder.byNoteType(spec.noteTypeName)`.

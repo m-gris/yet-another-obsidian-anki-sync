@@ -115,7 +115,7 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     specFor(note, "linearizability / definition").spec match
-      case CardSpec.ThreeField(_, concept, descriptor, _, _, _) =>
+      case CardSpec.ThreeField(_, concept, descriptor, _, _, _, _) =>
         assertEquals(concept, "Linearizability")
         assertEquals(descriptor, "Definition")
       case other => fail(s"expected ThreeField, got $other")
@@ -130,14 +130,14 @@ class ExtractorTest extends munit.FunSuite:
       fileName = "Consistency",
     )
     specFor(note, "definition").spec match
-      case CardSpec.ThreeField(_, concept, _, _, _, _) => assertEquals(concept, "Consistency")
+      case CardSpec.ThreeField(_, concept, _, _, _, _, _) => assertEquals(concept, "Consistency")
       case other                                    => fail(s"expected ThreeField, got $other")
   }
 
   test("the marker is stripped from the descriptor as well as from the key") {
     val note = extract("# A\n\nx\n\n## Cost #flashcard/3way/all\n\nExpensive.\n")
     specFor(note, "a / cost").spec match
-      case CardSpec.ThreeField(_, _, descriptor, _, directions, _) =>
+      case CardSpec.ThreeField(_, _, descriptor, _, directions, _, _) =>
         assertEquals(descriptor, "Cost")
         assertEquals(directions, ThreeFieldDirections.All)
       case other => fail(s"expected ThreeField, got $other")
@@ -339,7 +339,7 @@ class ExtractorTest extends munit.FunSuite:
   test("a pair card is a three-field spec — no separate card model") {
     val note = extract(messagingTable)
     specFor(note, "messaging / cost / benefit / queue / benefit").spec match
-      case CardSpec.ThreeField(_, concept, descriptor, description, _, _) =>
+      case CardSpec.ThreeField(_, concept, descriptor, description, _, _, _) =>
         assertEquals(concept, "Queue")
         assertEquals(descriptor, "Benefit")
         assertEquals(description.value, "Load Absorption")
@@ -443,7 +443,7 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     specFor(note, "t / w / queue / benefit").spec match
-      case CardSpec.ThreeField(_, _, _, description, _, _) =>
+      case CardSpec.ThreeField(_, _, _, description, _, _, _) =>
         assertEquals(description.value, "Load Absorption")
       case other => fail(s"expected ThreeField, got $other")
   }

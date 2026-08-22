@@ -78,7 +78,11 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       for
         b <- genBody
         d <- Gen.oneOf(ThreeFieldDirections.Default, ThreeFieldDirections.All)
-      yield CardSpec.ThreeField(k, "Concept", "Descriptor", b, d, "Coupling"),
+        // VARIED, so both shapes go through every property in this file: a card built from a
+        // TABLE carries the header naming what kind of thing its concept is, and one built
+        // from HEADINGS has nothing to put there.
+        l <- Gen.oneOf("", "Bone", "Pattern")
+      yield CardSpec.ThreeField(k, "Concept", "Descriptor", b, d, "Coupling", l),
     )
 
   val genSourced: Gen[SourcedSpec] =

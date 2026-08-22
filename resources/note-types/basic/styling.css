@@ -24,3 +24,20 @@
    where it sits INSIDE the note. */
 .context .deck { opacity: 0.75; }
 .context .sep  { opacity: 0.55; }
+
+/* A LABELLED VALUE: what it is, then what it says. The label is the column a table cell came
+   from, or the header over the column that names the rows. Uppercased in CSS rather than in
+   the data, so the stored value stays exactly what the author typed and a change of mind here
+   costs no resync. */
+.pair { margin: 0.35em 0; }
+.label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.label::after { content: ":"; margin-right: 0.4em; font-weight: 700; }
+
+/* What the card WANTS BACK, asked on the question side. Without it a card shows two values and
+   expects a third with no indication of what kind of thing it should be. */
+.asking { margin-top: 0.9em; }
+.asking .label::after { content: ""; margin-right: 0; }
