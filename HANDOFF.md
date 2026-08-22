@@ -24,18 +24,24 @@ Long messages must go via `--file`; the shell has an alias-guard hook that block
 
 | | |
 |---|---|
-| **The tool** | `backend-interview-prep/obsidian-anki-custom-sync/` |
-| **Design docs** | `backend-interview-prep/srs-obsidian-anki/` — REQUIREMENTS, CARD-MODEL, LEARNING-MODEL |
-| **Fixture vault** | `obsidian-anki-custom-sync/dummy-vault/` — yours, encodes the design |
-| **Hostile fixtures** | `obsidian-anki-custom-sync/hostile-vaults/` — must fail loudly, or must survive a *wrong* parser |
+| **The tool** | this repository — its root IS the tool |
+| **Design docs** | `docs/` — REQUIREMENTS, CARD-MODEL, LEARNING-MODEL |
+| **Fixture vault** | `dummy-vault/` — yours, encodes the design |
+| **Hostile fixtures** | `hostile-vaults/` — must fail loudly, or must survive a *wrong* parser |
 | **Marc's real vault** | `/Users/marc/srs-in-obsidian-test/` — **READ ONLY, NEVER WRITE** |
-| **Dead PoC** | `backend-interview-prep/poc-obsidian-vault/` — superseded, ignore entirely |
+
+_Paths corrected 2026-08-22, when the tool was extracted from the repository it grew up in
+(`backend-interview-prep`) into one of its own. The design documents were a sibling directory
+there and are `docs/` here. **The dead PoC vault did not come with it** — `poc-obsidian-vault/`
+stays behind in the old repository, so references to it anywhere in these documents now point
+at something this repository does not contain. It was superseded and to be ignored anyway._
 
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
-`scala-cli test <tool dir>` runs everything. **28 suites, 511 tests, 0 failures, 0 warnings** —
-measured by running it on 2026-08-21 and summing the per-suite totals. _The line previously said
-493 tests; the suite has grown since._
+`just test` runs everything, as does `scala-cli test .` from the repository root.
+**30 suites, 578 tests, 0 failures, 0 warnings** — measured on 2026-08-22 by running it and
+summing the per-suite totals. _The line has said 493, then 511; the suite keeps growing, so
+treat the number as a reading rather than a fact and re-measure before quoting it._
 
 ---
 
@@ -195,7 +201,7 @@ Six so far. **Every one produced plausible output instead of failing.**
 
 ## Design decisions you must not relitigate
 
-Ruled by Marc. The reasoning is in the source and in `srs-obsidian-anki/CARD-MODEL.md`.
+Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
 
 - **B1 tag encoding.** Percent-encode outside `[A-Za-z0-9.-]`. Anki tags are whitespace-delimited — a tag **cannot contain a space**, and 62 of 80 real headings do. `_` and `*` are search wildcards. `/` occurs inside real headings so it cannot double as the separator.
 - **B5 heading segment.** Extracted text, marker-stripped, NFC + case-folded + internal whitespace collapsed. Deliberate equalities: `**CAP**` == `CAP`, `Costs` == `costs`, `a  b` == `a b`. Whitespace collapses because a markdown *formatter* would otherwise silently orphan cards.
