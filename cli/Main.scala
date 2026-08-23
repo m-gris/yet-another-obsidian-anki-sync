@@ -591,17 +591,22 @@ object Main
     * case rather than falling back on a wildcard: `describeProfileCheck`, and
     * `withVerifiedProfile`'s exit-code branch.
     *
-    * WHAT THAT BUYS, AND WHAT IT DOES NOT. A case added later cannot silently acquire a
-    * PERMISSION: only `Confirmed` reaches `body`, so anything new refuses the run. But it
-    * does NOT fail to compile. This build sets `-deprecation -feature -Wunused:all` and NOT
-    * `-Xfatal-warnings`, so a non-exhaustive match is a warning and the compiler still exits
-    * 0 — a fifth case would build, and raise a `MatchError` the first time someone ran
-    * `sync`.
+    * WHAT THAT BUYS. A case added later cannot silently acquire a PERMISSION — only
+    * `Confirmed` reaches `body`, so anything new refuses the run — AND it cannot be added
+    * without both mappings answering for it: `project.scala` ends its option line with
+    * `-Wconf:msg=exhaustive:e`, so an inexhaustive match is a BUILD ERROR here, not a warning.
     *
-    * An earlier draft of this comment asserted the compiler refuses it. It does not, and
-    * that was established by compiling a throwaway file to check rather than by reading.
-    * Making the claim true would mean adding `-Xfatal-warnings`, which is a decision about
-    * the whole build rather than about this enum.
+    * _Corrected 2026-08-23, and the correction is the point._ This paragraph said the opposite
+    * — that the build sets no `-Xfatal-warnings`, that a non-exhaustive match merely warns, and
+    * that a fifth case would compile and raise a `MatchError` on the first `sync`. That was true
+    * when written on 2026-08-19 and false one day later: `754042a` added the flag on 2026-08-20
+    * and this comment was not revisited. Its own earlier draft had claimed enforcement and been
+    * "corrected" by measurement — so the file records a true statement being replaced by a false
+    * one, then outliving the fix.
+    *
+    * Left standing, it was worse than a stale note. In a codebase whose comments are
+    * load-bearing, a comment telling the next author that exhaustiveness is UNENFORCED is an
+    * invitation to reach for the `case _ =>` that this project has just spent a day removing.
     *
     * Four cases and not two, because `activeProfile` has two failure channels before any
     * string comparison happens at all. "Could not look", "the wrong collection is open" and
