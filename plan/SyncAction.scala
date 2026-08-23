@@ -37,6 +37,34 @@ enum Change:
 
   case DeckChanged(from: Option[DeckPath], to: DeckPath)
 
+  /** WHICH KIND OF CHANGE THIS IS, stripped of its payload.
+    *
+    * A report needs to say WHAT an update did, and a change's values are none of its business —
+    * so this is the projection that keeps a summary line from pattern-matching on field vectors
+    * and deck paths it will never print.
+    */
+  def kind: ChangeKind = this match
+    case FieldsChanged(_, _) => ChangeKind.Fields
+    case DeckChanged(_, _)   => ChangeKind.Deck
+
+/** The kinds of change one update can carry, IN THE ORDER A REPORT NAMES THEM.
+  *
+  * Declaration order is load-bearing: `cli/Report.scala` sorts by it so that an update which
+  * both rewrote content and moved deck always reads "update, and move to another deck" and
+  * never the reverse. A summary whose wording depended on which change the planner happened to
+  * compute first would be a diff nobody could review.
+  */
+enum ChangeKind:
+  case Fields
+  case Deck
+
+  /** How a run report names this kind. Longhand, so a third kind cannot be added without
+    * deciding what a person reading the summary is told about it.
+    */
+  def describe: String = this match
+    case Fields => "update"
+    case Deck   => "move to another deck"
+
 /** Whether a run carries an action out, or sets it aside for a human to ask for by name.
   *
   * A THIRD KIND IS DELIBERATELY ABSENT. An action is attempted or it is deferred; "attempted

@@ -256,20 +256,25 @@ object Report:
     // was rewritten. Naming the two apart costs one line, and is the difference between a report
     // that is read and one that is skimmed.
     case SyncAction.Update(_, _, changes) =>
-      val fields = changes.exists { case _: Change.FieldsChanged => true; case _ => false }
-      val deck   = changes.exists { case _: Change.DeckChanged => true; case _ => false }
-      (fields, deck) match
-        case (true, false) => "update"
-        case (false, true) => "move to another deck"
-        case (true, true)  => "update, and move to another deck"
-        // AN ASSERTION, NOT A FALLBACK. `changes` is a `NonEmptyVector` over a sum with exactly
-        // these two cases, so one of the flags is always set. A default of "update" here would
-        // turn a third case somebody adds later into a silently mislabelled line.
-        case (false, false) =>
-          sys.error(
-            s"an Update carried changes that are neither a field change nor a deck change — a " +
-              s"case was added to Change without teaching the report about it: $changes"
-          )
+      // ASKED OF THE SUM, AND WITH NO IMPOSSIBLE CORNER TO ASSERT AGAINST. This was two
+      // `case _ => false` probes feeding a `(Boolean, Boolean)` match, whose fourth corner
+      // could not happen and so ended in a `sys.error`. That traded a compile error for a
+      // RUNTIME CRASH INSIDE THE DRY-RUN REPORT — `Report.plan` is printed before a plan is
+      // applied, so a third `Change` case would have crashed in front of the very person who
+      // ran `--dry-run` to be careful.
+      //
+      // Projecting to `ChangeKind` instead makes the impossible state unrepresentable rather
+      // than asserted: `changes` is a `NonEmptyVector`, so there is always at least one kind,
+      // and a third kind must supply its own wording before this compiles.
+      //
+      // SORTED BY DECLARATION ORDER so the line reads the same however the planner happened to
+      // build the vector — see `ChangeKind`.
+      changes.toVector
+        .map(_.kind)
+        .distinct
+        .sortBy(k => ChangeKind.values.indexOf(k))
+        .map(_.describe)
+        .mkString(", and ")
 
     case _: SyncAction.Retype =>
       retypePolicy match

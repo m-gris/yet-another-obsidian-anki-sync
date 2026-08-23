@@ -465,3 +465,18 @@ class CliTest extends munit.FunSuite:
     assert(line.contains("update"), s"the content change went missing:\n$line")
     assert(line.contains("move to another deck"), s"the deck move went missing:\n$line")
   }
+
+  /** THE WORDING MUST NOT DEPEND ON WHICH CHANGE THE PLANNER COMPUTED FIRST.
+    *
+    * A summary line is read to decide whether to apply a plan, so an update that both rewrote
+    * content and moved deck has to read the same way every time. `ChangeKind`'s declaration
+    * order is what fixes it; this asserts the consequence, because "we happened to build the
+    * vector in that order" is not a property.
+    */
+  test("an update that did both always names the content change first") {
+    assertEquals(
+      updateLine(rewroteFields, movedDeck),
+      updateLine(movedDeck, rewroteFields),
+      "the summary wording changed with the order the changes were computed in",
+    )
+  }
