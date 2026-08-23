@@ -127,6 +127,55 @@ enum BuildFailure:
     */
   case FileUnreadable(file: String, reason: String)
 
+  /** WHAT THIS FAILURE SHELTERS FROM ORPHAN INFERENCE — the one question, asked once.
+    *
+    * Three consumers used to ask three DIFFERENT questions of this type, each with its own
+    * partial match and each silent about a case it had not heard of: `VaultScan.from` asked
+    * "does this degrade the scan?" with a `case _ => false`; `failedKeys` and
+    * `suppressedNoteIds` asked "does this exclude a key / a note?" with a `collect`. A sixth
+    * case had to be remembered in three places, and forgetting any of them compiled clean.
+    *
+    * They are the same question. What a failure shelters is a property OF THE FAILURE, and the
+    * three consumers are projections of it. Written longhand here, `-Wconf:msg=exhaustive:e`
+    * makes a new case answer all three at once, or not compile.
+    *
+    * THE STAKES, SO THE NEXT PERSON KNOWS WHAT THEY ARE ANSWERING. Getting this wrong runs
+    * orphan inference on incomplete data, and an orphan is TAGGED AND SUSPENDED — a live card
+    * with real review history silently out of the review queue. It has happened once already:
+    * `Extractor` records that one image pasted into one table cell flagged fifteen live cards.
+    */
+  def shelters: OrphanShelter = this match
+    // The key was derivable, so the card's Anki counterpart can be excluded BY ITSELF —
+    // broken must not read as deleted.
+    case KeyKnown(key, _, _) => OrphanShelter.OneKey(key)
+
+    // No key to exclude, so the blast radius widens to the note: the smallest unit still
+    // reasonable about.
+    case KeyUnderivableInFile(noteId, _, _) => OrphanShelter.WholeNote(noteId)
+
+    // Both of these are files with NO USABLE `id`, and a card's identity begins with the id —
+    // so neither has ever produced an Anki note, and neither owns a key that orphan inference
+    // could wrongly claim. Nothing to shelter.
+    case MarkerNotOnHeading(_, _)  => OrphanShelter.Nothing
+    case MarkedWithoutNoteId(_, _) => OrphanShelter.Nothing
+
+    // The one that costs the whole vault. Frontmatter that will not parse might have carried
+    // an id we failed to read, so the file may own notes under a name we cannot see.
+    case FileUnreadable(_, _) => OrphanShelter.Unknowable
+
+/** What a [[BuildFailure]] protects from being read as a deletion.
+  *
+  * FOUR CASES BECAUSE THERE ARE FOUR ANSWERS, and the last is not a bigger version of the
+  * third. `WholeNote` says "these keys are accounted for"; `Unknowable` says "I cannot tell you
+  * what is accounted for" — a statement about the tool's knowledge rather than about the file,
+  * and the only one that can invalidate inference for files it never touched.
+  */
+enum OrphanShelter:
+  case Nothing
+  case OneKey(key: CardKey)
+  case WholeNote(noteId: NoteId)
+  case Unknowable
+
 /** The result of walking the vault.
   *
   * The distinction is the whole point: "present in Anki, absent from markdown" is a valid
@@ -153,12 +202,11 @@ object VaultScan:
     */
   def from(specs: Vector[SourcedSpec], failures: Vector[BuildFailure]): VaultScan =
     // A file we could not read at all is the one failure that costs us the ability to
-    // group observed keys by note — so it, and only it, degrades the whole scan.
-    val unreadable = failures.exists {
-      case BuildFailure.FileUnreadable(_, _) => true
-      case _                                 => false
-    }
-    if unreadable then PartialScan(specs, failures) else CompleteScan(specs, failures)
+    // group observed keys by note — so it, and only it, degrades the whole scan. WHICH
+    // failures those are is `BuildFailure.shelters`, asked rather than restated: a
+    // `case _ => false` here would let a sixth case join the harmless ones in silence.
+    val unknowable = failures.exists(_.shelters == OrphanShelter.Unknowable)
+    if unknowable then PartialScan(specs, failures) else CompleteScan(specs, failures)
 
   extension (scan: VaultScan)
     def specs: Vector[SourcedSpec] = scan match
@@ -175,8 +223,8 @@ object VaultScan:
     /** Keys that failed to build but are nonetheless accounted for. Excluded from orphan
       * inference individually, so that BROKEN is not read as DELETED.
       */
-    def failedKeys: Set[CardKey] = scan.failures.collect {
-      case BuildFailure.KeyKnown(key, _, _) => key
+    def failedKeys: Set[CardKey] = scan.failures.map(_.shelters).collect {
+      case OrphanShelter.OneKey(key) => key
     }.toSet
 
     /** Notes whose keys cannot be enumerated because something in them was underivable.
@@ -187,8 +235,8 @@ object VaultScan:
       * orphan set. The blast radius widens from the card to the file — the smallest unit we
       * can still reason about.
       */
-    def suppressedNoteIds: Set[NoteId] = scan.failures.collect {
-      case BuildFailure.KeyUnderivableInFile(noteId, _, _) => noteId
+    def suppressedNoteIds: Set[NoteId] = scan.failures.map(_.shelters).collect {
+      case OrphanShelter.WholeNote(noteId) => noteId
     }.toSet
 
     /** Whether orphan inference is possible at all. */
