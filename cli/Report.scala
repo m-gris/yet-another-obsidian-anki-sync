@@ -283,6 +283,8 @@ object Report:
       s"${source.describe}  ${key.path.render}: $reason"
     case BuildFailure.KeyUnderivableInFile(noteId, source, reason) =>
       s"${source.describe}  note '${noteId.value}': $reason (orphan checks suppressed for this note)"
+    case BuildFailure.MarkerNotOnHeading(file, reason) =>
+      s"$file: $reason"
     case BuildFailure.MarkedWithoutNoteId(file, reason) =>
       s"$file: $reason"
     case BuildFailure.FileUnreadable(file, reason) =>

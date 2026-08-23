@@ -457,3 +457,38 @@ class VaultWalkerTest extends munit.FunSuite:
       s"expected a FileUnreadable, got ${index.scan.failures}",
     )
   }
+
+  /** THE MARKER IN THE WRONG PLACE, which is what a real vault produced within minutes.
+    *
+    * Typing `#flashcard/3way` into a note in the Obsidian desktop app lifts it out of the text
+    * and files it under the frontmatter `tags` property. The note then LOOKS marked — the
+    * Properties panel says `flashcard/3way` — and makes no cards, because this tool's rule is
+    * that a marker sits on a HEADING.
+    *
+    * Silence is wrong here even though a note with no marked heading is normally none of the
+    * tool's business: the frontmatter has said what the note was for.
+    */
+  test("a flashcard tag in the frontmatter with no marked heading is reported") {
+    val index = scan(
+      "Concept.md" -> "---\nid: n1\ntags:\n  - flashcard/3way\n---\n# Descriptor\nDescription\n"
+    )
+    assertEquals(index.scan.specs, Vector.empty)
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector("Concept.md"),
+    )
+    assert(index.scan.canInferOrphans, "this says nothing about what the file owns")
+  }
+
+  /** THE CONTROL. A note whose marker IS on a heading must not be nagged just because the word
+    * also appears in its frontmatter — which it will, since obsidian.nvim and Obsidian alike
+    * keep a `tags` list and an author may well tag the note too.
+    */
+  test("a marked heading silences the frontmatter check, even when tags mention flashcard") {
+    val index = scan(
+      "Good.md" ->
+        "---\nid: n1\ntags:\n  - flashcard/3way\n---\n\n# Concept\n\n## Descriptor #flashcard/3way\n\nDescription.\n"
+    )
+    assertEquals(index.scan.specs.size, 1)
+    assertEquals(index.scan.failures, Vector.empty, "a correctly marked note was nagged")
+  }

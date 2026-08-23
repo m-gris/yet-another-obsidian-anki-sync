@@ -195,6 +195,30 @@ object VaultWalker:
         case Right((keys, split)) =>
           val body   = split.body
           val parsed = ObsidianSyntax.markupParser.parse(body)
+          val marked = parsed.fold(_ => false, doc => Extractor.hasMarkedHeading(doc.content))
+
+          // INTENT DECLARED IN THE FRONTMATTER AND NOWHERE ELSE. Read off the RAW block rather
+          // than the parsed keys, because `Frontmatter.parse` keeps only scalar values and a
+          // `tags:` list is dropped before it gets here — which is the very shape this looks
+          // for. A substring match is enough: the block is small, and anything naming
+          // `flashcard` in it is a statement of what the note was meant to be.
+          val frontmatterNamesFlashcard =
+            split.frontmatter.exists(_.toLowerCase.contains("flashcard"))
+
+          // THE MARKER WENT TO THE WRONG PLACE. Typing `#flashcard/3way` into a note in the
+          // Obsidian desktop app lifts it out of the text and files it under the frontmatter
+          // `tags` property, leaving a note that LOOKS marked and produces nothing. Reported
+          // wherever it happens — with an id or without one — because the note has said what it
+          // was for and the gap between that and its headings is the whole message.
+          if frontmatterNamesFlashcard && !marked then
+            failures += BuildFailure.MarkerNotOnHeading(
+              file.relativePath,
+              "its frontmatter names 'flashcard' but no HEADING carries a marker, so it makes " +
+                "no cards — a marker goes on the heading itself, as in " +
+                "'## Some descriptor #flashcard/3way'. Typing one into the Obsidian editor " +
+                "files it under the 'tags' property instead, where this tool cannot see it",
+            )
+
           keys.get("id").map(NoteId.fromFrontmatter) match
             // NO ID. Whether that is a mistake depends entirely on whether the file asked for
             // cards, and only the parsed document can say. A note with marked headings is an
@@ -203,7 +227,7 @@ object VaultWalker:
             // is the noise that stops a report being read.
             case None =>
               parsed match
-                case Right(doc) if Extractor.hasMarkedHeading(doc.content) =>
+                case Right(_) if marked =>
                   failures += BuildFailure.MarkedWithoutNoteId(
                     file.relativePath,
                     "has #flashcard heading(s) but no 'id' in its frontmatter, so its cards " +

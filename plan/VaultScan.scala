@@ -72,6 +72,24 @@ enum BuildFailure:
     */
   case KeyUnderivableInFile(noteId: NoteId, source: SourceRef, reason: String)
 
+  /** The frontmatter mentions `flashcard`, but no HEADING carries a marker — so no card is made.
+    *
+    * The shape this catches, seen on a real vault within minutes of it being set up: typing
+    * `#flashcard/3way` into a note in the Obsidian desktop app, where the editor lifts it out of
+    * the text and files it under the frontmatter `tags` property. The result is a note that
+    * looks marked, says `flashcard/3way` at the top in the Properties panel, and produces
+    * nothing. The tool's own rule is that a marker belongs ON A HEADING, and a frontmatter tag
+    * is invisible to it.
+    *
+    * WORTH REPORTING BECAUSE THE INTENT IS LEGIBLE. Ordinarily a note with no marked heading is
+    * simply prose and saying anything about it would be noise — but a note whose frontmatter
+    * names `flashcard` has told us what it was for, and staying silent about the gap between
+    * that and its headings is exactly the silent-nothing this design exists to prevent.
+    *
+    * Non-degrading, like its neighbour: this says nothing about which notes the file owns.
+    */
+  case MarkerNotOnHeading(file: String, reason: String)
+
   /** The file has MARKED HEADINGS but no `id` in its frontmatter, so its cards cannot be keyed.
     *
     * The author asked for cards and will get none, so this is loud. But it does NOT degrade the
