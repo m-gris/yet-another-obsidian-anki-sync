@@ -3,7 +3,7 @@ package obsidiananki.cli
 import cats.data.NonEmptyVector
 import com.monovore.decline.Command as DeclineCommand
 import obsidiananki.anki.{AnkiNoteId, DeckPath}
-import obsidiananki.extract.{DeckShape, VaultFile, VaultWalker}
+import obsidiananki.extract.{DeckLevel, DeckShape, VaultFile, VaultWalker}
 import obsidiananki.plan.*
 
 class CliTest extends munit.FunSuite:
@@ -342,28 +342,28 @@ class CliTest extends munit.FunSuite:
     */
   test("--deck-from defaults to folders, the arrangement every synced collection already has") {
     assertEquals(shapeOf(), DeckShape.FoldersOnly)
-    assertEquals(shapeOf(), DeckShape(folders = true, fileName = false, headings = false))
+    assertEquals(shapeOf(), DeckShape.of(Set(DeckLevel.Folders)))
   }
 
   test("--deck-from selects the named sources and only those") {
     assertEquals(
       shapeOf("--deck-from", "folders,headings"),
-      DeckShape(folders = true, fileName = false, headings = true),
+      DeckShape.of(Set(DeckLevel.Folders, DeckLevel.Headings)),
     )
     assertEquals(
       shapeOf("--deck-from", "file"),
-      DeckShape(folders = false, fileName = true, headings = false),
+      DeckShape.of(Set(DeckLevel.FileName)),
     )
     assertEquals(
       shapeOf("--deck-from", "folders,file,headings"),
-      DeckShape(folders = true, fileName = true, headings = true),
+      DeckShape.of(Set(DeckLevel.Folders, DeckLevel.FileName, DeckLevel.Headings)),
     )
   }
 
   test("--deck-from tolerates spacing and case, since a shell script will have both") {
     assertEquals(
       shapeOf("--deck-from", " Folders , HEADINGS "),
-      DeckShape(folders = true, fileName = false, headings = true),
+      DeckShape.of(Set(DeckLevel.Folders, DeckLevel.Headings)),
     )
   }
 
@@ -373,7 +373,7 @@ class CliTest extends munit.FunSuite:
   test("--deck-from none selects nothing, and an empty value is refused") {
     assertEquals(
       shapeOf("--deck-from", "none"),
-      DeckShape(folders = false, fileName = false, headings = false),
+      DeckShape.of(Set.empty),
     )
     assert(parse("inspect", "--vault-path", existingDir, "--deck-from", "").isLeft)
   }
@@ -405,7 +405,7 @@ class CliTest extends munit.FunSuite:
       "headings",
     ) match
       case Right(Command.Sync(_, _, _, shape, _, _)) =>
-        assertEquals(shape, DeckShape(folders = false, fileName = false, headings = true))
+        assertEquals(shape, DeckShape.of(Set(DeckLevel.Headings)))
       case other => fail(s"got $other")
   }
 

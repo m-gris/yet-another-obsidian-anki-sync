@@ -424,21 +424,15 @@ class MarkerTest extends munit.FunSuite:
   /** Locate `model/Marker.scala`, by the walk-up idiom `FixtureVaultTest` already uses, so the
     * test does not depend on which directory the runner happened to start in.
     */
+  // ANCHORED ON THE COMPILED CLASSES, NOT ON `user.dir` — see `TestSources`, and note that
+  // this test was READING THE WRONG FILE from the day this repository was extracted until
+  // 2026-08-24. The walk up from the working directory resolved
+  // `backend-interview-prep/obsidian-anki-custom-sync/model/Marker.scala`, a stale copy of
+  // this tool frozen the day before the extraction. It passed throughout, because the marker
+  // `case` literals happen not to have changed since — a drift test that had stopped watching
+  // this repository and said nothing about it.
   private def markerSource: String =
-    val candidates = Iterator
-      .iterate(java.nio.file.Paths.get(sys.props("user.dir")).toAbsolutePath)(_.getParent)
-      .takeWhile(_ != null)
-      .take(6)
-      .flatMap(dir =>
-        Iterator(
-          dir.resolve("model/Marker.scala"),
-          dir.resolve("obsidian-anki-custom-sync/model/Marker.scala"),
-        )
-      )
-    val path = candidates
-      .find(java.nio.file.Files.exists(_))
-      .getOrElse(fail(s"model/Marker.scala not found from ${sys.props("user.dir")}"))
-    java.nio.file.Files.readString(path)
+    obsidiananki.TestSources.read(getClass, "model/Marker.scala")
 
   /** Every marker token the PARSER accepts, read out of its own `case` literals.
     *

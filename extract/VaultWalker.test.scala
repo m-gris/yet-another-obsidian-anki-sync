@@ -186,7 +186,7 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   test("folders and headings give the deck path from the ruling") {
     assertEquals(
-      composed(DeckShape(folders = true, fileName = false, headings = true)),
+      composed(DeckShape.of(Set(DeckLevel.Folders, DeckLevel.Headings))),
       "Obsidian::System-Design::Replication::Read-your-writes consistency",
     )
   }
@@ -196,21 +196,21 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   test("selecting both the file name and the headings repeats a name that appears in both") {
     assertEquals(
-      composed(DeckShape(folders = true, fileName = true, headings = true)),
+      composed(DeckShape.of(Set(DeckLevel.Folders, DeckLevel.FileName, DeckLevel.Headings))),
       "Obsidian::System-Design::Replication::Replication::Read-your-writes consistency",
     )
   }
 
   test("headings alone drop the folder, keeping the whole section chain") {
     assertEquals(
-      composed(DeckShape(folders = false, fileName = false, headings = true)),
+      composed(DeckShape.of(Set(DeckLevel.Headings))),
       "Obsidian::Replication::Read-your-writes consistency",
     )
   }
 
   test("the file name alone makes the file a deck level, which the folder mapping never does") {
     assertEquals(
-      composed(DeckShape(folders = true, fileName = true, headings = false)),
+      composed(DeckShape.of(Set(DeckLevel.Folders, DeckLevel.FileName))),
       "Obsidian::System-Design::Replication",
     )
   }
@@ -220,7 +220,7 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   test("selecting no source at all files every card in the root deck") {
     assertEquals(
-      composed(DeckShape(folders = false, fileName = false, headings = false)),
+      composed(DeckShape.of(Set.empty)),
       "Obsidian",
     )
   }
@@ -232,7 +232,7 @@ class VaultWalkerTest extends munit.FunSuite:
   test("a heading containing Anki's separator is refused when headings are selected") {
     val bad = replication.copy(headings = Vector("Replication", "A::B"))
     val err = Decks
-      .compose(root, DeckShape(folders = true, fileName = false, headings = true), bad, RecallText.none)
+      .compose(root, DeckShape.of(Set(DeckLevel.Folders, DeckLevel.Headings)), bad, RecallText.none)
       .swap
       .getOrElse(fail("a heading containing '::' must be refused"))
     assert(err.contains("A::B"), s"the message must name the offending segment — got: $err")
@@ -254,14 +254,14 @@ class VaultWalkerTest extends munit.FunSuite:
   test("a file name containing Anki's separator is refused when the file name is selected") {
     val bad = replication.copy(fileName = "we::ird")
     assert(
-      Decks.compose(root, DeckShape(folders = true, fileName = true, headings = false), bad, RecallText.none).isLeft
+      Decks.compose(root, DeckShape.of(Set(DeckLevel.Folders, DeckLevel.FileName)), bad, RecallText.none).isLeft
     )
   }
 
   test("surrounding whitespace is trimmed from a heading, as Anki would trim it") {
     val padded = replication.copy(headings = Vector("  Replication  ", " Read-your-writes  "))
     assertEquals(
-      composed(DeckShape(folders = false, fileName = false, headings = true), padded),
+      composed(DeckShape.of(Set(DeckLevel.Headings)), padded),
       "Obsidian::Replication::Read-your-writes",
     )
   }
@@ -273,14 +273,14 @@ class VaultWalkerTest extends munit.FunSuite:
   test("a blank heading contributes no deck level") {
     val blank = replication.copy(headings = Vector("Replication", "   ", "Marked"))
     assertEquals(
-      composed(DeckShape(folders = false, fileName = false, headings = true), blank),
+      composed(DeckShape.of(Set(DeckLevel.Headings)), blank),
       "Obsidian::Replication::Marked",
     )
   }
 
   // ================================================ the walk composes per CARD ====
 
-  val withHeadings: DeckShape = DeckShape(folders = true, fileName = false, headings = true)
+  val withHeadings: DeckShape = DeckShape.of(Set(DeckLevel.Folders, DeckLevel.Headings))
 
   /** THE REASON THE COMPOSITION MOVED FROM THE FILE TO THE CARD. Two cards in one file share a
     * folder and a file name but not a heading chain, so a deck derived per file cannot tell
@@ -586,4 +586,70 @@ class VaultWalkerTest extends munit.FunSuite:
   test("blank things-to-avoid are ignored rather than matching every blank segment") {
     val path = Vector("Obsidian", "Anatomy")
     assertEquals(Decks.clamp(path, RecallText(Vector("", "   "))), path)
+  }
+
+  // ============================ the deck-source tokens cannot drift ====
+
+  /** ==Why this reads the source file==
+    *
+    * `--deck-from` used to validate its tokens against one hand-written list and map them to
+    * record fields in another, fourteen lines apart. Add a name to the first and forget the
+    * second, and `--help` advertises a source, the parser accepts it, and NOTHING ACTS ON IT.
+    * A flag that is documented, accepted, and inert.
+    *
+    * `DeckLevel.Documented` is now the only place a token exists, which closes the gap between
+    * the two lists — but not the gap between the enum and the table. A case added to the enum
+    * with no row here is simply untypeable at the command line: no error, no warning, just a
+    * source nobody can select.
+    *
+    * So this reads the `case` declarations out of the source, exactly as
+    * `model/Marker.test.scala` does for the marker tokens, and requires the two sets to agree.
+    * That is the precedent this file is following, quoted from `Marker.scala`: "ANYONE ADDING A
+    * `case` BELOW MUST ADD A ROW HERE, and the build fails otherwise."
+    */
+  // ANCHORED ON THE COMPILED CLASSES, NOT ON `user.dir` — see `TestSources`. A walk up from
+  // the working directory resolved a STALE COPY of this file in the repository this tool was
+  // extracted from, and a drift test reading the wrong file is a green test proving nothing.
+  private def deckLevelSource: String =
+    obsidiananki.TestSources.read(getClass, "extract/VaultWalker.scala")
+
+  test("every DeckLevel case has a token, and every token names a case") {
+    // The `case` lines of `enum DeckLevel`, and nothing else in the file: anchored to a
+    // two-space indent so a `case` inside any match body cannot be mistaken for one.
+    val declared = """(?m)^  case (Folders|FileName|Headings)$""".r
+      .findAllMatchIn(deckLevelSource)
+      .map(_.group(1))
+      .toSet
+
+    assert(
+      declared.sizeIs >= 3,
+      s"only ${declared.size} DeckLevel cases were found in the source — the extraction is " +
+        "broken, so this test is proving nothing. Fix the regex, do NOT delete the assertion.",
+    )
+    assertEquals(
+      declared,
+      DeckLevel.values.map(_.toString).toSet,
+      "the source and the enum disagree about which parts of a location exist",
+    )
+    assertEquals(
+      DeckLevel.Documented.map(_._2).toSet,
+      DeckLevel.values.toSet,
+      "a DeckLevel case has no --deck-from token, so no command line can select it",
+    )
+  }
+
+  /** The tokens are what `--help` prints and what an error message offers, so a duplicate or a
+    * blank would be a line nobody can act on.
+    */
+  test("the tokens are distinct and non-blank") {
+    assertEquals(DeckLevel.tokens.distinct.size, DeckLevel.tokens.size)
+    assert(DeckLevel.tokens.forall(_.trim.nonEmpty))
+  }
+
+  /** `Documented` is in the order the parts NEST, which is the order `compose` walks them in.
+    * If the two disagreed, `--help` would list the parts in one order and a deck path would be
+    * built in another.
+    */
+  test("the documented order is the nesting order") {
+    assertEquals(DeckLevel.Documented.map(_._2), DeckLevel.values.toVector)
   }

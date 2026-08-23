@@ -4,7 +4,7 @@ import cats.data.{NonEmptyVector, Validated}
 import cats.syntax.all.*
 import com.monovore.decline.Opts
 import obsidiananki.anki.DeckPath
-import obsidiananki.extract.DeckShape
+import obsidiananki.extract.{DeckLevel, DeckShape}
 import obsidiananki.plan.RetypePolicy
 import java.nio.file.Paths
 
@@ -146,8 +146,10 @@ object Cli:
           case None      => Validated.invalidNel("deck-root must not be empty")
       }
 
-  /** The names `--deck-from` accepts, in the order they nest. */
-  private val deckSourceNames: Vector[String] = Vector("folders", "file", "headings")
+  // `deckSourceNames` STOOD HERE, a second hand-written list of the same three names. The
+  // allowlist it fed and the name-to-field mapping fourteen lines below could disagree in
+  // silence — a token added to one and forgotten in the other is a source `--help` advertises
+  // and nothing acts on. `DeckLevel.Documented` is now the only place a name exists.
 
   /** WHICH parts of a card's location become deck levels.
     *
@@ -168,33 +170,29 @@ object Cli:
       .option[String](
         "deck-from",
         "Which parts of a card's location become deck levels, comma-separated: " +
-          s"${deckSourceNames.mkString(", ")} — or 'none' for one flat deck. Default: folders",
+          s"${DeckLevel.tokens.mkString(", ")} — or 'none' for one flat deck. Default: folders",
       )
       .withDefault("folders")
       .mapValidated { raw =>
         val names   = raw.split(",").toVector.map(_.trim.toLowerCase).filter(_.nonEmpty)
-        val unknown = names.filterNot(n => n == "none" || deckSourceNames.contains(n))
+        val unknown = names.filterNot(n => n == "none" || DeckLevel.fromToken(n).isDefined)
         if names.isEmpty then
           Validated.invalidNel(
-            s"deck-from must name at least one of ${deckSourceNames.mkString(", ")}, or 'none'"
+            s"deck-from must name at least one of ${DeckLevel.tokens.mkString(", ")}, or 'none'"
           )
         else if unknown.nonEmpty then
           Validated.invalidNel(
             s"deck-from: unknown source ${unknown.map(u => s"'$u'").mkString(", ")} — " +
-              s"expected any of ${deckSourceNames.mkString(", ")}, or 'none'"
+              s"expected any of ${DeckLevel.tokens.mkString(", ")}, or 'none'"
           )
         else if names.contains("none") && names.sizeIs > 1 then
           Validated.invalidNel(
             "deck-from: 'none' means no source at all, so it cannot be combined with another"
           )
         else
-          Validated.valid(
-            DeckShape(
-              folders = names.contains("folders"),
-              fileName = names.contains("file"),
-              headings = names.contains("headings"),
-            )
-          )
+          // `flatMap` over the SAME table the allowlist just consulted, so a token that
+          // validated cannot then fail to map — the two questions have one answer.
+          Validated.valid(DeckShape.of(names.flatMap(DeckLevel.fromToken).toSet))
       }
 
   private val inspect: Opts[Command] =

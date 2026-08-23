@@ -42,7 +42,48 @@ final case class VaultIndex(scan: VaultScan, decks: Map[CardKey, DeckPath]):
   */
 final case class DeckSource(folders: Vector[String], fileName: String, headings: Vector[String])
 
+/** ONE PART OF A CARD'S LOCATION that can become a deck level.
+  *
+  * ==Why this is an enum and not three booleans on [[DeckShape]]==
+  *
+  * The record was `DeckShape(folders: Boolean, fileName: Boolean, headings: Boolean)`, and the
+  * cost of that was not in the record — it was at the command line. `--deck-from` validated its
+  * tokens against one hand-written list and mapped those tokens to fields in ANOTHER, fourteen
+  * lines below. The two could disagree in silence: add `"tags"` to the allowlist, forget the
+  * mapping, and `--help` advertises a source, the parser accepts it, `unknown` comes back
+  * empty, and nothing whatsoever acts on it. A documented, accepted flag that does nothing.
+  *
+  * `model/Marker.scala` already solved this one file over. Its `Documented` table and
+  * `fromToken` are checked against each other by a test that reads the `case` string literals
+  * out of the source — "ANYONE ADDING A `case` BELOW MUST ADD A ROW HERE, and the build fails
+  * otherwise". The deck sources never got that treatment; now the token table below is the only
+  * place a name exists, so there is nothing left to drift.
+  */
+enum DeckLevel:
+  case Folders
+  case FileName
+  case Headings
+
+object DeckLevel:
+
+  /** EVERY TOKEN `--deck-from` ACCEPTS, in the order the parts nest, with the gloss `--help`
+    * prints. Precedent and reasoning: `Marker.Documented`.
+    *
+    * A case added above without a row here cannot be typed at the command line; a row here
+    * naming a case that does not exist does not compile.
+    */
+  val Documented: Vector[(String, DeckLevel)] =
+    Vector("folders" -> Folders, "file" -> FileName, "headings" -> Headings)
+
+  val tokens: Vector[String]                  = Documented.map(_._1)
+  private val byToken: Map[String, DeckLevel] = Documented.toMap
+
+  def fromToken(token: String): Option[DeckLevel] = byToken.get(token.trim.toLowerCase)
+
 /** Which parts of a card's location become deck levels.
+  *
+  * A SET, BECAUSE MEMBERSHIP IS THE ONLY CHOICE. The parts nest in document order, so the order
+  * they are named in carries no meaning and must not be expressible — see the note below.
   *
   * RULED BY MARC, 2026-08-22 (`docs/REQUIREMENTS.md` item 11): folder path, file
   * name and heading path are COMPLEMENTARY segments of one deck path, each optional. How decks
@@ -61,9 +102,11 @@ final case class DeckSource(folders: Vector[String], fileName: String, headings:
   * instead of being silently de-duplicated: a rule that dropped a repeat would also drop a
   * heading that genuinely repeats its parent, and the author could not tell which had happened.
   */
-final case class DeckShape(folders: Boolean, fileName: Boolean, headings: Boolean)
+opaque type DeckShape = Set[DeckLevel]
 
 object DeckShape:
+  def of(levels: Set[DeckLevel]): DeckShape = levels
+  extension (s: DeckShape) def levels: Set[DeckLevel] = s
 
   /** What the tool did before the shape was configurable, and still the default.
     *
@@ -72,7 +115,7 @@ object DeckShape:
     * Nothing is lost by that — a deck move keeps scheduling — but a run that reports hundreds
     * of changes nobody asked for is a run that stops being read.
     */
-  val FoldersOnly: DeckShape = DeckShape(folders = true, fileName = false, headings = false)
+  val FoldersOnly: DeckShape = Set(DeckLevel.Folders)
 
 /** Mapping a card's location onto an Anki deck path. */
 object Decks:
@@ -138,10 +181,16 @@ object Decks:
     // NAMED ALONGSIDE THE VALUES, so a refusal can say "heading 'A::B'" rather than "'A::B'".
     // A message that does not say which of three sources produced the segment sends the
     // author looking through a folder tree for a string that is in a heading.
+    // DRIVEN BY `DeckLevel.values`, WHICH IS THE NESTING ORDER, and matched rather than
+    // branched. Three `if`s on three boolean fields stood here; a fourth part could be
+    // selected at the command line and contribute nothing, in silence, because no `if`
+    // mentioned it. The compiler asks this match about every part there is.
     val selected: Vector[(String, String)] =
-      (if shape.folders then source.folders.map("folder" -> _) else Vector.empty) ++
-        (if shape.fileName then Vector("file name" -> source.fileName) else Vector.empty) ++
-        (if shape.headings then source.headings.map("heading" -> _) else Vector.empty)
+      DeckLevel.values.toVector.filter(shape.levels.contains).flatMap {
+        case DeckLevel.Folders  => source.folders.map("folder" -> _)
+        case DeckLevel.FileName => Vector("file name" -> source.fileName)
+        case DeckLevel.Headings => source.headings.map("heading" -> _)
+      }
 
     // TRIMMED BEFORE ANYTHING ELSE, because Anki trims deck names itself: leaving the padding
     // on would have the tool believe in a deck named `" Spaced "` that Anki calls `"Spaced"`,
