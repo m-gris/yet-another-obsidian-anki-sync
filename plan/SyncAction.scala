@@ -37,6 +37,17 @@ enum Change:
 
   case DeckChanged(from: Option[DeckPath], to: DeckPath)
 
+/** Whether a run carries an action out, or sets it aside for a human to ask for by name.
+  *
+  * A THIRD KIND IS DELIBERATELY ABSENT. An action is attempted or it is deferred; "attempted
+  * and failed" is an OUTCOME rather than a disposition, and lives in [[ExecutionReport]]
+  * alongside what Anki said. Folding the two together is how a run comes to report a refusal
+  * it never made.
+  */
+enum Disposition:
+  case Attempt
+  case Defer
+
 enum SyncAction:
   /** In the markdown, not in Anki. The only case that legitimately carries no note id.
     *
@@ -136,6 +147,29 @@ enum SyncAction:
     * from a live one in the list a human reviews before pruning.
     */
   case Unflag(key: CardKey, noteId: AnkiNoteId)
+
+  /** Does a run under this policy CARRY THIS ACTION OUT, or set it aside?
+    *
+    * WRITTEN LONGHAND, WITH NO CATCH-ALL, AND THAT IS THE WHOLE POINT OF PUTTING IT HERE.
+    * `Executor.run` used to answer this with `plan.actions.filter { case _: Retype => false;
+    * case _ => true }` — a default that sweeps every action it has not heard of INTO execution.
+    * `-Wconf:msg=exhaustive:e` is live, so asking the sum instead means a sixth action cannot
+    * acquire a disposition by falling through: the compiler asks whether a policy defers it.
+    *
+    * THE CASE THIS GUARDS IS ALREADY NAMED IN `README.md`: `prune`, the command that deletes
+    * flagged cards. Under the old catch-all a `Prune` action would have been handed to the
+    * executor by a run whose entire contract is "do not act on an instruction you were not
+    * given" — a deletion nobody asked for, in the mode chosen for caution.
+    */
+  def dispositionUnder(policy: RetypePolicy): Disposition = this match
+    case _: Create => Disposition.Attempt
+    case _: Update => Disposition.Attempt
+    case _: Flag   => Disposition.Attempt
+    case _: Unflag => Disposition.Attempt
+    case _: Retype =>
+      policy match
+        case RetypePolicy.Defer => Disposition.Defer
+        case RetypePolicy.Apply => Disposition.Attempt
 
   // A `Relink` case sat here: a proposed pairing between an orphan and an unmatched key, for
   // a human to confirm. REMOVED 2026-08-19, when automatic rename detection was cut from v0

@@ -492,3 +492,97 @@ class RetypingTest extends munit.FunSuite:
     )
     assertEquals(noteAt(anki, id).noteType, "Basic", "a refused move changed the note anyway")
   }
+
+  // ============ which actions a policy carries out, asked of the sum ====
+
+  /** ==Why this is on `SyncAction` and not in `Executor`==
+    *
+    * `Executor.run` used to split the plan with
+    * `plan.actions.filter { case _: Retype => false; case _ => true }` — a catch-all that
+    * sweeps every action it has not heard of INTO execution. `-Wconf:msg=exhaustive:e` makes an
+    * inexhaustive MATCH a build error, but a catch-all opts out of that check as completely as
+    * an `if` would, while looking like it did not.
+    *
+    * The case it would swallow is not hypothetical. `README.md` names `prune` — the command
+    * that DELETES flagged cards — as the next thing to be built. Under the old split a `Prune`
+    * action would have been handed to the executor by a run whose whole contract is "do not act
+    * on an instruction you were not given".
+    *
+    * These tests pin the dispositions. The compiler pins the exhaustiveness: a sixth case does
+    * not compile until `dispositionUnder` answers for it.
+    */
+  private val someKey = key("n1", "Coupling")
+  private val someNoteId = AnkiNoteId(1L)
+
+  /** The four actions no policy may switch off, plus the one it may. Hand-built rather than
+    * planned, because what is under test is the DISPOSITION and not how an action is produced.
+    */
+  private val alwaysAttempted: Vector[(String, SyncAction)] = Vector(
+    "create" -> SyncAction.Create(
+      someKey,
+      NewNote(
+        noteType = Marker.NoteTypes.Basic,
+        deck = defaultDeck,
+        fields = Vector("Front" -> "f", "Back" -> "b"),
+        tags = NonEmptyVector.of(TagCodec.encode(someKey), OwnedTag.sha("sha::a")),
+      ),
+    ),
+    "update" -> SyncAction.Update(
+      someKey,
+      someNoteId,
+      NonEmptyVector.one(Change.FieldsChanged(Vector("Front" -> "f"), "sha::a")),
+    ),
+    "flag"   -> SyncAction.Flag(someKey, someNoteId),
+    "unflag" -> SyncAction.Unflag(someKey, someNoteId),
+  )
+
+  private val aRetype: SyncAction = SyncAction.Retype(
+    key = someKey,
+    noteId = someNoteId,
+    from = Marker.NoteTypes.Basic,
+    to = Marker.NoteTypes.BasicAndReversed,
+    fields = Vector("Front" -> "f", "Back" -> "b"),
+    ownedTags = NonEmptyVector.of(TagCodec.encode(someKey), OwnedTag.sha("sha::a")),
+    preservedTags = Vector.empty,
+    deck = None,
+  )
+
+  test("under Defer, only a retype is set aside") {
+    assertEquals(
+      aRetype.dispositionUnder(RetypePolicy.Defer),
+      Disposition.Defer,
+      "a retype must not be attempted by a run that was not asked to migrate",
+    )
+    alwaysAttempted.foreach { (kind, action) =>
+      assertEquals(
+        action.dispositionUnder(RetypePolicy.Defer),
+        Disposition.Attempt,
+        s"deferring retypes must not stop a $kind — 'every other action runs either way'",
+      )
+    }
+  }
+
+  test("under Apply, every action is attempted, retypes included") {
+    assertEquals(aRetype.dispositionUnder(RetypePolicy.Apply), Disposition.Attempt)
+    alwaysAttempted.foreach { (_, action) =>
+      assertEquals(action.dispositionUnder(RetypePolicy.Apply), Disposition.Attempt)
+    }
+  }
+
+  /** THE POLICY ONLY EVER SWITCHES ONE THING. Stated as its own property because
+    * `Executor.run`'s docstring promises it in prose — "every other action runs either way" —
+    * and prose is not checked.
+    */
+  test("the policy changes the disposition of retypes and of nothing else") {
+    alwaysAttempted.foreach { (kind, action) =>
+      assertEquals(
+        action.dispositionUnder(RetypePolicy.Defer),
+        action.dispositionUnder(RetypePolicy.Apply),
+        s"the policy changed what happens to a $kind",
+      )
+    }
+    assertNotEquals(
+      aRetype.dispositionUnder(RetypePolicy.Defer),
+      aRetype.dispositionUnder(RetypePolicy.Apply),
+    )
+  }

@@ -195,11 +195,21 @@ object Executor:
   ): F[ExecutionReport] =
     policy match
       case RetypePolicy.Defer =>
-        val deferred = plan.actions.collect { case retype: SyncAction.Retype => retype }
-        val rest     = plan.actions.filter {
-          case _: SyncAction.Retype => false
-          case _                    => true
-        }
+        // SPLIT BY ASKING THE SUM, not by a catch-all. `plan.actions.filter { case _: Retype =>
+        // false; case _ => true }` stood here, and its default swept every action it had not
+        // heard of INTO execution — including, one day, the `prune` this project has already
+        // announced, which DELETES cards. A deletion carried out by the run whose whole
+        // contract is "do not act on an instruction you were not given" is the failure that
+        // default made possible. `SyncAction.dispositionUnder` is written longhand, so a sixth
+        // action must answer for itself before it compiles.
+        val (setAside, rest) =
+          plan.actions.partition(_.dispositionUnder(policy) == Disposition.Defer)
+
+        // NARROWED BACK TO `Retype` FOR THE REPORT, because `ExecutionReport.deferred` promises
+        // that type and its consumers read `from`/`to` off it. The `collect` is a projection of
+        // an already-decided split rather than the decision itself — which is the difference
+        // between a partial function used for its type and one used for its control flow.
+        val deferred = setAside.collect { case retype: SyncAction.Retype => retype }
         applyEach(rest, anki, Map.empty).map(ExecutionReport(_, deferred))
 
       case RetypePolicy.Apply =>
