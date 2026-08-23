@@ -125,12 +125,11 @@ object Tables:
     * guard green against a function production no longer calls — the shadow-path shape this
     * project already has a scar from.
     *
-    * A NAMED, UNCLOSED HOLE: `Extractor.scala` has two call sites and only ONE of them runs.
-    * The arm inside `buildSpecs`'s `marker match` sits in the `else` of
-    * `if marker == Marker.Table` and exists only because an inexhaustive match is a build
-    * error here. Its `CellDisplay` argument is exercised by no test and never will be while
-    * that `if` stands — a future "simplification" that collapses the `if` makes it live.
-    * Both call sites inject [[CellDisplay.Escaped]] since S11.
+    * ONE CALL SITE, injecting [[CellDisplay.Escaped]]. _Corrected 2026-08-23._ This paragraph
+    * described two call sites of which only one ran, guarded by an `if marker == Marker.Table`
+    * in `Extractor.buildSpecs`. That comparison had been permanently FALSE since `Marker.Table`
+    * gained parameters, so the guarded branch was the dead one and the `marker match` arm this
+    * paragraph called unexercised was in fact the only live path. The guard is deleted.
     *
     * `contextTitles` IS FULLY COMPUTED BY THE CALLER, AND THIS FILE HOLDS NO RULE ABOUT IT.
     * Which heading segments a card's breadcrumb keeps depends on what that card's face already

@@ -1254,3 +1254,94 @@ class ExtractorTest extends munit.FunSuite:
       Vector("A & B"),
     )
   }
+
+  // ================ a table's marker must reach the cards it makes ====
+
+  /** ==Why this exists, and why its absence was the real defect==
+    *
+    * `#flashcard/table` carries two axes — how many DIRECTIONS each cell is asked, and whether
+    * the cards are about CELLS, whole ROWS, or both. `model/Marker.test.scala` proves the
+    * parser reads those tokens. Nothing proved they reached a card.
+    *
+    * They did not, for four days. `Extractor.buildSpecs` guarded its table path with
+    * `if marker == Marker.Table`, which became permanently FALSE the moment `Marker.Table`
+    * gained parameters — a bare `Marker.Table` is the companion object. Production ran the
+    * `marker match` arm instead, which happens to be correct, so no card was ever wrong. But
+    * had the guard been "repaired" rather than deleted, it would have hardcoded
+    * `Default, Both` and silently retired every `/1way`, `/3way`, `/cells` and `/rows` token
+    * the README advertises — and NOTHING WOULD HAVE FAILED, because every table in
+    * `dummy-vault` is marked bare and no test drove a variant end to end.
+    *
+    * These tests are that missing end. They assert on CARDS, not on the parser.
+    */
+  private def tableCardsFor(marker: String): Vector[(String, String)] =
+    val note =
+      s"""|# Bones
+          |
+          |## Cranial bones $marker
+          |
+          || Bone     | Anterior border | Posterior border |
+          || -------- | --------------- | ---------------- |
+          || Frontal  | Orbital rim     | Coronal suture   |
+          || Parietal | Coronal suture  | Lambdoid suture  |
+          |""".stripMargin
+    extract(note, id = "anatomy", fileName = "Anatomy").specs.map(s => s.spec.noteTypeName -> s.key.path.render)
+
+  /** A bare marker asks for both scopes: a pair card per usable cell, plus a row card per row. */
+  test("a bare table marker yields cell cards AND row cards") {
+    val cards = tableCardsFor("#flashcard/table")
+    assert(cards.exists((_, k) => k == "bones / cranial bones / frontal"), s"no row card: $cards")
+    assert(
+      cards.exists((_, k) => k == "bones / cranial bones / frontal / anterior border"),
+      s"no cell card: $cards",
+    )
+  }
+
+  /** `/cells` SUPPRESSES the row card. If the marker's scope did not reach `Tables`, this would
+    * still contain one — which is exactly what a repaired guard hardcoding `Both` would do.
+    */
+  test("/cells reaches the cards: the row card is gone, the cell cards remain") {
+    val cards = tableCardsFor("#flashcard/table/cells")
+    assert(
+      !cards.exists((_, k) => k == "bones / cranial bones / frontal"),
+      s"/cells still produced a row card, so the scope never reached Tables: $cards",
+    )
+    assert(
+      cards.exists((_, k) => k == "bones / cranial bones / frontal / anterior border"),
+      s"/cells lost its cell cards: $cards",
+    )
+  }
+
+  /** `/rows` is the mirror: the whole-row card alone. */
+  test("/rows reaches the cards: the cell cards are gone, the row card remains") {
+    val cards = tableCardsFor("#flashcard/table/rows")
+    assert(cards.exists((_, k) => k == "bones / cranial bones / frontal"), s"no row card: $cards")
+    assert(
+      !cards.exists((_, k) => k.endsWith("/ anterior border")),
+      s"/rows still produced cell cards, so the scope never reached Tables: $cards",
+    )
+  }
+
+  /** THE DIRECTION AXIS, which a hardcoded `Default` would also have silently retired. `3way`
+    * fills the `ThreeWay` gate field, which is what makes Anki generate the third card; the
+    * default leaves it empty. Asserted on the FIELD, because the card count is Anki's business
+    * and this tool's business is what it writes.
+    */
+  test("/3way reaches the cards, and the default does not fill the gate field") {
+    def gate(marker: String): Set[String] =
+      val note =
+        s"""|# Bones
+            |
+            |## Cranial bones $marker
+            |
+            || Bone    | Anterior border |
+            || ------- | --------------- |
+            || Frontal | Orbital rim     |
+            |""".stripMargin
+      extract(note, id = "anatomy", fileName = "Anatomy").specs
+        .flatMap(_.spec.fields.collect { case (n, v) if n == Marker.ThreeWayField => v })
+        .toSet
+
+    assertEquals(gate("#flashcard/table"), Set(""), "the default must leave the gate empty")
+    assert(gate("#flashcard/table/3way").forall(_.nonEmpty), "/3way did not reach the card")
+  }

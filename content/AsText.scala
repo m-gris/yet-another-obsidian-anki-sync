@@ -172,8 +172,10 @@ object AsText:
     // body rows.
     //
     // NOTE this is the ORDINARY-BODY path — a table appearing inside a `1way`/`2way`/`cloze`
-    // section. A `#flashcard/table` section does not come through here at all; `Tables.scala`
-    // decomposes it into cards.
+    // section. _Corrected 2026-08-23:_ this said a `#flashcard/table` section "does not come
+    // through here at all". It does. `Extractor.buildSpecs` renders every marked section's body
+    // before its `marker match`, a table section included, so this arm runs for one and its
+    // output is then discarded — `Tables.scala` decomposes the section into cards separately.
     case Block.Table(header, rows) =>
       (header ++ rows.flatten)
         .map(c => c.content.map(inlineText(_, deletion)).mkString)

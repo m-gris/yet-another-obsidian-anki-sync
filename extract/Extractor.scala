@@ -276,14 +276,7 @@ object Extractor:
     // IS the Concept.
     val tableContextTitles = ancestorTitles :+ title
 
-    if marker == Marker.Table then
-      bodyBlocks(where, ownBody(section))
-        // The SAFETY walk, which runs for a table section too and only needs to reach the
-        // refusals — the directions it passes are irrelevant to that and never reach a card.
-        .flatMap(_ =>
-          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, ThreeFieldDirections.Default, TableScope.Both)
-        )
-    else for
+    for
       lowered <- bodyBlocks(where, ownBody(section))
 
       // ── THE RULE, AND THEN THE INVARIANT. TWO BINDINGS, IN THIS ORDER. ────────────────
@@ -433,10 +426,18 @@ object Extractor:
             .fromLowered(key, lowered, CardContext.render(ancestorTitles :+ title))
             .map(c => Vector(c -> RowSource.heading))
 
-        // UNREACHABLE WHILE THE `if marker == Marker.Table` ABOVE STANDS, and compiled only
-        // because an inexhaustive match is a build error here. It is given the same argument
-        // the live call site is given, so a future "simplification" that collapses that `if`
-        // does not silently start emitting contextless table cards.
+        // THE ONE AND ONLY CALL SITE, and a demonstration of this project's own thesis.
+        //
+        // An `if marker == Marker.Table` once stood above this `for`, and this arm carried a
+        // comment calling itself UNREACHABLE. The comment was true when written and false from
+        // `6a494e7` onward: that commit gave `Marker.Table` PARAMETERS, so a bare `Marker.Table`
+        // became the companion OBJECT and the comparison became permanently false. The compiler
+        // forced THIS ARM to be updated in that same diff and said nothing about the `if` eleven
+        // lines above — the match got exhaustiveness, the `if` got silence.
+        //
+        // So the guard was deleted rather than repaired. Repairing it would hardcode
+        // `Default, Both` and retire every `/1way`, `/3way`, `/cells` and `/rows` token the
+        // README advertises, with no test to notice.
         case Marker.Table(directions, scope) =>
           Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, directions, scope)
 
