@@ -1,145 +1,89 @@
 package obsidiananki.extract
 
-/** Composing a card's breadcrumb from where the card lives.
+/** The breadcrumb a card shows above its prompt.
   *
-  * ==What this is for==
+  * ==What is NOT here, and why==
   *
-  * A card under review has to say enough about itself to be answerable. `Surjection /
-  * Definition` does not say it is about FUNCTIONS, and the file it came from — `Functions.md` —
-  * knew that and could not say so: the breadcrumb was built from heading ancestors alone, so a
-  * note two levels deep produced an EMPTY context. Marc's ruling in `docs/REQUIREMENTS.md` item
-  * 11 — folder path, file name and heading path are complementary segments, each optional —
-  * had been applied to the deck and never here.
+  * These tests once drove a `CardContext.compose(shape, source)`, which let a vault-level
+  * setting choose which parts of a card's location the breadcrumb showed. That was deleted on
+  * 2026-08-23, unwired, along with the `ContextShape`/`ContextSource` pair — see the commit for
+  * the argument. The short form: WHAT A BREADCRUMB MAY SHOW IS NOT A PREFERENCE. It is
+  * everything the card's own face does not already give away, which differs per card shape and
+  * is therefore decided by the caller building that card, not by a dial the whole vault shares.
   *
-  * ==The one rule these tests exist to protect==
-  *
-  * A breadcrumb must never print the answer. `CardContext`'s long-standing contract is that the
-  * CALLER passes only what the card's face does not already show, and that rule now covers the
-  * file name as well as the headings: when a marked heading has no ancestor, `Extractor` uses
-  * the FILE NAME as the card's concept, and a breadcrumb repeating it would put the answer
-  * above the question.
-  *
-  * That judgement is the caller's and is not re-derived here — which is exactly why the tests
-  * below drive `compose` with sources that have already been pruned. What they pin is that
-  * `compose` shows what it is given and nothing more.
+  * That contract is stated at the top of `CardContext.scala` and implemented at five call
+  * sites — `Extractor.scala:312, 363, 386, 487` and `Tables.scala:156`. `render` is the shared
+  * half: it joins and escapes, and it decides nothing.
   */
 class CardContextTest extends munit.FunSuite:
 
-  /** `Functions.md`, at the vault root, holding `# Surjection` / `## Definition #flashcard/3way`.
-    *
-    * `headings` is what the THREE-FIELD caller passes: the ancestor chain minus the concept,
-    * because the concept is printed on the card. For this note that leaves nothing — which is
-    * precisely why the card came out with no context at all, and why the file name matters.
-    */
-  private val functions: ContextSource =
-    ContextSource(folders = Vector.empty, fileName = "Functions", headings = Vector.empty)
-
-  /** The same note moved into a folder, and with a heading left over after the concept is
-    * dropped — so that every field has something in it and selection is observable.
-    */
-  private val nested: ContextSource =
-    ContextSource(
-      folders = Vector("Maths", "Analysis"),
-      fileName = "Functions",
-      headings = Vector("Injectivity and friends"),
-    )
-
   private val sep = CardContext.Separator
 
-  test("the default shape is what the breadcrumb showed before it was composable") {
+  test("a chain is joined by the separator, outermost first") {
     assertEquals(
-      CardContext.compose(ContextShape.HeadingsOnly, nested),
-      "Injectivity and friends",
+      CardContext.render(Vector("Maths", "Analysis", "Functions")),
+      s"Maths${sep}Analysis${sep}Functions",
     )
   }
 
-  /** THE CASE THAT PROMPTED ALL THIS. A note whose only ancestor is the concept has an empty
-    * heading chain, so under the old behaviour its card said nothing about where it came from.
-    * Selecting the file name is the whole fix.
+  /** A REAL AND EXPECTED VALUE, not an edge case. A `3way` heading sitting directly under its
+    * note's H1 has nothing above it that the card does not already show, so its chain is empty
+    * once the caller has removed the concept. The note types wrap the field in
+    * `{{#Context}}…{{/Context}}`, so an empty value emits no markup at all.
     */
-  test("a card whose heading chain is empty can still say which file it came from") {
-    assertEquals(CardContext.compose(ContextShape.HeadingsOnly, functions), "")
-    assertEquals(
-      CardContext.compose(ContextShape(folders = false, fileName = true, headings = true), functions),
-      "Functions",
-    )
+  test("an empty chain yields the empty string") {
+    assertEquals(CardContext.render(Vector.empty), "")
   }
 
-  test("segments appear in document order: folders, then the file, then the headings") {
-    assertEquals(
-      CardContext.compose(ContextShape(folders = true, fileName = true, headings = true), nested),
-      s"Maths${sep}Analysis${sep}Functions${sep}Injectivity and friends",
-    )
+  test("a single segment needs no separator") {
+    assertEquals(CardContext.render(Vector("Functions")), "Functions")
   }
 
-  test("each part can be selected on its own") {
-    val only = (f: Boolean, n: Boolean, h: Boolean) =>
-      CardContext.compose(ContextShape(folders = f, fileName = n, headings = h), nested)
-    assertEquals(only(true, false, false), s"Maths${sep}Analysis")
-    assertEquals(only(false, true, false), "Functions")
-    assertEquals(only(false, false, true), "Injectivity and friends")
-    assertEquals(only(true, false, true), s"Maths${sep}Analysis${sep}Injectivity and friends")
-  }
-
-  /** Selecting nothing is a legal composition and means a card with no breadcrumb. The note
-    * types wrap the field in `{{#Context}}`, so an empty value emits no markup at all.
+  /** ESCAPED, BECAUSE THE RESULT IS AN HTML FIELD. Heading text is author text and can hold any
+    * of the six characters `Html.escape` rewrites.
     */
-  test("selecting nothing yields the empty string, which the templates render as nothing") {
-    assertEquals(
-      CardContext.compose(ContextShape(folders = false, fileName = false, headings = false), nested),
-      "",
-    )
-  }
-
-  /** THE ANTI-SPOILER RULE, EXPRESSED THE ONLY WAY IT CAN BE HERE. `compose` cannot know
-    * whether the file name is on the card — only the caller building that card knows. So the
-    * caller hands over a source with the spoiler already gone, and what this pins is that
-    * `compose` adds nothing back: asking for a file name that is not there yields no separator,
-    * no empty segment, and no gap.
-    */
-  test("a source with its spoiler removed composes to nothing extra") {
-    val spoilerRemoved = nested.copy(fileName = "")
-    assertEquals(
-      CardContext.compose(ContextShape(folders = true, fileName = true, headings = true), spoilerRemoved),
-      s"Maths${sep}Analysis${sep}Injectivity and friends",
-    )
-  }
-
-  test("blank and whitespace-only segments contribute nothing rather than an empty step") {
-    val ragged = ContextSource(
-      folders = Vector("Maths", "   ", "Analysis"),
-      fileName = "  Functions  ",
-      headings = Vector("", "Injectivity"),
-    )
-    assertEquals(
-      CardContext.compose(ContextShape(folders = true, fileName = true, headings = true), ragged),
-      s"Maths${sep}Analysis${sep}Functions${sep}Injectivity",
-    )
-  }
-
-  /** ESCAPED, BECAUSE THE RESULT IS AN HTML FIELD. A folder or file name is author text like
-    * any other and can hold the six characters `Html.escape` rewrites; `render` already does
-    * this for headings and `compose` must not find a way around it.
-    */
-  test("every part is escaped, not just the headings") {
-    val hostile =
-      ContextSource(folders = Vector("A & B"), fileName = "<script>", headings = Vector("x > y"))
-    val out =
-      CardContext.compose(ContextShape(folders = true, fileName = true, headings = true), hostile)
-    assert(out.contains("&amp;"), s"a folder name was not escaped: $out")
-    assert(out.contains("&lt;script&gt;"), s"a file name was not escaped: $out")
-    assert(out.contains("&gt;"), s"a heading was not escaped: $out")
+  test("segments are escaped on the way into the field") {
+    val out = CardContext.render(Vector("A & B", "x > y", "<script>"))
+    assert(out.contains("&amp;"), out)
+    assert(out.contains("&gt;"), out)
+    assert(out.contains("&lt;script&gt;"), out)
     assert(!out.contains("<script>"), s"raw markup reached a card field: $out")
   }
 
-  /** `compose` and `render` must not drift: selecting only the headings has to mean exactly
-    * what the four existing call sites already produce, or wiring `compose` in would silently
-    * rewrite every card's context and every content hash with it.
+  /** THE SEPARATOR MUST SURVIVE ESCAPING UNCHANGED, which is why it is U+203A and not `>`.
+    * `Html.escape` would render `>` as `&gt;`, putting an entity between every two segments.
     */
-  test("headings-only composition is identical to what render already produces") {
-    val chain = Vector("Body shapes", "Cranial bones")
+  test("the separator is not itself escaped") {
+    assertEquals(CardContext.render(Vector("a", "b")), s"a${sep}b")
+    assert(!CardContext.render(Vector("a", "b")).contains("&gt;"))
+  }
+
+  /** JOIN-THEN-ESCAPE EQUALS ESCAPE-THEN-JOIN, which is a property of the escaper rather than a
+    * coincidence: `Html.escape` is a per-character map, so it distributes over concatenation,
+    * and the separator contains no character it rewrites. Worth pinning because a future author
+    * reordering those two steps would change every card's Context field, and with it every
+    * note's content hash.
+    */
+  test("escaping distributes over the join") {
+    val parts = Vector("A & B", "C > D")
     assertEquals(
-      CardContext.compose(ContextShape.HeadingsOnly, ContextSource(Vector.empty, "", chain)),
-      CardContext.render(chain),
+      CardContext.render(parts),
+      parts.map(p => CardContext.render(Vector(p))).mkString(sep),
     )
+  }
+
+  /** THE ANTI-SPOILER CONTRACT, EXPRESSED THE ONLY WAY IT CAN BE HERE. `render` cannot know
+    * what is on a card's face; only the caller building that card knows. So the caller hands
+    * over a chain with the spoiler already removed, and what this pins is that `render` adds
+    * nothing back — no trailing separator, no empty step, no gap where the dropped segment was.
+    *
+    * _Rewritten 2026-08-23 from a version that drove the deleted `compose`. The property is
+    * unchanged; only the function carrying it moved._
+    */
+  test("a chain with its spoiler removed renders with no trace of the gap") {
+    val full    = Vector("Body shapes", "Cranial bones", "Frontal")
+    val trimmed = full.dropRight(1)
+    assertEquals(CardContext.render(trimmed), s"Body shapes${sep}Cranial bones")
+    assert(!CardContext.render(trimmed).contains("Frontal"))
+    assert(!CardContext.render(trimmed).endsWith(sep), "a dropped segment left a dangling separator")
   }
