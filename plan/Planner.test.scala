@@ -3,7 +3,7 @@ package obsidiananki.plan
 import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
-import obsidiananki.plan.SectionChain.NoSectionChain
+import obsidiananki.plan.SectionChain.{NoRecall, NoSectionChain}
 
 /** The planner is where "run it twice and the second run changes nothing" is decided, so
   * that law is the centrepiece here. It is provable entirely against the in-memory
@@ -43,7 +43,7 @@ class PlannerTest extends munit.FunSuite:
     CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, testContext)
 
   def sourced(spec: CardSpec, file: String = "Note.md", line: Int = 1): SourcedSpec =
-    SourcedSpec(spec, SourceRef(file, line, SourceKind.Heading), NoSectionChain)
+    SourcedSpec(spec, SourceRef(file, line, SourceKind.Heading), NoSectionChain, NoRecall)
 
   /** Builds the NewNote for a Create. Carries BOTH owned tags, because the identity tag and
     * the content hash must exist from the moment the note does.
@@ -377,8 +377,8 @@ class PlannerTest extends munit.FunSuite:
   test("B10: two sources deriving one key is rejected before anything is written") {
     val k = key("n1", "A", "Definition")
     val scan = scanOf(
-      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Note.md", 10, SourceKind.Heading), NoSectionChain),
-      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Note.md", 40, SourceKind.TablePair), NoSectionChain),
+      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Note.md", 10, SourceKind.Heading), NoSectionChain, NoRecall),
+      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Note.md", 40, SourceKind.TablePair), NoSectionChain, NoRecall),
     )
     Planner.plan(scan, ObservedState(Vector.empty), _ => defaultDeck, newNoteOf) match
       case Left(errors) => assertEquals(errors.size, 1)
@@ -391,8 +391,8 @@ class PlannerTest extends munit.FunSuite:
   test("B10: the error names both sources, their kinds and their positions") {
     val k = key("n1", "Messaging", "Definition")
     val scan = scanOf(
-      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Messaging.md", 10, SourceKind.Heading), NoSectionChain),
-      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Messaging.md", 42, SourceKind.TableRow), NoSectionChain),
+      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Messaging.md", 10, SourceKind.Heading), NoSectionChain, NoRecall),
+      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Messaging.md", 42, SourceKind.TableRow), NoSectionChain, NoRecall),
     )
     val message = Planner.checkUnique(scan.specs).map(_.describe).mkString
     assert(message.contains("messaging / definition"), s"key not named: $message")

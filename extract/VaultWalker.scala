@@ -75,41 +75,6 @@ object DeckShape:
   val FoldersOnly: DeckShape = DeckShape(folders = true, fileName = false, headings = false)
 
 /** Mapping a card's location onto an Anki deck path. */
-/** What a card asks the reviewer to produce, in the RAW form a location segment carries.
-  *
-  * ==Why this exists==
-  *
-  * A card's deck path is printed on the card. Every one of the eight front templates opens
-  * `<div class="context"><span class="deck">{{Deck}}</span>…`, at full body size — so a deck
-  * segment naming the answer prints the answer above the question, exactly as a breadcrumb
-  * would. `CardContext` has defended against that since it was written; the deck never has.
-  *
-  * ==Why RAW text, and why carried rather than read off the CardSpec==
-  *
-  * The answer is on the spec already — `CardSpec.ThreeField.concept` is the very string card 1
-  * blanks. But it arrives there ESCAPED (`Extractor` wraps it in `Html.escape`), while heading
-  * titles reach a deck path raw. `A & B` and `A &amp; B` are not equal, so a comparison against
-  * the spec would silently miss every concept containing one of the six escaped characters —
-  * failing exactly where an author used an ampersand in a heading. This is computed where the
-  * raw text still exists and carried from there.
-  *
-  * ==Empty is the common case and is not a hole==
-  *
-  * Only two card shapes can ever ask for something a location also names: a two-way card, whose
-  * reverse asks for the marked heading, and a three-field card, whose first card asks for the
-  * concept. For a one-way, cloze, sequence or table card the answer is body prose or a table
-  * cell, which no folder, file or heading is, so nothing is at risk and this is empty.
-  */
-opaque type RecallText = Vector[String]
-
-object RecallText:
-  val none: RecallText = Vector.empty
-
-  /** From raw display text. The caller is the one place holding the unescaped strings. */
-  def apply(raw: Vector[String]): RecallText = raw.filter(_.trim.nonEmpty)
-
-  extension (r: RecallText) def values: Vector[String] = r
-
 object Decks:
 
   /** Cut a deck path before the first segment the card asks the reviewer to recall.
@@ -138,13 +103,38 @@ object Decks:
         case -1 => segments
         case i  => segments.take(i)
 
-  /** Compose the deck a card belongs in from the parts its [[DeckShape]] selects.
+  /** A deck path, plus anything the anti-spoiler rule cut off the end of it.
+    *
+    * `clampedAway` IS NOT AN ERROR AND IS NOT EMPTY-MEANS-FINE-EITHER. A clamped card is filed
+    * CORRECTLY, merely more shallowly than the shape asked for — unlike a segment containing
+    * `::`, for which no correct deck exists at all. So this is reported rather than refused.
+    *
+    * But it is REPORTED, and that is the point of carrying it rather than discarding it inside
+    * `compose`: this file already objects, three lines below, that "a deck path silently shorter
+    * than asked for is a card filed somewhere the author did not choose and would have to notice
+    * by eye". Clamping makes exactly that happen, on purpose. The remedy is to say so.
+    */
+  final case class ComposedDeck(path: DeckPath, clampedAway: Vector[String])
+
+  /** Compose the deck a card belongs in from the parts its [[DeckShape]] selects, cut short of
+    * anything the card asks the reviewer to recall.
     *
     * Returns the reason on the left rather than dropping a bad segment, because a deck path
     * silently shorter than asked for is a card filed somewhere the author did not choose and
     * would have to notice by eye.
+    *
+    * THE ROOT IS NEVER CLAMPED, and that is a property of this function rather than of
+    * [[clamp]], which is uniform over whatever it is handed. The root is not derived from the
+    * card's location — it is a constant prefix the author chose, and it is what makes the deck
+    * a deck. Clamping it would leave a card with no deck at all, which is not a shallower
+    * filing but an impossible one.
     */
-  def compose(root: DeckPath, shape: DeckShape, source: DeckSource): Either[String, DeckPath] =
+  def compose(
+      root: DeckPath,
+      shape: DeckShape,
+      source: DeckSource,
+      recall: RecallText,
+  ): Either[String, ComposedDeck] =
     // NAMED ALONGSIDE THE VALUES, so a refusal can say "heading 'A::B'" rather than "'A::B'".
     // A message that does not say which of three sources produced the segment sends the
     // author looking through a folder tree for a string that is in a heading.
@@ -161,11 +151,23 @@ object Decks:
     // CHECKED OVER THE SELECTION AND NOT OVER THE SOURCE. A `::` in a segment the shape does
     // not use cannot reach a deck path, so refusing it would be the tool objecting to
     // something it is not looking at.
+    // CHECKED BEFORE CLAMPING, DELIBERATELY. A `::` in a segment the clamp is about to remove
+    // could not reach a deck path, so checking afterwards would refuse it for one card and
+    // accept it for its sibling under a different marker. A refusal that depends on which
+    // marker a heading carries is one an author cannot predict; keeping the check ahead of the
+    // clamp makes it a property of the LOCATION, which is where the author can see it.
     trimmed.find((_, value) => value.contains("::")) match
       case Some((kind, value)) =>
         Left(s"$kind '$value' contains '::', which is Anki's deck separator")
       case None =>
-        Right(DeckPath(NonEmptyVector.fromVectorUnsafe(root.segments.toVector ++ trimmed.map(_._2))))
+        val selectedSegments = trimmed.map(_._2)
+        val kept             = clamp(selectedSegments, recall)
+        Right(
+          ComposedDeck(
+            DeckPath(NonEmptyVector.fromVectorUnsafe(root.segments.toVector ++ kept)),
+            clampedAway = selectedSegments.drop(kept.length),
+          )
+        )
 
   /** Split a vault-relative file path into the deck levels it could contribute.
     *
@@ -207,7 +209,11 @@ object Decks:
     * NAME for the folder-only arrangement and the reasoning behind it.
     */
   def fromRelativePath(root: DeckPath, relativeFilePath: String): Either[String, DeckPath] =
-    compose(root, DeckShape.FoldersOnly, sourceFor(relativeFilePath, Vector.empty))
+    // NO RECALL TEXT, because there is no card here to spoil. This function answers "where
+    // does this FILE file", for callers that have a path and nothing else; a clamp needs a
+    // card, and passing `none` says so rather than leaving it to be inferred.
+    compose(root, DeckShape.FoldersOnly, sourceFor(relativeFilePath, Vector.empty), RecallText.none)
+      .map(_.path)
 
 /** Turning a whole vault into a scan. */
 object VaultWalker:
@@ -336,10 +342,15 @@ object VaultWalker:
                   // the rest of the vault keeps its orphan inference. It is also the only
                   // shape that can express a refusal caused by ONE heading.
                   note.specs.foreach { s =>
-                    Decks.compose(deckRoot, shape, Decks.sourceFor(file.relativePath, s.sectionTitles)) match
-                      case Right(deck) =>
+                    Decks.compose(
+                      deckRoot,
+                      shape,
+                      Decks.sourceFor(file.relativePath, s.sectionTitles),
+                      s.recall,
+                    ) match
+                      case Right(composed) =>
                         specs += s
-                        decks += s.key -> deck
+                        decks += s.key -> composed.path
                       case Left(reason) =>
                         failures += BuildFailure.KeyKnown(s.key, s.source, s"deck: $reason")
                   }

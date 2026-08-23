@@ -43,6 +43,47 @@ object Extractor:
       case _                         => false
     root.content.exists(go)
 
+  /** WHAT A CARD OF THIS SHAPE ASKS THE REVIEWER TO PRODUCE, in raw display text.
+    *
+    * Only two shapes can ever ask for something a location also names, and this function is
+    * that fact written down once:
+    *
+    *   - a TWO-WAY card, whose reverse blanks `{{Front}}` — the marked heading itself
+    *   - a THREE-FIELD card, whose first card blanks `{{Concept}}` — the nearest ancestor
+    *     heading, or the FILE NAME when the marked heading has no ancestor
+    *
+    * `3way/all` adds a third card blanking the DESCRIPTOR, which is the marked heading. That is
+    * deeper in the location than the concept, so truncating at the concept already removes it —
+    * but it is named here anyway, because the check is by VALUE: a folder sharing the marked
+    * heading's name would otherwise slip through above the concept.
+    *
+    * Everything else asks for body prose, a cloze deletion, a list order, or a table cell. None
+    * of those is a folder, a file or a heading, so nothing is at risk and the answer is empty.
+    * That emptiness is a finding, not a gap.
+    *
+    * RAW, NEVER ESCAPED — see [[RecallText]]. The strings here are the same ones
+    * `CardContext` receives unescaped, taken before `Html.escape` runs.
+    */
+  def recallFromLocation(
+      marker: Marker,
+      title: String,
+      ancestorTitles: Vector[String],
+      fileName: String,
+  ): RecallText =
+    val concept = ancestorTitles.lastOption.getOrElse(fileName)
+    marker match
+      case Marker.TwoField(TwoFieldDirections.Both)       => RecallText(Vector(title))
+      case Marker.ThreeField(ThreeFieldDirections.All)    => RecallText(Vector(concept, title))
+      case Marker.ThreeField(ThreeFieldDirections.Default) => RecallText(Vector(concept))
+      // `ValueOnly` suppresses the concept-recall card entirely, so the concept is never the
+      // answer. Unreachable from a heading today — no heading token selects it — but stated
+      // rather than folded into the catch-all, because folding it in would make the reason
+      // invisible if a heading token ever did.
+      case Marker.ThreeField(ThreeFieldDirections.ValueOnly) => RecallText.none
+      case Marker.TwoField(TwoFieldDirections.Forward)       => RecallText.none
+      case Marker.Cloze | Marker.Sequence                    => RecallText.none
+      case Marker.Table(_, _)                                => RecallText.none
+
   def fromDocument(
       noteId: NoteId,
       fileName: String,
@@ -140,6 +181,12 @@ object Extractor:
                           // recursive descent below passes on, so a card and the cards under
                           // it agree about where they sit.
                           sectionTitles = nextTitles,
+                          // COMPUTED HERE BECAUSE HERE IS WHERE THE RAW TEXT STILL EXISTS.
+                          // `title` and `ancestorTitles` are unescaped at this point; by the
+                          // time they reach a `CardSpec` they have been through `Html.escape`,
+                          // and an escaped concept can never match the heading a deck path is
+                          // built from.
+                          recall = recallFromLocation(marker, title, ancestorTitles, fileName),
                         )
                       }
                     case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))

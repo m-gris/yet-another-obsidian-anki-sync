@@ -21,3 +21,13 @@ package obsidiananki.plan
   */
 object SectionChain:
   val NoSectionChain: Vector[String] = Vector.empty
+
+  /** The counterpart for `recall`: what a hand-built spec asks the reviewer to produce, in a
+    * test that is not about deck paths.
+    *
+    * EMPTY MEANS "ASKS FOR NOTHING A LOCATION NAMES", which is true of most card shapes — a
+    * one-way card, a cloze, a sequence, a table card. So unlike `NoSectionChain` this is not a
+    * sentinel standing in for a real value; it is a real and common value, and the planner
+    * tests below genuinely have it.
+    */
+  val NoRecall: obsidiananki.model.RecallText = obsidiananki.model.RecallText.none

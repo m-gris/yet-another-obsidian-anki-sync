@@ -152,7 +152,7 @@ class VaultWalkerTest extends munit.FunSuite:
     )
 
   def composed(shape: DeckShape, source: DeckSource = replication): String =
-    Decks.compose(root, shape, source).fold(e => fail(s"compose: $e"), _.render)
+    Decks.compose(root, shape, source, RecallText.none).fold(e => fail(s"compose: $e"), _.path.render)
 
   /** THE ONE THAT PROTECTS EXISTING COLLECTIONS. Every card synced before the shape became
     * configurable sits in a folder-derived deck, so the default must place them exactly where
@@ -173,7 +173,7 @@ class VaultWalkerTest extends munit.FunSuite:
     ).foreach { (path, expected) =>
       val source = Decks.sourceFor(path, Vector("H1", "Marked heading"))
       assertEquals(
-        Decks.compose(root, DeckShape.FoldersOnly, source).map(_.render),
+        Decks.compose(root, DeckShape.FoldersOnly, source, RecallText.none).map(_.path.render),
         Right(expected),
         s"the default shape moved '$path'",
       )
@@ -232,7 +232,7 @@ class VaultWalkerTest extends munit.FunSuite:
   test("a heading containing Anki's separator is refused when headings are selected") {
     val bad = replication.copy(headings = Vector("Replication", "A::B"))
     val err = Decks
-      .compose(root, DeckShape(folders = true, fileName = false, headings = true), bad)
+      .compose(root, DeckShape(folders = true, fileName = false, headings = true), bad, RecallText.none)
       .swap
       .getOrElse(fail("a heading containing '::' must be refused"))
     assert(err.contains("A::B"), s"the message must name the offending segment — got: $err")
@@ -246,7 +246,7 @@ class VaultWalkerTest extends munit.FunSuite:
   test("a heading containing Anki's separator is ignored when headings are NOT selected") {
     val bad = replication.copy(headings = Vector("Replication", "A::B"))
     assertEquals(
-      Decks.compose(root, DeckShape.FoldersOnly, bad).map(_.render),
+      Decks.compose(root, DeckShape.FoldersOnly, bad, RecallText.none).map(_.path.render),
       Right("Obsidian::System-Design"),
     )
   }
@@ -254,7 +254,7 @@ class VaultWalkerTest extends munit.FunSuite:
   test("a file name containing Anki's separator is refused when the file name is selected") {
     val bad = replication.copy(fileName = "we::ird")
     assert(
-      Decks.compose(root, DeckShape(folders = true, fileName = true, headings = false), bad).isLeft
+      Decks.compose(root, DeckShape(folders = true, fileName = true, headings = false), bad, RecallText.none).isLeft
     )
   }
 

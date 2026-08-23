@@ -3,7 +3,7 @@ package obsidiananki.plan
 import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
-import obsidiananki.plan.SectionChain.NoSectionChain
+import obsidiananki.plan.SectionChain.{NoRecall, NoSectionChain}
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalacheck.Prop.forAll
 
@@ -92,7 +92,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       spec <- genSpecFor(k)
       line <- Gen.choose(1, 200)
       kind <- Gen.oneOf(SourceKind.Heading, SourceKind.TablePair, SourceKind.TableRow)
-    yield SourcedSpec(spec, SourceRef("Note.md", line, kind), NoSectionChain)
+    yield SourcedSpec(spec, SourceRef("Note.md", line, kind), NoSectionChain, NoRecall)
 
   /** A scan with no duplicate keys — duplicates are a separate, already-tested rejection,
     * and including them here would only exercise that path.

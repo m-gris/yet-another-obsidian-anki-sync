@@ -1161,3 +1161,96 @@ class ExtractorTest extends munit.FunSuite:
     assert(reason.contains("empty body"), s"expected an empty-body refusal, got: $reason")
     assert(!reason.contains("no list"), s"the sequence check ran ahead of B6: $reason")
   }
+
+  // ================== what a card asks for, insofar as its location could name it ====
+
+  /** ==Why only two shapes appear below==
+    *
+    * A card's deck path is printed on its front — every one of the eight templates opens
+    * `<span class="deck">{{Deck}}</span>` — so a deck segment naming the answer prints the
+    * answer above the question. Which shapes are at risk is not a matter of taste: it is read
+    * off the templates. Only a two-way card (whose reverse blanks the marked heading) and a
+    * three-field card (whose first card blanks the concept) ever ask for something a folder,
+    * file or heading also names.
+    *
+    * The empty answers are therefore FINDINGS, not gaps, and are asserted as deliberately as
+    * the non-empty ones. A cloze card asks for a highlighted span; a sequence card for a list
+    * order; a table card for a cell. None of those is a location part.
+    */
+  private def recalls(marker: Marker, title: String, ancestors: Vector[String], file: String) =
+    Extractor.recallFromLocation(marker, title, ancestors, file).values
+
+  test("a one-way card asks for its body, which no location names") {
+    assertEquals(
+      recalls(Marker.TwoField(TwoFieldDirections.Forward), "Definition", Vector("Surjection"), "Functions"),
+      Vector.empty,
+    )
+  }
+
+  /** The reverse card blanks `{{Front}}`, which is the marked heading itself. */
+  test("a two-way card asks for its own heading") {
+    assertEquals(
+      recalls(Marker.TwoField(TwoFieldDirections.Both), "Scaphoid", Vector("Carpals"), "Bones"),
+      Vector("Scaphoid"),
+    )
+  }
+
+  /** Card 1 blanks `{{Concept}}`, and the concept is the NEAREST ANCESTOR heading. */
+  test("a three-field card asks for its concept, taken from the nearest ancestor") {
+    assertEquals(
+      recalls(Marker.ThreeField(ThreeFieldDirections.Default), "Definition", Vector("Maths", "Surjection"), "Functions"),
+      Vector("Surjection"),
+    )
+  }
+
+  /** THE CASE THAT MAKES THE FILE NAME DANGEROUS. With no ancestor heading the concept falls
+    * back to the FILE NAME (`Extractor.scala`'s `ancestorTitles.lastOption.getOrElse(fileName)`),
+    * so the file name becomes the answer — and a deck level naming the file would print it.
+    */
+  test("with no ancestor heading the concept is the file name") {
+    assertEquals(
+      recalls(Marker.ThreeField(ThreeFieldDirections.Default), "Definition", Vector.empty, "Surjection"),
+      Vector("Surjection"),
+    )
+  }
+
+  /** `3way/all` adds a third card blanking the DESCRIPTOR — the marked heading. It sits deeper
+    * than the concept, so truncating at the concept already removes it; it is named anyway
+    * because the check is by VALUE, and a FOLDER sharing that name would sit above the concept
+    * and otherwise slip through.
+    */
+  test("3way/all asks for the descriptor as well as the concept") {
+    val got = recalls(Marker.ThreeField(ThreeFieldDirections.All), "Blood supply", Vector("Scaphoid"), "Bones")
+    assert(got.contains("Scaphoid"), s"the concept is missing: $got")
+    assert(got.contains("Blood supply"), s"the descriptor is missing: $got")
+  }
+
+  test("a cloze card asks for a highlighted span, which no location names") {
+    assertEquals(recalls(Marker.Cloze, "Layers", Vector("Skin"), "Anatomy"), Vector.empty)
+  }
+
+  test("a sequence card asks for a list order, which no location names") {
+    assertEquals(recalls(Marker.Sequence, "Path of blood", Vector("Heart"), "Anatomy"), Vector.empty)
+  }
+
+  /** A table card's concept is a table CELL and its descriptor a COLUMN HEADER. Neither is a
+    * folder, a file or a heading, so a table section's headings are safe at any depth.
+    */
+  test("a table card asks for a cell, which no location names") {
+    assertEquals(
+      recalls(Marker.Table(ThreeFieldDirections.All, TableScope.Both), "Sutures", Vector("Bones"), "Anatomy"),
+      Vector.empty,
+    )
+  }
+
+  /** RAW, NOT ESCAPED, and this is the property that makes the whole check work. The concept
+    * reaches `CardSpec` HTML-escaped, so a comparison against the spec would miss every heading
+    * containing one of the six escaped characters. Taken here, before escaping, it matches the
+    * heading text a deck path is built from.
+    */
+  test("the text is raw, so it can be compared against a deck segment") {
+    assertEquals(
+      recalls(Marker.ThreeField(ThreeFieldDirections.Default), "Definition", Vector("A & B"), "F"),
+      Vector("A & B"),
+    )
+  }

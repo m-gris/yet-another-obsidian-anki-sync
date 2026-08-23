@@ -1,6 +1,6 @@
 package obsidiananki.plan
 
-import obsidiananki.model.{CardKey, CardSpec, NoteId}
+import obsidiananki.model.{CardKey, CardSpec, NoteId, RecallText}
 
 /** Where a spec came from, so that a collision can be reported legibly.
   *
@@ -51,7 +51,17 @@ final case class SourceRef(file: String, line: Int, kind: SourceKind, detail: Op
   * silently empty while production always fills it, and the deck built from that spec would be
   * correct by accident in the test and wrong in the field.
   */
-final case class SourcedSpec(spec: CardSpec, source: SourceRef, sectionTitles: Vector[String]):
+/** `recall` IS WHAT THIS CARD ASKS THE REVIEWER TO PRODUCE, and it rides alongside
+  * `sectionTitles` because the two are consumed together: a deck path is built from the titles
+  * and then cut short of anything in here. See [[RecallText]] for why it is raw text carried
+  * from the extractor rather than read back off `spec`.
+  */
+final case class SourcedSpec(
+    spec: CardSpec,
+    source: SourceRef,
+    sectionTitles: Vector[String],
+    recall: RecallText,
+):
   def key: CardKey = spec.key
 
 /** A card that could not be built.

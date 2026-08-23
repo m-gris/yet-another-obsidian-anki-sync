@@ -3,7 +3,7 @@ package obsidiananki.plan
 import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
-import obsidiananki.plan.SectionChain.NoSectionChain
+import obsidiananki.plan.SectionChain.{NoRecall, NoSectionChain}
 
 /** Moving a note from one Anki note type to another, which is the operation that carries this
   * tool's own note types into a collection that was synced before they existed.
@@ -47,7 +47,7 @@ class RetypingTest extends munit.FunSuite:
   val testContext: String = "Coupling"
 
   def sourced(spec: CardSpec): SourcedSpec =
-    SourcedSpec(spec, SourceRef("Note.md", 1, SourceKind.Heading), NoSectionChain)
+    SourcedSpec(spec, SourceRef("Note.md", 1, SourceKind.Heading), NoSectionChain, NoRecall)
 
   def scanOf(specs: CardSpec*): VaultScan =
     VaultScan.from(specs.toVector.map(sourced), Vector.empty)
