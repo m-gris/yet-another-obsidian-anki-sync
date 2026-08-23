@@ -492,3 +492,98 @@ class VaultWalkerTest extends munit.FunSuite:
     assertEquals(index.scan.specs.size, 1)
     assertEquals(index.scan.failures, Vector.empty, "a correctly marked note was nagged")
   }
+
+  // ================================ the deck may not print the answer ====
+
+  /** ==Why a deck path needs an anti-spoiler rule at all==
+    *
+    * Every one of the eight card front templates opens
+    * `<div class="context"><span class="deck">{{Deck}}</span>…`, at full body size. The deck
+    * path is therefore ON THE CARD, next to the breadcrumb — not sidebar chrome. A deck segment
+    * naming the answer prints the answer above the question.
+    *
+    * `CardContext` has defended against that since it was written, per card shape, at five call
+    * sites. `Decks.compose` never has: it takes a location and a shape, knows nothing about
+    * what any card asks, and its only refusal is on `::`.
+    *
+    * ==Why truncation, and why by value==
+    *
+    * A deck path is prefix-closed, so a middle segment cannot be dropped without re-parenting
+    * the card somewhere that does not exist. And cutting the SLOT the answer came from is not
+    * enough — see the `Surjection.md` test below, which is the case that killed the purely
+    * structural version of this rule.
+    */
+  private def clamped(path: Vector[String], recall: String*): Vector[String] =
+    Decks.clamp(path, RecallText(recall.toVector))
+
+  test("a path holding nothing the card asks for is left whole") {
+    assertEquals(
+      clamped(Vector("Obsidian", "Anatomy", "Skeletal", "Bones of the hand"), "Scaphoid"),
+      Vector("Obsidian", "Anatomy", "Skeletal", "Bones of the hand"),
+    )
+  }
+
+  test("a card that asks for nothing from its location is never clamped") {
+    val path = Vector("Obsidian", "Anatomy", "Scaphoid", "Blood supply")
+    assertEquals(Decks.clamp(path, RecallText.none), path)
+  }
+
+  /** THE CASE THAT KILLED THE STRUCTURAL RULE, and the reason this compares by VALUE.
+    *
+    * `Math/Surjection.md` whose body opens `# Surjection` — the commonest Obsidian convention
+    * there is, and one `dummy-vault` follows in all twelve files. The concept is the HEADING,
+    * so cutting before the headings leaves the FILE NAME behind, carrying the same word. One
+    * string in two slots; removing one slot removes one copy, and the answer is printed anyway.
+    */
+  test("the answer is cut wherever it appears, not merely where it came from") {
+    assertEquals(
+      clamped(Vector("Obsidian", "Math", "Surjection"), "Surjection"),
+      Vector("Obsidian", "Math"),
+    )
+  }
+
+  /** Everything below an offending segment goes with it, because a deck path is prefix-closed:
+    * `A::B::C` means C inside B inside A, so B cannot be removed while keeping C.
+    */
+  test("truncation takes everything below the offending segment") {
+    assertEquals(
+      clamped(Vector("Obsidian", "Math", "Surjection", "Definition"), "Surjection"),
+      Vector("Obsidian", "Math"),
+    )
+  }
+
+  /** A deck segment and a heading are both author text and may differ in case, in spacing, or
+    * in Unicode normal form while naming the same thing. A spoiler that leaks on a capital
+    * letter is worse than no check at all, so the comparison uses the canonical form the card
+    * key itself is built on.
+    */
+  test("the comparison survives case, spacing and normal form") {
+    assertEquals(clamped(Vector("Obsidian", "SCAPHOID"), "Scaphoid"), Vector("Obsidian"))
+    assertEquals(clamped(Vector("Obsidian", "Bones  of   the hand"), "Bones of the hand"), Vector("Obsidian"))
+    // "é" as e + U+0301 in the path, precomposed in the answer.
+    assertEquals(clamped(Vector("Obsidian", "Café"), "Café"), Vector("Obsidian"))
+  }
+
+  /** A two-way card asks for its own heading on the reverse; a three-field card asks for its
+    * concept. A card can therefore carry more than one thing to avoid, and the SHALLOWEST cut
+    * wins — anything else would leave a segment the other card spoils.
+    */
+  test("with several things to avoid, the shallowest cut wins") {
+    assertEquals(
+      clamped(Vector("Obsidian", "Anatomy", "Bones", "Scaphoid"), "Scaphoid", "Bones"),
+      Vector("Obsidian", "Anatomy"),
+    )
+  }
+
+  /** The root is a deck segment like any other and is NOT exempt: a vault whose root deck is
+    * named after what its cards ask would spoil every one of them. Returning an empty path is
+    * the honest answer; the caller decides what to do with it.
+    */
+  test("not even the root is exempt") {
+    assertEquals(clamped(Vector("Obsidian"), "Obsidian"), Vector.empty)
+  }
+
+  test("blank things-to-avoid are ignored rather than matching every blank segment") {
+    val path = Vector("Obsidian", "Anatomy")
+    assertEquals(Decks.clamp(path, RecallText(Vector("", "   "))), path)
+  }

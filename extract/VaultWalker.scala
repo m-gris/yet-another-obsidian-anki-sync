@@ -75,7 +75,68 @@ object DeckShape:
   val FoldersOnly: DeckShape = DeckShape(folders = true, fileName = false, headings = false)
 
 /** Mapping a card's location onto an Anki deck path. */
+/** What a card asks the reviewer to produce, in the RAW form a location segment carries.
+  *
+  * ==Why this exists==
+  *
+  * A card's deck path is printed on the card. Every one of the eight front templates opens
+  * `<div class="context"><span class="deck">{{Deck}}</span>…`, at full body size — so a deck
+  * segment naming the answer prints the answer above the question, exactly as a breadcrumb
+  * would. `CardContext` has defended against that since it was written; the deck never has.
+  *
+  * ==Why RAW text, and why carried rather than read off the CardSpec==
+  *
+  * The answer is on the spec already — `CardSpec.ThreeField.concept` is the very string card 1
+  * blanks. But it arrives there ESCAPED (`Extractor` wraps it in `Html.escape`), while heading
+  * titles reach a deck path raw. `A & B` and `A &amp; B` are not equal, so a comparison against
+  * the spec would silently miss every concept containing one of the six escaped characters —
+  * failing exactly where an author used an ampersand in a heading. This is computed where the
+  * raw text still exists and carried from there.
+  *
+  * ==Empty is the common case and is not a hole==
+  *
+  * Only two card shapes can ever ask for something a location also names: a two-way card, whose
+  * reverse asks for the marked heading, and a three-field card, whose first card asks for the
+  * concept. For a one-way, cloze, sequence or table card the answer is body prose or a table
+  * cell, which no folder, file or heading is, so nothing is at risk and this is empty.
+  */
+opaque type RecallText = Vector[String]
+
+object RecallText:
+  val none: RecallText = Vector.empty
+
+  /** From raw display text. The caller is the one place holding the unescaped strings. */
+  def apply(raw: Vector[String]): RecallText = raw.filter(_.trim.nonEmpty)
+
+  extension (r: RecallText) def values: Vector[String] = r
+
 object Decks:
+
+  /** Cut a deck path before the first segment the card asks the reviewer to recall.
+    *
+    * TRUNCATION, NOT REMOVAL, and that is forced by Anki rather than chosen: a deck path is
+    * prefix-closed — `A::B::C` means C inside B inside A — so a middle segment cannot be
+    * dropped without re-parenting the card somewhere that does not exist. Everything below an
+    * offending segment goes with it.
+    *
+    * BY VALUE, NOT BY POSITION. Cutting the slot the concept came from is not sufficient, and
+    * the case that proves it is the commonest Obsidian convention there is: `Surjection.md`
+    * whose body opens `# Surjection`. The concept is the heading, so cutting before the
+    * headings leaves `…::Math::Surjection` — the file name, carrying the same word, and the
+    * answer is printed anyway. One string, two slots; removing one slot removes one copy.
+    *
+    * COMPARED UNDER [[HeadingSegment]]'s CANONICAL FORM — NFC, trimmed, whitespace-collapsed,
+    * case-folded — because a deck segment and a heading are author text that may differ in all
+    * four ways while naming the same thing, and a spoiler that leaks on a capital letter is
+    * worse than no check at all.
+    */
+  def clamp(segments: Vector[String], recall: RecallText): Vector[String] =
+    val avoid = recall.values.map(TagCodec.canonical).filter(_.nonEmpty).toSet
+    if avoid.isEmpty then segments
+    else
+      segments.indexWhere(s => avoid.contains(TagCodec.canonical(s))) match
+        case -1 => segments
+        case i  => segments.take(i)
 
   /** Compose the deck a card belongs in from the parts its [[DeckShape]] selects.
     *
