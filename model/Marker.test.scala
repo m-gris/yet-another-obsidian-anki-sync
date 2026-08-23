@@ -503,3 +503,30 @@ class MarkerTest extends munit.FunSuite:
       "a marker is documented with a blank description",
     )
   }
+
+  // ------------------------------------------------- what a table scope wants ----
+
+  /** THE THREE SCOPES, AND WHAT EACH ASKS FOR. `extract/Tables.scala` used to decide this with
+    * `scope == TableScope.RowsOnly` and `scope == TableScope.CellsOnly` at three call sites; a
+    * comparison answers "Both" for any case it has not heard of, so a fourth scope would have
+    * silently minted the cell cards it existed to suppress.
+    *
+    * Pinned as a truth table rather than case by case, because the property that matters is
+    * that no scope wants NEITHER — a marker asking for no cards at all.
+    */
+  test("each scope wants exactly the cards its token promises") {
+    assertEquals(
+      TableScope.values.toVector.map(s => (s, s.wantsCellCards, s.wantsRowCards)),
+      Vector(
+        (TableScope.Both, true, true),
+        (TableScope.CellsOnly, true, false),
+        (TableScope.RowsOnly, false, true),
+      ),
+    )
+  }
+
+  test("no scope asks for no cards at all") {
+    TableScope.values.foreach { s =>
+      assert(s.wantsCellCards || s.wantsRowCards, s"$s would produce nothing")
+    }
+  }

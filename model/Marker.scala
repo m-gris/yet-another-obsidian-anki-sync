@@ -67,6 +67,31 @@ enum TableScope:
     */
   case RowsOnly
 
+  /** ==Why a scope answers two questions here rather than being compared at three call sites==
+    *
+    * `extract/Tables.scala` decided all of this with `scope == TableScope.RowsOnly` and
+    * `scope == TableScope.CellsOnly`, in two functions, three times. A comparison answers
+    * "Both" for any case it has not heard of — so a fourth scope would have silently minted the
+    * cell cards it existed to suppress, and silently dropped the row card it existed to demand.
+    * Both directions are the failures `SpecError.TableWithoutDescriptors` and
+    * `SpecError.TableRowsWithoutRows` were added to prevent, arrived at from the inside.
+    *
+    * The parser is no protection: `Marker.fromToken` would be forced to name a new token, then
+    * hand it to three `if`s that ignore it. These two are written longhand, so
+    * `-Wconf:msg=exhaustive:e` makes a fourth scope answer both before anything compiles.
+    *
+    * TWO PREDICATES AND NOT ONE, because they are genuinely independent: `Both` wants each, and
+    * a scope wanting NEITHER would be a marker asking for no cards — which the token grid does
+    * not admit and this pair does not pretend to model.
+    */
+  def wantsCellCards: Boolean = this match
+    case Both | CellsOnly => true
+    case RowsOnly         => false
+
+  def wantsRowCards: Boolean = this match
+    case Both | RowsOnly => true
+    case CellsOnly       => false
+
 /** The marker on a heading, parsed. */
 enum Marker:
   case TwoField(directions: TwoFieldDirections)

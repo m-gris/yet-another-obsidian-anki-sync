@@ -202,7 +202,14 @@ object Tables:
         // would otherwise see a clean run and believe the section synced. The two shapes that
         // reach here are a table whose rows all carry fewer than two usable descriptor cells,
         // and a table with no body rows at all — the message names which.
-        if scope == TableScope.RowsOnly && cards.isEmpty then
+        //
+        // THE PREDICATE IS "WANTS ROW CARDS AND NOTHING ELSE", which is what `/rows` means and
+        // is spelled out rather than compared against that case by name. A scope wanting BOTH
+        // kinds and getting none is deliberately NOT reported here: its cell cards are missing
+        // too, and that is already `TableWithoutDescriptors`' business, said in the vocabulary
+        // of columns rather than of row cards. Only a scope that asked for row cards ALONE has
+        // a complaint this message can answer.
+        if scope.wantsRowCards && !scope.wantsCellCards && cards.isEmpty then
           val what =
             if bodyRows.isEmpty then "the table has no rows yet"
             else
@@ -349,7 +356,7 @@ object Tables:
         // single pair card. The threshold and the construction below read the SAME vector,
         // and `.map` is size-preserving, so the guard and `fromVectorUnsafe` cannot skew.
         val rowCard =
-          if scope == TableScope.CellsOnly then Vector.empty
+          if !scope.wantsRowCards then Vector.empty
           else if pairs.size < 2 then Vector.empty
           else
             val key = base.copy(path = HeadingPath(base.path.segments :+ rowSeg))
@@ -378,7 +385,7 @@ object Tables:
 
         // `rows` DROPS THE CELL CARDS, which is the whole point of asking for it: the cluster
         // is the knowledge and a column at a time tests something the author does not want.
-        if scope == TableScope.RowsOnly then rowCard else pairCards ++ rowCard
+        (if scope.wantsCellCards then pairCards else Vector.empty) ++ rowCard
 
   private def firstTable(section: Section): Option[Table] =
     section.content.collectFirst { case t: Table => t }
