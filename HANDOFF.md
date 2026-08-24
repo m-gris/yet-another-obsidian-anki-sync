@@ -371,7 +371,7 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    unestablished is whether Anki GENERATES the extra cards. The gate is unchanged; only the
    explanation is now true in both directions, and a test pins them apart.
 
-10. **THE `if`-VERSUS-PATTERN-MATCH AUDIT IS SEVEN-ELEVENTHS DONE — FOUR FINDINGS ARE OPEN.**
+10. **THE `if`-VERSUS-PATTERN-MATCH AUDIT IS EIGHT-ELEVENTHS DONE — THREE FINDINGS ARE OPEN.**
     Run by a subagent on 2026-08-23 against one question: where does an `if` or a `case _ =>`
     decide something a sealed sum should have decided? Eleven findings, seven landed —
     `plan/VaultScan.scala`'s `OrphanShelter`, `plan/SyncAction.scala`'s `Disposition` and
@@ -381,10 +381,9 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
     of `IN-FLIGHT.md`** — that is IN-FLIGHT's own numbering, not the audit's, and the entries
     there are the ones to read. In the order they should be taken:
 
-    - **`extract/VaultWalker.scala:264` — THE ONLY ONE THAT CHANGES BEHAVIOUR,** so it needs a
-      RED test first. An `Either` is folded to a `Boolean`, collapsing three states into two,
-      and a file that fails to parse is then told "no heading carries a marker" — a claim the
-      tool never established.
+    - ~~`extract/VaultWalker.scala:264`~~ **DONE 2026-08-24** — the one that changed behaviour.
+      See IN-FLIGHT item 5 for what it needed beyond the match: removing the false message left
+      a file with nothing said about it, so it also took a new `BuildFailure.MarkerUnknowable`.
     - **`anki/NoteTypeInstall.scala:356-380` — four independent drift probes,** where a fifth
       `NoteTypeDrift` case would match none of them and be reported as "nothing needed changing".
     - **`anki/NoteTypeStatus` catch-alls at three sites,** where a fourth status reports clean.

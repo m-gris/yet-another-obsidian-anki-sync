@@ -390,5 +390,7 @@ object Report:
       s"$file: $reason"
     case BuildFailure.MarkedWithoutNoteId(file, reason) =>
       s"$file: $reason"
+    case BuildFailure.MarkerUnknowable(file, reason) =>
+      s"$file: $reason"
     case BuildFailure.FileUnreadable(file, reason) =>
       s"$file: $reason (SCAN IS PARTIAL — no orphans will be computed)"

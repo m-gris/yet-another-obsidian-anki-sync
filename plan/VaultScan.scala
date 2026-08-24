@@ -117,6 +117,31 @@ enum BuildFailure:
     */
   case MarkedWithoutNoteId(file: String, reason: String)
 
+  /** The frontmatter declares `flashcard` intent, the markdown WILL NOT PARSE, and there is no
+    * usable `id` — so nothing else in this file reports anything, and no claim about markers is
+    * available in either direction.
+    *
+    * IT EXISTS TO CLOSE A HOLE OPENED BY REMOVING A LIE, which is the only reason to add a
+    * failure case. Until 2026-08-24 the marker search folded an unparseable document to "no
+    * marker found", so this file was reported as [[MarkerNotOnHeading]] — telling the author
+    * that no heading carried a marker, about a document nothing had read. Deleting that false
+    * report on its own would have left this file SILENT: a note that declared it wanted cards,
+    * produced none, and had nothing said about it anywhere.
+    *
+    * WHY ONLY WHEN THERE IS NO USABLE ID. With an id, the same unparseable markdown is already
+    * reported as [[KeyUnderivableInFile]], which names the parser's own error and shelters the
+    * note's keys. Both messages would send the reader to the same single action — fix the
+    * markdown — so the second would be noise. This fires exactly where nothing else does.
+    *
+    * NON-DEGRADING, for the same reason as [[MarkedWithoutNoteId]]: a file with no id has never
+    * produced an Anki note and owns no observed key, so orphan inference across the rest of the
+    * vault is untouched.
+    *
+    * REACHED BY ORDINARY PROSE. Parsing is strict, so an array index written as `[0]` in a
+    * sentence is enough.
+    */
+  case MarkerUnknowable(file: String, reason: String)
+
   /** Neither key nor note id could be derived — missing or unreadable frontmatter. Observed
     * keys cannot even be GROUPED by file, so no orphan inference is possible at all and the
     * scan as a whole degrades to partial.
@@ -153,11 +178,20 @@ enum BuildFailure:
     // reasonable about.
     case KeyUnderivableInFile(noteId, _, _) => OrphanShelter.WholeNote(noteId)
 
-    // Both of these are files with NO USABLE `id`, and a card's identity begins with the id —
-    // so neither has ever produced an Anki note, and neither owns a key that orphan inference
-    // could wrongly claim. Nothing to shelter.
-    case MarkerNotOnHeading(_, _)  => OrphanShelter.Nothing
+    // NOTHING TO SHELTER — but for two different reasons, and the distinction matters enough
+    // to write out. _The comment here used to say all of these were files with no usable `id`.
+    // That was false of the first one, whose own test gives the file `id: n1`; the conclusion
+    // was right and the stated reason was not. Corrected 2026-08-24._
+
+    // KNOWN TO OWN NOTHING NOW. This file parses, and the tool can see exactly what it
+    // produces: no cards. If it once had marked headings and they were removed, the notes they
+    // made ARE deleted and SHOULD be flagged — sheltering them would hide a real orphan.
+    case MarkerNotOnHeading(_, _) => OrphanShelter.Nothing
+
+    // NEVER OWNED ANYTHING. A card's identity begins with the frontmatter id, so a file without
+    // one has never produced an Anki note and cannot own an observed key.
     case MarkedWithoutNoteId(_, _) => OrphanShelter.Nothing
+    case MarkerUnknowable(_, _)    => OrphanShelter.Nothing
 
     // The one that costs the whole vault. Frontmatter that will not parse might have carried
     // an id we failed to read, so the file may own notes under a name we cannot see.

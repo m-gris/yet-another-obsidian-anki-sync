@@ -3,6 +3,7 @@ package obsidiananki.extract
 import cats.data.NonEmptyVector
 import obsidiananki.anki.DeckPath
 import obsidiananki.model.*
+import obsidiananki.parser.ObsidianSyntax
 import obsidiananki.plan.{BuildFailure, VaultScan}
 
 class VaultWalkerTest extends munit.FunSuite:
@@ -478,6 +479,120 @@ class VaultWalkerTest extends munit.FunSuite:
       Vector("Concept.md"),
     )
     assert(index.scan.canInferOrphans, "this says nothing about what the file owns")
+  }
+
+  // ------------------------- a document nothing could read makes no claim either way ----
+
+  /** THE BODY USED BY THE THREE TESTS BELOW, and it is chosen to make the old lie vivid.
+    *
+    * IT HAS A MARKED HEADING, plainly visible on line 3. It also contains `[0]`, and parsing is
+    * STRICT — see `parser/ObsidianSyntax.test.scala`, "bare bracketed prose FAILS loudly under
+    * strict parsing" — so the document does not parse. Until 2026-08-24 the marker search
+    * folded that failure to "no marker found", and the tool then told the author that NO
+    * HEADING CARRIED A MARKER about a file whose third line carries one.
+    *
+    * AN ARRAY INDEX IN PROSE IS ALL IT TAKES. This is not an exotic input; it is a sentence.
+    */
+  val unparseableBody =
+    "# Concept\n\n## Descriptor #flashcard/cdd/2way\n\nAn array index like [0] in prose.\n"
+
+  /** THE VACUITY GUARD FOR THE THREE TESTS BELOW. Every one of them means nothing unless the
+    * body genuinely fails to parse — if strict parsing were ever relaxed, or if `[0]` stopped
+    * being rejected, they would all pass while testing nothing at all. Asserted here once,
+    * against the parser itself, rather than assumed three times.
+    */
+  test("the fixture body used by the marker-search tests really does fail to parse") {
+    assert(
+      ObsidianSyntax.markupParser.parse(unparseableBody).isLeft,
+      "the body parses now, so the three tests below prove nothing — pick another " +
+        "unparseable body or check whether strict parsing is still on",
+    )
+  }
+
+  /** THE LIE, WITH AN ID. The file declares flashcard intent, carries a marked heading, and
+    * does not parse. It must not be told that no heading carries a marker: nothing read the
+    * document, so the tool is in no position to say either way.
+    *
+    * WHAT IT SHOULD SAY INSTEAD IS ALREADY THERE. With a usable id the unparseable markdown is
+    * reported as `KeyUnderivableInFile`, which names the parser's own error and shelters this
+    * note's keys from orphan inference. That is the one actionable message — fix the markdown —
+    * so a second one would be noise. Its presence is also what proves the parse failed.
+    */
+  test("an unparseable document is NOT reported as having no marked heading") {
+    val index = scan(
+      "Broken.md" -> s"---\nid: n1\ntags:\n  - flashcard\n---\n\n$unparseableBody"
+    )
+    assert(
+      index.scan.failures.exists {
+        case BuildFailure.KeyUnderivableInFile(_, _, _) => true
+        case _                                          => false
+      },
+      s"the markdown parsed after all, so this test proves nothing: ${index.scan.failures}",
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "the tool told the author that no heading carries a marker, about a document it could " +
+        "not read — and whose third line carries one",
+    )
+
+    // AND NOT A SECOND MESSAGE EITHER. `MarkerUnknowable` exists for the file nothing else
+    // names; this file IS named, by the `KeyUnderivableInFile` asserted above. Both would send
+    // the reader to the same single action — repair the markdown — so the second is noise.
+    //
+    // THIS ASSERTION WAS MISSING UNTIL A MUTATION FOUND IT. Widening the guard in
+    // `VaultWalker` from `case None` to `case _`, so that every unparseable intent-declaring
+    // file got a `MarkerUnknowable` whether or not it already had one, left the whole suite
+    // green. The claim was written in a docstring and checked by nothing.
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerUnknowable(f, _) => f },
+      Vector.empty,
+      "a file that already reports its parse error was given a second message saying the " +
+        "same thing",
+    )
+  }
+
+  /** THE HOLE THAT REMOVING THE LIE WOULD OTHERWISE OPEN. Same file, no id.
+    *
+    * Nothing else reports this file: `KeyUnderivableInFile` needs an id to name, and the
+    * no-id branch stays deliberately quiet about documents that did not parse. So deleting the
+    * false message without putting anything in its place would leave a note that declared it
+    * wanted cards, produced none, and had NOTHING said about it — which is worse than a wrong
+    * message, because a wrong message at least gets read.
+    */
+  test("a file that declares flashcard intent and will not parse is reported, not silenced") {
+    val index = scan(
+      "Broken.md" -> s"---\ntags:\n  - flashcard\n---\n\n$unparseableBody"
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerUnknowable(f, _) => f },
+      Vector("Broken.md"),
+      s"nothing was said about a file that asked for cards and got none: ${index.scan.failures}",
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "still claiming no heading carries a marker, now in the no-id branch",
+    )
+    assert(
+      index.scan.canInferOrphans,
+      "a file with no id owns no Anki note, so it must not cost the vault its orphan inference",
+    )
+  }
+
+  /** THE CONTROL THAT STOPS THE FIX BECOMING NOISE. An unparseable file that never mentioned
+    * flashcards and has no id says nothing about itself and owns nothing. It is ordinary prose
+    * — the vast majority of any real vault — and a report that names it is a report nobody
+    * finishes reading. Without this, `MarkerUnknowable` could be emitted for every file that
+    * fails to parse and the two tests above would still pass.
+    */
+  test("an unparseable file that never asked for cards stays quiet") {
+    val index = scan("Prose.md" -> unparseableBody)
+    assertEquals(
+      index.scan.failures,
+      Vector.empty,
+      "ordinary prose with an array index in it was reported",
+    )
   }
 
   /** THE CONTROL. A note whose marker IS on a heading must not be nagged just because the word

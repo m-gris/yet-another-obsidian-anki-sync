@@ -72,11 +72,23 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
    reporting clean over a collection it has just said it cannot classify. `NoteTypeStatus`
    already carries `def asset` and `def name` as abstract members satisfied per case; it should
    carry `def drift` the same way.
-5. **`extract/VaultWalker.scala:264` folds an `Either` to a `Boolean`,** collapsing three states
-   into two — unparseable, parsed-with-no-marker, parsed-with-marker. A file whose frontmatter
-   names `flashcard` and whose markdown does NOT parse is told "no HEADING carries a marker", a
-   claim the tool never established. **THE ONLY REMAINING FIX THAT CHANGES BEHAVIOUR.** Check
-   `dummy-vault` and `hostile-vaults` for a fixture exercising the wrong message before landing.
+5. ~~**`extract/VaultWalker.scala:264` folds an `Either` to a `Boolean`.**~~ **DONE 2026-08-24.**
+   The three states are now the `MarkedHeadings` enum — `Present`, `Absent`, `CouldNotLook` —
+   named for the epistemic state rather than for the parser, because what matters downstream is
+   that no claim about markers may be made in EITHER direction.
+
+   Removing the false message opened a hole, and closing it needed a new failure case. A file
+   with no `id` whose markdown will not parse is reported by nothing else, so deleting the lie
+   alone would have left it silent — worse than a wrong message, which at least gets read. It is
+   now `BuildFailure.MarkerUnknowable`, raised ONLY where nothing else names the file.
+
+   **Neither fixture vault exercised it** — the check IN-FLIGHT asked for — so the tests build
+   the input inline. They did not need anything exotic: parsing is strict, so `[0]` written in a
+   sentence is enough, which means this fired on ordinary prose.
+
+   _A mutation found a missing guard: widening the no-double-report condition from `case None`
+   to `case _` left the whole suite green, so that claim lived in a docstring and was checked by
+   nothing. There is an assertion for it now._
 6. **STYLE, ranked below everything above and possibly not worth doing.**
    `plan/Retyping.scala`'s `isCloze: Boolean` wants a two-case enum — but no failure is nameable,
    since Anki has exactly two kinds. And note-type names as `String`, which the auditor

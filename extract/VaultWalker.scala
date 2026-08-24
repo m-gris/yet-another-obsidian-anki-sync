@@ -264,6 +264,29 @@ object Decks:
     compose(root, DeckShape.FoldersOnly, sourceFor(relativeFilePath, Vector.empty), RecallText.none)
       .map(_.path)
 
+/** Whether any heading in a file carries a `#flashcard` marker — INCLUDING the case where the
+  * question could not be asked.
+  *
+  * IT IS THREE STATES BECAUSE THERE ARE THREE, and a `Boolean` here told a lie. The search used
+  * to be `parsed.fold(_ => false, doc => hasMarkedHeading(doc.content))`, which files "the
+  * markdown would not parse" under the same answer as "the markdown parsed and holds no
+  * marker". The report then said `no HEADING carries a marker` about a document nothing had
+  * ever read — a claim the tool was in no position to make.
+  *
+  * REACHABLE BY ORDINARY PROSE, not by anything exotic. Parsing is strict on purpose, so
+  * `An array index like [0] in prose.` fails to parse; see `parser/ObsidianSyntax.test.scala`,
+  * "bare bracketed prose FAILS loudly under strict parsing". Any note containing an array index
+  * takes this path.
+  *
+  * `CouldNotLook` IS NAMED FOR THE EPISTEMIC STATE, not for the cause. What matters downstream
+  * is not that a parser failed; it is that no claim about markers may be made about this file
+  * in either direction — neither "it has one" nor "it has none".
+  */
+enum MarkedHeadings:
+  case Present
+  case Absent
+  case CouldNotLook
+
 /** Turning a whole vault into a scan. */
 object VaultWalker:
 
@@ -311,7 +334,15 @@ object VaultWalker:
         case Right((keys, split)) =>
           val body   = split.body
           val parsed = ObsidianSyntax.markupParser.parse(body)
-          val marked = parsed.fold(_ => false, doc => Extractor.hasMarkedHeading(doc.content))
+          // THREE STATES, NOT TWO. This was `parsed.fold(_ => false, …)` until 2026-08-24,
+          // which answered "no marker found" for a document that was never read — and the
+          // report then said so to the author. See [[MarkedHeadings]].
+          val marked = parsed.fold(
+            _ => MarkedHeadings.CouldNotLook,
+            doc =>
+              if Extractor.hasMarkedHeading(doc.content) then MarkedHeadings.Present
+              else MarkedHeadings.Absent,
+          )
 
           // INTENT DECLARED IN THE FRONTMATTER AND NOWHERE ELSE. Read off the RAW block rather
           // than the parsed keys, because `Frontmatter.parse` keeps only scalar values and a
@@ -321,36 +352,78 @@ object VaultWalker:
           val frontmatterNamesFlashcard =
             split.frontmatter.exists(_.toLowerCase.contains("flashcard"))
 
-          // THE MARKER WENT TO THE WRONG PLACE. Typing `#flashcard/3way` into a note in the
-          // Obsidian desktop app lifts it out of the text and files it under the frontmatter
-          // `tags` property, leaving a note that LOOKS marked and produces nothing. Reported
-          // wherever it happens — with an id or without one — because the note has said what it
-          // was for and the gap between that and its headings is the whole message.
-          if frontmatterNamesFlashcard && !marked then
-            failures += BuildFailure.MarkerNotOnHeading(
-              file.relativePath,
-              "its frontmatter names 'flashcard' but no HEADING carries a marker, so it makes " +
-                "no cards — a marker goes on the heading itself, as in " +
-                "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian editor " +
-                "files it under the 'tags' property instead, where this tool cannot see it",
-            )
+          val identity = keys.get("id").map(NoteId.fromFrontmatter)
 
-          keys.get("id").map(NoteId.fromFrontmatter) match
+          // WHAT TO SAY TO A FILE THAT DECLARED INTENT AND MADE NO CARDS, which depends on
+          // whether the tool actually LOOKED at its headings. Asked as a match rather than as
+          // `&& !marked`, because the negation silently lumped "did not look" in with "looked
+          // and found nothing" and then reported the second.
+          if frontmatterNamesFlashcard then
+            marked match
+              // It has a marker where a marker belongs. Nothing to say.
+              case MarkedHeadings.Present => ()
+
+              // THE MARKER WENT TO THE WRONG PLACE. Typing `#flashcard/3way` into a note in
+              // the Obsidian desktop app lifts it out of the text and files it under the
+              // frontmatter `tags` property, leaving a note that LOOKS marked and produces
+              // nothing. Reported wherever it happens — with an id or without one — because
+              // the note has said what it was for and the gap between that and its headings is
+              // the whole message.
+              case MarkedHeadings.Absent =>
+                failures += BuildFailure.MarkerNotOnHeading(
+                  file.relativePath,
+                  "its frontmatter names 'flashcard' but no HEADING carries a marker, so it " +
+                    "makes no cards — a marker goes on the heading itself, as in " +
+                    "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian " +
+                    "editor files it under the 'tags' property instead, where this tool " +
+                    "cannot see it",
+                )
+
+              // NOTHING READ THE DOCUMENT, so no claim about its headings may be made in
+              // either direction — and this file may well carry a perfectly good marker.
+              //
+              // REPORTED ONLY WHERE NOTHING ELSE REPORTS IT, which is the no-id case alone: an
+              // unusable id becomes `FileUnreadable` just below, and a usable one makes the
+              // same unparseable markdown a `KeyUnderivableInFile`. Both name the parser's own
+              // error, and both send the reader to the single action that fixes this — repair
+              // the markdown — so a second message beside either would be noise.
+              case MarkedHeadings.CouldNotLook =>
+                identity match
+                  case Some(_) => ()
+                  case None =>
+                    failures += BuildFailure.MarkerUnknowable(
+                      file.relativePath,
+                      "its frontmatter names 'flashcard', but its markdown could not be " +
+                        "parsed — so this tool cannot say whether any heading carries a " +
+                        "marker, and it makes no cards. Parsing is strict: an array index " +
+                        "written as '[0]' in prose is enough to stop it. The file also has " +
+                        "no 'id' in its frontmatter, which its cards would need in order to " +
+                        "be keyed",
+                    )
+
+          identity match
             // NO ID. Whether that is a mistake depends entirely on whether the file asked for
             // cards, and only the parsed document can say. A note with marked headings is an
             // author who will get nothing and must be told; a note without them is ordinary
             // prose — the vast majority of any real vault — and saying anything at all about it
             // is the noise that stops a report being read.
             case None =>
-              parsed match
-                case Right(_) if marked =>
+              marked match
+                case MarkedHeadings.Present =>
                   failures += BuildFailure.MarkedWithoutNoteId(
                     file.relativePath,
                     "has #flashcard heading(s) but no 'id' in its frontmatter, so its cards " +
                       "cannot be keyed — add an id to the frontmatter",
                   )
+
                 // Asked for nothing we can see, and owns nothing, having no id. Stays quiet.
-                case Right(_) | Left(_) => ()
+                case MarkedHeadings.Absent => ()
+
+                // Already reported as `MarkerUnknowable` above IF the frontmatter declared
+                // intent. If it did not, this is ordinary prose that happens not to parse and
+                // owns nothing — the vast majority of any real vault — and naming it is the
+                // noise that stops a report being read.
+                case MarkedHeadings.CouldNotLook => ()
 
             case Some(Left(e)) => unreadable(s"unusable id: $e")
             case Some(Right(noteId)) =>
