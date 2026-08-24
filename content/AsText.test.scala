@@ -3,7 +3,7 @@ package obsidiananki.content
 import laika.ast
 import obsidiananki.extract.{CellDisplay, Frontmatter}
 import obsidiananki.parser.ObsidianSyntax
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 
 /** The CELL projection, and two traps in the inline renderer.
@@ -35,15 +35,11 @@ class AsTextSuite extends munit.FunSuite:
 
   /** The same upward walk `Golden.test.scala:278-287` uses; see `Lower.test.scala`. */
   lazy val vaultRoot: Path =
-    Iterator
-      .iterate(Paths.get(sys.props("user.dir")).toAbsolutePath)(_.getParent)
-      .takeWhile(_ != null)
-      .take(6)
-      .flatMap(dir =>
-        Iterator(dir.resolve("dummy-vault"), dir.resolve("obsidian-anki-custom-sync/dummy-vault"))
-      )
-      .find(Files.isDirectory(_))
-      .getOrElse(fail("dummy-vault not found from " + sys.props("user.dir")))
+    // ANCHORED ON THE COMPILED CLASSES, NOT ON `user.dir` — see `TestSources`. A walk up from
+    // the working directory resolved the fixture vault belonging to the repository this tool
+    // was EXTRACTED FROM, so this test read a stale vault. It passed only because the two
+    // copies were still identical.
+    obsidiananki.TestSources.dir(getClass, "dummy-vault")
 
   def parse(markdown: String): ast.RootElement =
     ObsidianSyntax.markupParser

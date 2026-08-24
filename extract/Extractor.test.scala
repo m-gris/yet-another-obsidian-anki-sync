@@ -1051,7 +1051,11 @@ class ExtractorTest extends munit.FunSuite:
       Vector(
         "Title"   -> "Path of blood",
         "Text"    -> "<p>From the body to the lungs:</p><ul><li>superior vena cava</li><li>right atrium</li></ul>",
-        "Context" -> "B",
+        // THE FILE NAME LEADS THE BREADCRUMB SINCE 2026-08-24. `extract` defaults `fileName` to
+        // "Note", and a breadcrumb is now the WHOLE location minus what the card carries as a
+        // field — the marked heading is the `Title` here, so it is excluded and everything
+        // above it kept. This read "B" while the breadcrumb was heading-ancestors only.
+        "Context" -> "Note › B",
       ),
     )
   }

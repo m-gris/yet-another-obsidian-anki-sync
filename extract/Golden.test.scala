@@ -4,7 +4,7 @@ import cats.data.NonEmptyVector
 import obsidiananki.anki.DeckPath
 import obsidiananki.model.*
 import obsidiananki.plan.*
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 
 /** A GOLDEN PIN of everything the fixture vault turns into today, so that a change to how
@@ -276,15 +276,11 @@ class GoldenTest extends munit.FunSuite:
     * duplication is forced by this slice's file list, not chosen.
     */
   lazy val vaultRoot: Path =
-    Iterator
-      .iterate(Paths.get(sys.props("user.dir")).toAbsolutePath)(_.getParent)
-      .takeWhile(_ != null)
-      .take(6)
-      .flatMap(dir =>
-        Iterator(dir.resolve("dummy-vault"), dir.resolve("obsidian-anki-custom-sync/dummy-vault"))
-      )
-      .find(Files.isDirectory(_))
-      .getOrElse(fail("dummy-vault not found from " + sys.props("user.dir")))
+    // ANCHORED ON THE COMPILED CLASSES, NOT ON `user.dir` — see `TestSources`. A walk up from
+    // the working directory resolved the fixture vault belonging to the repository this tool
+    // was EXTRACTED FROM, so this test read a stale vault. It passed only because the two
+    // copies were still identical.
+    obsidiananki.TestSources.dir(getClass, "dummy-vault")
 
   /** Derived from `vaultRoot` rather than walked for separately: one walk, so there is only
     * one thing to keep right.
@@ -664,18 +660,27 @@ class GoldenTest extends munit.FunSuite:
     }
   }
 
-  /** FIVE EMPTY, FIFTY NOT. The five are the `#flashcard/3way` headings sitting DIRECTLY under
-    * their note's H1 — `System-Design/Consistency.md`'s `## Definition` and
-    * `## Why it is a spectrum`, and all three of `System-Design/Linearizability.md`'s. For a
-    * three-field card the breadcrumb stops short of the last ancestor, because that ancestor
-    * IS the Concept the card asks the reviewer to recall; with only one ancestor there is
-    * nothing left to show.
+  /** NONE EMPTY, FIFTY-FIVE NOT — and the five that used to be empty are why the breadcrumb
+    * was changed.
     *
-    * BOTH NUMBERS ARE ASSERTED, not just the total. Fifty alone would pass if the empty ones
-    * grew; five alone would pass if extraction stopped emitting cards. If either genuinely
-    * moves, change the literal BY HAND and say here which fixture caused it.
+    * _Was FIVE EMPTY, FIFTY NOT until 2026-08-24, and changed BY HAND after reading the delta._
+    * The five were the `#flashcard/3way` headings sitting DIRECTLY under their note's H1 —
+    * `System-Design/Consistency.md`'s `## Definition` and `## Why it is a spectrum`, and all
+    * three of `System-Design/Linearizability.md`'s. For a three-field card the breadcrumb stops
+    * short of the last ancestor, because that ancestor IS the Concept the card asks the
+    * reviewer to recall; with only one ancestor there was nothing left to show, so the field
+    * rendered empty and the card said nothing about where it came from.
+    *
+    * The breadcrumb is now the WHOLE LOCATION minus what the card carries as a field, so those
+    * five say `System-Design` — the folder — where they used to say nothing. `Consistency` is
+    * still absent from them, correctly: it is the Concept, and it is removed BY VALUE, which
+    * takes out both the H1 and the identically-named file stem.
+    *
+    * BOTH NUMBERS ARE ASSERTED, not just the total. Fifty-five alone would pass if empties
+    * reappeared; zero alone would pass if extraction stopped emitting cards. If either
+    * genuinely moves, change the literal BY HAND and say here which fixture caused it.
     */
-  test("exactly five cards have an empty Context, and they are the five under an H1") {
+  test("no card has an empty Context, and all fifty-five carry a real breadcrumb") {
     // Looked up BY NAME and FAILING when absent, never defaulting. A lookup with a fallback
     // would report "empty" for a card that has no Context field at all, and those are different
     // failures that must not collapse into one. (Positional until 2026-08-22 — see the test
@@ -688,18 +693,29 @@ class GoldenTest extends munit.FunSuite:
     }
     val (empty, nonEmpty) = contexts.partition(_._2.isEmpty)
 
-    assertEquals(empty.size, 5, s"expected 5 empty-context cards, got: ${empty.map(_._1)}")
-    assertEquals(nonEmpty.size, 50, "the number of cards carrying a real breadcrumb has changed")
+    assertEquals(empty.size, 0, s"a card lost its breadcrumb: ${empty.map(_._1)}")
+    assertEquals(nonEmpty.size, 55, "the number of cards carrying a real breadcrumb has changed")
 
+    // THE FIVE THAT USED TO SAY NOTHING, NAMED AND ASSERTED POSITIVELY. This listed them as the
+    // EMPTY ones until 2026-08-24; asserting they are now empty-free would be redundant with the
+    // count above, so it asserts what they SAY instead — which is the property the change was
+    // made for, and one a regeneration cannot quietly satisfy.
+    //
+    // `System-Design` is the folder. Their file stem and their H1 are both absent and both for
+    // the same reason: each note's H1 restates its file name, that H1 is the Concept, and the
+    // Concept is removed BY VALUE — so naming it once takes out both copies.
+    val theFiveUnderAnH1 = Vector(
+      "src::fix-consistency::consistency/definition",
+      "src::fix-consistency::consistency/why%20it%20is%20a%20spectrum",
+      "src::fix-linearizability::linearizability/definition",
+      "src::fix-linearizability::linearizability/cost",
+      "src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency",
+    )
     assertEquals(
-      empty.map(_._1),
-      Vector(
-        "src::fix-consistency::consistency/definition",
-        "src::fix-consistency::consistency/why%20it%20is%20a%20spectrum",
-        "src::fix-linearizability::linearizability/definition",
-        "src::fix-linearizability::linearizability/cost",
-        "src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency",
+      theFiveUnderAnH1.map(tag =>
+        tag -> contexts.collectFirst { case (t, v) if t == tag => v }.getOrElse(fail(s"no card $tag"))
       ),
+      theFiveUnderAnH1.map(_ -> "System-Design"),
     )
   }
 
@@ -725,6 +741,9 @@ class GoldenTest extends munit.FunSuite:
     assertEquals(card.fields.toMap.get(escape("Concept")), Some("Frontal"))
     assertEquals(
       card.fields.toMap.get(escape(Marker.ContextField)),
-      Some("Body shapes › Cranial bones and their sutures"),
+      // GAINED ITS FOLDER on 2026-08-24, when the breadcrumb became the whole location rather
+      // than the heading ancestors alone. `Body-Shapes` the file stem is absent because the H1
+      // `# Body shapes` says the same word later in the chain and the later one wins.
+      Some("Anatomy › Body shapes › Cranial bones and their sutures"),
     )
   }

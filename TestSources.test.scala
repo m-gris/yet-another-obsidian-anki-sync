@@ -59,6 +59,20 @@ object TestSources:
         sys.error(s"no project.scala above $start — where is this repository's root?")
       )
 
+  /** A directory inside this repository, located from the caller's own compiled position.
+    *
+    * The fixture vault is reached through here for the same reason the source files are: a walk
+    * up from `user.dir` found `backend-interview-prep/obsidian-anki-custom-sync/dummy-vault`,
+    * so the GOLDEN TEST — this project's acceptance artifact — was comparing a stale vault's
+    * cards against a stale golden. Both copies were identical at the time, so it passed; a
+    * change to either would have gone unnoticed in one direction and unexplainable in the other.
+    */
+  def dir(owner: Class[?], relativePath: String): java.nio.file.Path =
+    val d = repoRoot(owner).resolve(relativePath)
+    if !java.nio.file.Files.isDirectory(d) then
+      sys.error(s"$relativePath is not a directory under ${repoRoot(owner)}")
+    d
+
   /** One of this repository's source files, read as text.
     *
     * FAILS LOUDLY RATHER THAN RETURNING EMPTY, because every caller compares what it finds

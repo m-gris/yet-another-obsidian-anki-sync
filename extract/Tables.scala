@@ -152,7 +152,10 @@ object Tables:
       scope: TableScope,
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
     val where   = key.path.render
-    val context = CardContext.render(contextTitles)
+    // ALREADY COMPOSED BY THE CALLER, which is the one that knows which fields this card
+    // carries — `Extractor.buildSpecs` hands over the location with nothing excluded, because a
+    // table card's fields come from CELLS rather than from where the note sits.
+    val context = CardContext.compose(contextTitles, Vector.empty)
     firstTable(section).toRight(SpecError.TableWithoutTable(where)).flatMap { table =>
       val headerRow = rowCells(table.head.content).headOption.getOrElse(Vector.empty)
       val bodyRows  = rowCells(table.body.content)

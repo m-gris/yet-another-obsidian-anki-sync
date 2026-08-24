@@ -1,6 +1,7 @@
 package obsidiananki.extract
 
 import obsidiananki.content as C
+import obsidiananki.model.TagCodec
 
 /** The breadcrumb a card shows above its prompt: where in the document this card came from.
   *
@@ -57,6 +58,84 @@ import obsidiananki.content as C
   * escapes. See `Extractor.buildSpecs` and `Tables.fromSection` for the six decisions.
   */
 object CardContext:
+
+  /** THE BREADCRUMB: everywhere this card came from, minus everything it already says.
+    *
+    * ==Why it takes the whole location and not just the headings==
+    *
+    * Because the heading chain is often empty and the file name is often the missing word. A
+    * note at `System Design Pattern.md` holding `# 3 Components` has NO ancestor heading, so a
+    * breadcrumb built from headings alone renders nothing, and the card asks "3 Components"
+    * with nothing on it saying three components OF WHAT. The file already knew; the tool threw
+    * it away in the act of extraction. Same for a note filed three folders deep whose subject
+    * is the folder.
+    *
+    * ==What `shownOnCard` is, and why it is not "the answer"==
+    *
+    * The strings this note's cards already carry AS FIELDS — the concept and descriptor of a
+    * `cdd` card, the front of a two-field one, the title of a sequence. Not "the answer",
+    * because either side disqualifies a segment for a different reason and both disqualify it:
+    * a segment on the QUESTION side is redundant, and a segment on the ANSWER side is a
+    * spoiler. One list covers both, and the caller building the card is the only thing that
+    * knows which fields it is filling.
+    *
+    * ==Removal, not truncation, and this is where a breadcrumb differs from a deck path==
+    *
+    * A deck path is prefix-closed, so `Decks.clamp` can only cut and lose everything below the
+    * offending segment. A breadcrumb is just a list, so a middle element can be dropped and its
+    * neighbours kept. `Anatomy/Scaphoid.md` under a `cdd` marker keeps `Anatomy` while dropping
+    * `Scaphoid`; the deck, for the same card, has to stop at `Anatomy`.
+    *
+    * MATCHED UNDER THE CANONICAL FORM, so a folder and a heading that differ only in case,
+    * spacing or Unicode normal form are still recognised as the same word. A breadcrumb that
+    * repeated the answer because of a capital letter would be worse than none.
+    */
+  def compose(location: Vector[String], shownOnCard: Vector[String]): String =
+    val hide = shownOnCard.map(TagCodec.canonical).filter(_.nonEmpty).toSet
+    // TRIMMED AND EMPTIES DROPPED, for the same reason `Decks.compose` does it: a segment that
+    // is blank, or that the caller emptied to keep it off the card, must cost nothing — not a
+    // separator, not a gap where it used to be.
+    val kept = location
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .filterNot(seg => hide.contains(TagCodec.canonical(seg)))
+    render(withoutRepeats(kept))
+
+  /** Drop a segment that a LATER segment says again.
+    *
+    * ==Why a breadcrumb de-duplicates where a deck path must not==
+    *
+    * Because they are different kinds of thing. A deck path is a FILING LOCATION and must stay
+    * an unambiguous address, so `Decks.compose` keeps every repeat and says so in its own
+    * docstring: "a rule that dropped a repeat would also drop a heading that genuinely repeats
+    * its parent, and the author could not tell which had happened". A breadcrumb is a SENTENCE
+    * read while answering, and `Anatomy › Bones › Bones › Cells that remodel bone` tells the
+    * reviewer nothing that `Anatomy › Bones › …` does not. Repetition there is noise, not
+    * information.
+    *
+    * ==Why it is needed at all, and only on some card shapes==
+    *
+    * Because the commonest Obsidian convention is a file whose H1 restates its own name —
+    * `Bones.md` opening `# Bones`, which `dummy-vault` does in all twelve files. On a `cdd`
+    * card the concept filter already removes both copies by value, since the H1 is a FIELD; on
+    * a one-way, cloze, sequence or table card it is not a field, and both copies survive.
+    *
+    * THE LATER ONE WINS. A file stem is a filesystem artifact and is conventionally the
+    * kebab- or snake-cased form of the title inside it; the heading is the author's prose.
+    * Keeping the later occurrence renders `Body-Shapes.md` + `# Body shapes` as `Body shapes`
+    * rather than `Body-Shapes`.
+    *
+    * COMPARED MORE LOOSELY THAN IDENTITY EVER IS, and that separation is deliberate.
+    * `TagCodec.canonical` is what card KEYS are built on and must never move; this adds
+    * hyphens and underscores as word separators on top of it, purely so that a kebab-cased
+    * stem is recognised as the same word as its spaced title. Nothing here can reach a key.
+    */
+  private def withoutRepeats(segments: Vector[String]): Vector[String] =
+    def word(s: String): String = TagCodec.canonical(s.replace('-', ' ').replace('_', ' '))
+    val forms = segments.map(word)
+    segments.zipWithIndex.collect {
+      case (seg, i) if !forms.drop(i + 1).contains(forms(i)) => seg
+    }
 
   /** `" › "` — space, U+203A SINGLE RIGHT-POINTING ANGLE QUOTATION MARK, space.
     *

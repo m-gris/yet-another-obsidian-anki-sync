@@ -104,6 +104,11 @@ object Extractor:
     // would miss and the check would silently never fire.
     val listIndent = ListIndent.scan(body, bodyFirstLine)
 
+    // THE FOLDERS THIS NOTE SITS IN, for the breadcrumb. Derived here rather than passed in
+    // because `filePath` is already a parameter and splitting it twice would be two answers to
+    // one question — `Decks.sourceFor` does the same split for the deck path.
+    val folders = filePath.split('/').toVector.dropRight(1)
+
     /** @param ancestors heading texts from the outermost down to this section's parent,
       *                  already marker-stripped and canonicalised into segments
       * @param ancestorTitles the same chain as DISPLAY text, for the concept — a concept is
@@ -170,7 +175,7 @@ object Extractor:
                     )
                   failures += BuildFailure.KeyKnown(key, ref, describe(why))
                 else
-                  buildSpecs(key, marker, title, ancestorTitles, section, fileName) match
+                  buildSpecs(key, marker, title, ancestorTitles, section, fileName, folders) match
                     case Right(built) => built.foreach { case (spec, src) =>
                         specs += SourcedSpec(
                           spec,
@@ -237,8 +242,20 @@ object Extractor:
       ancestorTitles: Vector[String],
       section: Section,
       fileName: String,
+      folders: Vector[String],
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
     val where = key.path.render
+
+    // EVERYWHERE THIS CARD CAME FROM, in the order the parts nest. Each arm below hands this
+    // to `CardContext.compose` together with the strings ITS OWN card already carries as
+    // fields, and compose removes them — a segment on the question side being redundant and
+    // one on the answer side being a spoiler.
+    //
+    // THE FILE NAME IS IN HERE, which it never used to be, and that is the whole fix: a note
+    // whose marked heading is its H1 has no ancestor, so a breadcrumb built from headings
+    // alone rendered EMPTY. `System Design Pattern.md` holding `# 3 Components` produced a
+    // card asking "3 Components" with nothing on it saying three components OF WHAT.
+    val location = folders ++ Vector(fileName) ++ ancestorTitles :+ title
     // A table section's content IS the table; it has no prose body of its own, so the
     // empty-body rule must not be applied to it.
     //
@@ -274,7 +291,10 @@ object Extractor:
     // already on the card and the whole chain INCLUDING this heading survives. Contrast the
     // heading-derived three-field arm below, which must drop one segment because that segment
     // IS the Concept.
-    val tableContextTitles = ancestorTitles :+ title
+    // THE WHOLE LOCATION, WITH NOTHING EXCLUDED. A table card's fields are a row cell and a
+    // column header — never a folder, a file name or a heading — so no location segment is on
+    // the card and every one of them is context worth having.
+    val tableContextTitles = location
 
     for
       lowered <- bodyBlocks(where, ownBody(section))
@@ -340,8 +360,10 @@ object Extractor:
           // ESCAPED HERE, IN THE ARGUMENT POSITION, AND NOWHERE UPSTREAM. See the note below
           // the `ThreeField` arm — rebinding `title` is the highest-consequence mistake
           // available in this function.
-          // CONTEXT IS THE WHOLE ANCESTOR CHAIN. This card's face is the heading itself, so
-          // every ancestor above it is absent from the card and none of them is the answer.
+          // THE FRONT IS THE MARKED HEADING, and it is the only location segment this card
+          // carries as a field. Folders, the file name and every ancestor above it are context
+          // the card does not otherwise have — and for a note whose marked heading is its H1,
+          // the file name is the ONLY thing naming the subject.
           Right(
             Vector(
               CardSpec.TwoField(
@@ -349,7 +371,7 @@ object Extractor:
                 C.Html.escape(title).render,
                 body,
                 directions,
-                CardContext.render(ancestorTitles),
+                CardContext.compose(location, Vector(title)),
               ) -> RowSource.heading
             )
           )
@@ -400,7 +422,12 @@ object Extractor:
                 C.Html.escape(title).render,
                 body,
                 directions,
-                CardContext.render(ancestorTitles.dropRight(1)),
+                // TWO FIELDS CARRY LOCATION SEGMENTS HERE — the concept, which is the nearest
+                // ancestor heading or the FILE NAME when there is none, and the descriptor,
+                // which is the marked heading. Both are excluded by value rather than by
+                // position, which is what makes the file-name case work: when the concept came
+                // from the file name, naming it removes it wherever it sits.
+                CardContext.compose(location, Vector(concept, title)),
                 // EMPTY, AND THAT IS NOT AN OMISSION. The label names what KIND of thing the
                 // concept is, and only a table has anywhere to say it: its first column's header.
                 // Here the concept is an ancestor HEADING, which names the thing itself and never
@@ -423,7 +450,9 @@ object Extractor:
         // the heading for cloze alone — costs the largest context gain in the design.
         case Marker.Cloze =>
           Cloze
-            .fromLowered(key, lowered, CardContext.render(ancestorTitles :+ title))
+            // NOTHING EXCLUDED. A cloze note's fields are its text and its extra — the marked
+            // heading is not among them, so the whole location survives, this heading included.
+            .fromLowered(key, lowered, CardContext.compose(location, Vector.empty))
             .map(c => Vector(c -> RowSource.heading))
 
         // THE ONE AND ONLY CALL SITE, and a demonstration of this project's own thesis.
@@ -532,7 +561,9 @@ object Extractor:
                   key,
                   C.Html.escape(title).render,
                   body,
-                  CardContext.render(ancestorTitles),
+                  // The marked heading IS a field here — the template renders `{{Title}}` above
+                  // the list — so it is excluded and everything above it kept.
+                  CardContext.compose(location, Vector(title)),
                 ) -> RowSource.heading
               )
             )

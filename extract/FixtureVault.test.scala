@@ -4,7 +4,7 @@ import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
 import obsidiananki.plan.*
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 
 /** The planner, driven by specs from the REAL FIXTURE VAULT through the REAL extraction path.
@@ -26,12 +26,10 @@ class FixtureVaultTest extends munit.FunSuite:
     // Checks both candidates at every level, because the tests may be invoked from the
     // project directory OR from a sibling — depending on cwd would make this pass or fail
     // for reasons that have nothing to do with the code.
-    Iterator
-      .iterate(Paths.get(sys.props("user.dir")).toAbsolutePath)(_.getParent)
-      .takeWhile(_ != null)
-      .take(6)
-      .flatMap(dir => Iterator(dir.resolve("dummy-vault"), dir.resolve("obsidian-anki-custom-sync/dummy-vault")))
-      .find(Files.isDirectory(_))
+    // ANCHORED ON THE COMPILED CLASSES, NOT ON `user.dir` — see `TestSources`. A walk up from
+    // the working directory resolved the fixture vault belonging to the repository this tool
+    // was EXTRACTED FROM. It passed only because the two copies were still identical.
+    Some(obsidiananki.TestSources.dir(getClass, "dummy-vault"))
 
   def loadVault(exclude: String => Boolean = _ => false): Vector[VaultFile] =
     val root = vaultRoot.getOrElse(fail("dummy-vault not found from " + sys.props("user.dir")))
