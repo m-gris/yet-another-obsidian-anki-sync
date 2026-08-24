@@ -205,3 +205,27 @@ looking like it did not — which was the entire yield of the audit. The demonst
 repository's own history: `6a494e7` gave `Marker.Table` parameters, the compiler forced the MATCH
 arm updated in that same diff, and said nothing about the `if` eleven lines above, which flipped
 to always-false and stayed that way for four days.
+
+## OPEN — found after the numbered sections above were written
+
+_Appended rather than filed into the section it belongs to, because `HANDOFF.md` cross-references
+the items above BY NUMBER ("items 7–11 of IN-FLIGHT.md") and renumbering would silently break
+those references._
+
+17. **DECISION — the final summary line counts actions the run will refuse.** Measured live on
+    2026-08-24, with `--dry-run --migrate-note-types` over Marc's vault. The report said, in
+    order: `1 move to another note type`, `1 update`, then a block correctly headed
+    `OF THE MOVES COUNTED ABOVE, 1 WILL NOT HAPPEN` — and then closed on
+    `result: OK — dry run; 2 actions are outstanding`.
+
+    Only ONE of those two will be applied. The refusal is disclosed three lines earlier, so
+    nothing is hidden; what is wrong is that the LAST line, which is the one line every run
+    prints and the one a person actually reads, still counts the refused move as work. This is
+    the same shape as the dry-run defect fixed the same day — a summary that does not describe
+    what the run will do — arriving one line lower.
+
+    Candidates, not a prescription: count only what will be applied and name the refused ones
+    separately; or keep the total and qualify the noun so the number stops reading as a promise.
+    **Marc's call — it is the wording of the line he reads most.** The counting lives in
+    `cli/Main.scala`'s `describeSyncOutcome` / `verdict`, and `RetypeVerdict` already carries
+    exactly the distinction the line needs.
