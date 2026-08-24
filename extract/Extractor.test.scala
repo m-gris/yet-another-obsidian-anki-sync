@@ -1345,3 +1345,53 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(gate("#flashcard/table"), Set(""), "the default must leave the gate empty")
     assert(gate("#flashcard/table/3way").forall(_.nonEmpty), "/3way did not reach the card")
   }
+
+  // ============ cdd/1way: the card that could not be asked for ====
+
+  /** `System Design Pattern.md` holding `# 3 Components`, which is the note that exposed the
+    * vocabulary bug. The author wanted the concept-descriptor shape asked ONE way; the only
+    * token meaning "one" was `#flashcard/1way`, which is a different SHAPE with no concept
+    * field — so the card read "3 Components" with an empty breadcrumb and no way to know three
+    * components OF WHAT.
+    *
+    * With the marker on the H1 there is no ancestor heading, so the concept falls back to the
+    * FILE NAME. That is the whole point: the file already knew the answer.
+    */
+  private def sdp(marker: String) =
+    extract(s"# 3 Components $marker\n- A Problem\n- A Solution\n- A Cost\n",
+            id = "sdp", fileName = "System Design Pattern")
+
+  test("cdd/1way puts the file name on the card as the concept") {
+    val specs = sdp("#flashcard/cdd/1way").specs
+    assertEquals(specs.size, 1)
+    val fields = specs.head.spec.fields.toMap
+    assertEquals(fields("Concept"), "System Design Pattern")
+    assertEquals(fields("Descriptor"), "3 Components")
+    assert(fields("Description").contains("A Problem"), fields("Description"))
+  }
+
+  /** THE GATE THAT MAKES IT ONE CARD. `ValueOnly` is INVERTED — a non-empty value suppresses
+    * the concept-recall card — so that a note predating the field renders as it always did.
+    * `cdd/2way` must leave it empty; `cdd/1way` must fill it.
+    */
+  test("cdd/1way sets the gate that suppresses the second direction, and cdd/2way does not") {
+    def gate(marker: String) = sdp(marker).specs.head.spec.fields.toMap.apply(Marker.ValueOnlyField)
+    assert(gate("#flashcard/cdd/1way").nonEmpty, "cdd/1way did not suppress the concept card")
+    assertEquals(gate("#flashcard/cdd/2way"), "", "cdd/2way must leave the gate empty")
+  }
+
+  /** THE PROPERTY THAT MAKES THE RENAME FREE. Rewriting a marker must change nothing a sync can
+    * see — same key, same note type, same fields, therefore the same content hash and no
+    * update. Asserted on the whole spec rather than field by field, so nothing can differ
+    * quietly.
+    */
+  test("rewriting 3way as cdd/2way changes nothing about the cards") {
+    assertEquals(
+      sdp("#flashcard/3way").specs.map(s => (s.key, s.spec)),
+      sdp("#flashcard/cdd/2way").specs.map(s => (s.key, s.spec)),
+    )
+    assertEquals(
+      sdp("#flashcard/3way/all").specs.map(s => (s.key, s.spec)),
+      sdp("#flashcard/cdd/3way").specs.map(s => (s.key, s.spec)),
+    )
+  }

@@ -114,14 +114,34 @@ file. The marker is stripped before the heading is shown on a card.
 |---|---|---|
 | `#flashcard/1way` | heading → body | 1 |
 | `#flashcard/2way` | heading ⇄ body | 2 |
-| `#flashcard/3way` | concept–descriptor–description | 2 |
-| `#flashcard/3way/all` | the same, plus recall the descriptor | 3 |
+| `#flashcard/cdd/1way` | concept–descriptor–description | 1 |
+| `#flashcard/cdd/2way` | the same, plus "which thing has this?" | 2 |
+| `#flashcard/cdd/3way` | the same, plus "which aspect is this?" | 3 |
 | `#flashcard/cloze` | `==highlights==` blanked out | 1 per group |
 | `#flashcard/sequence` | a list revealed one item at a time | 1 |
 | `#flashcard/table` | see *Tables* below | many |
 
-`3way` counts **fields, not cards**. It selects the three-field shape whose default is two
-directions — recall the concept, and recall the description. `3way/all` adds the third.
+**`cdd` is concept–descriptor–description** — the three-field shape. `1way`, `2way`, `3way`
+count **retrieval directions**, and the ceiling is a property of the shape: a front/back card
+has two fields and so at most two directions; a `cdd` card has three fields and so three.
+
+| | shown | you recall | reads as |
+|---|---|---|---|
+| `cdd/1way` | concept + descriptor | the **description** | *"Scaphoid, blood supply → ?"* |
+| `cdd/2way` | + descriptor + description | the **concept** | *"which bone has this blood supply?"* |
+| `cdd/3way` | + concept + description | the **descriptor** | *"Scaphoid, retrograde → which aspect?"* |
+
+Each level adds a card to the one before. The third direction is opt-in because "which aspect
+is this?" is often a guessing game.
+
+Front/back needs no shape name — `#flashcard/1way` and `#flashcard/2way` are what you get when
+you name no shape at all.
+
+> **Older spellings.** `#flashcard/3way` and `#flashcard/3way/all` still work and mean
+> `cdd/2way` and `cdd/3way`. They were renamed because `3way` named a *shape* with a *direction*
+> word and then produced two cards, not three. Rewriting them changes nothing — a marker is
+> stripped from its heading before that heading becomes part of a card's identity, so the key,
+> the note type and every field stay the same and the next sync reports nothing.
 
 **Notes and cards are not the same thing, and the tool counts notes.** One marked heading
 becomes one Anki *note*; the note's type decides how many *cards* Anki generates from it. So
@@ -141,7 +161,7 @@ The leader cannot acknowledge a write until at least one follower has confirmed 
 slow or unreachable follower stalls every writer.
 ```
 
-### Concept–descriptor
+### Concept–descriptor–description (`cdd`)
 
 For a fact that is *an aspect of a thing*. The **concept** is the nearest ancestor heading, the
 **descriptor** is the marked heading, and the **description** is the body. One file can
@@ -151,25 +171,43 @@ key is the heading *path*, not the heading text.
 ```markdown
 ## CAP Theorem
 
-### Definition #flashcard/3way
+### Definition #flashcard/cdd/2way
 
 When a network partition splits a distributed system, the system must choose between
 answering with possibly stale data and refusing to answer at all.
 
-### Failure mode #flashcard/3way
+### Failure mode #flashcard/cdd/2way
 
 Treating the C-versus-A choice as a permanent architectural setting rather than a
 per-partition decision.
 
 ## Quorum
 
-### Definition #flashcard/3way
+### Definition #flashcard/cdd/2way
 
 ...
 ```
 
 Those four headings give four distinct cards, `CAP Theorem / Definition` through
 `Quorum / Failure mode`, rather than two that overwrite each other.
+
+**When the marked heading has no ancestor, the concept is the file name.** This is what makes a
+one-heading note work:
+
+```markdown
+<!-- System Design Pattern.md -->
+# 3 Components #flashcard/cdd/1way
+
+- A Problem
+- A Solution
+- A Cost
+```
+
+The card asks *"System Design Pattern → 3 Components?"*, with the file name on the front as the
+concept. Marked `#flashcard/1way` instead, that note produces a front/back card whose entire
+question is "3 Components" — three components **of what?** — because front/back has no concept
+field and nothing else on the card names the subject. Reach for `cdd/1way` whenever the note's
+title is the thing and the heading is an aspect of it.
 
 ### Cloze
 

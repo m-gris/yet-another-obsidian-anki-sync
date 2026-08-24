@@ -524,3 +524,60 @@ class MarkerTest extends munit.FunSuite:
       assert(s.wantsCellCards || s.wantsRowCards, s"$s would produce nothing")
     }
   }
+
+  // ---------------------------------------------- the cdd spelling, and its aliases ----
+
+  /** ==What `Nway` means, and what it used to mean==
+    *
+    * `Nway` counts RETRIEVAL DIRECTIONS, and the ceiling is a property of the shape: front-back
+    * has two fields and so at most two directions, `cdd` has three and so three.
+    *
+    * `#flashcard/3way` broke that. It named a SHAPE with a direction word, then produced TWO
+    * cards, with a third needing `/all`. So `#flashcard/3way` and `#flashcard/table/2way` meant
+    * the identical thing under two names, and "concept-descriptor asked one way" could not be
+    * written at all, because `1way` was spent on front-back —
+    * `ThreeFieldDirections.ValueOnly` existed with no heading token able to select it.
+    */
+  test("cdd names the shape and Nway names the directions") {
+    assertEquals(parsed("Blood supply #flashcard/cdd/1way"), Some(Marker.ThreeField(ThreeFieldDirections.ValueOnly)))
+    assertEquals(parsed("Blood supply #flashcard/cdd/2way"), Some(Marker.ThreeField(ThreeFieldDirections.Default)))
+    assertEquals(parsed("Blood supply #flashcard/cdd/3way"), Some(Marker.ThreeField(ThreeFieldDirections.All)))
+  }
+
+  /** THE ONE THAT WAS UNSAYABLE. A heading wanting the concept-descriptor shape asked ONE way
+    * had to settle for `#flashcard/1way`, which is a different SHAPE — front-back, with no
+    * concept field at all. That is how a note whose file name was the concept ended up with an
+    * empty breadcrumb and a question nobody could answer.
+    */
+  test("cdd/1way is reachable from a heading, which it never was before") {
+    assertEquals(
+      parsed("3 Components #flashcard/cdd/1way"),
+      Some(Marker.ThreeField(ThreeFieldDirections.ValueOnly)),
+    )
+  }
+
+  /** MIGRATION MUST BE FREE, and this is what makes it so. The old spellings map to the SAME
+    * values, and a marker is stripped from a heading before that heading becomes a key segment
+    * — so rewriting a vault's markers changes no key, no note type and no field, and the next
+    * sync reports nothing. Without this the rename would retype every affected note, which
+    * blanks every field and replaces every tag.
+    */
+  test("the older spellings are aliases, not merely accepted") {
+    assertEquals(parsed("X #flashcard/3way"), parsed("X #flashcard/cdd/2way"))
+    assertEquals(parsed("X #flashcard/3way/all"), parsed("X #flashcard/cdd/3way"))
+  }
+
+  /** The bare front-back tokens keep their one-segment spelling: every other shape names
+    * itself, and front-back is what you get when you name none.
+    */
+  test("front-back stays unprefixed and keeps its meaning") {
+    assertEquals(parsed("X #flashcard/1way"), Some(Marker.TwoField(TwoFieldDirections.Forward)))
+    assertEquals(parsed("X #flashcard/2way"), Some(Marker.TwoField(TwoFieldDirections.Both)))
+  }
+
+  /** `cdd` alone is not a marker: a shape without a direction count says nothing about how
+    * many cards are wanted, and guessing a default is what produced `3way` meaning two.
+    */
+  test("cdd without a direction count is refused") {
+    assert(Marker.parse("X #flashcard/cdd").isLeft)
+  }

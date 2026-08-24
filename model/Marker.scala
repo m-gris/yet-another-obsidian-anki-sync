@@ -418,8 +418,11 @@ object Marker:
   val Documented: Vector[(String, String)] = Vector(
     "#flashcard/1way"             -> "heading -> body",
     "#flashcard/2way"             -> "heading <-> body",
-    "#flashcard/3way"             -> "concept / descriptor / description, asked two ways",
-    "#flashcard/3way/all"         -> "the same, asked three ways",
+    "#flashcard/cdd/1way"         -> "concept / descriptor / description, asked one way",
+    "#flashcard/cdd/2way"         -> "the same, and also which thing has this",
+    "#flashcard/cdd/3way"         -> "the same again, and also which aspect this is",
+    "#flashcard/3way"             -> "an older spelling of cdd/2way",
+    "#flashcard/3way/all"         -> "an older spelling of cdd/3way",
     "#flashcard/cloze"            -> "==highlights== blanked out, one card per group",
     "#flashcard/sequence"         -> "a list revealed one item at a time, on one schedule",
     "#flashcard/table"            -> "a card per table cell, plus one per whole row",
@@ -434,8 +437,40 @@ object Marker:
   )
 
   private def fromToken(token: String): Option[Marker] = token match
-    case "#flashcard/1way"     => Some(TwoField(TwoFieldDirections.Forward))
-    case "#flashcard/2way"     => Some(TwoField(TwoFieldDirections.Both))
+    // ═══ FRONT-BACK: the shape is implicit, so the token is only a direction count ═══
+    //
+    // NO `/qa/` PREFIX, deliberately. Every other shape names itself — `cdd`, `table`, `cloze`,
+    // `sequence` — and front-back is what you get when you name none. Keeping the commonest
+    // marker to one segment is worth the asymmetry.
+    case "#flashcard/1way" => Some(TwoField(TwoFieldDirections.Forward))
+    case "#flashcard/2way" => Some(TwoField(TwoFieldDirections.Both))
+
+    // ═══ CONCEPT–DESCRIPTOR–DESCRIPTION: shape, then direction count ═══
+    //
+    // `Nway` MEANS THE SAME THING HERE AS EVERYWHERE — how many retrieval directions — and the
+    // CEILING is what differs: front-back has two fields and so at most two directions, `cdd`
+    // has three fields and so three.
+    //
+    //   1way  Concept + Descriptor  -> Description   given the thing and the aspect, the value
+    //   2way  and Descriptor + Description -> Concept   which thing has this?
+    //   3way  and Concept + Description -> Descriptor   which aspect is this? — the weak one
+    case "#flashcard/cdd/1way" => Some(ThreeField(ThreeFieldDirections.ValueOnly))
+    case "#flashcard/cdd/2way" => Some(ThreeField(ThreeFieldDirections.Default))
+    case "#flashcard/cdd/3way" => Some(ThreeField(ThreeFieldDirections.All))
+
+    // ═══ THE SPELLINGS THESE REPLACED, KEPT AS ALIASES ═══
+    //
+    // `3way` NAMED A SHAPE WITH A DIRECTION WORD, and then did not deliver that number: it
+    // produced TWO cards, and a third needed `/all`. The name was selecting the concept-
+    // descriptor structure while `Nway` everywhere else counted directions — so
+    // `#flashcard/3way` and `#flashcard/table/2way` meant the identical thing under two names,
+    // and "concept-descriptor asked one way" was unsayable because `1way` was spent on
+    // front-back. `ThreeFieldDirections.ValueOnly` existed with no heading token to select it.
+    //
+    // THEY MAP TO THE SAME VALUES, SO MIGRATION IS FREE. A marker is stripped from a heading
+    // before the heading becomes a key segment, so rewriting `#flashcard/3way` as
+    // `#flashcard/cdd/2way` changes no key, no note type and no field — the next sync reports
+    // nothing. Rewrite a vault at leisure, or never.
     case "#flashcard/3way"     => Some(ThreeField(ThreeFieldDirections.Default))
     case "#flashcard/3way/all" => Some(ThreeField(ThreeFieldDirections.All))
     case "#flashcard/cloze"    => Some(Cloze)
