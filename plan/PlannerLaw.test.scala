@@ -167,7 +167,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       val full = planOf(scan, anki)
       val half = full.actions.take(full.actions.size / 2)
 
-      runPlan(Plan(half, full.orphanInference, Vector.empty), anki)
+      runPlan(Plan(half, full.orphanInference, Vector.empty, full.parked), anki)
       val resumed = planOf(scan, anki)
 
       // The remainder is no bigger than what was left, and finishing it converges.

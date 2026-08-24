@@ -328,4 +328,18 @@ final case class Plan(
     actions: Vector[SyncAction],
     orphanInference: OrphanInference,
     failures: Vector[BuildFailure],
+
+    /** The cards ALREADY parked as orphaned when the collection was observed, BEFORE any of
+      * `actions` is applied. Not a projection of what will be parked afterwards: this run may
+      * park more (a `Flag`) or release some (an `Unflag`), and both are visible in `actions`.
+      *
+      * KEYS RATHER THAN A COUNT, because the count is derivable from the keys and the keys are
+      * not derivable from the count. How much of this to show a reader is the report's
+      * decision to make, not the planner's.
+      *
+      * NO DEFAULT VALUE, deliberately. A default would let a construction site omit the census
+      * and report zero parked cards over a collection holding dozens — which is the shape of
+      * silent wrongness this field exists to end.
+      */
+    parked: Vector[CardKey],
 )

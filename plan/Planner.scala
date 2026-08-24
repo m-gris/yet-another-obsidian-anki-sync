@@ -58,6 +58,27 @@ final case class ObservedState(
     */
   def isFullyResolved: Boolean = unresolved.isEmpty
 
+  /** The notes this tool has ALREADY parked as orphaned, as observed BEFORE this run.
+    *
+    * THE ONE DEFINITION OF "PARKED", so nothing can hold a second, disagreeing one. It is a
+    * fact about the collection rather than about the plan, which is why it lives here and is
+    * DERIVED rather than stored: a stored copy could disagree with the tags it claims to
+    * count, and this cannot.
+    *
+    * IT IS AVAILABLE EVEN WHEN ORPHANS CANNOT BE COMPUTED, and that is the point rather than an
+    * accident. Inferring a NEW orphan needs a complete scan — a key absent from the markdown is
+    * only evidence of deletion if the markdown was read in full. Reading a tag off a note the
+    * collection already returned needs nothing. So a partial scan still knows exactly what is
+    * parked, and a run that says "orphans NOT computed" can still say how many are waiting.
+    *
+    * WHY THIS EXISTS AT ALL. A parked note produces no action on any later run — it is already
+    * flagged, so the planner skips it — and the report names orphans only as WORK. So the run
+    * that parks a note mentions it once and every run afterwards is silent, while the note sits
+    * suspended out of review indefinitely. Six were sitting in a real collection, unmentioned by
+    * a run that printed "nothing to do", when this was written.
+    */
+  def parkedOrphans: Vector[ObservedCard] = notes.filter(_.isFlaggedOrphan)
+
   /** The lookup from card identity to the note holding it — OR the collisions that make such
     * a lookup a lie.
     *
@@ -390,4 +411,4 @@ object Planner:
             }
             (orphans.map(c => SyncAction.Flag(c.key, c.note.id)), OrphanInference.Computed)
 
-        Right(Plan(perSpec ++ orphanActions, inference, scan.failures))
+        Right(Plan(perSpec ++ orphanActions, inference, scan.failures, observed.parkedOrphans.map(_.key)))

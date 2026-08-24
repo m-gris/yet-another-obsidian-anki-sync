@@ -110,6 +110,14 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
 12. **`prune`** — deletes flagged cards after the list has been reviewed. Named in `README.md`
     under *Not built yet*, and it is the exact case `SyncAction.dispositionUnder` was written to
     protect against.
+
+    **NOW DISCOVERABLE, WHICH RAISES ITS PRIORITY.** Until 2026-08-24 a parked note was
+    mentioned by the run that parked it and by no run afterwards, so the missing command was
+    invisible too. `Report.parkedNote` now says on every run how many notes are parked — and
+    says plainly that nothing removes them yet. That sentence is a standing admission of an
+    unbuilt command, and it is written to be found by grepping for `prune` when the command
+    lands. Marc found the gap by asking why deleting a note in Obsidian appeared to do nothing
+    in Anki; it had done something, twice, and said so only the first time.
 13. **A formatter, and a keybinding** — largely solved on 2026-08-22 without being closed here.
     `conform.nvim` runs prettier on markdown at `--tab-width 4`, bound to `<leader>fo`, and that
     REPAIRS a two-space nested list into a four-space one — so it is the fix for `ListIndent`'s

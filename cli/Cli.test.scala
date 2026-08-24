@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import com.monovore.decline.Command as DeclineCommand
 import obsidiananki.anki.{AnkiNoteId, DeckPath}
 import obsidiananki.extract.{DeckLevel, DeckShape, VaultFile, VaultWalker}
+import obsidiananki.model.*
 import obsidiananki.plan.*
 
 class CliTest extends munit.FunSuite:
@@ -249,8 +250,94 @@ class CliTest extends munit.FunSuite:
 
   test("a plan with no actions says so rather than printing an empty list") {
     val lines =
-      Report.plan(Plan(Vector.empty, OrphanInference.Computed, Vector.empty), RetypePolicy.Defer)
+      Report.plan(Plan(Vector.empty, OrphanInference.Computed, Vector.empty, Vector.empty), RetypePolicy.Defer)
     assertEquals(lines, Vector("nothing to do"))
+  }
+
+  // ----------------------------------------- the notes already parked as orphaned ----
+
+  /** WHY THESE TESTS EXIST, since the behaviour they describe is easy to mistake for noise.
+    *
+    * A note this tool has already parked produces NO ACTION on any later run — the planner
+    * skips it precisely because it is already flagged — and the report names orphans only as
+    * WORK BEING DONE. So the run that parks a note mentions it once, and every run afterwards
+    * is silent while the note sits suspended and out of review indefinitely.
+    *
+    * MEASURED, not imagined: a real collection held SIX such notes while the run over it
+    * printed `nothing to do`. Marc found them by asking why deleting a note in Obsidian
+    * appeared to do nothing in Anki — the answer being that it had done something, twice, and
+    * said so only the first time.
+    */
+  private def parkedKey(id: String, heading: String) =
+    CardKey(
+      NoteId.fromFrontmatter(id).toOption.get,
+      HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText(heading).toOption.get)),
+    )
+
+  private def parkedLines(parked: Vector[CardKey], inference: OrphanInference = OrphanInference.Computed) =
+    Report.plan(Plan(Vector.empty, inference, Vector.empty, parked), RetypePolicy.Defer).mkString("\n")
+
+  test("a run with nothing to do still says how many notes are parked as orphaned") {
+    val lines = parkedLines(Vector(parkedKey("n1", "Definition"), parkedKey("n2", "Cost")))
+    assert(
+      lines.contains("2"),
+      s"a report over a collection holding two parked notes never mentioned them:\n$lines",
+    )
+    assert(
+      lines != "nothing to do",
+      "the report said 'nothing to do' over a collection holding two suspended orphans — " +
+        "this IS the defect: parking is announced once and never again",
+    )
+  }
+
+  /** THE CONTROL, and the reason the test above is not satisfied by always printing a line.
+    * Without this, "mention parked notes" could be implemented as an unconditional sentence
+    * that reads `0 notes parked` on every clean run — noise that trains the reader to skip
+    * the block where the real number will one day appear.
+    */
+  test("a run over a collection with nothing parked adds no line about parking") {
+    assertEquals(
+      parkedLines(Vector.empty),
+      "nothing to do",
+      "a clean collection was told about orphans it does not have",
+    )
+  }
+
+  /** Number agreement, which this report has got wrong before: three summary lines read
+    * `1 cards` / `1 actions` / `1 notes are` until 2026-08-24. One parked note is the common
+    * case, so it is the sentence most often read.
+    */
+  test("one parked note is described in the singular") {
+    val lines = parkedLines(Vector(parkedKey("n1", "Definition")))
+    assert(
+      !lines.contains("1 notes"),
+      s"plural verb or noun over a single parked note:\n$lines",
+    )
+    assert(lines.contains("1 note"), s"the single parked note went unmentioned:\n$lines")
+  }
+
+  /** THE CASE THAT WOULD OTHERWISE GO UNCHECKED, and the one that justifies deriving the
+    * census from tags rather than from orphan inference.
+    *
+    * Inferring a NEW orphan needs a COMPLETE scan: a key absent from the markdown is only
+    * evidence of deletion if the markdown was read in full. Reading an `orphaned::` tag off a
+    * note the collection already returned needs nothing of the kind. So a run that must say
+    * "orphans NOT computed" can still say exactly how many are parked — and a reader looking
+    * at a degraded run is precisely the reader who needs to know what is already suspended.
+    */
+  test("parked notes are still counted when orphan inference had to be suppressed") {
+    val lines = parkedLines(
+      Vector(parkedKey("n1", "Definition")),
+      OrphanInference.SuppressedIncompleteScan("a file could not be read"),
+    )
+    assert(
+      lines.contains("orphans NOT computed"),
+      s"the partial scan stopped being reported:\n$lines",
+    )
+    assert(
+      lines.contains("1 note"),
+      s"a degraded run hid what was already parked, which is when it matters most:\n$lines",
+    )
   }
 
   /** THE PLAN IS PRINTED BEFORE IT IS APPLIED, so the summary line for a note-type move has to
@@ -275,6 +362,7 @@ class CliTest extends munit.FunSuite:
         )
       ),
       OrphanInference.Computed,
+      Vector.empty,
       Vector.empty,
     )
 
@@ -428,6 +516,7 @@ class CliTest extends munit.FunSuite:
         SyncAction.Update(key, AnkiNoteId(1L), NonEmptyVector.fromVectorUnsafe(changes.toVector))
       ),
       OrphanInference.Computed,
+      Vector.empty,
       Vector.empty,
     )
     Report.plan(plan, RetypePolicy.Defer).mkString("\n")

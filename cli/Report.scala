@@ -2,6 +2,7 @@ package obsidiananki.cli
 
 import obsidiananki.anki.{InstallOutcome, NoteTypeProblem, NoteTypeStatus, RepairOutcome}
 import obsidiananki.extract.VaultIndex
+import obsidiananki.model.CardKey
 import obsidiananki.plan.*
 
 /** Rendering results for a human.
@@ -83,7 +84,55 @@ object Report:
       if p.failures.isEmpty then Vector.empty
       else "" +: "build failures" +: p.failures.map(describeFailure).map("  " + _)
 
-    header ++ orphanNote ++ failureLines
+    header ++ orphanNote ++ parkedNote(p.parked) ++ failureLines
+
+  /** What this tool is already holding, said on EVERY run rather than only on the run that
+    * parked it.
+    *
+    * THE BEHAVIOUR THIS REPAIRS. A parked note produces no action ever again — the planner
+    * skips it because it is already flagged — and every other mention of orphans in this file
+    * is a line about WORK. So the run that parks a note names it once and every run afterwards
+    * says nothing, while the note stays suspended and out of review. A real collection held six
+    * of them under a run that printed `nothing to do`.
+    *
+    * SILENT AT ZERO, deliberately. A `0 notes parked` line on every clean run is noise, and
+    * noise in a fixed position is worse than absence: it trains the reader to skip exactly the
+    * block where the real number will one day appear.
+    *
+    * IT DOES NOT PROMISE A REMEDY IT DOES NOT HAVE. `prune` — the command that removes these
+    * after a person has seen the list — IS NOT BUILT. Naming it as though it worked would send
+    * the reader to a command that does not exist, so the line says plainly that nothing removes
+    * them yet. WHEN `prune` LANDS, THIS SENTENCE MUST CHANGE; it is written to be found by
+    * grepping for the word.
+    */
+  private def parkedNote(parked: Vector[CardKey]): Vector[String] =
+    if parked.isEmpty then Vector.empty
+    else
+      Vector(
+        "",
+        s"${quantify(parked.size, "note")} parked as orphaned: the source " +
+          s"${if parked.sizeIs == 1 then "heading is" else "headings are"} gone from the vault, " +
+          s"so ${if parked.sizeIs == 1 then "it is" else "they are"} suspended rather than deleted.",
+        "  Nothing removes them yet — the 'prune' command is not built.",
+      )
+
+  /** "1 card" / "2 cards" — the count and its noun, agreeing.
+    *
+    * IT EXISTS BECAUSE THE SUMMARY LINE IS THE ONE LINE EVERY RUN PRINTS. Three of them read
+    * `${xs.size} cards` / `actions` / `notes` unconditionally, so a run with exactly one
+    * problem ended on "1 cards could not be built from the vault" — which is the sentence a
+    * person sees most often, since one problem is the common case.
+    *
+    * IT LIVES HERE RATHER THAN IN `Main` because it is presentation, and because a second copy
+    * beside the caller that needed it would be two definitions of the same sentence fragment,
+    * free to drift. `Main` calls it as `Report.quantify`.
+    *
+    * DELIBERATELY NAIVE: it appends an `s`. Every noun these summaries use is regular, and a
+    * general pluraliser would be a library pretending this file needs one. A noun that is not
+    * regular should be passed already-plural to a different helper, not taught to this one.
+    */
+  def quantify(n: Int, singular: String): String =
+    if n == 1 then s"$n $singular" else s"$n ${singular}s"
 
   /** What an `install-note-types` run found and what it did.
     *

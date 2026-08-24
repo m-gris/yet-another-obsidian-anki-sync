@@ -1110,24 +1110,11 @@ object Main
     * The suppression reason is deliberately not interpolated: `Report.plan` already prints
     * `orphans NOT computed: <why>` and owns that wording.
     */
-  /** "1 card" / "2 cards" — the count and its noun, agreeing.
-    *
-    * IT EXISTS BECAUSE THE SUMMARY LINE IS THE ONE LINE EVERY RUN PRINTS. Three of them read
-    * `${xs.size} cards` / `actions` / `notes` unconditionally, so a run with exactly one
-    * problem ended on "1 cards could not be built from the vault" — which is the sentence a
-    * person sees most often, since one problem is the common case.
-    *
-    * DELIBERATELY NAIVE: it appends an `s`. Every noun these summaries use is regular, and a
-    * general pluraliser would be a library pretending this file needs one. A noun that is not
-    * regular should be passed already-plural to a different helper, not taught to this one.
-    */
-  private def quantify(n: Int, singular: String): String =
-    if n == 1 then s"$n $singular" else s"$n ${singular}s"
 
   private def problemsIn(plan: Plan): Vector[String] =
     val buildFailures =
       if plan.failures.isEmpty then Vector.empty
-      else Vector(s"${quantify(plan.failures.size, "card")} could not be built from the vault")
+      else Vector(s"${Report.quantify(plan.failures.size, "card")} could not be built from the vault")
 
     val orphanNote = plan.orphanInference match
       case OrphanInference.Computed => Vector.empty
@@ -1171,11 +1158,11 @@ object Main
       // green result would say the collection matches the vault, and it does not.
       val reasons =
         (if failures.isEmpty then Vector.empty
-         else Vector(s"${quantify(failures.size, "action")} failed — listed above")) ++
+         else Vector(s"${Report.quantify(failures.size, "action")} failed — listed above")) ++
           (if deferred.isEmpty then Vector.empty
            else
              Vector(
-               s"${quantify(deferred.size, "note")} ${if deferred.size == 1 then "is" else "are"} " +
+               s"${Report.quantify(deferred.size, "note")} ${if deferred.size == 1 then "is" else "are"} " +
                  "on the wrong note type and " +
                  (if deferred.size == 1 then "was" else "were") + " left alone — " +
                  "re-run with --migrate-note-types to move them"

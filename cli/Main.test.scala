@@ -267,7 +267,7 @@ class MainTest extends munit.FunSuite:
     * failed others: it must not look like success.
     */
   test("every outcome maps to an exit code, and a partly-failed run is not success") {
-    val empty = Plan(Vector.empty, OrphanInference.Computed, Vector.empty)
+    val empty = Plan(Vector.empty, OrphanInference.Computed, Vector.empty, Vector.empty)
     val failure = ExecutionFailure(
       SyncAction.Flag(
         CardKey(
@@ -312,7 +312,7 @@ class MainTest extends munit.FunSuite:
     * what is on screen rather than on an exit code is the normal case, not the exceptional one.
     */
   test("each way a run can end says on screen what happened to the collection") {
-    val empty = Plan(Vector.empty, OrphanInference.Computed, Vector.empty)
+    val empty = Plan(Vector.empty, OrphanInference.Computed, Vector.empty, Vector.empty)
     def lines(o: Main.SyncOutcome) = Main.describeSyncOutcome(o).mkString("\n")
 
     val couldNotObserve = lines(Main.SyncOutcome.CouldNotObserve(AnkiError.Remote("notesInfo", "boom")))
@@ -350,6 +350,7 @@ class MainTest extends munit.FunSuite:
     val partial = Plan(
       Vector.empty,
       OrphanInference.SuppressedIncompleteScan("a file could not be read"),
+      Vector.empty,
       Vector.empty,
     )
     Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty))) match
