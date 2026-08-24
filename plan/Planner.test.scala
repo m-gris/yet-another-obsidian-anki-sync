@@ -307,6 +307,74 @@ class PlannerTest extends munit.FunSuite:
     )
   }
 
+  /** Class (a'): THE FAILURE KEY IS A PREFIX OF THE CARDS' KEYS, WHICH IS THE TABLE CASE.
+    *
+    * `Planner.underAFailedSection` existed and was correct before this test did, and NOTHING
+    * EXERCISED IT — deleting the clause left the whole suite green. That is what this test is
+    * for. It was added on 2026-08-24 after the `underAFailedSection` clause was commented out
+    * and the suite still passed; with this test present, that same deletion fails here.
+    *
+    * WHY A PREFIX AND NOT AN EQUALITY. `Extractor.walk` records every `buildSpecs` failure at
+    * the key of the SECTION that failed, while `Tables.cardsForRow` keys each card one or two
+    * segments DEEPER — the row's concept, plus the column header for a pair card. So the
+    * section key that failed matches NO observed note, and every card the table ever produced
+    * looks unclaimed. Before the clause existed, one image pasted into one cell flagged and
+    * SUSPENDED fifteen live cards while the run reported "1 card could not be built".
+    *
+    * THE CONTROL CARD IS THE POINT OF THE TEST, not decoration. `stillOrphaned` is a genuinely
+    * absent card in the SAME NOTE, sitting outside the failed section. Without it this test
+    * would pass just as well against a planner that had stopped flagging orphans altogether,
+    * or one that suppressed the entire note rather than the failed subtree — which is the
+    * over-broad fix a later author is most likely to reach for.
+    */
+  test("a failure at a section key shelters the cards keyed BENEATH it, and only those") {
+    val anki    = InMemoryAnki()
+    val section = key("n1", "Messaging", "Cost / benefit")
+    val row     = key("n1", "Messaging", "Cost / benefit", "Queue")
+    val pair    = key("n1", "Messaging", "Cost / benefit", "Queue", "Benefit")
+
+    // OUTSIDE the failed section, and deliberately in the SAME note — a shelter keyed on the
+    // note id rather than the path would swallow this one and the assertion would not notice.
+    val stillOrphaned = key("n1", "Messaging", "Unrelated heading")
+
+    // Seeded in ONE scan, for the reason the neighbouring test gives: syncing them one at a
+    // time flags the earlier cards along the way, and the assertions below would then pass
+    // because already-flagged orphans are skipped rather than because sheltering works.
+    runPlan(
+      planOf(
+        VaultScan.from(
+          Vector(row, pair, stillOrphaned).map(k => sourced(twoFieldSpec(k, "f", "b"))),
+          Vector.empty,
+        ),
+        observe(anki),
+      ),
+      anki,
+    )
+
+    // The section fails to build. Its cards are therefore not in the scan — a failed build
+    // produces no specs — and neither is the unrelated card, which was really deleted.
+    val scan = VaultScan.from(
+      Vector.empty,
+      Vector(
+        BuildFailure.KeyKnown(
+          section,
+          SourceRef("Messaging.md", 12, SourceKind.Heading),
+          "an image in a table cell",
+        )
+      ),
+    )
+
+    val flagged = planOf(scan, observe(anki)).actions.collect { case SyncAction.Flag(k, _) => k }
+
+    assertEquals(
+      flagged.toSet,
+      Set(stillOrphaned),
+      "expected ONLY the card outside the failed section to be flagged — if the two table " +
+        "cards appear here the prefix rule is gone; if nothing appears, sheltering has become " +
+        "note-wide and is now hiding real orphans",
+    )
+  }
+
   /** Class (b), blast radius determinable: no key, but the file's note id is known, so every
     * observed key belonging to that note is suppressed.
     */
