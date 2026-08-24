@@ -331,7 +331,7 @@ object VaultWalker:
               file.relativePath,
               "its frontmatter names 'flashcard' but no HEADING carries a marker, so it makes " +
                 "no cards — a marker goes on the heading itself, as in " +
-                "'## Some descriptor #flashcard/3way'. Typing one into the Obsidian editor " +
+                "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian editor " +
                 "files it under the 'tags' property instead, where this tool cannot see it",
             )
 
