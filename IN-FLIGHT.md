@@ -18,16 +18,20 @@ Two changes DO rewrite content. Both were deliberate and both were reported to M
 - **`#flashcard/cdd/{1,2,3}way`** replaced `3way` / `3way/all`, with the old spellings kept as
   aliases so rewriting a vault's markers syncs nothing at all.
 
-## OPEN — the two defects found last, not yet fixed
+## The two defects found last — ONE FIXED, ONE STILL OPEN
 
-1. **A DRY RUN DOES NOT CONSULT THE RETYPE GATE, so it reports a migration a real run refuses.**
+1. ~~**A dry run does not consult the retype gate.**~~ **FIXED** — one `Retyping.verdictFor`
+   now answers both halves, and `Executor.preview` asks it for the dry run. Guarded by a law
+   asserted in both directions. Original report, kept because it is the measurement:
    Measured on Marc's vault: `sync --dry-run --migrate-note-types` printed
    `1 move to another note type` and `result: OK`, while a real run refuses — `Obsidian Basic`
    has 1 template, `Obsidian Concept-Descriptor` has 3, and `plan/Retyping.scala:117` refuses any
    difference. Cause: `cli/Main.scala:929` returns `PlannedOnly` for a dry run and never reaches
    `Executor.run`, the only place note-type shapes are read. A dry run whose whole job is to say
    what a real run will do cannot see the one check that would stop it.
-2. **THE RETYPE GATE COMPARES TEMPLATE COUNTS, WHICH CONFLATES TWO UNLIKE RISKS.** It refuses any
+2. **STILL OPEN — but the MESSAGE is fixed.** Each direction now names its own unknown, and a
+   test pins them apart; the gate itself still refuses both, pending the measurement below.
+   **THE RETYPE GATE COMPARES TEMPLATE COUNTS, WHICH CONFLATES TWO UNLIKE RISKS.** It refuses any
    difference. But growing and shrinking fail differently, and only one of the two failures is
    the one the gate's comment is actually about:
 

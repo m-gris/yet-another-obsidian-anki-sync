@@ -292,32 +292,24 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
 
 ## Open items
 
-1. ⚠️ **A REFUSAL INSIDE A `#flashcard/table` SECTION ORPHANS EVERY CARD THAT TABLE ALREADY
-   PRODUCED — the one way a live, correctly-synced card reaches the prune list.** _Added to this
-   document 2026-08-21. It was recorded only in two mid-file source comments —
-   `extract/Extractor.scala:174-181` and `content/Lower.scala:134-145` — so a fresh session
-   reading the documents it is told to read first would not have met it. NOT FIXED; the code
-   below was read in this session, not remembered._
+1. ~~**A refusal inside a `#flashcard/table` section orphans every card that table produced.**~~
+   **NOT A DEFECT SINCE BEFORE THIS ENTRY WAS WRITTEN — the entry was wrong, and it was wrong in
+   the direction that wastes a session.** `Planner.underAFailedSection` shelters every observed
+   key whose path extends the path of a section that failed to build, which is exactly the table
+   case: failures are recorded at the SECTION key and a table's cards are keyed one or two
+   segments deeper. The clause carries a long comment recording that it was measured — one image
+   in one cell flagged and suspended fifteen live cards before it existed.
 
-   The chain, each link read rather than inferred: `Extractor.walk` records **every** `buildSpecs`
-   failure as `BuildFailure.KeyKnown` at the **section** key (`extract/Extractor.scala:118`),
-   while `Tables.cardsForRow` keys each table card **one or two segments deeper** — the row's
-   concept, plus the column header for a pair card. `VaultScan.failedKeys` therefore gains a key
-   that no Anki note carries, and claims none of the table's real keys. `Planner` then computes
-   `accountedFor = scan.builtKeys ++ scan.failedKeys` (`plan/Planner.scala:231`) and emits
-   `SyncAction.Flag` for every observed note outside it. Nothing in that path is degraded or
-   partial, so the run looks healthy: the scan still reports `complete`.
+   **WHAT WAS ACTUALLY MISSING WAS THE GUARD, AND THAT IS NOW BUILT (2026-08-24).** Commenting
+   the clause out left all 651 tests green, so a refactor could have deleted it in silence and
+   restored the data loss. `plan/Planner.test.scala` now has one test that fails in BOTH
+   directions — if the prefix rule goes, the table's cards appear as orphans; if someone widens
+   the shelter to the whole note, a control card that is genuinely absent stops being flagged.
+   Both were confirmed by mutation.
 
-   The blast radius is a whole table, not a card. `dummy-vault/Patterns/Messaging.md`'s
-   `## Cost / benefit` is **nine cards** — counted in this session by grepping
-   `extract/golden/fixture-cards.txt` for `src::fix-messaging`, which yields nine entries, every
-   one of them keyed below the section key. Refuse that one section and all nine live notes are
-   flagged as orphans.
-
-   What can fire the refusal today, per the comment at `extract/Extractor.scala:182-192` (its
-   reasoning is version-scoped to laika-core 1.3.2 and was NOT re-verified here): an embed, an
-   image or a task list inside a cell — in practice one `![[x.png]]`. The fix needs the failure
-   record to carry a key SET rather than a single key, and is its own slice.
+   _The lesson generalises past this entry: a document that says "NOT FIXED" is a claim about
+   code, and it decays exactly like a comment does. Two of the four items closed on 2026-08-21
+   and 2026-08-24 were closed by reading the source and finding the entry contradicted flatly._
 
 2. **DECIDE WHAT A CARD FIELD CONTAINS: plain text or an HTML fragment?** Nothing can be
    sensibly formatted until this is ruled on, and it is Marc's. Anki fields ARE HTML, so a
@@ -344,31 +336,22 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    templates up BY NAME and silently ignores names it does not recognise, so a wrong name is a
    repair that reports success and changes nothing.
 7. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.
-8. ⚠️ **THERE ARE TWO SEPARATE RETYPE GATES AND `--dry-run` ONLY SEES ONE OF THEM.** _Read out
-   of the source on 2026-08-24, after a live run disagreed with its own preview. NOT FIXED._
-   Distinguishing the two is the whole of this item, because a fix aimed at the wrong one is
-   wasted:
+8. ~~**Two separate retype gates, and `--dry-run` only saw one.**~~ **FIXED 2026-08-24.** The
+   decision had two halves in two places: the POLICY half was pure and the report consulted it,
+   while the COMPATIBILITY half needed the note types read out of the collection and lived
+   inside the executor, which a dry run never enters. So `--dry-run --migrate-note-types`
+   printed `1 move to another note type` and `result: OK` over a move the real run refused.
 
-   - **The POLICY gate — `RetypePolicy.Defer` / `Apply`** (`plan/Retyping.scala`), off by
-     default, set by `--migrate-note-types`. Pure, needs no collection. The dry run DOES
-     consult it: `Report.kindOf` (`cli/Report.scala:280-282`) labels the action
-     *"move to another note type (NOT APPLIED — see --migrate-note-types)"* under `Defer`.
-   - **The COMPATIBILITY gate — `Retyping.refusalFor`.** Refuses a move whose old and new note
-     types differ in cloze-ness or in template count, because the note's cards keep their
-     ordinals while the type underneath them changes. It needs the SHAPE of both note types,
-     which is two AnkiConnect reads per name — so it is called only from
-     `plan/Executor.scala:266`, and **the dry run never reaches the Executor**
-     (`cli/Main.scala:929` returns `SyncOutcome.PlannedOnly(plan)` instead).
+   Both halves are now one total function, `Retyping.verdictFor`, returning a `RetypeVerdict`
+   (`WillApply` / `DeferredByPolicy` / `RefusedByShapes(refusal)` / `ShapesUnavailable`). The
+   executor asks it instead of deciding, and `Executor.preview` asks the same function for a dry
+   run — so there is one decision and the two cannot drift. The preview pays what the run pays
+   and no more: nothing under `Defer`, and under `Apply` the same two reads per DISTINCT note
+   type, none at all when the plan holds no retypes.
 
-   **The consequence:** run `--dry-run --migrate-note-types` and the preview says *"move to
-   another note type"* flatly, with no caveat; the real run then hits `refusalFor` and refuses
-   it. The preview and the run disagree, which is the one thing a preview exists not to do.
-
-   **The fix is not "call `refusalFor` from the dry run" as an afterthought.** Making the two
-   agree means the shape reads move ahead of the branch, so the dry run pays for them too —
-   two requests per DISTINCT note type named in the plan, which `Retyping.shapesOf` already
-   de-duplicates and which is empty when there is nothing to retype. That is the design
-   question to settle first.
+   Guarded by a LAW asserted in both directions — a move the run refuses must preview as
+   refused, and a move the run makes must preview as work — because the first alone is satisfied
+   by a preview that refuses everything. Restoring the old behaviour fails it.
 
 9. **THE COMPATIBILITY GATE IS DELIBERATELY NARROWER THAN THE TRUTH, AND WIDENING IT IS AN
    EXPERIMENT, NOT AN EDIT.** Not a defect — `plan/Retyping.scala`'s header says so plainly —
@@ -379,7 +362,14 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    settle it is one measurement in a throwaway profile — never `User 1` — recording what Anki
    actually does to a card whose ordinal its new note type cannot generate: survives, is
    orphaned until Check Database, or is destroyed. Until somebody runs that, widening the gate
-   would be trading a documented refusal for an undocumented risk.
+      would be trading a documented refusal for an undocumented risk.
+
+   **WHAT DID CHANGE ON 2026-08-24: the refusal now names the RIGHT unknown.** One sentence
+   covered both directions and was accurate for only one — it warned about cards carrying
+   ordinals the new type cannot generate, which happens when the count SHRINKS and cannot happen
+   when it grows. The growth refusal now says that nothing would be stranded and that what is
+   unestablished is whether Anki GENERATES the extra cards. The gate is unchanged; only the
+   explanation is now true in both directions, and a test pins them apart.
 
 10. **THE `if`-VERSUS-PATTERN-MATCH AUDIT IS SEVEN-ELEVENTHS DONE — FOUR FINDINGS ARE OPEN.**
     Run by a subagent on 2026-08-23 against one question: where does an `if` or a `case _ =>`
