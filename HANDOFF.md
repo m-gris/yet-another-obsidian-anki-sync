@@ -39,7 +39,7 @@ at something this repository does not contain. It was superseded and to be ignor
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
 `just test` runs everything, as does `scala-cli test .` from the repository root.
-**30 suites, 578 tests, 0 failures, 0 warnings** — measured on 2026-08-22 by running it and
+**32 suites, 651 tests, 0 failures, 0 warnings** — measured on 2026-08-24 by running it and
 summing the per-suite totals. _The line has said 493, then 511; the suite keeps growing, so
 treat the number as a reading rather than a fact and re-measure before quoting it._
 
@@ -67,7 +67,11 @@ rewrites the templates; the by-hand field addition the old text called for is no
 `sync --dry-run` → `sync --migrate-note-types`.
 
 - `parser/ObsidianSyntax.scala` — Obsidian dialect (wikilinks, embeds, highlights, task-list rejection) and **the canonical `markupParser`**. Build parsers only from there.
-- `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker` (**seven** markers: `Marker.fromToken` accepts `1way`, `2way`, `3way`, `3way/all`, `cloze`, `table`, `sequence` — this line said six before `sequence` was added), `CardSpec` (**five** cases: `TwoField`, `ThreeField`, `Cloze`, `TableRow`, `Sequence` — this line said "six card shapes", which does not match the enum; both counts re-read on 2026-08-21).
+- `model/` — `CardKey`/`TagCodec` (identity + tag encoding), `Marker`, `CardSpec` (**five** cases: `TwoField`, `ThreeField`, `Cloze`, `TableRow`, `Sequence`).
+
+  **DO NOT COUNT MARKERS IN PROSE HERE.** This line carried a hand-maintained tally that was wrong twice. `Marker.Documented` is the list, `--help` prints it, and `model/Marker.test.scala` reads the `case` literals out of the source and fails the build if the two disagree. Read those, not this.
+
+  **THE MARKER VOCABULARY CHANGED ON 2026-08-24.** `Nway` counts RETRIEVAL DIRECTIONS everywhere, and the ceiling is a property of the SHAPE — front-back has two fields and so at most two directions, concept-descriptor-description has three fields and so three. `#flashcard/3way` broke that rule: it used a direction word to select a shape and then produced TWO cards, needing `/all` for a third. The shape is now named: `#flashcard/cdd/{1,2,3}way`, mirroring `table`, which was always coherent. Front-back stays unprefixed — it is what you get when you name no shape. `3way` and `3way/all` remain as ALIASES to the same values, so rewriting a vault's markers changes no key, no note type and no field, and syncs nothing.
 - `anki/` — the `Anki[F]` algebra; `InMemoryAnki`, a working fake that **enforces Anki's real constraints**; and, since 2026-08-19, `AnkiConnectClient` over http4s/Ember plus `FakeAnkiConnect`, an in-process fake AnkiConnect **server** that reproduces the traps rather than the happy path.
 - `plan/` — `VaultScan`, `SyncAction`, `Planner`, `Executor`/`Observer`.
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
@@ -163,6 +167,44 @@ Also settled: **scheduling survives a retype** (interval/reps/queue unchanged), 
 
 ---
 
+## Traps that have already cost time — read before touching a test
+
+**`sys.props("user.dir")` IS THE SHELL'S WORKING DIRECTORY, NOT THE PROJECT'S.** Four tests
+located repository files by walking up from it, and on 2026-08-24 all four were measured
+resolving files under `backend-interview-prep/obsidian-anki-custom-sync/` — a STALE COPY of this
+entire tool, left behind when it was extracted on 2026-08-23. That included the GOLDEN TEST,
+which was comparing a stale vault's cards against a stale golden. Every one of them passed,
+because the copies were still identical. Use `TestSources.read` / `TestSources.dir`, which anchor
+on the compiled test classes and walk up to `project.scala`. **The stale copy still exists**, so
+the trap is armed for any new test that reaches for the old idiom.
+
+**REVERT A MUTATION WITH `cp`, NEVER WITH `git checkout`.** `git checkout -- <file>` cannot tell
+a one-line mutation from an hour of uncommitted work in the same file. It destroyed work FIVE
+times in one session — once an entire enum, and once producing a PUSHED commit whose message
+described a fix the commit did not contain, because five of six files were staged and the sixth
+had been reverted. Commit first, back up with `cp` to a scratch path, restore with `cp`.
+
+**RE-RUN THE WHOLE SUITE BETWEEN THE LAST EDIT AND THE COMMIT.** Not before the last edit.
+
+**A DRIFT TEST NEEDS A VACUITY GUARD.** Any test that extracts something from a source file and
+compares two sets must first assert the extraction found a plausible number of things. The
+`--deck-from` token test failed loudly rather than passing by luck only because of
+`assert(declared.sizeIs >= 3, "…the extraction is broken, so this test is proving nothing")`.
+Without it, two empty sets agree.
+
+**COMMENTS HERE ARE LOAD-BEARING AND NOTHING CHECKS THEM.** On 2026-08-24 three comments in three
+files were found asserting the exact inverse of what the code did — a commit had made an `if`
+always-false and the compiler, having forced the neighbouring `match` arm to be updated, said
+nothing about the `if`. Another comment told future authors that exhaustiveness was unenforced,
+written one day before the flag that enforces it landed. When a fix invalidates a comment, the
+comment is part of the fix.
+
+**THE COMPILER IS THE FIRST TEST.** `project.scala` ends `-Wconf:msg=exhaustive:e`, so an
+inexhaustive match is a BUILD ERROR. A `case _ =>` over a sealed sum opts out of that as
+completely as an `if` does, while looking like it did not — that was the entire yield of the
+2026-08-23 audit. Before writing a test for "what if someone adds a case", check whether the
+compiler already refuses it; twice this week it did, which is the better outcome.
+
 ## The methodology that has actually been catching bugs
 
 This matters more than any individual finding.
@@ -208,6 +250,8 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
 - **B6 section body.** Own prose only, stopping at the next heading of any level — **plus a hard error on an empty body**. Without the second half, `2way` silently produces one card where it promised two.
 - **B7 duplicates.** `allowDuplicate: true`, field order Concept/Descriptor/Description. We own identity via `src::`; Anki's first-field checksum is a competing mechanism that would fight ours.
 - **Deletion.** The sync **never deletes**. Orphans are **suspended in place** and tagged `orphaned::`, and the run reports what it suspended; a separate explicit `prune` command removes them after a human sees the list. _Suspension added 2026-08-19: a tag alone left the card in the daily review rotation, so a card whose source heading was gone kept being asked with only a tag nobody reads to show for it. A holding deck was considered and rejected — decks mirror folders while the identity tag encodes the heading path, so once a heading is gone the original folder is unrecoverable and the card's current deck is its only record._
+- **The breadcrumb is a RULE, not a setting** (2026-08-24). `Context` carries the whole location — folders, file name, heading chain — minus whatever the card already holds as a FIELD. A `VaultLayout` YAML file and a `ContextShape` were both built, green and unwired, and both DELETED: what a breadcrumb may show is not a preference. Deck SHAPE stays a flag because it is genuine taste; the anti-spoiler ceiling over it is not.
+- **A deck path may not print the card's own answer** (2026-08-24). `Decks.clamp` TRUNCATES because a deck path is prefix-closed; the breadcrumb REMOVES because it is a list. And a breadcrumb DE-DUPLICATES where a deck path must not — a deck is a filing address and must stay unambiguous, a breadcrumb is a sentence and repetition is noise.
 - **Rename detection is CUT from v0**, ruled 2026-08-19 — a subsystem, not a feature. A rename therefore surfaces as an orphan plus an unrelated create, reconciled by hand, which is lossless precisely because the orphan is suspended rather than deleted. The `Relink` case was removed the same day; what was learned is recorded in `CARD-MODEL.md` under *Deliberately deferred*.
 - **Cloze grouping.** `==text==` is its own group keyed by its text (fragile); `==2|text==` joins group 2 keyed by the group (stable — text may change freely and the card keeps its history). **The label IS the cloze number.** Two *unlabelled* highlights with identical text are refused, with the remedy named. Digits only, to keep `==a|b==` unambiguous.
 - **Task lists are rejected by name**, not supported. Parsing is **strict** — lenient mode is off, and turning it back on would re-arm the mechanism that hid the wikilink bug.
@@ -283,7 +327,7 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    run-on sentence. Choosing HTML means escaping user content becomes an obligation, and
    changes every content hash once — an UPDATE for every note, so scheduling survives, but the
    run will report the lot.
-3. **Suspend orphans.** Ruled 2026-08-19 and **not yet built**: `Anki[F]` has no `suspend`/`unsuspend` operation, so this is new algebra plus `InMemoryAnki` plus the `AnkiConnect` actions (verified present: `suspend`, `unsuspend`, `suspended`, `areSuspended`). Note the return trip — `Unflag` must unsuspend, and unlike a deck move it does not come free from the existing deck-difference logic.
+3. ~~**Suspend orphans.**~~ **BUILT** — `Anki[F].suspend`/`unsuspend` exist in all three interpreters and were verified live. `Flag` tags then suspends; `Unflag` unsuspends then clears the tag.
 4. **Check field names before writing.** _Partly done, 2026-08-21._ `sync` now runs `NoteTypeInstaller.readiness` before it observes the collection — one `modelNames` plus one `modelFieldNames` per note type — and refuses the whole run when a note type is absent or does not declare a field this tool writes. What is still open is narrower: nothing checks an INDIVIDUAL write's field names against the note type it names. The two coincide today, because every write is built by `CardSpec.fields` and `anki/NoteTypeAssets.test.scala` ties that to the manifests. `AnkiError.UnknownField` is still raised by `InMemoryAnki` and **unreachable** through `AnkiConnect`, because it cannot be classified from the wire: Anki reports a wrong field name as *"cannot create note because it is empty"*, exactly as it reports a genuinely empty note.
 5. **The `prune` command** — reads `orphaned::` tags. v0-adjacent.
 6. ~~**Repair-in-place of an existing note type is NOT BUILT.**~~ **BUILT — this item is closed.**
@@ -300,3 +344,85 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    templates up BY NAME and silently ignores names it does not recognise, so a wrong name is a
    repair that reports success and changes nothing.
 7. **The hazard list is not yet in the design docs.** Marc's condition: every entry must be honestly labelled ELIMINATED or MITIGATED — a documented hazard whose remedy is a workaround reads as solved and is worse than no note.
+8. ⚠️ **THERE ARE TWO SEPARATE RETYPE GATES AND `--dry-run` ONLY SEES ONE OF THEM.** _Read out
+   of the source on 2026-08-24, after a live run disagreed with its own preview. NOT FIXED._
+   Distinguishing the two is the whole of this item, because a fix aimed at the wrong one is
+   wasted:
+
+   - **The POLICY gate — `RetypePolicy.Defer` / `Apply`** (`plan/Retyping.scala`), off by
+     default, set by `--migrate-note-types`. Pure, needs no collection. The dry run DOES
+     consult it: `Report.kindOf` (`cli/Report.scala:280-282`) labels the action
+     *"move to another note type (NOT APPLIED — see --migrate-note-types)"* under `Defer`.
+   - **The COMPATIBILITY gate — `Retyping.refusalFor`.** Refuses a move whose old and new note
+     types differ in cloze-ness or in template count, because the note's cards keep their
+     ordinals while the type underneath them changes. It needs the SHAPE of both note types,
+     which is two AnkiConnect reads per name — so it is called only from
+     `plan/Executor.scala:266`, and **the dry run never reaches the Executor**
+     (`cli/Main.scala:929` returns `SyncOutcome.PlannedOnly(plan)` instead).
+
+   **The consequence:** run `--dry-run --migrate-note-types` and the preview says *"move to
+   another note type"* flatly, with no caveat; the real run then hits `refusalFor` and refuses
+   it. The preview and the run disagree, which is the one thing a preview exists not to do.
+
+   **The fix is not "call `refusalFor` from the dry run" as an afterthought.** Making the two
+   agree means the shape reads move ahead of the branch, so the dry run pays for them too —
+   two requests per DISTINCT note type named in the plan, which `Retyping.shapesOf` already
+   de-duplicates and which is empty when there is nothing to retype. That is the design
+   question to settle first.
+
+9. **THE COMPATIBILITY GATE IS DELIBERATELY NARROWER THAN THE TRUTH, AND WIDENING IT IS AN
+   EXPERIMENT, NOT AN EDIT.** Not a defect — `plan/Retyping.scala`'s header says so plainly —
+   but it is the reason a `1way` heading retagged `2way` will not migrate, which reads as a bug
+   from the outside. It refuses one-template-to-two even though that CANNOT strand a card,
+   because the move needs Anki to GENERATE the second card and non-generation is the silent
+   failure `SyncAction.Retype` exists to prevent. Both directions are unmeasured. What would
+   settle it is one measurement in a throwaway profile — never `User 1` — recording what Anki
+   actually does to a card whose ordinal its new note type cannot generate: survives, is
+   orphaned until Check Database, or is destroyed. Until somebody runs that, widening the gate
+   would be trading a documented refusal for an undocumented risk.
+
+10. **THE `if`-VERSUS-PATTERN-MATCH AUDIT IS SEVEN-ELEVENTHS DONE — FOUR FINDINGS ARE OPEN.**
+    Run by a subagent on 2026-08-23 against one question: where does an `if` or a `case _ =>`
+    decide something a sealed sum should have decided? Eleven findings, seven landed —
+    `plan/VaultScan.scala`'s `OrphanShelter`, `plan/SyncAction.scala`'s `Disposition` and
+    `ChangeKind`, `extract/Tables.scala`'s `DescriptorColumn`, among them.
+
+    The four that remain are written out in full, with file and line, as items **3, 4, 5 and 6
+    of `IN-FLIGHT.md`** — that is IN-FLIGHT's own numbering, not the audit's, and the entries
+    there are the ones to read. In the order they should be taken:
+
+    - **`extract/VaultWalker.scala:264` — THE ONLY ONE THAT CHANGES BEHAVIOUR,** so it needs a
+      RED test first. An `Either` is folded to a `Boolean`, collapsing three states into two,
+      and a file that fails to parse is then told "no heading carries a marker" — a claim the
+      tool never established.
+    - **`anki/NoteTypeInstall.scala:356-380` — four independent drift probes,** where a fifth
+      `NoteTypeDrift` case would match none of them and be reported as "nothing needed changing".
+    - **`anki/NoteTypeStatus` catch-alls at three sites,** where a fourth status reports clean.
+    - **STYLE only** — behaviour-preserving, and the entry argues it may not be worth doing.
+
+11. **THE DAY-TO-DAY QUEUE IS `IN-FLIGHT.md`, NOT THIS LIST.** This section holds the items that
+    outlive a session: rulings deferred to Marc, subsystems not built, hazards with a blast
+    radius. `IN-FLIGHT.md` holds what is mid-flight right now — currently sixteen numbered
+    items, the settled rulings behind them, the fixtures that look untidy on purpose, and the
+    mistakes worth not repeating. **Read both.** An item that survives more than a few sessions
+    belongs here; an item finished this week belongs there and then disappears.
+
+12. **FIVE DECISIONS ARE WAITING ON MARC, none of them blocking.** Named here so a later session
+    does not rediscover them as bugs and 'fix' them. Each is written out in full as items 7–11
+    of `IN-FLIGHT.md`.
+
+    - **Blank-rendering cards.** NOT the same thing as an empty section body, which is already a
+      hard refusal (`B6`, above). This is a card Anki keeps but cannot show — switching a table
+      to fewer directions leaves cards whose FRONT is empty, and Anki says "The front of this
+      card is blank" until Tools → Empty Cards is run. Say nothing, or count them and say so.
+    - **Content duplicates.** Two cards with identical fields under different keys trip nothing:
+      `allowDuplicate` is on and uniqueness is by key. Refusing would be wrong — two tables
+      legitimately defining one term is the author's business — so it could only be a report.
+    - **Obsidian tags onto Anki notes.** Requested 2026-08-22, so that a vault tag can drive an
+      Anki filtered deck. The hard part is not reading them: it is that an unprefixed vault tag
+      is indistinguishable from one somebody added by hand in Anki, and this tool must never
+      delete a tag believing it owned it.
+    - **Row scope at `cdd/2way` / `cdd/3way`** — a row card that blanks the CONCEPT rather than
+      the values. Needs a second template; not designed.
+    - **Whether to drop the `3way` / `3way/all` aliases** once the vault is rewritten to `cdd/`,
+      which would turn the old spelling from a silent synonym into a loud refusal.
