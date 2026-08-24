@@ -138,6 +138,61 @@ class NoteTypeRepairTest extends munit.FunSuite:
     assertEquals(plan.refusals, Vector.empty)
   }
 
+  // -------------------------- what differences each kind of status reports, and why ----
+
+  /** THE THREE CATCH-ALLS THIS REPLACED all said the same thing in different words:
+    * `case _ => true`, `case other => other.name -> Vector.empty`, `case _ => Vector.empty`.
+    * A fourth status would have been called clean by one, difference-free by the next, and
+    * gone unmentioned by the third — a note type nobody had classified, reported as fine.
+    *
+    * THE COMPILER NOW GATES THE QUESTION, once, at `NoteTypeStatus.differences`. What it cannot
+    * check is that an EXISTING case still answers the way it is supposed to, which is what this
+    * pins.
+    */
+  test("a status that is not Present reports no differences, and that is not 'matches'") {
+    val asset = assetNamed(ConceptDescriptor)
+
+    // NOT IN THE COLLECTION AT ALL, so there is no copy to compare against and nothing can be
+    // found to differ. Emptiness here is a statement about COMPARISON, not about health: the
+    // note type is missing, which the status itself says and `NoteTypeProblem` acts on.
+    assertEquals(NoteTypeStatus.Absent(asset).differences, Vector.empty)
+
+    // Same reasoning: the collection holds it under the OLD name, so this tool has not compared
+    // anything. The remedy is a hand-rename in Anki, not a repair.
+    assertEquals(
+      NoteTypeStatus.AwaitingManualRename(asset, "Old Name").differences,
+      Vector.empty,
+    )
+  }
+
+  test("a Present status reports exactly the differences it was built with") {
+    val asset = assetNamed(ConceptDescriptor)
+    val drift = Vector(NoteTypeDrift.StylingDiffers)
+
+    assertEquals(NoteTypeStatus.Present(asset, drift).differences, drift)
+    assertEquals(NoteTypeStatus.Present(asset, Vector.empty).differences, Vector.empty)
+  }
+
+  /** THE DISTINCTION THE EMPTINESS MUST NOT ERASE, asserted against the report rather than
+    * argued in a comment. An absent note type and a matching one BOTH report no differences;
+    * what separates them is the STATE line, which is why the report prints state and
+    * differences as two separate things. If a later change ever derived the state from the
+    * differences, this fails.
+    */
+  test("absent and matching are both difference-free and must still read differently") {
+    val absent   = NoteTypeStatus.Absent(assetNamed(ConceptDescriptor))
+    val matching = NoteTypeStatus.Present(assetNamed(ConceptDescriptor), Vector.empty)
+
+    assertEquals(absent.differences, matching.differences, "the premise of this test changed")
+
+    val lines = obsidiananki.cli.Report.noteTypes(
+      InstallOutcome(before = Vector(absent, matching), created = Vector.empty, failures = Vector.empty)
+    ).mkString("\n")
+
+    assert(lines.contains("absent"), s"an absent note type was not reported as absent:\n$lines")
+    assert(lines.contains("present, matches"), s"a matching note type lost its state:\n$lines")
+  }
+
   // ------------------------------- what each kind of difference means for a repair ----
 
   /** THE MAPPING, PINNED CASE BY CASE.

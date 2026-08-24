@@ -187,6 +187,34 @@ enum NoteTypeStatus:
 
   def name: String = asset.spec.name
 
+  /** HOW THIS NOTE TYPE DIFFERS FROM THE REPOSITORY'S COPY. Empty means no difference is known.
+    *
+    * IT REPLACES THREE CATCH-ALLS THAT EACH ANSWERED THE SAME QUESTION SEPARATELY.
+    * `RepairOutcome.isClean` matched `case _ => true`, `NoteTypeInstaller.repair` matched
+    * `case other => other.name -> Vector.empty`, and the report matched `case _ => Vector.empty`.
+    * Three places, three defaults, no gate: a FOURTH status would have been answered "clean" by
+    * the first, "no differences" by the second and nothing at all by the third — a note type the
+    * tool had just declined to classify, reported as fine.
+    *
+    * ASKED HERE THE QUESTION IS TOTAL, so a new case is a build error in ONE place, and the
+    * three consumers ask for `.differences` and do no matching at all.
+    *
+    * NAMED `differences` RATHER THAN `drift` ONLY BECAUSE `Present` ALREADY HAS A PARAMETER BY
+    * THAT NAME, and a member cannot share it. Renaming the parameter would be the tidier
+    * outcome and is a decision for Marc, not a side effect of this change.
+    *
+    * A NOTE THAT IS NOT THERE HAS NO DIFFERENCES, and that is a statement about comparison
+    * rather than about health. There is no copy in the collection to compare against, so
+    * nothing can be found to differ; whether its absence is a problem is a different question,
+    * answered by the case itself and by `NoteTypeProblem`. Reading emptiness here as "matches"
+    * would be the mistake — which is why the report prints the STATE and the DIFFERENCES as two
+    * separate things.
+    */
+  def differences: Vector[NoteTypeDrift] = this match
+    case Present(_, drift)          => drift
+    case Absent(_)                  => Vector.empty
+    case AwaitingManualRename(_, _) => Vector.empty
+
 /** A reason `sync` must not write to this collection.
   *
   * NARROWER THAN [[NoteTypeDrift]] ON PURPOSE — see the note at the top of this file. Only two
@@ -305,10 +333,9 @@ final case class InstallOutcome(
     * describe the same note type differently and nobody has decided which is right.
     */
   def isClean: Boolean =
-    failures.isEmpty && blockedByRename.isEmpty && before.forall {
-      case NoteTypeStatus.Present(_, drift) => drift.isEmpty
-      case _                                => true
-    }
+    // `case _ => true` until 2026-08-24, which called a status it had not classified clean.
+    // The question is now asked once, totally, at `NoteTypeStatus.differences`.
+    failures.isEmpty && blockedByRename.isEmpty && before.forall(_.differences.isEmpty)
 
 object NoteTypeInstaller:
 
@@ -524,10 +551,9 @@ object NoteTypeInstaller:
             plan = plan,
             applied = results.collect { case Right(action) => action },
             failures = results.collect { case Left(failure) => failure },
-            remainingDrift = after.map {
-              case NoteTypeStatus.Present(asset, drift) => asset.spec.name -> drift
-              case other                                => other.name -> Vector.empty
-            },
+            // `case other => other.name -> Vector.empty` until 2026-08-24. Every status can now
+            // be asked directly, and a new one has to say what it reports before this compiles.
+            remainingDrift = after.map(status => status.name -> status.differences),
           )
         }
       }

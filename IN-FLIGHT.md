@@ -70,12 +70,41 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
 
    `LeaveAlone` is unused today, and a test asserts that it stays unused, so choosing it later
    is a visible ruling rather than a quiet resting place for a case nobody decided about.
-4. **Catch-alls over `NoteTypeStatus` at three sites** — `NoteTypeInstall.scala:249-252` and
-   `:445-448`, and `cli/Report.scala:126-130`. A fourth status would be answered `true` by
-   `isClean`, `Vector.empty` by `remainingDrift`, and nothing at all by the report: a run
-   reporting clean over a collection it has just said it cannot classify. `NoteTypeStatus`
-   already carries `def asset` and `def name` as abstract members satisfied per case; it should
-   carry `def drift` the same way.
+4. ~~**Catch-alls over `NoteTypeStatus` at three sites.**~~ **DONE 2026-08-24.** The question is
+   now asked once, at `NoteTypeStatus.differences`, and the three consumers do no matching at
+   all — `isClean` is `before.forall(_.differences.isEmpty)`, the repair read-back is
+   `status.name -> status.differences`, and the report filters on `_.differences.nonEmpty`.
+
+   **It is named `differences`, not `drift`, only because `Present` already has a parameter
+   called `drift` and a member cannot share the name.** Renaming that parameter is the tidier
+   outcome and is Marc's call, not a side effect of an audit fix.
+
+   **It is a total match rather than the abstract member this entry proposed — and that was a
+   CHOICE, not a constraint.** _Corrected 2026-08-25 after Marc questioned the claim and it was
+   tested rather than remembered._
+
+   What is true: a Scala 3 **`enum` case** cannot carry a body. Both spellings are rejected by
+   the parser, not by the typer — `case Absent(x: String):` with an indented `def` gives
+   _"end of statement expected but ':' found"_, and
+   `case Absent(x: String) extends Status { def label = … }` gives the same for `{`. So an
+   abstract member on an `enum` can only be satisfied by a PARAMETER of that name, which is
+   exactly why `def asset` works and `differences` could not follow it.
+
+   What is NOT true, and was implied: that this made the abstract-member design impossible. The
+   restriction belongs to the `enum` SYNTAX, not to Scala. The desugared shape — a `sealed
+   trait` with `final case class`es defining the member each beside its own case — compiles
+   fine, and was verified compiling. Converting `NoteTypeStatus` to a sealed trait would have
+   bought the original design.
+
+   Why the total match was kept anyway: it is the shape `NoteTypeDrift.describe` and
+   `NoteTypeDrift.repair` already use in the same file, the diff is far smaller, and the gate is
+   identical in strength — the compiler refuses a new case either way. **Reopen this if the
+   sealed-trait form is wanted for its own sake**; it is a live option, not a closed door.
+
+   _Verified by adding a fourth case. The report's state line already refused it — that gate
+   existed. What is new is that satisfying the state line no longer lets the build go green:
+   `differences` refuses independently, which is exactly the hole, since an author who fixed
+   the one error they were shown would previously have shipped three silent wrong answers._
 5. ~~**`extract/VaultWalker.scala:264` folds an `Either` to a `Boolean`.**~~ **DONE 2026-08-24.**
    The three states are now the `MarkedHeadings` enum — `Present`, `Absent`, `CouldNotLook` —
    named for the epistemic state rather than for the parser, because what matters downstream is

@@ -371,7 +371,7 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    unestablished is whether Anki GENERATES the extra cards. The gate is unchanged; only the
    explanation is now true in both directions, and a test pins them apart.
 
-10. **THE `if`-VERSUS-PATTERN-MATCH AUDIT IS NINE-ELEVENTHS DONE — TWO FINDINGS ARE OPEN.**
+10. **THE `if`-VERSUS-PATTERN-MATCH AUDIT IS TEN-ELEVENTHS DONE — ONE FINDING IS OPEN, AND IT IS THE STYLE ONE.**
     Run by a subagent on 2026-08-23 against one question: where does an `if` or a `case _ =>`
     decide something a sealed sum should have decided? Eleven findings, seven landed —
     `plan/VaultScan.scala`'s `OrphanShelter`, `plan/SyncAction.scala`'s `Disposition` and
@@ -385,7 +385,7 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
       See IN-FLIGHT item 5 for what it needed beyond the match: removing the false message left
       a file with nothing said about it, so it also took a new `BuildFailure.MarkerUnknowable`.
     - ~~`anki/NoteTypeInstall.scala` drift probes~~ **DONE 2026-08-24** — see IN-FLIGHT item 3.
-    - **`anki/NoteTypeStatus` catch-alls at three sites,** where a fourth status reports clean.
+    - ~~`NoteTypeStatus` catch-alls at three sites~~ **DONE 2026-08-24** — see IN-FLIGHT item 4.
     - **STYLE only** — behaviour-preserving, and the entry argues it may not be worth doing.
 
 11. **THE DAY-TO-DAY QUEUE IS `IN-FLIGHT.md`, NOT THIS LIST.** This section holds the items that

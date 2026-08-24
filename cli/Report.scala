@@ -172,10 +172,12 @@ object Report:
       f"  ${status.name}%-36s $state"
     }
 
-    val drifts = outcome.before.flatMap {
-      case NoteTypeStatus.Present(asset, drift) if drift.nonEmpty =>
-        s"  ${asset.spec.name}" +: drift.map("    " + _.describe)
-      case _ => Vector.empty
+    // ASKS EVERY STATUS, rather than matching `Present` and answering `case _ => Vector.empty`
+    // for the rest — which is how a status nobody had classified went unmentioned entirely.
+    // A status with no differences contributes no lines, which is not the same as it MATCHING:
+    // the state line above says which it is, and the two are printed separately on purpose.
+    val drifts = outcome.before.filter(_.differences.nonEmpty).flatMap { status =>
+      s"  ${status.name}" +: status.differences.map("    " + _.describe)
     }
     val driftLines =
       if drifts.isEmpty then Vector.empty
