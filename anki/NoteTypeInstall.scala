@@ -87,6 +87,65 @@ enum NoteTypeDrift:
     case StylingDiffers =>
       "the stylesheet differs from the repository"
 
+  /** WHAT REPAIRING THIS DIFFERENCE WOULD MEAN. Every case must answer, and that is the point.
+    *
+    * IT LIVES ON THE SUM RATHER THAN IN THE PLANNER because of how the planner used to ask.
+    * `planRepair` ran FOUR INDEPENDENT PROBES over the drift list — a `collectFirst` for one
+    * case, two `collect`s, and a `.contains` for the fourth. A partial function is legal over
+    * any subset, so a FIFTH case would have matched none of them, contributed no action, and
+    * left the note type in `unchanged`; the run would then print "REPAIR: nothing needed
+    * changing" about a note type that demonstrably differs. Nothing in the compiler had
+    * anything to say about it, because nothing was asking a total question.
+    *
+    * ASKED HERE, THE QUESTION IS TOTAL. Adding a case to this enum without extending this match
+    * is a BUILD ERROR — `project.scala` ends `-Wconf:msg=exhaustive:e` — so the decision about
+    * what repairing it means cannot be postponed by accident.
+    */
+  def repair: DriftRepair = this match
+    // ONLY MISSING FIELDS ARE ADDED, and this is where "field ORDER is not repaired" actually
+    // happens: a reordering leaves nothing to filter, so this yields an empty list and the note
+    // type plans no action. Reordering somebody's fields changes their Browse columns and
+    // nothing this tool stores — it writes fields BY NAME. A field the collection has and the
+    // repository does not is likewise never removed: that would delete its content from every
+    // note of the type.
+    case FieldsDiffer(declared, inCollection) =>
+      DriftRepair.AddFields(declared.filterNot(inCollection.contains))
+
+    // REFUSES THE WHOLE NOTE TYPE, not merely its template action. With the names disagreeing
+    // there is no way to know which repository template corresponds to which of the
+    // collection's, so overwriting any of them is a guess.
+    case d: TemplateNamesDiffer => DriftRepair.RefuseWholeType(d.describe)
+
+    case TemplateSideDiffers(templateName, _) => DriftRepair.ReplaceTemplate(templateName)
+    case StylingDiffers                       => DriftRepair.ReplaceStyling
+
+/** What a repair does about ONE difference. Deliberately carries no note-type name: it says
+  * WHAT to do, and [[NoteTypeInstaller.planRepair]] — which knows which note type is being
+  * planned — turns it into a named [[RepairAction]].
+  */
+enum DriftRepair:
+  /** Abandon this note type entirely, with the reason to print. */
+  case RefuseWholeType(reason: String)
+
+  /** Add these field names, in this order. EMPTY IS MEANINGFUL and is the ordinary answer for a
+    * difference that is only a reordering: there is a real difference, and nothing to do about
+    * it that would not be a cosmetic edit to somebody's collection.
+    */
+  case AddFields(missing: Vector[String])
+
+  case ReplaceTemplate(templateName: String)
+  case ReplaceStyling
+
+  /** A difference this tool has DECIDED not to act on.
+    *
+    * NOT A DEFAULT AND NOT A SHRUG. Nothing uses it today; it exists so that a future drift
+    * case whose right answer is genuinely "leave it" can say so in one word, instead of the
+    * author reaching for `AddFields(Vector.empty)` and leaving the next reader to work out
+    * whether that was a ruling or an oversight. Choosing it is a claim that doing nothing is
+    * CORRECT here, and it belongs beside a comment saying why.
+    */
+  case LeaveAlone
+
 /** What the collection holds for ONE of this tool's note types. */
 enum NoteTypeStatus:
   /** DECLARED ABSTRACT AND SATISFIED BY EACH CASE'S OWN `asset` PARAMETER. Every status is
@@ -344,38 +403,61 @@ object NoteTypeInstaller:
     * same reason and a stronger one: removing a field DELETES ITS CONTENT from every note of
     * that type.
     */
+  /** What a note type's differences add up to, while they are being folded together.
+    *
+    * NAME-FREE, like [[DriftRepair]] itself: it accumulates WHAT to do, and the caller — which
+    * knows which note type it is planning — attaches the name. `nothing` is written out rather
+    * than given as parameter defaults, so the empty state is a value with a name instead of
+    * four defaults that a later `copy` could quietly rely on.
+    */
+  private final case class Gathered(
+      refusal: Option[String],
+      fields: Vector[String],
+      templates: Vector[String],
+      styling: Boolean,
+  )
+
+  private object Gathered:
+    val nothing: Gathered = Gathered(None, Vector.empty, Vector.empty, styling = false)
+
   def planRepair(statuses: Vector[NoteTypeStatus]): RepairPlan =
     val present = statuses.collect { case p @ NoteTypeStatus.Present(_, _) => p }
 
     val perType = present.map { case NoteTypeStatus.Present(asset, drift) =>
       val name = asset.spec.name
 
-      // Refuse the WHOLE note type, not just its template action: with the names disagreeing
-      // there is no way to know which repository template corresponds to which of the
-      // collection's, so overwriting any of them is a guess.
-      val namesDiffer = drift.collectFirst { case d: NoteTypeDrift.TemplateNamesDiffer => d }
+      // ONE TOTAL QUESTION, ASKED OF EVERY DIFFERENCE IN TURN — replacing four independent
+      // probes over the same list (a `collectFirst`, two `collect`s and a `.contains`). A
+      // partial function is legal over any subset, so a fifth drift case matched none of them,
+      // planned nothing, and left the note type reported as needing no change. Both matches in
+      // this path are now total, so a new [[NoteTypeDrift]] case breaks the build at
+      // `NoteTypeDrift.repair`, and a new [[DriftRepair]] case breaks it here.
+      val gathered = drift.map(_.repair).foldLeft(Gathered.nothing) { (acc, r) =>
+        r match
+          // FIRST REFUSAL WINS, matching the `collectFirst` this replaced. Which one is
+          // reported does not matter — a refusal abandons the whole note type either way — but
+          // being deliberate about it keeps the message stable across runs.
+          case DriftRepair.RefuseWholeType(reason) => acc.copy(refusal = acc.refusal.orElse(Some(reason)))
+          case DriftRepair.AddFields(missing)      => acc.copy(fields = acc.fields ++ missing)
+          case DriftRepair.ReplaceTemplate(t)      => acc.copy(templates = acc.templates :+ t)
+          case DriftRepair.ReplaceStyling          => acc.copy(styling = true)
+          case DriftRepair.LeaveAlone              => acc
+      }
 
-      namesDiffer match
-        case Some(d) =>
-          (Vector.empty[RepairAction], Vector(RepairRefused(name, d.describe)), Vector.empty[String])
+      gathered.refusal match
+        case Some(reason) =>
+          (Vector.empty[RepairAction], Vector(RepairRefused(name, reason)), Vector.empty[String])
 
         case None =>
-          val addFields = drift.collect { case NoteTypeDrift.FieldsDiffer(declared, inCollection) =>
-            declared.filterNot(inCollection.contains).map(RepairAction.AddField(name, _))
-          }.flatten
+          // ONE `ReplaceTemplates` PER NOTE TYPE, naming every template that differs on either
+          // side — `distinct` because a front AND a back difference on one template are two
+          // drift entries and one template to rewrite.
+          val actions =
+            gathered.fields.map(RepairAction.AddField(name, _)) ++
+              (if gathered.templates.isEmpty then Vector.empty
+               else Vector(RepairAction.ReplaceTemplates(name, gathered.templates.distinct))) ++
+              (if gathered.styling then Vector(RepairAction.ReplaceStyling(name)) else Vector.empty)
 
-          val touchedTemplates =
-            drift.collect { case NoteTypeDrift.TemplateSideDiffers(t, _) => t }.distinct
-
-          val templateAction =
-            if touchedTemplates.isEmpty then Vector.empty
-            else Vector(RepairAction.ReplaceTemplates(name, touchedTemplates))
-
-          val stylingAction =
-            if drift.contains(NoteTypeDrift.StylingDiffers) then Vector(RepairAction.ReplaceStyling(name))
-            else Vector.empty
-
-          val actions = addFields ++ templateAction ++ stylingAction
           if actions.isEmpty then (Vector.empty, Vector.empty, Vector(name))
           else (actions, Vector.empty, Vector.empty)
     }

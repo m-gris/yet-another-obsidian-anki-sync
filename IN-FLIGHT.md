@@ -59,13 +59,17 @@ Two changes DO rewrite content. Both were deliberate and both were reported to M
 
 The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 findings; seven landed.
 
-3. **`anki/NoteTypeInstall.scala:356-380` — four independent drift probes.** `NoteTypeDrift` has
-   four cases, each consumed by its own `collect` / `collectFirst` / `.contains`. A fifth case
-   (`SortFieldDiffers` is the obvious candidate) matches no probe, so `actions` is empty, the note
-   type lands in `unchanged`, and the report prints "REPAIR: nothing needed changing" for a note
-   type that differs. Partly mitigated by accident — `repair` re-reads the collection, so the
-   report contradicts itself rather than lying outright. Fix: one total `dispositionOf(drift)`
-   returning Refuse / Fix / LeaveAlone, folded over the drift list.
+3. ~~**`anki/NoteTypeInstall.scala:356-380` — four independent drift probes.**~~ **DONE
+   2026-08-24**, as IN-FLIGHT proposed: one total question per difference, folded over the list.
+
+   `NoteTypeDrift.repair` returns a `DriftRepair` — `RefuseWholeType`, `AddFields`,
+   `ReplaceTemplate`, `ReplaceStyling`, `LeaveAlone` — and the planner folds those with a match
+   that is itself total. **Two gates, not one:** a new `NoteTypeDrift` case breaks the build at
+   `repair`, and a new `DriftRepair` case breaks it at the fold. Both verified by adding the
+   `SortFieldDiffers` case the entry named and watching the compiler refuse it.
+
+   `LeaveAlone` is unused today, and a test asserts that it stays unused, so choosing it later
+   is a visible ruling rather than a quiet resting place for a case nobody decided about.
 4. **Catch-alls over `NoteTypeStatus` at three sites** — `NoteTypeInstall.scala:249-252` and
    `:445-448`, and `cli/Report.scala:126-130`. A fourth status would be answered `true` by
    `isClean`, `Vector.empty` by `remainingDrift`, and nothing at all by the report: a run

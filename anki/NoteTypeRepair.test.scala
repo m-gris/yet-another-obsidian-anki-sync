@@ -138,6 +138,79 @@ class NoteTypeRepairTest extends munit.FunSuite:
     assertEquals(plan.refusals, Vector.empty)
   }
 
+  // ------------------------------- what each kind of difference means for a repair ----
+
+  /** THE MAPPING, PINNED CASE BY CASE.
+    *
+    * `NoteTypeDrift.repair` is a total match, so the COMPILER already refuses a new drift case
+    * that says nothing about repairing itself — that gate is the point of the type and needs no
+    * test. What the compiler cannot see is whether an EXISTING case still means what it meant:
+    * changing `TemplateSideDiffers` to answer `LeaveAlone`, say, compiles perfectly and quietly
+    * stops repairing templates.
+    *
+    * WHY THIS IS NOT REDUNDANT WITH THE `planRepair` TESTS BELOW. Those drive the planner
+    * through a fake collection and assert on the actions it emits, which is the right shape for
+    * behaviour but reaches each drift case only as far as some fixture happens to produce it.
+    * This asserts the rule directly, on hand-built values, including combinations no fixture
+    * makes.
+    */
+  test("every kind of drift says what repairing it means, and says the right thing") {
+    assertEquals(
+      NoteTypeDrift.FieldsDiffer(Vector("A", "B", "C"), Vector("A")).repair,
+      DriftRepair.AddFields(Vector("B", "C")),
+      "a field the repository declares and the collection lacks must be added",
+    )
+
+    // THE DELIBERATE NO-OP. Same members, different order: nothing is missing, so nothing is
+    // added. Reordering somebody's fields rearranges their Browse columns uninvited, and this
+    // tool writes fields BY NAME so the order changes nothing it depends on.
+    assertEquals(
+      NoteTypeDrift.FieldsDiffer(Vector("A", "B"), Vector("B", "A")).repair,
+      DriftRepair.AddFields(Vector.empty),
+      "a pure reordering proposed a field change",
+    )
+
+    // NEVER REMOVED. A field the collection has and the repository does not stays: removing it
+    // deletes its content from every note of that type.
+    assertEquals(
+      NoteTypeDrift.FieldsDiffer(Vector("A"), Vector("A", "TheirOwnField")).repair,
+      DriftRepair.AddFields(Vector.empty),
+      "a repair proposed touching a field the repository does not declare",
+    )
+
+    assertEquals(
+      NoteTypeDrift.TemplateSideDiffers("Card 1", TemplateSide.Front).repair,
+      DriftRepair.ReplaceTemplate("Card 1"),
+    )
+    assertEquals(NoteTypeDrift.StylingDiffers.repair, DriftRepair.ReplaceStyling)
+
+    // THE WHOLE NOTE TYPE, not just its templates: with the names disagreeing there is no way
+    // to know which repository template corresponds to which of the collection's.
+    val names = NoteTypeDrift.TemplateNamesDiffer(Vector("Card 1"), Vector("Karte 1"))
+    assertEquals(names.repair, DriftRepair.RefuseWholeType(names.describe))
+  }
+
+  /** NOTHING ANSWERS `LeaveAlone` TODAY, and this is what says so out loud.
+    *
+    * `LeaveAlone` exists for a future difference whose right answer is genuinely "do nothing" —
+    * a ruling, made deliberately, beside a comment saying why. It is not a resting place for a
+    * case nobody got round to. If this test starts failing, that is the question being asked:
+    * was the new `LeaveAlone` a decision, or a way of not making one?
+    */
+  test("no difference this tool knows about is currently answered by doing nothing") {
+    val everyKind = Vector(
+      NoteTypeDrift.FieldsDiffer(Vector("A"), Vector("B")),
+      NoteTypeDrift.TemplateNamesDiffer(Vector("Card 1"), Vector("Karte 1")),
+      NoteTypeDrift.TemplateSideDiffers("Card 1", TemplateSide.Back),
+      NoteTypeDrift.StylingDiffers,
+    )
+    assertEquals(
+      everyKind.filter(_.repair == DriftRepair.LeaveAlone),
+      Vector.empty,
+      "a known difference is now answered by doing nothing — deliberate ruling, or oversight?",
+    )
+  }
+
   test("a note type identical to the repository is planned nothing and reported unchanged") {
     val anki = collectionWith(assets.map(_.spec)*)
     val plan = NoteTypeInstaller.planRepair(surveyOf(anki))
