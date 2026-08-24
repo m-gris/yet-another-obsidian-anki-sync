@@ -177,6 +177,58 @@ class RetypingTest extends munit.FunSuite:
     )
   }
 
+  /** THE REFUSAL MUST NAME THE RIGHT UNKNOWN, and the two directions have different ones.
+    *
+    * A single sentence covered both until 2026-08-24 and was accurate for only one: it said the
+    * cards might carry an ordinal the new note type cannot generate, which is what happens when
+    * the template count SHRINKS and cannot happen when it grows. Somebody retagging a heading
+    * from one card to two was sent to reason about stranded cards that do not exist, while the
+    * actual reason the tool withholds the move — that card GENERATION on a note-type change is
+    * unmeasured — appeared nowhere.
+    *
+    * ASSERTED ON THE DISTINGUISHING CLAUSE, not on the whole sentence. Pinning the full text
+    * would make this a change-detector that fails on any rewording; pinning the clause that
+    * differs is what stops the two reasons being collapsed back into one.
+    */
+  test("a refusal explains the direction it is refusing, and the two directions differ") {
+    val shrinking = RetypeRefusal.TemplateCountDiffers("Wide", 3, "Narrow", 1).describe
+    val growing   = RetypeRefusal.TemplateCountDiffers("Narrow", 1, "Wide", 3).describe
+
+    assert(
+      shrinking.contains("ordinals it cannot generate"),
+      s"the shrinking refusal stopped naming the stranded card, which is its whole reason: $shrinking",
+    )
+    assert(
+      !shrinking.contains("GENERATES"),
+      s"the shrinking refusal blamed generation, which is the other direction's unknown: $shrinking",
+    )
+
+    assert(
+      growing.contains("GENERATES"),
+      s"the growing refusal stopped naming card generation, which is its only reason: $growing",
+    )
+    assert(
+      growing.contains("No existing card would be stranded"),
+      s"the growing refusal did not say that stranding cannot happen here: $growing",
+    )
+
+    assertNotEquals(
+      shrinking,
+      growing,
+      "both directions gave the same reason again — one of them is therefore wrong, which is " +
+        "exactly the state this test was written to end",
+    )
+
+    // BOTH STILL REFUSED. The message changed; the gate did not. If this ever fails because
+    // growing now returns None, that is the measurement having landed — update `IN-FLIGHT.md`
+    // and this test together, and say which profile it was measured in.
+    assertEquals(
+      Retyping.refusalFor("Narrow", NoteTypeShape(1, false), "Wide", NoteTypeShape(3, false)),
+      Some(RetypeRefusal.TemplateCountDiffers("Narrow", 1, "Wide", 3)),
+      "the growth direction was admitted without a measurement to justify it",
+    )
+  }
+
   // ------------------------------------------- the verdict: both halves at once ----
 
   /** `verdictFor` IS THE FIX FOR A PREVIEW THAT LIED. The policy half was pure and the report

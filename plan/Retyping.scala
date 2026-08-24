@@ -67,11 +67,32 @@ enum RetypeRefusal:
       s"'$from' is ${kindOf(fromIsCloze)} note type and '$to' is ${kindOf(toIsCloze)} one. " +
         "A card's ordinal means a template on one and a cloze number on the other, so the " +
         "existing cards would carry ordinals the new note type does not generate"
+    // THE TWO DIRECTIONS ARE REFUSED FOR DIFFERENT REASONS, AND SAYING SO IS THE POINT.
+    // One sentence used to cover both, and it was accurate for only one of them: it told the
+    // reader that a card might carry an ordinal the new note type cannot generate, which is
+    // true when the template count SHRINKS and simply false when it grows — growing cannot
+    // strand anything, by arithmetic. A person retagging `#flashcard/1way` as `2way` was
+    // therefore sent to think about stranded cards that cannot exist, and the real reason the
+    // move is withheld — that card GENERATION on a note-type change is unmeasured — was never
+    // stated.
+    //
+    // THE GATE ITSELF IS UNCHANGED: both directions are still refused, because the growth case
+    // is unmeasured rather than known-safe. What changes is that the refusal now names which
+    // unknown it is protecting the reader from. See `IN-FLIGHT.md` for the one measurement
+    // that would let the growth branch be admitted.
     case TemplateCountDiffers(from, fromCount, to, toCount) =>
-      s"'$from' has $fromCount card template(s) and '$to' has $toCount. " +
-        "Moving a note between note types keeps its cards and their ordinals, and this tool " +
-        "has not established what Anki does with a card whose ordinal the new note type " +
-        "cannot generate"
+      val counts = s"'$from' has $fromCount card template(s) and '$to' has $toCount. "
+      if fromCount > toCount then
+        counts +
+          "Moving a note between note types keeps its cards and their ordinals, so the cards " +
+          "past the new note type's last template would carry ordinals it cannot generate, and " +
+          "this tool has not established what Anki then does with them"
+      else
+        counts +
+          "No existing card would be stranded by this — every ordinal the note already has " +
+          "exists on the wider note type. What is unestablished is the other half: whether " +
+          "Anki GENERATES the additional cards when a note changes type, or leaves the note " +
+          "silently short of them"
 
   /** The sentence that follows the reason wherever this is reported. Written once, here,
     * because it is the same remedy in every case and a second copy would drift from this one.
