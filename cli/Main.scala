@@ -926,7 +926,25 @@ object Main
             (if dryRun then IO.println("DRY RUN — the plan below will NOT be applied.")
              else IO.unit) *>
               Report.plan(plan, retypePolicy).traverse_(IO.println) *>
-              (if dryRun then IO.pure(SyncOutcome.PlannedOnly(plan))
+              (if dryRun then
+                 // THE DRY RUN ASKS THE SAME QUESTION THE REAL RUN ASKS, and this is the whole
+                 // reason `Executor.preview` exists. `Report.plan` above renders the POLICY
+                 // half of the retype decision and cannot reach the other half, which needs the
+                 // note types read out of the collection — so `--dry-run --migrate-note-types`
+                 // used to print `1 move to another note type` and `result: OK` over a move the
+                 // real run then refused.
+                 //
+                 // A FAILED READ ENDS THE DRY RUN rather than being reported as an empty
+                 // preview. Nothing has been written — a dry run writes nothing by
+                 // construction — so ending here costs the person only the answer they came
+                 // for, which is better than a preview that quietly stopped checking.
+                 Executor.preview[Refused](plan, anki, retypePolicy).value.flatMap {
+                   case Left(error) => IO.pure(SyncOutcome.AbortedDuringExecution(error))
+                   case Right(verdicts) =>
+                     Report.retypePreview(verdicts).traverse_(IO.println).as(
+                       SyncOutcome.PlannedOnly(plan)
+                     )
+                 }
                else
                  Executor.run[Refused](plan, anki, retypePolicy).value.map {
                    case Left(error)   => SyncOutcome.AbortedDuringExecution(error)

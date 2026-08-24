@@ -210,21 +210,58 @@ object Executor:
         // an already-decided split rather than the decision itself — which is the difference
         // between a partial function used for its type and one used for its control flow.
         val deferred = setAside.collect { case retype: SyncAction.Retype => retype }
-        applyEach(rest, anki, Map.empty).map(ExecutionReport(_, deferred))
+        applyEach(rest, anki, Map.empty, policy).map(ExecutionReport(_, deferred))
 
       case RetypePolicy.Apply =>
         Retyping
           .shapesOf(anki, Retyping.noteTypesIn(plan))
-          .flatMap(shapes => applyEach(plan.actions, anki, shapes).map(ExecutionReport(_, Vector.empty)))
+          .flatMap(shapes => applyEach(plan.actions, anki, shapes, policy).map(ExecutionReport(_, Vector.empty)))
+
+  /** WHAT A REAL RUN WOULD DECIDE ABOUT EVERY RETYPE, WITHOUT WRITING ANYTHING.
+    *
+    * THIS IS THE DRY RUN'S HALF OF THE FIX. `--dry-run` returns before [[run]] is ever called,
+    * so until this existed the preview could see the policy and never the note-type shapes, and
+    * announced migrations the real run then refused.
+    *
+    * IT PAYS THE SAME PRICE THE RUN PAYS, AND ONLY THAT. Under [[RetypePolicy.Defer]] no
+    * request is made at all — the answer does not depend on the collection. Under
+    * [[RetypePolicy.Apply]] it makes exactly the reads [[run]] makes: two per DISTINCT note
+    * type named in the plan, de-duplicated by `Retyping.shapesOf`, and none at all when the
+    * plan holds no retypes. A dry run is therefore no longer free in the one case where being
+    * free meant being wrong.
+    *
+    * A FAILURE TO READ THE SHAPES PROPAGATES rather than being swallowed into a verdict. The
+    * preview cannot both fail to look and claim to know; a run that cannot reach the collection
+    * has a connection problem, and saying so is more useful than reporting every retype as
+    * unmeasurable.
+    */
+  def preview[F[_]](plan: Plan, anki: Anki[F], policy: RetypePolicy)(using
+      F: MonadError[F, AnkiError]
+  ): F[Vector[(SyncAction.Retype, RetypeVerdict)]] =
+    val retypes = plan.actions.collect { case retype: SyncAction.Retype => retype }
+
+    // THE POLICY BRANCH DECIDES WHETHER TO READ, NOT WHAT TO ANSWER. Both arms hand the same
+    // `policy` to the same `verdictFor`; the only difference is whether shapes were fetched
+    // first. Answering `DeferredByPolicy` directly here would be a second copy of the decision,
+    // which is the exact defect this function exists to remove.
+    policy match
+      case RetypePolicy.Defer =>
+        F.pure(retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, Map.empty)))
+
+      case RetypePolicy.Apply =>
+        Retyping
+          .shapesOf(anki, Retyping.noteTypesIn(plan))
+          .map(shapes => retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, shapes)))
 
   private def applyEach[F[_]](
       actions: Vector[SyncAction],
       anki: Anki[F],
       shapes: Map[String, NoteTypeShape],
+      policy: RetypePolicy,
   )(using F: MonadError[F, AnkiError]): F[Vector[ExecutionFailure]] =
     actions
       .traverse(action =>
-        runOne(action, anki, shapes).attempt.map(_.left.toOption.map(ExecutionFailure(action, _)))
+        runOne(action, anki, shapes, policy).attempt.map(_.left.toOption.map(ExecutionFailure(action, _)))
       )
       .map(_.flatten)
 
@@ -232,6 +269,7 @@ object Executor:
       action: SyncAction,
       anki: Anki[F],
       shapes: Map[String, NoteTypeShape],
+      policy: RetypePolicy,
   )(using F: MonadError[F, AnkiError]): F[Unit] =
     action match
       // The identity tag travels inside NewNote, so it is written by the call that creates
@@ -261,17 +299,36 @@ object Executor:
         // content under a stale hash, so none of the fields-first-hash-last ordering that
         // governs `Change.FieldsChanged` applies here.
         val what = s"move '${key.path.render}' from note type '$from' to '$to'"
-        (shapes.get(from), shapes.get(to)) match
-          case (Some(fromShape), Some(toShape)) =>
-            Retyping.refusalFor(from, fromShape, to, toShape) match
-              // REFUSED PER NOTE, LOUDLY, and reported as a failure rather than as a deferral:
-              // a deferral is this tool declining to act on instruction, whereas this is it
-              // declining to act on evidence, and the person needs to see the difference.
-              case Some(refusal) =>
-                F.raiseError(
-                  AnkiError.UnsupportedOperation(what, s"${refusal.describe} — ${refusal.remedy}")
-                )
-              case None =>
+
+        // ASKED, NOT RE-DECIDED. This branch used to read the two shapes and call
+        // `refusalFor` itself, which is how the dry run came to disagree with the run: the
+        // preview could reach the policy half of the decision and never this half. Both now
+        // call `Retyping.verdictFor`, so there is one decision and it cannot drift.
+        Retyping.verdictFor(from, to, policy, shapes) match
+          // REFUSED PER NOTE, LOUDLY, and reported as a failure rather than as a deferral:
+          // a deferral is this tool declining to act on instruction, whereas this is it
+          // declining to act on evidence, and the person needs to see the difference.
+          case RetypeVerdict.RefusedByShapes(refusal) =>
+            F.raiseError(
+              AnkiError.UnsupportedOperation(what, s"${refusal.describe} — ${refusal.remedy}")
+            )
+
+          // AN INVARIANT BREAK, NOT A CASE TO HANDLE GRACEFULLY. Under `Defer` every Retype is
+          // partitioned out of execution by `dispositionUnder` before `applyEach` is reached,
+          // so arriving here means that partition and this decision disagree about what
+          // deferral means. Raising is the only honest answer: silently applying would perform
+          // the one operation the policy exists to withhold, and silently skipping would
+          // report a clean run over work that was never done.
+          case RetypeVerdict.DeferredByPolicy =>
+            F.raiseError(
+              AnkiError.UnsupportedOperation(
+                what,
+                "a deferred retype reached the executor — the partition in `Executor.run` and " +
+                  "`Retyping.verdictFor` disagree about what RetypePolicy.Defer means",
+              )
+            )
+
+          case RetypeVerdict.WillApply =>
                 // NOTE TYPE FIRST, DECK SECOND, and the order follows this file's own rule:
                 // leave work to be REDONE rather than work believed done. Interrupted between
                 // the two, the note is on its new type and its deck is still wrong — which the
@@ -284,8 +341,9 @@ object Executor:
           // NOT REACHABLE from `run`, which reads the shape of every note type the plan names
           // before it applies anything. Raising rather than defaulting is still the right
           // shape: any default here is a decision about somebody's review history taken by a
-          // branch nobody meant to write.
-          case _ =>
+          // branch nobody meant to write. It is now a NAMED case rather than a catch-all, so
+          // a fifth verdict has to answer for itself here instead of being swept in with it.
+          case RetypeVerdict.ShapesUnavailable(_, _) =>
             F.raiseError(
               AnkiError.UnsupportedOperation(
                 what,

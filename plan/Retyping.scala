@@ -97,7 +97,64 @@ enum RetypePolicy:
   case Defer
   case Apply
 
+/** WHAT A RUN WILL ACTUALLY DO WITH ONE RETYPE — the whole decision, as a value.
+  *
+  * IT EXISTS BECAUSE THE DECISION HAD TWO HALVES IN TWO PLACES AND ONLY ONE CALLER COULD SEE
+  * BOTH. The policy half ([[RetypePolicy]]) is pure and was consulted by the report, so a dry
+  * run rendered it correctly. The shape half ([[Retyping.refusalFor]]) needs the note types
+  * read out of the collection, so it lived inside `Executor.runOne` — and a dry run never
+  * reaches the executor. The result was a preview that promised a migration the real run then
+  * refused: `--dry-run --migrate-note-types` printed `1 move to another note type` and
+  * `result: OK` over a move that could not happen.
+  *
+  * A PREVIEW THAT DISAGREES WITH THE RUN IT PREVIEWS IS WORSE THAN NO PREVIEW, because it is
+  * believed. So the decision is now one total function over both halves, and both the preview
+  * and the run ask it rather than each deciding a part. They cannot drift while there is only
+  * one of it.
+  */
+enum RetypeVerdict:
+
+  /** The policy allows it and the shapes permit it. */
+  case WillApply
+
+  /** The policy withholds it. NOT a refusal: the tool was not asked, and says so. */
+  case DeferredByPolicy
+
+  /** The policy allows it and the shapes forbid it — declining on EVIDENCE, not on
+    * instruction, which is why it is reported as a failure rather than as a deferral.
+    */
+  case RefusedByShapes(refusal: RetypeRefusal)
+
+  /** A note type the plan names could not be measured. Distinct from a refusal on purpose:
+    * refusing says the move is wrong, this says the question could not be asked.
+    */
+  case ShapesUnavailable(from: String, to: String)
+
 object Retyping:
+
+  /** THE ONE PLACE THAT DECIDES. Pure, so a preview costs nothing beyond the shape reads it
+    * shares with the run, and so every branch is drivable without a collection.
+    *
+    * THE POLICY IS ASKED FIRST, and that ordering is load-bearing rather than stylistic. Under
+    * [[RetypePolicy.Defer]] no shapes are read at all — a deferred run must not pay for two
+    * requests per note type to answer a question whose answer it has already declined to act
+    * on. So `shapes` is legitimately empty there, and consulting it first would turn every
+    * deferral into a [[RetypeVerdict.ShapesUnavailable]].
+    */
+  def verdictFor(
+      from: String,
+      to: String,
+      policy: RetypePolicy,
+      shapes: Map[String, NoteTypeShape],
+  ): RetypeVerdict = policy match
+    case RetypePolicy.Defer => RetypeVerdict.DeferredByPolicy
+    case RetypePolicy.Apply =>
+      (shapes.get(from), shapes.get(to)) match
+        case (Some(fromShape), Some(toShape)) =>
+          refusalFor(from, fromShape, to, toShape)
+            .fold(RetypeVerdict.WillApply)(RetypeVerdict.RefusedByShapes(_))
+        case _ => RetypeVerdict.ShapesUnavailable(from, to)
+
 
   /** PURE, so every branch is drivable without a collection.
     *

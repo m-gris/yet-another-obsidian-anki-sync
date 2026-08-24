@@ -177,6 +177,88 @@ class RetypingTest extends munit.FunSuite:
     )
   }
 
+  // ------------------------------------------- the verdict: both halves at once ----
+
+  /** `verdictFor` IS THE FIX FOR A PREVIEW THAT LIED. The policy half was pure and the report
+    * consulted it; the shape half needed the collection and lived inside the executor, which a
+    * dry run never enters. So `--dry-run --migrate-note-types` announced a migration that the
+    * real run then refused. These tests pin the combined decision — the thing both callers now
+    * ask instead of each deciding a part.
+    */
+  test("the policy is asked before the shapes, so a deferral needs no shapes at all") {
+    assertEquals(
+      Retyping.verdictFor("A", "B", RetypePolicy.Defer, Map.empty),
+      RetypeVerdict.DeferredByPolicy,
+      "a deferred run consulted shapes it deliberately never read, and would now report the " +
+        "collection as unmeasurable instead of simply saying it declined to act",
+    )
+  }
+
+  /** ORDERING, ASSERTED SEPARATELY FROM THE EMPTY-MAP CASE ABOVE. That one passes even if the
+    * shapes are consulted first and happen to be absent; this one fails, because here the
+    * shapes are present AND incompatible. Only checking both pins the order.
+    */
+  test("a deferral is reported as deferred even when the shapes would have refused it") {
+    assertEquals(
+      Retyping.verdictFor(
+        "A",
+        "B",
+        RetypePolicy.Defer,
+        Map("A" -> NoteTypeShape(1, false), "B" -> NoteTypeShape(3, false)),
+      ),
+      RetypeVerdict.DeferredByPolicy,
+      "declining on instruction was reported as declining on evidence — the person cannot " +
+        "tell 'you did not ask me to' from 'you asked and it is not possible'",
+    )
+  }
+
+  test("under Apply, a compatible pair is a move that will happen") {
+    assertEquals(
+      Retyping.verdictFor(
+        "A",
+        "B",
+        RetypePolicy.Apply,
+        Map("A" -> NoteTypeShape(2, false), "B" -> NoteTypeShape(2, false)),
+      ),
+      RetypeVerdict.WillApply,
+    )
+  }
+
+  test("under Apply, an incompatible pair carries the refusal itself, not just a flag") {
+    assertEquals(
+      Retyping.verdictFor(
+        "A",
+        "B",
+        RetypePolicy.Apply,
+        Map("A" -> NoteTypeShape(1, false), "B" -> NoteTypeShape(3, false)),
+      ),
+      RetypeVerdict.RefusedByShapes(RetypeRefusal.TemplateCountDiffers("A", 1, "B", 3)),
+      "the verdict must carry the refusal so the preview can print the SAME sentence the run " +
+        "would have printed — a bare 'refused' would drift from it",
+    )
+  }
+
+  /** EITHER SIDE MISSING, BOTH ASSERTED. A `shapes.get(from)` that forgot `to` would pass on
+    * one of these and fail on the other.
+    */
+  test("a note type that could not be measured is its own verdict, not a refusal") {
+    val onlyFrom = Map("A" -> NoteTypeShape(1, false))
+    val onlyTo   = Map("B" -> NoteTypeShape(1, false))
+
+    assertEquals(
+      Retyping.verdictFor("A", "B", RetypePolicy.Apply, onlyFrom),
+      RetypeVerdict.ShapesUnavailable("A", "B"),
+    )
+    assertEquals(
+      Retyping.verdictFor("A", "B", RetypePolicy.Apply, onlyTo),
+      RetypeVerdict.ShapesUnavailable("A", "B"),
+    )
+    assertEquals(
+      Retyping.verdictFor("A", "B", RetypePolicy.Apply, Map.empty),
+      RetypeVerdict.ShapesUnavailable("A", "B"),
+    )
+  }
+
   /** THE CLOZE TEST COMES FIRST, and the order is load-bearing rather than stylistic. A cloze
     * note may hold any number of cards regardless of how many templates its type declares, so
     * a template-count message would send the reader to count templates when the real problem is
@@ -410,6 +492,93 @@ class RetypingTest extends munit.FunSuite:
 
     assertEquals(report.failures.size, 1, s"expected one refusal: $report")
     assert(report.deferred.isEmpty, s"a refusal was reported as a deferral: $report")
+  }
+
+  // ------------------------------- the preview must agree with the run it previews ----
+
+  /** THE LAW THE DRY-RUN DEFECT BROKE, stated as a law rather than as a case.
+    *
+    * `--dry-run --migrate-note-types` printed `1 move to another note type` and `result: OK`
+    * for a move the real run then refused, because the preview could reach the POLICY half of
+    * the retype decision and not the SHAPE half — the half that needs the note types read out
+    * of the collection, and that lived inside the executor a dry run never enters.
+    *
+    * THE LAW IS ASSERTED IN BOTH DIRECTIONS AGAINST THE SAME COLLECTION, which is what makes
+    * it a law rather than two examples: a refusal must be previewed as a refusal AND an
+    * admissible move must be previewed as one. Only checking the refusing direction would be
+    * satisfied by a preview that refused everything.
+    */
+  def previewOf(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): Vector[RetypeVerdict] =
+    Executor
+      .preview(p, anki, policy)
+      .fold(e => fail(s"preview aborted: $e"), identity)
+      .map(_._2)
+
+  test("LAW: a move the run refuses is previewed as refused, not as work") {
+    val anki = collectionWith(stockBasic)
+    seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
+
+    // `Basic` has one card template; asking for both directions needs the tool's own two-card
+    // note type, so this is a 1 -> 2 move and the gate refuses it.
+    val reversed =
+      CardSpec.TwoField(k, "Temporal coupling", body("All up at once."), TwoFieldDirections.Both, testContext)
+    val plan = planOf(scanOf(reversed), anki)
+
+    // PREVIEW FIRST, AGAINST THE UNTOUCHED COLLECTION — the order a person experiences.
+    val previewed = previewOf(plan, anki, RetypePolicy.Apply)
+    assertEquals(previewed.size, 1, s"expected exactly one retype to preview: $previewed")
+    assert(
+      previewed.head.isInstanceOf[RetypeVerdict.RefusedByShapes],
+      s"the preview called a refusable move ordinary work — this IS the dry-run defect: $previewed",
+    )
+
+    // AND THE RUN AGREES. Asserted rather than assumed: if this ever reports success the law is
+    // still broken, only in the other direction.
+    val report = runReport(plan, anki, RetypePolicy.Apply)
+    assertEquals(report.failures.size, 1, s"the run did not refuse what the preview refused: $report")
+  }
+
+  test("LAW: a move the run makes is previewed as work, not as refused") {
+    val anki = collectionWith(stockBasic)
+    val id   = seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
+
+    // One template to one template: admissible by arithmetic, and the case that keeps the test
+    // above from passing against a preview that simply refuses everything.
+    val plan = planOf(scanOf(basicSpec), anki)
+
+    assertEquals(
+      previewOf(plan, anki, RetypePolicy.Apply),
+      Vector(RetypeVerdict.WillApply),
+      "the preview refused a move the run makes, which is the same disagreement the other way",
+    )
+
+    runReport(plan, anki, RetypePolicy.Apply)
+    assertEquals(
+      noteAt(anki, id).noteType,
+      Marker.NoteTypes.Basic,
+      "the run did not make the move its own preview promised",
+    )
+  }
+
+  /** UNDER `Defer` THE VERDICT IS `DeferredByPolicy`, WHATEVER THE COLLECTION HOLDS.
+    *
+    * WHAT THIS DOES NOT ASSERT, said plainly so nobody reads more into it: it does not prove
+    * that no request was made. `InMemoryAnki` exposes no request log, so the claim in
+    * `Executor.preview` that a deferred preview costs nothing is enforced only by reading it.
+    * Making that claim testable means giving the fake a counter, which is a change to the fake
+    * and belongs with whoever needs it — a comment saying "verified" here would be worse than
+    * this one saying it is not.
+    */
+  test("LAW: previewing a deferred run makes no request of the collection") {
+    val anki = collectionWith(stockBasic)
+    seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
+    val plan = planOf(scanOf(basicSpec), anki)
+
+    assertEquals(
+      previewOf(plan, anki, RetypePolicy.Defer),
+      Vector(RetypeVerdict.DeferredByPolicy),
+      "a deferred retype was previewed as something other than deferred",
+    )
   }
 
   // ========================================= the behaviours that force the design ====

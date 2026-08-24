@@ -245,6 +245,55 @@ object Report:
         "and nothing in this tool ever deletes a note.",
       )
 
+  /** WHAT A DRY RUN SAYS ABOUT THE RETYPES IT IS PREVIEWING.
+    *
+    * ONLY THE VERDICTS THAT CONTRADICT THE PLAN SUMMARY ARE PRINTED. `Report.plan` above
+    * already counts a retype as work; a `WillApply` verdict agrees with it and adding a second
+    * line saying so would be noise. What the summary CANNOT say is that a line it just counted
+    * as work will not happen — so those are the ones this block exists for, and printing them
+    * is the whole point of the function.
+    *
+    * DEFERRALS ARE ALSO SILENT HERE, and that is not an omission: `kindOf` already labels them
+    * "(NOT APPLIED — see --migrate-note-types)" in the summary itself, so the contradiction
+    * this block reports does not arise for them.
+    *
+    * THE REFUSAL'S OWN SENTENCE IS REUSED, not paraphrased. The preview must print what the run
+    * would print; a second wording here would drift from `RetypeRefusal.describe` and the two
+    * would eventually disagree about the same collection.
+    */
+  def retypePreview(verdicts: Vector[(SyncAction.Retype, RetypeVerdict)]): Vector[String] =
+    val blocked = verdicts.collect {
+      case (retype, RetypeVerdict.RefusedByShapes(refusal)) =>
+        (retype, refusal.describe, refusal.remedy)
+      case (retype, RetypeVerdict.ShapesUnavailable(from, to)) =>
+        (
+          retype,
+          s"the shape of note type '$from' or '$to' could not be read from the collection",
+          "this is a connection or collection fault rather than anything about the move",
+        )
+    }
+
+    if blocked.isEmpty then Vector.empty
+    else
+      Vector(
+        "",
+        s"OF THE MOVES COUNTED ABOVE, ${blocked.size} WILL NOT HAPPEN.",
+        "",
+        "This is what the run itself would refuse, checked here against the same note types",
+        "rather than assumed — so this preview and the run agree.",
+        "",
+      ) ++ blocked.flatMap { (retype, why, remedy) =>
+        Vector(
+          s"  '${retype.key.path.render}'  (${retype.from} -> ${retype.to})",
+          s"    $why.",
+          s"    $remedy.",
+        )
+      } ++ Vector(
+        "",
+        "Everything else in the plan is unaffected: a note that is not moved stays on the note",
+        "type it is on, and nothing in this tool ever deletes a note.",
+      )
+
   private def kindOf(a: SyncAction, retypePolicy: RetypePolicy): String = a match
     case _: SyncAction.Create => "create"
 
