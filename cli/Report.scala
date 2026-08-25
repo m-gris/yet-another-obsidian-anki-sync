@@ -176,8 +176,8 @@ object Report:
     // for the rest — which is how a status nobody had classified went unmentioned entirely.
     // A status with no differences contributes no lines, which is not the same as it MATCHING:
     // the state line above says which it is, and the two are printed separately on purpose.
-    val drifts = outcome.before.filter(_.differences.nonEmpty).flatMap { status =>
-      s"  ${status.name}" +: status.differences.map("    " + _.describe)
+    val drifts = outcome.before.filter(_.drift.nonEmpty).flatMap { status =>
+      s"  ${status.name}" +: status.drift.map("    " + _.describe)
     }
     val driftLines =
       if drifts.isEmpty then Vector.empty

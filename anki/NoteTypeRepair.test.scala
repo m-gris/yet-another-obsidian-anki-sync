@@ -145,7 +145,7 @@ class NoteTypeRepairTest extends munit.FunSuite:
     * A fourth status would have been called clean by one, difference-free by the next, and
     * gone unmentioned by the third — a note type nobody had classified, reported as fine.
     *
-    * THE COMPILER NOW GATES THE QUESTION, once, at `NoteTypeStatus.differences`. What it cannot
+    * THE COMPILER NOW GATES THE QUESTION, once, at `NoteTypeStatus.drift`. What it cannot
     * check is that an EXISTING case still answers the way it is supposed to, which is what this
     * pins.
     */
@@ -155,12 +155,12 @@ class NoteTypeRepairTest extends munit.FunSuite:
     // NOT IN THE COLLECTION AT ALL, so there is no copy to compare against and nothing can be
     // found to differ. Emptiness here is a statement about COMPARISON, not about health: the
     // note type is missing, which the status itself says and `NoteTypeProblem` acts on.
-    assertEquals(NoteTypeStatus.Absent(asset).differences, Vector.empty)
+    assertEquals(NoteTypeStatus.Absent(asset).drift, Vector.empty)
 
     // Same reasoning: the collection holds it under the OLD name, so this tool has not compared
     // anything. The remedy is a hand-rename in Anki, not a repair.
     assertEquals(
-      NoteTypeStatus.AwaitingManualRename(asset, "Old Name").differences,
+      NoteTypeStatus.AwaitingManualRename(asset, "Old Name").drift,
       Vector.empty,
     )
   }
@@ -169,8 +169,8 @@ class NoteTypeRepairTest extends munit.FunSuite:
     val asset = assetNamed(ConceptDescriptor)
     val drift = Vector(NoteTypeDrift.StylingDiffers)
 
-    assertEquals(NoteTypeStatus.Present(asset, drift).differences, drift)
-    assertEquals(NoteTypeStatus.Present(asset, Vector.empty).differences, Vector.empty)
+    assertEquals(NoteTypeStatus.Present(asset, drift).drift, drift)
+    assertEquals(NoteTypeStatus.Present(asset, Vector.empty).drift, Vector.empty)
   }
 
   /** THE DISTINCTION THE EMPTINESS MUST NOT ERASE, asserted against the report rather than
@@ -183,7 +183,7 @@ class NoteTypeRepairTest extends munit.FunSuite:
     val absent   = NoteTypeStatus.Absent(assetNamed(ConceptDescriptor))
     val matching = NoteTypeStatus.Present(assetNamed(ConceptDescriptor), Vector.empty)
 
-    assertEquals(absent.differences, matching.differences, "the premise of this test changed")
+    assertEquals(absent.drift, matching.drift, "the premise of this test changed")
 
     val lines = obsidiananki.cli.Report.noteTypes(
       InstallOutcome(before = Vector(absent, matching), created = Vector.empty, failures = Vector.empty)

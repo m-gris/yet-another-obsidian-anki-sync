@@ -146,17 +146,60 @@ enum DriftRepair:
     */
   case LeaveAlone
 
-/** What the collection holds for ONE of this tool's note types. */
-enum NoteTypeStatus:
-  /** DECLARED ABSTRACT AND SATISFIED BY EACH CASE'S OWN `asset` PARAMETER. Every status is
-    * about one note type definition from the repository, so the accessor exists on the sum
-    * rather than only on each variant.
+/** What the collection holds for ONE of this tool's note types.
+  *
+  * A SEALED TRAIT RATHER THAN AN `enum`, AND THE REASON IS `drift` BELOW. Each variant answers
+  * for itself, beside itself — which an `enum` cannot express, because an enum case may not
+  * carry a body. Both spellings are rejected by the PARSER: `case Absent(a: A):` with an
+  * indented `def`, and `case Absent(a: A) extends NoteTypeStatus { … }`. So on an `enum` an
+  * abstract member can only ever be satisfied by a case PARAMETER of that name.
+  *
+  * THE COST OF THE ENUM FORM WAS A WORSE NAME AND A WEAKER GATE. `drift` had to be called
+  * `differences`, because `Present` already has a parameter called `drift` and a member cannot
+  * share the name; and the answer had to be given by one match at the bottom of the type,
+  * which means a new variant is caught SOMEWHERE ELSE than where it was written. Here the
+  * variant cannot be defined at all without answering.
+  *
+  * Nothing used the `enum`'s own facilities — no `values`, no `ordinal`, no `fromOrdinal` —
+  * so nothing was given up. Sealed is what makes a match exhaustive, and that is unchanged.
+  */
+sealed trait NoteTypeStatus:
+  /** DECLARED ABSTRACT AND SATISFIED BY EACH VARIANT. Every status is about one note type
+    * definition from the repository, so the accessor exists on the sum rather than only on
+    * each variant.
     */
   def asset: NoteTypeAsset
+
+  /** HOW THIS NOTE TYPE DIFFERS FROM THE REPOSITORY'S COPY. Empty means no difference is known.
+    *
+    * IT REPLACED THREE CATCH-ALLS THAT EACH ANSWERED THIS SEPARATELY. `RepairOutcome.isClean`
+    * matched `case _ => true`, `NoteTypeInstaller.repair` matched
+    * `case other => other.name -> Vector.empty`, and the report matched `case _ => Vector.empty`.
+    * Three places, three defaults, no gate: a FOURTH status would have been answered "clean" by
+    * the first, "no differences" by the second and nothing at all by the third — a note type the
+    * tool had just declined to classify, reported as fine.
+    *
+    * ABSTRACT, SO A NEW VARIANT CANNOT EXIST WITHOUT AN ANSWER. Not "is caught by a match
+    * somewhere": cannot be written. `Present` satisfies it with the parameter it already had.
+    *
+    * A NOTE TYPE THAT IS NOT THERE HAS NO DIFFERENCES, and that is a statement about comparison
+    * rather than about health. There is no copy in the collection to compare against, so
+    * nothing can be found to differ; whether its absence is a problem is a different question,
+    * answered by the variant itself and by `NoteTypeProblem`. Reading emptiness here as
+    * "matches" would be the mistake — which is why the report prints the STATE and the
+    * DIFFERENCES as two separate things.
+    */
+  def drift: Vector[NoteTypeDrift]
+
+  def name: String = asset.spec.name
+
+object NoteTypeStatus:
   /** Not in the collection under its own name, and its former name is not there either — so it
     * can simply be created.
     */
-  case Absent(asset: NoteTypeAsset)
+  final case class Absent(asset: NoteTypeAsset) extends NoteTypeStatus:
+    // Nothing in the collection to compare against — see `drift` on the trait.
+    def drift: Vector[NoteTypeDrift] = Vector.empty
 
   /** Not in the collection under its own name, and the name it is being RENAMED FROM **is**.
     *
@@ -180,40 +223,19 @@ enum NoteTypeStatus:
     * (`modelNames` on 2026-08-21 lists only the correctly spelled names), so the mechanism
     * above was read out of this file rather than reproduced.
     */
-  case AwaitingManualRename(asset: NoteTypeAsset, currentName: String)
+  final case class AwaitingManualRename(asset: NoteTypeAsset, currentName: String)
+      extends NoteTypeStatus:
+    // The collection holds it under the OLD name, so nothing has been compared. The remedy is
+    // a hand-rename in Anki, not a repair.
+    def drift: Vector[NoteTypeDrift] = Vector.empty
 
-  /** In the collection, with whatever differences were found. Empty means identical. */
-  case Present(asset: NoteTypeAsset, drift: Vector[NoteTypeDrift])
-
-  def name: String = asset.spec.name
-
-  /** HOW THIS NOTE TYPE DIFFERS FROM THE REPOSITORY'S COPY. Empty means no difference is known.
+  /** In the collection, with whatever differences were found. Empty means identical.
     *
-    * IT REPLACES THREE CATCH-ALLS THAT EACH ANSWERED THE SAME QUESTION SEPARATELY.
-    * `RepairOutcome.isClean` matched `case _ => true`, `NoteTypeInstaller.repair` matched
-    * `case other => other.name -> Vector.empty`, and the report matched `case _ => Vector.empty`.
-    * Three places, three defaults, no gate: a FOURTH status would have been answered "clean" by
-    * the first, "no differences" by the second and nothing at all by the third — a note type the
-    * tool had just declined to classify, reported as fine.
-    *
-    * ASKED HERE THE QUESTION IS TOTAL, so a new case is a build error in ONE place, and the
-    * three consumers ask for `.differences` and do no matching at all.
-    *
-    * NAMED `differences` RATHER THAN `drift` ONLY BECAUSE `Present` ALREADY HAS A PARAMETER BY
-    * THAT NAME, and a member cannot share it. Renaming the parameter would be the tidier
-    * outcome and is a decision for Marc, not a side effect of this change.
-    *
-    * A NOTE THAT IS NOT THERE HAS NO DIFFERENCES, and that is a statement about comparison
-    * rather than about health. There is no copy in the collection to compare against, so
-    * nothing can be found to differ; whether its absence is a problem is a different question,
-    * answered by the case itself and by `NoteTypeProblem`. Reading emptiness here as "matches"
-    * would be the mistake — which is why the report prints the STATE and the DIFFERENCES as two
-    * separate things.
+    * ITS `drift` PARAMETER IS WHAT SATISFIES THE TRAIT'S MEMBER, exactly as its `asset`
+    * parameter satisfies the other one. This is the variant the member exists for.
     */
-  def differences: Vector[NoteTypeDrift] = this match
-    case Present(_, drift)          => drift
-    case Absent(_)                  => Vector.empty
-    case AwaitingManualRename(_, _) => Vector.empty
+  final case class Present(asset: NoteTypeAsset, drift: Vector[NoteTypeDrift])
+      extends NoteTypeStatus
 
 /** A reason `sync` must not write to this collection.
   *
@@ -334,8 +356,8 @@ final case class InstallOutcome(
     */
   def isClean: Boolean =
     // `case _ => true` until 2026-08-24, which called a status it had not classified clean.
-    // The question is now asked once, totally, at `NoteTypeStatus.differences`.
-    failures.isEmpty && blockedByRename.isEmpty && before.forall(_.differences.isEmpty)
+    // The question is now asked once, totally, at `NoteTypeStatus.drift`.
+    failures.isEmpty && blockedByRename.isEmpty && before.forall(_.drift.isEmpty)
 
 object NoteTypeInstaller:
 
@@ -553,7 +575,7 @@ object NoteTypeInstaller:
             failures = results.collect { case Left(failure) => failure },
             // `case other => other.name -> Vector.empty` until 2026-08-24. Every status can now
             // be asked directly, and a new one has to say what it reports before this compiles.
-            remainingDrift = after.map(status => status.name -> status.differences),
+            remainingDrift = after.map(status => status.name -> status.drift),
           )
         }
       }

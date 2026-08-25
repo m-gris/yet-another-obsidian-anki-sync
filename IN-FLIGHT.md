@@ -79,27 +79,32 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
    called `drift` and a member cannot share the name.** Renaming that parameter is the tidier
    outcome and is Marc's call, not a side effect of an audit fix.
 
-   **It is a total match rather than the abstract member this entry proposed — and that was a
-   CHOICE, not a constraint.** _Corrected 2026-08-25 after Marc questioned the claim and it was
-   tested rather than remembered._
+   **It IS the abstract member this entry proposed, reached by making `NoteTypeStatus` a sealed
+   trait.** _Landed 2026-08-25, after two corrections worth recording._
 
-   What is true: a Scala 3 **`enum` case** cannot carry a body. Both spellings are rejected by
-   the parser, not by the typer — `case Absent(x: String):` with an indented `def` gives
-   _"end of statement expected but ':' found"_, and
-   `case Absent(x: String) extends Status { def label = … }` gives the same for `{`. So an
-   abstract member on an `enum` can only be satisfied by a PARAMETER of that name, which is
-   exactly why `def asset` works and `differences` could not follow it.
+   The first attempt used a total match on the `enum` instead, justified by the claim that a
+   Scala 3 enum case cannot carry a body. That claim is TRUE — both spellings are rejected by
+   the PARSER, `case Absent(a: A):` with an indented `def` and
+   `case Absent(a: A) extends NoteTypeStatus { … }` alike — but the restriction belongs to the
+   `enum` SYNTAX, not to Scala, and presenting it as a language limit made a design choice look
+   like a closed door. Marc asked; it was tested rather than remembered; the desugared shape
+   compiled first time.
 
-   What is NOT true, and was implied: that this made the abstract-member design impossible. The
-   restriction belongs to the `enum` SYNTAX, not to Scala. The desugared shape — a `sealed
-   trait` with `final case class`es defining the member each beside its own case — compiles
-   fine, and was verified compiling. Converting `NoteTypeStatus` to a sealed trait would have
-   bought the original design.
+   **The conversion paid for itself twice over, and both were things the enum form gave up:**
 
-   Why the total match was kept anyway: it is the shape `NoteTypeDrift.describe` and
-   `NoteTypeDrift.repair` already use in the same file, the diff is far smaller, and the gate is
-   identical in strength — the compiler refuses a new case either way. **Reopen this if the
-   sealed-trait form is wanted for its own sake**; it is a live option, not a closed door.
+   - **The member is called `drift`, its natural name.** `Present`'s existing parameter
+     satisfies it directly, exactly as its `asset` parameter satisfies the other abstract
+     member. Under the `enum` it had to be `differences`, because a member cannot share a name
+     with a case parameter — and that left a rename hanging as an open question for Marc.
+   - **The error moves to where the mistake is.** Adding a variant without answering now fails
+     with _"class Unclassifiable needs to be abstract, since def drift … is not defined"_,
+     pointing AT THE VARIANT. The match form pointed at a match further down the file: the
+     author was told a case was missing somewhere else. A variant now cannot be written at all
+     without answering.
+
+   Nothing was given up: no `values`, no `ordinal`, no `fromOrdinal` was used, and `sealed` is
+   what made the matches exhaustive to begin with. The report's state line still gates
+   independently — verified by satisfying `drift` and watching it refuse anyway.
 
    _Verified by adding a fourth case. The report's state line already refused it — that gate
    existed. What is new is that satisfying the state line no longer lets the build go green:
