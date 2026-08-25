@@ -176,8 +176,13 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
     (exact hash, exact fields) are built. Anything fuzzy may only RANK candidates, never apply.
 15. **`ZZ-probe-delete-me`** — a note type left in `claude-POC-test` by a migration probe.
     AnkiConnect has no delete-model action; Tools → Manage Note Types.
-16. **Marc's vault still has one note on the wrong note type** — `3 components`, on
-    `Obsidian Basic` while the vault now asks for `Obsidian Concept-Descriptor`. See item 2.
+16. **Marc's vault still has one note on the wrong note type** — but it is a DIFFERENT note
+    from the one this entry first named. _Re-measured 2026-08-25 by dry-running the live vault._
+    `3 components` is gone from the plan; the note now blocked is `framework`, on
+    `Obsidian Basic (and reversed card)` (2 card templates) while the vault asks for
+    `Obsidian Concept-Descriptor` (3). That is the GROWTH direction, so it is a live instance of
+    exactly what item 2 is about — the measurement is no longer hypothetical, it has a note
+    waiting on it.
 
 ## Rulings that are settled — do not reopen
 
