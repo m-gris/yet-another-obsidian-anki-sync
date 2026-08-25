@@ -27,6 +27,49 @@ enum FrontmatterError:
   /** The block parsed but is not a mapping — a bare list or scalar at the top level. */
   case NotAMapping
 
+/** ONE PROPERTY'S VALUE, in the shapes this tool is prepared to model.
+  *
+  * WHY THIS TYPE EXISTS. `parse` used to answer `Map[String, String]`, keeping scalars and
+  * DISCARDING everything else — so a property written as a YAML list was not merely unread, it
+  * was indistinguishable from a property that was never written. That was deliberate and it was
+  * right while the only property this tool read was `id`, which is a scalar. It stopped being
+  * right the moment frontmatter became a source of cards: Obsidian writes `tags:` as a LIST, so
+  * a note asking to be a `#flashcard/sequence` had its marker dropped on the floor and the tool
+  * could tell only that the word "flashcard" appeared somewhere in the raw block.
+  *
+  * THE SHAPE IS PRESERVED RATHER THAN NORMALISED. `tags: math` and `tags: [math]` mean the same
+  * thing to Obsidian and are written differently by different tools, so a consumer that treats
+  * them alike should say so itself. Collapsing them here would decide that question once, for
+  * every consumer, at the point that knows least about it.
+  *
+  * THERE ARE NO PROJECTIONS ON THIS TYPE, AND THAT IS THE POINT. No `asString`, no
+  * `valuesOrEmpty`. Every such helper has to answer for [[Unreadable]], and the only answers
+  * available to it are a lie (empty) or a crash. A consumer that MATCHES is forced by the
+  * compiler to say what it wants to happen — which is different for each of them, and is
+  * information only they have.
+  */
+enum PropertyValue:
+
+  /** A single scalar. Always a `String`: implicit typing is off, so `007` and `2026-08-18` stay
+    * as written rather than becoming an integer and a date.
+    */
+  case One(text: String)
+
+  /** A sequence of scalars, possibly EMPTY — `tags: []` is a property the author declared and
+    * left empty, which is not the same as one they never wrote.
+    */
+  case Many(items: Vector[String])
+
+  /** Present, and not a shape this tool models: a nested mapping, or a sequence with a
+    * non-scalar in it.
+    *
+    * IT IS A CASE RATHER THAN A SILENT DROP because "absent" and "there but unreadable" lead a
+    * reader to different actions. A nested-mapping `id` reported as absent produces "no 'id' in
+    * its frontmatter — add an id", which sends someone to add a key they can see already. The
+    * `shape` string is for that message and nothing else; nothing branches on it.
+    */
+  case Unreadable(shape: String)
+
 /** A note's frontmatter and body, separated.
   *
   * @param bodyFirstLine
@@ -97,7 +140,7 @@ object Frontmatter:
     * rather than an error: `aliases:` and `tags:` are none of this tool's business, and a
     * note must not fail to sync because of a key it does not use.
     */
-  def parse(block: String): Either[FrontmatterError, Map[String, String]] =
+  def parse(block: String): Either[FrontmatterError, Map[String, PropertyValue]] =
     if block.trim.isEmpty then Right(Map.empty)
     else
       try
@@ -106,12 +149,7 @@ object Frontmatter:
           case Some(m: java.util.Map[?, ?]) =>
             import scala.jdk.CollectionConverters.*
             Right(
-              m.asScala.iterator.collect {
-                // Scalars only. A list or nested mapping is absent rather than an error:
-                // `aliases:` and `tags:` are none of this tool's business, and a note must
-                // not fail to sync because of a key it does not use.
-                case (k, v: String) => k.toString -> v
-              }.toMap
+              m.asScala.iterator.flatMap { (k, v) => shapeOf(v).map(k.toString -> _) }.toMap
             )
           case Some(_) => Left(FrontmatterError.NotAMapping)
       catch case e: org.yaml.snakeyaml.error.YAMLException => Left(FrontmatterError.Malformed(e.getMessage))
@@ -122,11 +160,51 @@ object Frontmatter:
     * which is precisely how every downstream line number came to be counted from the wrong
     * origin — the information was discarded here, one call before it was needed.
     */
-  def read(content: String): Either[FrontmatterError, (Map[String, String], SplitNote)] =
+  def read(content: String): Either[FrontmatterError, (Map[String, PropertyValue], SplitNote)] =
     for
       note <- split(content)
-      keys <- note.frontmatter.fold(Right(Map.empty[String, String]))(parse)
+      keys <- note.frontmatter.fold(Right(Map.empty[String, PropertyValue]))(parse)
     yield (keys, note)
+
+  /** One snakeyaml value as a [[PropertyValue]], or `None` when the property carries nothing.
+    *
+    * `None` MEANS ABSENT, and exactly one thing reaches it: a null, which is what YAML gives for
+    * `aliases:` with nothing after it. That is a property the author declared and gave no value,
+    * and every consumer here treats it the same as one never written. Obsidian's own template
+    * leaves several behind in each note.
+    *
+    * EVERY OTHER VALUE IS REPRESENTED RATHER THAN DROPPED, including the ones this tool cannot
+    * model. A nested mapping becomes [[PropertyValue.Unreadable]] rather than vanishing, so the
+    * message about it can say what is actually there.
+    *
+    * A SEQUENCE IS ALL-OR-NOTHING. One containing a mapping is unreadable in full rather than
+    * read down to its scalars: a partial answer would silently drop the part that was not
+    * understood, which is the behaviour this whole change is undoing.
+    *
+    * Scalars are `String` because the loader below turns implicit typing off. A non-`String`
+    * scalar therefore should not occur, and if one ever does it is unreadable rather than
+    * coerced — being wrong about `007` or `2026-08-18` is the corruption this file exists for.
+    */
+  private def shapeOf(value: Any): Option[PropertyValue] =
+    import scala.jdk.CollectionConverters.*
+    value match
+      case null      => None
+      case s: String => Some(PropertyValue.One(s))
+
+      case xs: java.util.List[?] =>
+        val items = xs.asScala.toVector
+        val scalars = items.collect { case s: String => s }
+        if scalars.sizeIs == items.size then Some(PropertyValue.Many(scalars))
+        else
+          Some(
+            PropertyValue.Unreadable(
+              s"a list of ${items.size} value(s), ${items.size - scalars.size} of which " +
+                "is not a plain value"
+            )
+          )
+
+      case _: java.util.Map[?, ?] => Some(PropertyValue.Unreadable("a nested mapping"))
+      case other                  => Some(PropertyValue.Unreadable(s"a ${other.getClass.getSimpleName}"))
 
   /** A YAML loader with IMPLICIT TYPING TURNED OFF, so every scalar stays a string.
     *

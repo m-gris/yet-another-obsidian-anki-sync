@@ -290,6 +290,34 @@ enum MarkedHeadings:
 /** Turning a whole vault into a scan. */
 object VaultWalker:
 
+  /** The `id` property, as a note identity — or why it could not be one.
+    *
+    * IT LIVES HERE RATHER THAN ON [[PropertyValue]] because only this caller knows that an id
+    * must be SINGULAR. `tags` and a typed edge are equally happy with one value or several, and
+    * a shared `asSingleString` helper would have to invent an answer for them too.
+    *
+    * THE TWO NON-SCALAR ARMS ARE WHY THE TYPE CHANGED. Before it, a list-valued or
+    * nested-mapping `id` was dropped by the parser and reached this point as ABSENT — so a note
+    * that plainly has an `id:` line was told it has no id and asked to add one. The shape is now
+    * visible, so each can say what is actually wrong.
+    *
+    * The failure is a STRING rather than a `KeyError` because these two arms are not key errors:
+    * nothing was malformed, the property is simply the wrong shape to be an identity. It reaches
+    * the reader through the same `unusable id:` sentence either way.
+    */
+  private def noteIdFrom(value: PropertyValue): Either[String, NoteId] = value match
+    case PropertyValue.One(text) => NoteId.fromFrontmatter(text).left.map(_.toString)
+
+    case PropertyValue.Many(items) =>
+      Left(
+        s"the 'id' property is a list of ${items.size} value(s), and a note's id must be a " +
+          "single value — every card in the file is keyed on it"
+      )
+
+    case PropertyValue.Unreadable(shape) =>
+      Left(s"the 'id' property is $shape, and a note's id must be a single scalar value")
+
+
   /** Read every file, extract its cards, and classify what went wrong.
     *
     * The three failure classes are not cosmetic — they decide how far orphan inference is
@@ -352,7 +380,7 @@ object VaultWalker:
           val frontmatterNamesFlashcard =
             split.frontmatter.exists(_.toLowerCase.contains("flashcard"))
 
-          val identity = keys.get("id").map(NoteId.fromFrontmatter)
+          val identity = keys.get("id").map(noteIdFrom)
 
           // WHAT TO SAY TO A FILE THAT DECLARED INTENT AND MADE NO CARDS, which depends on
           // whether the tool actually LOOKED at its headings. Asked as a match rather than as
