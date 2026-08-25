@@ -173,11 +173,11 @@ class MarkerTest extends munit.FunSuite:
   def aKey(segments: String*): CardKey =
     CardKey(
       NoteId.fromFrontmatter("fix-note").toOption.get,
-      HeadingPath(
+      CardPath.Headings(HeadingPath(
         NonEmptyVector.fromVectorUnsafe(
           segments.toVector.map(s => HeadingSegment.fromExtractedText(s).toOption.get)
         )
-      ),
+      )),
     )
 
   def body(s: String): Body = Body.fromExtracted(s).getOrElse(fail("test body was empty"))

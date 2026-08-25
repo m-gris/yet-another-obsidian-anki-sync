@@ -78,6 +78,32 @@ class FixtureVaultTest extends munit.FunSuite:
     assert(index.scan.specs.sizeIs > 20, s"only ${index.scan.specs.size} specs extracted")
   }
 
+  /** WHICH KINDS OF NODE EXTRACTION CURRENTLY ANCHORS CARDS TO, asserted so that gaining a new
+    * one is a decision somebody made rather than a drift nobody noticed.
+    *
+    * [[CardPath]] admits three anchors — a chain of headings, a frontmatter property, and the
+    * note itself. Only the first is produced today. The other two exist because identity is the
+    * most expensive thing in this system to change once review history has accumulated and the
+    * cheapest while the collection is nearly empty, so their SHAPE was settled ahead of the
+    * behaviour that fills them.
+    *
+    * WHEN THIS TEST FAILS, IT HAS DONE ITS JOB. It means extraction started producing an anchor
+    * it did not before, which is exactly the moment to check that the golden was reviewed rather
+    * than regenerated. Widen the expectation deliberately; do not delete the test.
+    */
+  test("extraction anchors every card at a heading, and at nothing else yet") {
+    val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
+
+    val kinds = index.scan.specs.map(_.key.path).map {
+      case CardPath.Headings(_) => "headings"
+      case CardPath.Property(_) => "property"
+      case CardPath.Note        => "note"
+    }.distinct
+
+    assert(kinds.nonEmpty, "no specs at all, so this test is proving nothing")
+    assertEquals(kinds, Vector("headings"), s"extraction now anchors cards at $kinds")
+  }
+
   test("LAW on REAL specs: plan, apply, and the next plan is empty") {
     val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
 

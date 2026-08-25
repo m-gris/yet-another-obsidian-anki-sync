@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath, NewNote, ObservedNote}
-import obsidiananki.model.{CardKey, CardSpec, OwnedTag, TagCodec}
+import obsidiananki.model.{CardKey, CardPath, CardSpec, OwnedTag, TagCodec}
 
 /** Why ONE note could not be placed. A fact about the note, carrying no advice.
   *
@@ -423,12 +423,26 @@ object Planner:
             val suppressed  = scan.suppressedNoteIds
             val builtKeys   = scan.builtKeys
 
+            // SHELTERING IS A HEADING-PATH RELATION, and the other kinds are not "not yet
+            // handled" — they are outside the relation entirely.
+            //
+            // The rule protects cards whose key extends the key of a section that failed to
+            // build, because a broken section must not read as a deleted one. A frontmatter
+            // property is not inside any section: it is read from the note's frontmatter, which
+            // parses independently of whether the body's markdown does. A section failing says
+            // nothing about it, so sheltering it would hide a genuinely deleted property. The
+            // same holds for the note-itself card.
             def underAFailedSection(card: CardKey): Boolean =
-              failed.exists { f =>
-                f.noteId == card.noteId &&
-                  f.path.segments.length < card.path.segments.length &&
-                  card.path.segments.toVector.startsWith(f.path.segments.toVector)
-              }
+              (card.path match
+                case CardPath.Headings(cardPath) =>
+                  failed.exists { f =>
+                    f.noteId == card.noteId && (f.path match
+                      case CardPath.Headings(failedPath) =>
+                        failedPath.segments.length < cardPath.segments.length &&
+                          cardPath.segments.toVector.startsWith(failedPath.segments.toVector)
+                      case CardPath.Property(_) | CardPath.Note => false)
+                  }
+                case CardPath.Property(_) | CardPath.Note => false)
 
             val orphans = observed.notes.filter { card =>
               !builtKeys.contains(card.key) &&

@@ -76,8 +76,86 @@ object HeadingSegment:
 final case class HeadingPath(segments: NonEmptyVector[HeadingSegment]):
   def render: String = segments.toVector.map(_.value).mkString(" / ")
 
+/** A frontmatter property's NAME, canonicalised exactly as a heading segment is.
+  *
+  * SAME CANONICALISATION, DIFFERENT TYPE. `Special-Case-Of` and `special-case-of` must key
+  * alike for the same reason two spellings of a heading do — an author who tidies their
+  * frontmatter has not made a different card. The type differs from [[HeadingSegment]] because
+  * the two are not interchangeable: one names a heading and the other names a property, and a
+  * card anchored at each is a different card even when the names coincide.
+  */
+opaque type PropertyName = String
+
+object PropertyName:
+
+  /** Canonicalise, and refuse what canonicalises to nothing. */
+  def fromFrontmatter(raw: String): Either[KeyError, PropertyName] =
+    val canonical = TagCodec.canonical(raw)
+    if canonical.isEmpty then Left(KeyError.EmptyPropertyName(raw)) else Right(canonical)
+
+  /** For a name recovered from an existing tag, which is canonical already. */
+  private[model] def fromDecoded(decoded: String): Either[KeyError, PropertyName] =
+    if decoded.isEmpty then Left(KeyError.EmptyPropertyName(decoded)) else Right(decoded)
+
+  extension (p: PropertyName) def value: String = p
+
+/** WHICH NODE OF A NOTE a card is anchored to.
+  *
+  * ==Why this is a sum and not a list of segments==
+  *
+  * A note is a tree of nodes and a card hangs off one of them. Until now the only markable node
+  * was a heading, so the anchor could be a bare chain of heading names — but a heading is one
+  * kind of node among several, exactly as a directory is one kind of filesystem entry. A
+  * frontmatter property is a node. The note itself is a node. Neither is reachable through a
+  * chain of headings, and neither is a special case of one.
+  *
+  * ==Why a mixed path is not representable==
+  *
+  * A property belongs to the NOTE, never to a heading inside it — Obsidian has no per-heading
+  * frontmatter — so `headings / property` is not a shape the domain has. Modelling the anchor as
+  * a list of kinded segments would admit it, and every consumer would then need a rule for
+  * something that cannot occur. Three cases, no impossible fourth.
+  *
+  * ==Why the names must not collide==
+  *
+  * `special-case-of:` in the frontmatter and `# Special-Case-Of` in the body are two different
+  * cards that a bare-name path would give one key. That is not hypothetical: both spellings were
+  * on the table as ways of writing the same relation. One key for two cards is a duplicate, and
+  * a duplicate identity refuses the whole run — loudly, so nothing is corrupted, but the vault
+  * stops syncing until a name is changed. Distinguishing the KIND removes the collision by
+  * construction rather than by asking authors to avoid it.
+  */
+enum CardPath:
+
+  /** The ordinary case: a chain of ancestor headings ending at the marked one. */
+  case Headings(headings: HeadingPath)
+
+  /** A frontmatter property of the note. Terminal by nature — a property has no children, so
+    * there is no chain to record.
+    */
+  case Property(name: PropertyName)
+
+  /** The note itself, carrying no anchor below it — a note with no headings whose whole body is
+    * the card.
+    *
+    * ADMITTED BY THE TYPE AND NOT YET PRODUCED BY EXTRACTION, deliberately. Identity is the most
+    * expensive thing in this system to change once review history exists and the cheapest while
+    * the collection is nearly empty, so the shape is being settled now and the behaviour that
+    * fills it can arrive whenever. A test asserts that nothing produces it yet, so the day one
+    * does is a visible decision rather than a drift.
+    */
+  case Note
+
+  /** For a human reading a report. The kinds are told apart in words, because a reader who
+    * cannot see which node a card came from cannot act on the line.
+    */
+  def render: String = this match
+    case Headings(headings) => headings.render
+    case Property(name)     => s"property '${name.value}'"
+    case Note               => "the note itself"
+
 /** The identity of a card's source location. */
-final case class CardKey(noteId: NoteId, path: HeadingPath)
+final case class CardKey(noteId: NoteId, path: CardPath)
 
 /** A tag this tool owns and may rewrite.
   *
@@ -143,6 +221,11 @@ object OwnedTag:
 enum KeyError:
   case BlankNoteId
   case EmptyHeadingSegment(raw: String)
+
+  /** A frontmatter property whose name canonicalises to nothing. Cannot arise from YAML, which
+    * has no empty keys, but can from a tag that was hand-edited into that shape.
+    */
+  case EmptyPropertyName(raw: String)
   case MalformedTag(tag: String, reason: String)
 
 /** Encoding of a [[CardKey]] into the Anki tag that binds it to a note, and back.
@@ -245,10 +328,41 @@ object TagCodec:
           i += 1
     error.toLeft(new String(bytes.toByteArray, java.nio.charset.StandardCharsets.UTF_8))
 
-  /** `src::{id}::{seg}/{seg}/…` — the tag that binds a markdown card to its Anki note. */
+  /** THE DISCRIMINATOR FOR A PATH THAT IS NOT A CHAIN OF HEADINGS, and the one invariant it
+    * rests on, stated here because the encoding is unreadable without it.
+    *
+    * A heading path encodes as `seg/seg/…` and EVERY SEGMENT IS NON-EMPTY: `HeadingSegment`
+    * refuses an empty value at construction and again at `fromDecoded`, and percent-encoding a
+    * non-empty string cannot produce an empty one. So a leading EMPTY token — a path beginning
+    * with the separator — is a shape no heading path can ever take, and is therefore free to
+    * mean something else. `TagCodecTest` pins that invariant directly rather than trusting it.
+    *
+    * WHY NOT A PLAIN PREFIX ON EVERY PATH, which would be easier to read. Because `h/` in front
+    * of every heading path would rewrite the identity tag of every card that already exists, and
+    * the golden file that pins them is 498 lines with `DO NOT REGENERATE THIS FILE` at the top.
+    * Changing 55 identity lines by hand is indistinguishable, in a diff, from the blind
+    * regeneration that file exists to catch. Heading paths therefore encode byte-for-byte as
+    * they always have, and the new kinds take a shape that was previously unreachable.
+    */
+  private val NotAHeadingPath = ""
+
+  private val PropertyMark = "p"
+  private val NoteMark     = "n"
+
+  /** `src::{id}::{path}` — the tag that binds a markdown card to its Anki note.
+    *
+    * The path is `{seg}/{seg}/…` for headings, `/p/{name}` for a frontmatter property, and `/n`
+    * for the note itself. See [[NotAHeadingPath]] for why the last two are unambiguous.
+    */
   def encode(key: CardKey): OwnedTag =
-    val id   = encodeComponent(key.noteId.value)
-    val path = key.path.segments.toVector.map(s => encodeComponent(s.value)).mkString(SegmentSep)
+    val id = encodeComponent(key.noteId.value)
+    val path = key.path match
+      case CardPath.Headings(headings) =>
+        headings.segments.toVector.map(s => encodeComponent(s.value)).mkString(SegmentSep)
+      case CardPath.Property(name) =>
+        Vector(NotAHeadingPath, PropertyMark, encodeComponent(name.value)).mkString(SegmentSep)
+      case CardPath.Note =>
+        Vector(NotAHeadingPath, NoteMark).mkString(SegmentSep)
     OwnedTag.unsafe(s"${OwnedTag.SrcPrefix}$FieldSep$id$FieldSep$path")
 
   /** Recover the key from a tag read back out of Anki.
@@ -263,18 +377,43 @@ object TagCodec:
         for
           idText <- decodeComponent(rawId)
           noteId <- NoteId.fromFrontmatter(idText)
-          segments <- rawPath
-            .split(SegmentSep, -1)
-            .toVector
-            .traverseEither(s => decodeComponent(s).flatMap(HeadingSegment.fromDecoded))
-          nev <- NonEmptyVector
-            .fromVector(segments)
-            .toRight(malformed("empty heading path"))
-        yield CardKey(noteId, HeadingPath(nev))
+          path <- decodePath(rawPath, malformed)
+        yield CardKey(noteId, path)
       case OwnedTag.SrcPrefix :: _ =>
         Left(malformed("expected exactly src::<id>::<path>"))
       case _ =>
         Left(malformed(s"not a ${OwnedTag.SrcPrefix}$FieldSep tag"))
+
+  /** THE KIND IS DECIDED BY THE FIRST TOKEN AND NOTHING ELSE, which is what makes this total.
+    *
+    * A non-empty first token is a heading segment, and therefore so is every token — there is no
+    * mixed path (see [[CardPath]]). An empty first token is the mark that the path is something
+    * else, and the token after it says which. An unrecognised mark is MALFORMED rather than
+    * quietly read as a heading: a tag this tool cannot place must never be filed as though it
+    * belonged somewhere, because a mis-filed card is updated in place and the card it really
+    * names is created again beside it.
+    */
+  private def decodePath(
+      rawPath: String,
+      malformed: String => KeyError,
+  ): Either[KeyError, CardPath] =
+    rawPath.split(SegmentSep, -1).toVector match
+      case Vector(NotAHeadingPath, NoteMark) => Right(CardPath.Note)
+
+      case Vector(NotAHeadingPath, PropertyMark, rawName) =>
+        for
+          name  <- decodeComponent(rawName)
+          value <- PropertyName.fromDecoded(name)
+        yield CardPath.Property(value)
+
+      case tokens if tokens.headOption.contains(NotAHeadingPath) =>
+        Left(malformed(s"'$rawPath' is marked as not being a heading path, and names no kind this tool knows"))
+
+      case tokens =>
+        for
+          segments <- tokens.traverseEither(s => decodeComponent(s).flatMap(HeadingSegment.fromDecoded))
+          nev      <- NonEmptyVector.fromVector(segments).toRight(malformed("empty heading path"))
+        yield CardPath.Headings(HeadingPath(nev))
 
   /** Local traverse, to avoid pulling a cats syntax import in for one call site. */
   extension [A](v: Vector[A])

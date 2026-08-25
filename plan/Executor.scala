@@ -131,6 +131,7 @@ object Observer:
   private def reasonFor(err: KeyError): String = err match
     case KeyError.BlankNoteId              => "the note id part is blank"
     case KeyError.EmptyHeadingSegment(raw) => s"a heading segment is empty in '$raw'"
+    case KeyError.EmptyPropertyName(raw)   => s"a property name is empty in '$raw'"
     case KeyError.MalformedTag(_, reason)  => reason
 
   /** A note's deck, via its cards — decks are a per-CARD property while identity is

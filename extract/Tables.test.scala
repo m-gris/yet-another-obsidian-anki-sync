@@ -130,7 +130,7 @@ class TablesTest extends munit.FunSuite:
   private def baseKey: CardKey =
     val id  = NoteId.fromFrontmatter("n1").fold(e => fail(s"note id: $e"), identity)
     val seg = HeadingSegment.fromExtractedText("T").fold(e => fail(s"heading segment: $e"), identity)
-    CardKey(id, HeadingPath(NonEmptyVector.one(seg)))
+    CardKey(id, CardPath.Headings(HeadingPath(NonEmptyVector.one(seg))))
 
   /** `contextTitles` IS PART OF THE HARNESS, NOT PART OF WHAT THESE TESTS MEASURE.
     *

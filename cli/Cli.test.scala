@@ -271,7 +271,7 @@ class CliTest extends munit.FunSuite:
   private def parkedKey(id: String, heading: String) =
     CardKey(
       NoteId.fromFrontmatter(id).toOption.get,
-      HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText(heading).toOption.get)),
+      CardPath.Headings(HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText(heading).toOption.get))),
     )
 
   private def parkedLines(parked: Vector[CardKey], inference: OrphanInference = OrphanInference.Computed) =

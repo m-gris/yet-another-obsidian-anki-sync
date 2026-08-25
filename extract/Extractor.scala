@@ -147,7 +147,7 @@ object Extractor:
             Marker.parse(rawHeading) match
               case Left(err) =>
                 failures += BuildFailure.KeyKnown(
-                  CardKey(noteId, HeadingPath(NonEmptyVector.fromVectorUnsafe(path))),
+                  CardKey(noteId, CardPath.Headings(HeadingPath(NonEmptyVector.fromVectorUnsafe(path)))),
                   ref,
                   s"unusable marker: $err",
                 )
@@ -155,7 +155,7 @@ object Extractor:
               case Right(None) => () // ordinary prose section — an ancestor, not a card
 
               case Right(Some(marker)) =>
-                val key = CardKey(noteId, HeadingPath(NonEmptyVector.fromVectorUnsafe(path)))
+                val key = CardKey(noteId, CardPath.Headings(HeadingPath(NonEmptyVector.fromVectorUnsafe(path))))
 
                 // CHECKED BEFORE THE CARD IS BUILT, not after. Once built, the card looks fine:
                 // the regrouped list is well-formed markdown and renders without complaint, so

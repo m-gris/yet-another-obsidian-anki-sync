@@ -272,7 +272,7 @@ class MainTest extends munit.FunSuite:
       SyncAction.Flag(
         CardKey(
           NoteId.fromFrontmatter("n1").toOption.get,
-          HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText("A").toOption.get)),
+          CardPath.Headings(HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText("A").toOption.get))),
         ),
         AnkiNoteId(1L),
       ),
@@ -330,7 +330,7 @@ class MainTest extends munit.FunSuite:
       SyncAction.Flag(
         CardKey(
           NoteId.fromFrontmatter("n1").toOption.get,
-          HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText("A").toOption.get)),
+          CardPath.Headings(HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText("A").toOption.get))),
         ),
         AnkiNoteId(1L),
       ),

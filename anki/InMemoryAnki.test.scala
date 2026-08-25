@@ -15,11 +15,11 @@ class InMemoryAnkiTest extends munit.FunSuite:
   def key(id: String, segments: String*): CardKey =
     CardKey(
       NoteId.fromFrontmatter(id).toOption.get,
-      HeadingPath(
+      CardPath.Headings(HeadingPath(
         NonEmptyVector.fromVectorUnsafe(
           segments.toVector.map(s => HeadingSegment.fromExtractedText(s).toOption.get)
         )
-      ),
+      )),
     )
 
   def basicNote(tag: OwnedTag, front: String = "F", back: String = "B"): NewNote =

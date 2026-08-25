@@ -25,11 +25,11 @@ class VaultScanTest extends munit.FunSuite:
   private def key(id: String, segments: String*): CardKey =
     CardKey(
       NoteId.fromFrontmatter(id).toOption.get,
-      HeadingPath(
+      CardPath.Headings(HeadingPath(
         NonEmptyVector.fromVectorUnsafe(
           segments.toVector.map(s => HeadingSegment.fromExtractedText(s).toOption.get)
         )
-      ),
+      )),
     )
 
   private def noteId(id: String): NoteId = NoteId.fromFrontmatter(id).toOption.get

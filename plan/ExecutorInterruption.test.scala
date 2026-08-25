@@ -116,11 +116,11 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   def key(id: String, segments: String*): CardKey =
     CardKey(
       NoteId.fromFrontmatter(id).toOption.get,
-      HeadingPath(
+      CardPath.Headings(HeadingPath(
         NonEmptyVector.fromVectorUnsafe(
           segments.toVector.map(s => HeadingSegment.fromExtractedText(s).toOption.get)
         )
-      ),
+      )),
     )
 
   val defaultDeck: DeckPath = DeckPath(NonEmptyVector.of("Obsidian", "System-Design"))

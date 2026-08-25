@@ -13,9 +13,117 @@ class CardKeyTest extends munit.FunSuite:
     NoteId.fromFrontmatter(raw).fold(e => fail(s"bad id '$raw': $e"), identity)
 
   def key(noteId: String, segments: String*): CardKey =
-    CardKey(id(noteId), HeadingPath(NonEmptyVector.fromVectorUnsafe(segments.toVector.map(seg))))
+    CardKey(id(noteId), CardPath.Headings(HeadingPath(NonEmptyVector.fromVectorUnsafe(segments.toVector.map(seg)))))
 
   def encoded(k: CardKey): String = TagCodec.encode(k).value
+
+  def prop(noteId: String, name: String): CardKey =
+    CardKey(
+      id(noteId),
+      CardPath.Property(
+        PropertyName.fromFrontmatter(name).fold(e => fail(s"bad property '$name': $e"), identity)
+      ),
+    )
+
+  // ------------------------------------------------- which node a card hangs off ----
+
+  /** THE INVARIANT THE WHOLE ENCODING RESTS ON, pinned directly rather than trusted.
+    *
+    * A path that is not a chain of headings is marked by a LEADING EMPTY TOKEN, which is only
+    * unambiguous because no heading path can produce one. That follows from two facts —
+    * `HeadingSegment` refuses an empty value, and percent-encoding a non-empty string yields a
+    * non-empty string — and the day either changes, every property tag in the collection becomes
+    * readable as a heading tag instead. This test is what makes that day loud.
+    */
+  test("no heading path ever encodes with an empty leading token") {
+    val awkward = Vector(
+      key("n1", "a"),
+      key("n1", ".", "-"),
+      key("n1", "0", "1", "2"),
+      key("n1", "p"),                       // the property mark, as an ordinary heading
+      key("n1", "n"),                       // the note mark, likewise
+      key("n1", "Cost / benefit"),          // a slash INSIDE a segment, percent-encoded
+      key("n1", "  spaced  out  "),
+      key("n1", "%20"),                     // text that looks like an escape already
+      key("n1", "café"),
+    )
+    awkward.foreach { k =>
+      val path = encoded(k).split("::", -1).last
+      assert(
+        !path.startsWith("/"),
+        s"'${k.path.render}' encoded to '$path', which a property path could be mistaken for",
+      )
+    }
+  }
+
+  test("a heading path still encodes exactly as it always did") {
+    // The golden file pins 55 of these and says DO NOT REGENERATE at the top. If this changes,
+    // every identity in every collection changes with it.
+    assertEquals(encoded(key("fix-consistency", "consistency", "definition")),
+                 "src::fix-consistency::consistency/definition")
+    assertEquals(encoded(key("n1", "Cost / benefit")), "src::n1::cost%20%2f%20benefit")
+  }
+
+  test("a property card round-trips through its tag") {
+    val k = prop("n1", "special-case-of")
+    assertEquals(encoded(k), "src::n1::/p/special-case-of")
+    assertEquals(TagCodec.decode(encoded(k)), Right(k))
+  }
+
+  test("the note-itself card round-trips through its tag") {
+    val k = CardKey(id("n1"), CardPath.Note)
+    assertEquals(encoded(k), "src::n1::/n")
+    assertEquals(TagCodec.decode(encoded(k)), Right(k))
+  }
+
+  /** THE COLLISION THIS TYPE EXISTS TO PREVENT.
+    *
+    * `special-case-of:` in the frontmatter and `# Special-Case-Of` in the body are two different
+    * cards, and both spellings were genuinely on the table as ways of writing one relation. A
+    * path of bare names would give them one key — and one key for two cards is a duplicate
+    * identity, which refuses the entire run until a name is changed.
+    */
+  test("a property and a heading of the same name are different cards") {
+    val fromProperty = prop("n1", "special-case-of")
+    val fromHeading  = key("n1", "Special-Case-Of")
+
+    assertNotEquals(fromProperty, fromHeading)
+    assertNotEquals(encoded(fromProperty), encoded(fromHeading))
+    assertEquals(TagCodec.decode(encoded(fromProperty)), Right(fromProperty))
+    assertEquals(TagCodec.decode(encoded(fromHeading)), Right(fromHeading))
+  }
+
+  test("a property name is canonicalised, so tidying its spelling is not a new card") {
+    assertEquals(prop("n1", "Special-Case-Of"), prop("n1", "special-case-of"))
+  }
+
+  /** AN UNKNOWN MARK IS MALFORMED, NOT SILENTLY READ AS A HEADING.
+    *
+    * A tag this tool cannot place must never be filed as though it belonged somewhere: a
+    * mis-filed card is updated in place, and the card it really names is created again beside
+    * it. That is the damage the identity design exists to prevent, and a lenient decoder would
+    * reintroduce it from the one direction nothing else guards.
+    */
+  test("a path marked as non-heading but naming an unknown kind is refused, and says why") {
+    // THE REASON IS ASSERTED, NOT MERELY THE REFUSAL, and a mutation is what forced that.
+    // Deleting the guard entirely leaves all three of these still failing — an empty leading
+    // token makes the first heading segment empty, which `HeadingSegment.fromDecoded` rejects
+    // on its own. So `isLeft` was true either way and the test could not see the guard at all.
+    // What the guard actually buys is the MESSAGE: "names no kind this tool knows" tells a
+    // reader their tag is from a newer version or was hand-edited, where "a heading segment is
+    // empty" describes a shape they never wrote.
+    def reasonOf(tag: String): String =
+      TagCodec.decode(tag) match
+        case Left(KeyError.MalformedTag(_, reason)) => reason
+        case other                                  => fail(s"expected a malformed tag, got $other")
+
+    assert(
+      reasonOf("src::n1::/z/whatever").contains("names no kind"),
+      s"the unknown mark was refused for the wrong reason: ${reasonOf("src::n1::/z/whatever")}",
+    )
+    assert(reasonOf("src::n1::/p").contains("names no kind"), "a property mark with no name")
+    assert(reasonOf("src::n1::/n/extra").contains("names no kind"), "the note mark takes nothing after it")
+  }
 
   // ---------------------------------------------------------------- NoteId ----
 

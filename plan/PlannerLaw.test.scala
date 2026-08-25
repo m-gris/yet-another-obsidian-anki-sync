@@ -63,7 +63,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       id     <- Gen.const(NoteId.fromFrontmatter(idText).toOption).suchThat(_.isDefined).map(_.get)
       parsed = segs.flatMap(s => HeadingSegment.fromExtractedText(s).toOption).toVector
       if parsed.nonEmpty
-    yield CardKey(id, HeadingPath(NonEmptyVector.fromVectorUnsafe(parsed)))
+    yield CardKey(id, CardPath.Headings(HeadingPath(NonEmptyVector.fromVectorUnsafe(parsed))))
 
   val genBody: Gen[Body] =
     Gen.oneOf("Some body.", "Another body.", "Operations appear instantaneous.", "x")

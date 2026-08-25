@@ -113,6 +113,31 @@ object CellDisplay:
 
 object Tables:
 
+  /** A table card's key: the section's own key, EXTENDED by the row and — for a pair card — the
+    * column header.
+    *
+    * WHY IT MUST BE A HEADING PATH, and why the other cases raise rather than being handled.
+    * `base` is the key of the SECTION whose body holds the table, and a section is a marked
+    * heading; there is no other way to reach this code. A property carries a single value and
+    * has no body to put a table in, and the note-itself card is the note's prose. So the two
+    * remaining cases are unreachable rather than merely unusual, and inventing an answer for
+    * them would be inventing a key — which is the one thing in this system that must never be
+    * guessed at, because a wrong key silently updates the wrong Anki note.
+    *
+    * IT RAISES INSTEAD OF RETURNING AN OPTION on the same grounds `Executor` raises for a
+    * retype verdict it was told could not occur: a `None` here would be swallowed by the
+    * surrounding `map` and the table would produce fewer cards than it has rows, silently.
+    */
+  private def deeper(base: CardKey, extra: HeadingSegment*): CardKey =
+    base.path match
+      case CardPath.Headings(headings) =>
+        base.copy(path = CardPath.Headings(HeadingPath(headings.segments ++ extra.toVector)))
+      case other =>
+        throw new IllegalStateException(
+          s"a table was found under ${other.render}, which has no body that could contain one"
+        )
+
+
   /** Build every card a table section declares.
     *
     * Note this requires GitHubFlavor to be enabled on the parser. Laika's base Markdown has
@@ -342,7 +367,7 @@ object Tables:
           // whose first and last characters are non-whitespace, on which `.trim` is a no-op.
           // The argument above therefore survives the swap unchanged.
           Body.fromExtracted(d.value).map { body =>
-            val key = base.copy(path = HeadingPath(base.path.segments :+ rowSeg :+ d.headerSeg))
+            val key = deeper(base, rowSeg, d.headerSeg)
             CardSpec.ThreeField(
               key,
               rowConcept,
@@ -362,7 +387,7 @@ object Tables:
           if !scope.wantsRowCards then Vector.empty
           else if pairs.size < 2 then Vector.empty
           else
-            val key = base.copy(path = HeadingPath(base.path.segments :+ rowSeg))
+            val key = deeper(base, rowSeg)
             Vector(
               CardSpec.TableRow(
                 key,
