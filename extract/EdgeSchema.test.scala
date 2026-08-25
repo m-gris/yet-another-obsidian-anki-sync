@@ -176,3 +176,50 @@ class EdgeSchemaTest extends munit.FunSuite:
     assertEquals(EdgeSchema.directionOf("4way"), None)
     assertEquals(EdgeSchema.directionOf(""), None)
   }
+
+  // ------------------------------------------- finding the schema inside a note ----
+
+  /** READ OFF RAW MARKDOWN, NOT A PARSED DOCUMENT. A schema note is prose with a list in it, and
+    * parsing is strict — an array index written as `[0]` in a sentence fails. Were the schema read
+    * from a parsed document, a paragraph having nothing to do with the vocabulary could cost the
+    * vault its whole vocabulary. Reading lines cannot fail.
+    */
+  test("the schema is the text under its heading, ending at the next heading") {
+    val note =
+      """# Function Space
+        |
+        |Some prose. An array index like [0] would break a strict parser.
+        |
+        |# Properties-to-Flashcards
+        |
+        |- special-case-of: 1way
+        |
+        |# Something Else
+        |
+        |- not-a-rule: 3way
+        |""".stripMargin
+
+    val found = EdgeSchema.findIn(note).getOrElse(fail("the schema heading was not found"))
+    val schema = parsed(found)
+    assertEquals(schema.directionsFor(prop("special-case-of")), Some(ValueOnly))
+    assertEquals(schema.directionsFor(prop("not-a-rule")), None, "it read past the next heading")
+  }
+
+  /** SPACES AND HYPHENS ARE THE SAME HERE, and that leniency is load-bearing rather than
+    * indulgent. A vault with no schema note is the ordinary case, so a missing schema cannot be
+    * reported as an error — which makes a NEAR-MISS the worst outcome available: write the
+    * heading with spaces and you get no schema, no cards, and no message about either.
+    */
+  test("the heading is matched loosely enough that a near-miss cannot fail silently") {
+    assert(EdgeSchema.findIn("## properties to flashcards\n- a: 1way\n").isDefined)
+    assert(EdgeSchema.findIn("### PROPERTIES-TO-FLASHCARDS\n- a: 1way\n").isDefined)
+    assert(EdgeSchema.findIn("# Properties To Flashcards\n- a: 1way\n").isDefined)
+    assert(EdgeSchema.findIn("#  properties_to_flashcards  \n- a: 1way\n").isDefined)
+
+    // Still a heading match, not a substring one.
+    assertEquals(EdgeSchema.findIn("# Properties to Flashcards and more\n- a: 1way\n"), None)
+  }
+
+  test("a note without the heading carries no schema") {
+    assertEquals(EdgeSchema.findIn("# Function Space\n\nProse.\n"), None)
+  }

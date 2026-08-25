@@ -768,3 +768,151 @@ class VaultWalkerTest extends munit.FunSuite:
   test("the documented order is the nesting order") {
     assertEquals(DeckLevel.Documented.map(_._2), DeckLevel.values.toVector)
   }
+
+  // ══════════════════════════════ cards made from frontmatter relations ══════
+
+  /** A TYPED EDGE IS A CARD, END TO END — vocabulary read from the vault, properties read from a
+    * note, and a three-field card out the other side.
+    *
+    * The fixture is the note that prompted the feature. `Function Space.md` declares
+    * `special-case-of: "[[HomSet]]"`, and its headings name aspects of the concept rather than the
+    * concept itself — which is why the subject can only be the file name.
+    */
+  val vocabulary: String =
+    "---\nid: schema\n---\n\n# Properties-to-Flashcards\n\n" +
+      "The relations I use.\n\n- special-case-of: 1way\n- dual-of: 2way\n"
+
+  test("a declared property becomes a card, with the file name as its subject") {
+    val index = scan(
+      "Schema.md"         -> vocabulary,
+      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# Definition\n\nProse.\n",
+    )
+
+    val edges = index.scan.specs.filter(_.key.path match
+      case CardPath.Property(_) => true
+      case _                    => false)
+
+    assertEquals(edges.size, 1, s"expected one edge card, got ${index.scan.specs.map(_.key.path.render)}")
+    edges.head.spec match
+      case t: CardSpec.ThreeField =>
+        assertEquals(t.concept, "Function Space")
+        assertEquals(t.descriptor, "special-case-of")
+        assertEquals(t.description.value, "HomSet")
+      case other => fail(s"an edge must be a three-field card: $other")
+  }
+
+  test("a vault with no schema note makes no edge cards and says nothing about it") {
+    val index = scan(
+      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A #flashcard/1way\n\nb\n"
+    )
+    assert(
+      !index.scan.specs.exists(_.key.path match
+        case CardPath.Property(_) => true
+        case _                    => false),
+      "a property made a card with no vocabulary declaring it",
+    )
+    assertEquals(index.scan.failures, Vector.empty, "the absence of a schema was reported as a problem")
+  }
+
+  /** AN UNREADABLE VOCABULARY IS NOT THE SAME AS NO VOCABULARY, and the difference is the whole
+    * reason it is reported. With no schema, nothing was expected. With a broken one, every
+    * typed-edge card the author expects is silently absent.
+    */
+  test("a vocabulary that cannot be read is reported once, loudly, for the whole vault") {
+    val index = scan(
+      "Schema.md"         -> "---\nid: s\n---\n\n# Properties-to-Flashcards\n\n- special-case-of: sideways\n",
+      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.EdgeVocabularyUnusable(f, _) => f },
+      Vector("Schema.md"),
+    )
+  }
+
+  test("two schema notes yield no vocabulary at all rather than an arbitrary one") {
+    val index = scan(
+      "A.md" -> "---\nid: a\n---\n\n# Properties-to-Flashcards\n\n- special-case-of: 1way\n",
+      "B.md" -> "---\nid: b\n---\n\n# Properties-to-Flashcards\n\n- special-case-of: 3way\n",
+      // A note that WOULD make a card under either vocabulary, which is what turns this from a
+      // test of the message into a test of the behaviour.
+      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+    )
+
+    val reported = index.scan.failures.collect { case BuildFailure.EdgeVocabularyUnusable(_, r) => r }
+    assertEquals(reported.size, 1, s"expected exactly one report: ${index.scan.failures}")
+    assert(reported.head.contains("A.md") && reported.head.contains("B.md"), reported.head)
+
+    // THE CONSEQUENCE, AND A MUTATION IS WHAT FORCED IT. Silently adopting the first of the two
+    // vocabularies left this suite entirely green: the report above is emitted either way, so a
+    // test that asserted only the message could not see that a vocabulary had been used anyway.
+    // Which of two vocabularies a tool silently picked is not something an author can discover by
+    // reading their vault.
+    assertEquals(
+      index.scan.specs.map(_.key.path).collect { case CardPath.Property(p) => p.value },
+      Vector.empty,
+      "a vocabulary was used despite the vault declaring two",
+    )
+  }
+
+  /** THE PROPERTY THAT MAKES EDGES MORE ROBUST THAN HEADINGS, and it falls out of where they live
+    * rather than being engineered. A relation is declared in frontmatter, and the frontmatter
+    * parsed — that is how the note has an id at all — so a body the strict parser refuses costs
+    * the note its heading cards and none of its edges.
+    */
+  test("a note whose body will not parse still declares its relations") {
+    val index = scan(
+      "Schema.md" -> vocabulary,
+      "Broken.md" -> ("---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n" +
+        "# Definition #flashcard/1way\n\nAn array index like [0] in prose.\n"),
+    )
+
+    assert(
+      index.scan.failures.exists {
+        case BuildFailure.KeyUnderivableInFile(_, _, _) => true
+        case _                                          => false
+      },
+      s"the body parsed after all, so this proves nothing: ${index.scan.failures}",
+    )
+    assertEquals(
+      index.scan.specs.map(_.key.path).collect { case CardPath.Property(p) => p.value },
+      Vector("special-case-of"),
+      "the edge was lost along with the body",
+    )
+  }
+
+  /** A REVERSIBLE EDGE THAT ASKS ONE QUESTION WITH SEVERAL RIGHT ANSWERS.
+    *
+    * `dual-of` is declared `2way`, so it also asks "what is the dual of X?". Two notes naming the
+    * same X make two cards asking that identical question and holding different answers — so
+    * whichever comes up, one of them marks you wrong. The tool can see both notes at once, which
+    * is why this is detected rather than forbidden outright or left to the author.
+    */
+  test("a reversible edge with several right answers is refused, naming them") {
+    val index = scan(
+      "Schema.md"  -> vocabulary,
+      "Product.md" -> "---\nid: n1\ndual-of: \"[[Category]]\"\n---\n\n# A\n\nb\n",
+      "Sum.md"     -> "---\nid: n2\ndual-of: \"[[Category]]\"\n---\n\n# A\n\nb\n",
+    )
+
+    val refusals = index.scan.failures.collect {
+      case BuildFailure.KeyKnown(_, _, reason) if reason.contains("dual-of") => reason
+    }
+    assertEquals(refusals.size, 2, s"expected both sides refused: ${index.scan.failures}")
+    assert(refusals.head.contains("Product") && refusals.head.contains("Sum"), refusals.head)
+  }
+
+  /** THE CONTROL. A one-way edge asks only forwards, so the same object on many notes is
+    * perfectly ordinary — and `special-case-of` is exactly the relation where that is the norm.
+    * Without this, the check above could be satisfied by refusing every repeated object.
+    */
+  test("a one-way edge may point many notes at the same thing") {
+    val index = scan(
+      "Schema.md"          -> vocabulary,
+      "Function Space.md"  -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+      "Exponential.md"     -> "---\nid: n2\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+    )
+    assertEquals(index.scan.failures, Vector.empty, s"a 1way edge was refused: ${index.scan.failures}")
+    assertEquals(index.scan.specs.count(_.key.path match
+      case CardPath.Property(_) => true
+      case _                    => false), 2)
+  }

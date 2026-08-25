@@ -12,10 +12,16 @@ enum SourceKind:
   case TablePair
   case TableRow
 
+  /** A frontmatter property — a typed edge. Not a heading, and named so that a diagnostic sends
+    * the reader to the top of the file rather than into its body.
+    */
+  case Property
+
   def describe: String = this match
     case Heading   => "heading"
     case TablePair => "table pair card"
     case TableRow  => "table row card"
+    case Property  => "frontmatter property"
 
 /** Where a spec came from.
   *
@@ -117,6 +123,18 @@ enum BuildFailure:
     */
   case MarkedWithoutNoteId(file: String, reason: String)
 
+  /** THE VAULT'S EDGE VOCABULARY COULD NOT BE READ, so no property makes a card anywhere.
+    *
+    * ITS BLAST RADIUS IS THE WHOLE VAULT, which is why it is reported once and loudly rather than
+    * per note. A schema that cannot be read is not the same as a vault with no schema: the second
+    * is the ordinary case and says nothing, while the first means every typed-edge card the author
+    * expects is silently absent. Without this, the two are indistinguishable.
+    *
+    * Non-degrading: it says nothing about which notes own which cards, so orphan inference for
+    * everything else is untouched. The heading cards of every note are unaffected.
+    */
+  case EdgeVocabularyUnusable(file: String, reason: String)
+
   /** The frontmatter declares `flashcard` intent, the markdown WILL NOT PARSE, and there is no
     * usable `id` — so nothing else in this file reports anything, and no claim about markers is
     * available in either direction.
@@ -191,6 +209,9 @@ enum BuildFailure:
     // NEVER OWNED ANYTHING. A card's identity begins with the frontmatter id, so a file without
     // one has never produced an Anki note and cannot own an observed key.
     case MarkedWithoutNoteId(_, _) => OrphanShelter.Nothing
+
+    // Nothing to shelter: this is about the vault's vocabulary, not about any note's cards.
+    case EdgeVocabularyUnusable(_, _) => OrphanShelter.Nothing
     case MarkerUnknowable(_, _)    => OrphanShelter.Nothing
 
     // The one that costs the whole vault. Frontmatter that will not parse might have carried

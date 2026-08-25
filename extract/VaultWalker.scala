@@ -336,6 +336,13 @@ object VaultWalker:
     val failures = Vector.newBuilder[BuildFailure]
     val decks    = Map.newBuilder[CardKey, DeckPath]
 
+    // THE VOCABULARY IS READ BEFORE ANYTHING ELSE, because it applies to every note and a note
+    // cannot be processed without it. It costs one pass over text already in memory and no
+    // parsing at all — `EdgeSchema.findIn` reads lines, which is what makes a schema note immune
+    // to a strict parser refusing something elsewhere in it.
+    val (schema, schemaFailures) = readVocabulary(files)
+    failures ++= schemaFailures
+
     // Sorted so a scan is reproducible: the same vault must always yield the same plan, or
     // "a second run changes nothing" becomes dependent on directory iteration order.
     files.sortBy(_.relativePath).foreach { file =>
@@ -455,6 +462,28 @@ object VaultWalker:
 
             case Some(Left(e)) => unreadable(s"unusable id: $e")
             case Some(Right(noteId)) =>
+              // EDGE CARDS COME FIRST AND DO NOT NEED THE PARSED DOCUMENT, which is a property
+              // worth having rather than an accident of ordering: a note whose markdown will not
+              // parse still declares its relations, because they live in frontmatter, and the
+              // frontmatter parsed — that is how we have an id at all. So a stray `[0]` in a
+              // sentence costs the note its heading cards and none of its edges.
+              val (edgeSpecs, edgeFailures) = Edges.specsFor(
+                noteId = noteId,
+                noteName = fileName,
+                relativePath = file.relativePath,
+                location = file.relativePath.split('/').dropRight(1).toVector :+ fileName,
+                properties = keys,
+                rawFrontmatter = split.frontmatter.getOrElse(""),
+                schema = schema,
+              )
+              specs ++= edgeSpecs
+              failures ++= edgeFailures
+              edgeSpecs.foreach { s =>
+                Decks
+                  .compose(deckRoot, shape, Decks.sourceFor(file.relativePath, Vector.empty), s.recall)
+                  .foreach(composed => decks += s.key -> composed.path)
+              }
+
               parsed match
                 // THE ID IS GOOD, SO THE BLAST RADIUS IS THIS NOTE. Every key this file could
                 // own begins with `noteId`, and `KeyUnderivableInFile` suppresses exactly those
@@ -506,4 +535,59 @@ object VaultWalker:
                   }
     }
 
-    VaultIndex(VaultScan.from(specs.result(), failures.result()), decks.result())
+    // A CROSS-NOTE CHECK, AND THEREFORE ONLY POSSIBLE HERE. Whether a reversible edge asks a
+    // question with several right answers is a fact about the whole vault, not about any note.
+    val built = specs.result()
+    VaultIndex(
+      VaultScan.from(built, failures.result() ++ Edges.reverseCollisions(built)),
+      decks.result(),
+    )
+
+  /** The vault's edge vocabulary, and any reason it could not be used.
+    *
+    * TWO SCHEMA NOTES YIELD NO SCHEMA AT ALL rather than an arbitrary one. Which of two
+    * vocabularies a tool silently picked is not something an author can discover by reading their
+    * vault, and the consequence — some relations making cards and others not — looks exactly like
+    * the tool being broken.
+    *
+    * NO SCHEMA IS NOT A FAILURE. Most vaults have no typed edges and never will; a tool that
+    * complained about a missing schema note would complain in every one of them.
+    */
+  private def readVocabulary(files: Vector[VaultFile]): (EdgeSchema, Vector[BuildFailure]) =
+    val carriers = files.sortBy(_.relativePath).flatMap { f =>
+      Frontmatter.split(f.content).toOption
+        .flatMap(split => EdgeSchema.findIn(split.body).map(f.relativePath -> _))
+    }
+
+    carriers match
+      case Vector() => (EdgeSchema.empty, Vector.empty)
+
+      case Vector((path, text)) =>
+        EdgeSchema
+          .parse(text)
+          .fold(
+            errs =>
+              (
+                EdgeSchema.empty,
+                Vector(
+                  BuildFailure.EdgeVocabularyUnusable(
+                    path,
+                    errs.toVector.map(_.describe).mkString("; "),
+                  )
+                ),
+              ),
+            schema => (schema, Vector.empty),
+          )
+
+      case many =>
+        (
+          EdgeSchema.empty,
+          Vector(
+            BuildFailure.EdgeVocabularyUnusable(
+              many.head._1,
+              s"the vault has ${many.size} notes carrying a '${EdgeSchema.Heading}' heading " +
+                s"(${many.map(_._1).mkString(", ")}), and this tool will not choose between two " +
+                "vocabularies — keep one",
+            )
+          ),
+        )

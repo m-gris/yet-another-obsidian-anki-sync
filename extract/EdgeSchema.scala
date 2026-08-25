@@ -107,6 +107,45 @@ object EdgeSchema:
     */
   val Heading: String = "properties-to-flashcards"
 
+  /** The raw text beneath the schema heading, if this note carries one.
+    *
+    * READ OFF THE RAW MARKDOWN RATHER THAN THE PARSED DOCUMENT, and that is deliberate. A schema
+    * note is prose with a list in it; parsing it as a document would make the schema unreadable
+    * whenever the note contained anything the strict parser refuses — an array index in a
+    * sentence is enough — so a vault could lose its whole vocabulary because of a paragraph that
+    * has nothing to do with it. Reading lines cannot fail.
+    *
+    * The heading is matched CANONICALLY, so `# Properties-to-Flashcards` and
+    * `## properties to flashcards` are the same heading, at any level. It ends at the next
+    * heading of any level, which is the same rule a section body follows.
+    */
+  def findIn(body: String): Option[String] =
+    val lines = body.linesIterator.toVector
+    lines.indexWhere(isSchemaHeading) match
+      case -1 => None
+      case at =>
+        val rest = lines.drop(at + 1)
+        Some(rest.takeWhile(l => !l.trim.startsWith("#")).mkString("\n"))
+
+  /** DELIBERATELY LENIENT ABOUT SPACES AND HYPHENS, and the reason is that the alternative is
+    * silence rather than an error.
+    *
+    * A vault with no schema note is the ordinary case — most have no typed edges at all — so a
+    * missing schema CANNOT be reported as a failure. That makes a near-miss the worst outcome
+    * available: write `# Properties to Flashcards` instead of `# Properties-to-Flashcards` and you
+    * get no cards, no schema, and nothing said about either. Treating the two alike removes the
+    * whole class.
+    *
+    * IT DOES NOT TOUCH `TagCodec.canonical`, which folds case and whitespace and is used to build
+    * KEYS. Widening that would merge headings that are currently distinct and re-key live cards.
+    * The leniency lives here, where its only effect is which heading is recognised.
+    */
+  private def isSchemaHeading(line: String): Boolean =
+    val trimmed = line.trim
+    def loosely(raw: String): String =
+      obsidiananki.model.TagCodec.canonical(raw).replace('-', ' ').replace('_', ' ')
+    trimmed.startsWith("#") && loosely(trimmed.dropWhile(_ == '#')) == loosely(Heading)
+
   /** Read the schema from the prose beneath its heading.
     *
     * THE RULES ARE THE LIST ITEMS AND NOTHING ELSE. A line that is not a list item is ignored
