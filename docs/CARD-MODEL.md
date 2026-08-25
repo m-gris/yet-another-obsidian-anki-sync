@@ -150,7 +150,7 @@ The binding between a markdown card and its Anki note must survive editing, or e
 concept/descriptor cards   (frontmatter id, heading path)
 table cards                (frontmatter id, heading path, row concept, column header)
 cloze sections             (frontmatter id, heading path)
-typed-edge cards           (frontmatter id, property name)
+typed-edge cards           (frontmatter id, property name)   [BUILT 2026-08-26]
 the note itself            (frontmatter id, nothing below it)     [shape settled, not yet produced]
 ```
 
@@ -175,6 +175,41 @@ about to be real. Writing a relation as the property `special-case-of:` and writ
 heading `# Special-Case-Of` were both genuinely on the table as ways of saying the same thing, and
 an anchor of bare names gives those two different cards ONE key. One key for two cards is a
 duplicate identity, which refuses the entire run until somebody renames something.
+
+### Cards made from a relation
+
+_Built 2026-08-26._ A relation declared in frontmatter — `special-case-of: "[[HomSet]]"` — is a
+TRIPLE, and so is a concept–descriptor card. They are the same shape, which is why a relation
+needs no note type, no marker and no card shape of its own: it is a `ThreeField` spec, and it
+inherits identity, hashing, decks, breadcrumbs, orphan handling and the whole reconciler unchanged.
+Subject is concept, predicate is descriptor, object is description.
+
+**The subject is the FILE NAME, and it is only a field.** A heading card takes its concept from
+the nearest ancestor heading and falls back to the file name; a relation has no ancestor heading at
+all, so the file name is the only candidate — and it is the right one, since the file is what the
+note is about. Because it is a field rather than part of the key, **renaming the file rewrites what
+the card says and moves no identity**, and rewording every heading in the note does nothing to it.
+That is a stronger guarantee than a heading card gets.
+
+**Several values make ONE card**, answered as a set. Keying per value would put the value in the
+key, so correcting a typo in one would retire that card and mint a replacement with no history.
+
+**A relation needs no parsed body**, which is a property rather than an accident: it lives in
+frontmatter, and the frontmatter parsed or the note would have no id. A body the strict parser
+refuses costs the note its heading cards and none of its relations.
+
+**Which properties are relations is declared in the VAULT**, under a `# Properties-to-Flashcards`
+heading, and that split is deliberate — see `docs/REQUIREMENTS.md` item 2. The heading is matched
+leniently about spaces and hyphens, because a vault with no schema is the ordinary case and
+therefore cannot be an error, which makes a near-miss the worst outcome available.
+
+**A reversible relation is CHECKED, not trusted or forbidden.** A `2way` or `3way` relation also
+asks which thing has the far end, and for a many-to-one relation several notes answer that — the
+same question on several cards, each holding a different right answer. Refusing `2way` outright
+would ban the relations that genuinely are one-to-one; trusting the author asks them to know in
+advance what the tool can see by looking, since it holds the whole vault at that moment. It is a
+property of the VAULT and not of a note, so adding a third answer months later breaks two cards
+that were fine, and the run that does it says so.
 
 **The note-itself anchor is admitted by the type and produced by nothing yet.** Identity is the
 most expensive thing in this system to change once review history has accumulated, and the

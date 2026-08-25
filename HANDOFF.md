@@ -39,7 +39,7 @@ at something this repository does not contain. It was superseded and to be ignor
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
 `just test` runs everything, as does `scala-cli test .` from the repository root.
-**33 suites, 706 tests, 0 failures, 0 warnings** — measured on 2026-08-26 by running it and
+**34 suites, 732 tests, 0 failures, 0 warnings** — measured on 2026-08-26 by running it and
 summing the per-suite totals. _The line has said 493, then 511; the suite keeps growing, so
 treat the number as a reading rather than a fact and re-measure before quoting it._
 
@@ -439,8 +439,13 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
     - **Whether to drop the `3way` / `3way/all` aliases** once the vault is rewritten to `cdd/`,
       which would turn the old spelling from a silent synonym into a loud refusal.
 
-13. **THE TYPED-EDGE FEATURE IS TWO-THIRDS BUILT, AND THE REMAINING THIRD IS THE CARD'S FACE.**
-    _Added 2026-08-26._
+13. ~~**THE TYPED-EDGE FEATURE IS TWO-THIRDS BUILT.**~~ **BUILT AND WIRED, 2026-08-26**, and
+    verified against the live vault: `Function Space.md`'s `special-case-of` property now plans a
+    card. The three open questions below were all answered in favour of the option that fails on a
+    real condition rather than on a guess — the subject is the file name and lives in a FIELD so
+    renaming stays free; a wikilink loses its brackets and an alias wins; and a reversible relation
+    is CHECKED against the whole vault rather than trusted or forbidden. Kept for the reasoning.
+    _Original entry follows._
 
     Built and tested: the frontmatter parser now reads list-valued properties, which had been
     dropped since the beginning (`extract/Frontmatter.scala`); the key can name a property anchor

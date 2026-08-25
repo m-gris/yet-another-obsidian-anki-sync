@@ -361,3 +361,16 @@ not.**_
   docstring being removed, so the match started from the wrong occurrence. The `cp` backup made it
   a non-event. Compute the span, assert the start is unique, refuse if the span is an implausible
   number of lines, and print what is about to go.
+
+- **A MUTATION HARNESS THAT COUNTS TEST FAILURES CANNOT SEE A MUTATION THE COMPILER REJECTED.**
+  _2026-08-26._ A mutation was reported as SURVIVING when the build had in fact refused it —
+  `-Wconf:msg=exhaustive:e` will not accept a match that stops being exhaustive, so there were no
+  tests and therefore no failures, which counts identically to zero kills. That is the strongest
+  possible outcome being reported as the weakest. **Count compile errors and test failures
+  separately**, and treat a mutation that does not build as killed by the compiler.
+
+- **ASSERT THE CONSEQUENCE, NOT THE MESSAGE.** _2026-08-26._ A test named "two schema notes yield
+  no vocabulary at all" asserted only that the refusal was REPORTED. Silently adopting the first of
+  the two vocabularies left it green, because the report is emitted either way. A test that names a
+  behaviour in its title and checks only the diagnostic is the same class of thing as a docstring
+  that promises a test: it reads as verification and is not.

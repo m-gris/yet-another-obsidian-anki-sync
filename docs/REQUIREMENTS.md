@@ -245,9 +245,9 @@ Requests for a general, subject-agnostic version recur on the Anki forums and ha
    downstream of `CardSpec` — it inherits identity, hashing, decks, breadcrumbs, orphan handling
    and the whole reconciler unchanged.
 
-   What exists: `extract/EdgeSchema.scala` reads a vault-declared vocabulary from a note, under a
-   heading `# Properties-to-Flashcards`, as list items of the form `- special-case-of: 1way`. It
-   is read and tested; **nothing consumes it yet**.
+   **BUILT AND WIRED 2026-08-26.** `extract/EdgeSchema.scala` reads a vault-declared vocabulary
+   from a note under a `# Properties-to-Flashcards` heading, and `extract/Edges.scala` turns each
+   declared property into a `ThreeField` card. Verified against the live vault.
 
    **It lives in the vault, and that is a ruling rather than a convenience.** Heading markers are
    universal — every vault that wants a two-way card writes the same token — so their vocabulary
@@ -258,11 +258,12 @@ Requests for a general, subject-agnostic version recur on the Anki forums and ha
    rightly ruled a rule rather than a setting. A vocabulary is a dictionary, and the dictionary
    belongs to whoever owns the words.
 
-   Still open, and they are the card's face rather than its plumbing: what supplies the SUBJECT of
-   the triple when nothing in the body names the concept (the filename is the only candidate);
-   what becomes of a wikilink value's brackets; and whether `2way` may be declared at all for an
-   edge that is many-to-one, where "what is a special case of HomSet?" has several right answers
-   living in different notes.
+   The three questions this entry left open are answered, all three in favour of the option that
+   fails on a real condition rather than on a guess. The SUBJECT is the file name, carried as a
+   field rather than in the key, so renaming a note costs nothing. A wikilink's brackets come off
+   and an alias wins, because a card face is read rather than clicked. And `2way` is neither
+   trusted nor forbidden but CHECKED: the tool holds the whole vault, so it can see whether the
+   reverse question actually has several answers, and refuses only then.
 
 3. ~~**What defines a block's card set**~~ — **deferred** with the route and linearization.
 

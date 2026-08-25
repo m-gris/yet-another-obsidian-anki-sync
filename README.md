@@ -281,6 +281,93 @@ So `#flashcard/table/3way/cells` is three directions, cell cards only. Bare `#fl
 is `2way` over both scopes. A direction combined with `/rows` is refused, because a direction
 has nothing to apply to when there are no cell cards.
 
+## Relations in the frontmatter
+
+A marker on a heading is not the only way to make a card. A **relation** written as a frontmatter
+property makes one too:
+
+```markdown
+---
+id: 22e55b6a-9efe-4722-bd2e-0bfa84401d99
+special-case-of: "[[HomSet]]"
+---
+
+# Definition #flashcard/cdd/2way
+
+The set of all functions from a domain to a codomain.
+```
+
+`Function Space.md` now yields **two** cards: the definition, from the marked heading, and
+
+> **Function Space** — *special-case-of* — ? → **HomSet**
+
+### Why this is a concept-descriptor card
+
+A relation is a triple — this note, the relation, the thing on the far end. So is a
+concept–descriptor card: a thing, an aspect of it, the value of that aspect. They are the same
+shape, which is why a relation needs no new note type and no new marker. It is a `cdd` card whose
+descriptor happens to be a property name.
+
+That also means `3way` works on a relation, and asks the card you cannot get any other way:
+*Function Space — ? — HomSet*. Not "what is it related to", but **which relation holds**.
+
+### Declaring which properties are cards
+
+By default no property makes a card — otherwise `created:` and `aliases:` would fill your
+collection, and a typo would quietly make a *different* card rather than being refused. Declare
+them in **one note in the vault**, under a heading `# Properties-to-Flashcards`:
+
+```markdown
+# Properties-to-Flashcards
+
+Which frontmatter properties become flashcards, and how many ways each is asked.
+
+- special-case-of: 1way
+- dual-of: 3way
+```
+
+The words are the ones a heading already uses. Prose around the rules is ignored, so explain your
+vocabulary beside it — that is the point of keeping this in the vault rather than in a config file.
+
+This vocabulary lives in your vault, unlike the `#flashcard` markers which live in the tool.
+Markers are universal; every vault that wants a two-way card writes the same thing. Relations are
+yours — `special-case-of` is mathematics, another vault wants other words entirely.
+
+### Before you write `2way` or `3way` on a relation
+
+A reversible card also asks the question backwards: *what is a special case of HomSet?* That is
+only a sound question when **one** note answers it. If three notes are each a special case of
+HomSet, three cards ask the identical question holding three different right answers, and whichever
+comes up you are wrong twice out of three times.
+
+The tool checks rather than trusting you or forbidding it, because it holds the whole vault at once
+and can simply look. If the collision is there it refuses those cards and names every note
+involved. Note that adding a third answer months later breaks two cards that were fine until then
+— the run that does it will say so.
+
+`1way` is never affected: pointing many notes at the same thing is the normal case.
+
+### What it does with the value
+
+- `[[HomSet]]` shows as **HomSet** — a card face is read, not clicked, and Anki cannot follow a
+  wikilink whatever it looks like.
+- `[[HomSet|the hom-set]]` shows as **the hom-set** — you already said how you wanted it to read.
+- Several values make **one** card, answered `A, B`. It is one question whose honest answer is
+  both; and it keeps the card's identity stable when you correct a typo in one of them.
+- Anything that is not a link is left exactly as written, so `status: draft` is as good a relation
+  as a link.
+
+### Two things worth knowing
+
+**Renaming the file is free.** A relation card is identified by the note's `id` and the property
+name, so the file name is only something the card *displays*. Rename the note, reword every
+heading in it — the card keeps its review history. Heading cards do not have this property:
+rewording a marked heading retires that card and makes a new one.
+
+**A relation survives a body the parser refuses.** Parsing is strict, and an array index written
+as `[0]` in a sentence is enough to fail it. Such a note loses its heading cards and keeps its
+relations, because relations live in the frontmatter.
+
 ## Decks
 
 By default a card's deck mirrors its **folder path** under a root deck named `Obsidian`. The
