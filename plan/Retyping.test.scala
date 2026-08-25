@@ -376,26 +376,75 @@ class RetypingTest extends munit.FunSuite:
       case other => fail(s"expected exactly one Retype, got $other")
   }
 
-  /** A STALE ORPHAN FLAG IS DROPPED BY THE MOVE ITSELF, so no [[SyncAction.Unflag]] accompanies
-    * it. The key is present in the markdown — that is why a Retype was planned at all — so the
-    * flag was stale, and the write that replaces the whole tag set is where it goes.
+  /** A MOVE OVER A FLAGGED NOTE PLANS AN `Unflag` AS WELL, AND THE `Unflag` COMES FIRST.
+    *
+    * _Rewritten 2026-08-25. This test previously asserted the OPPOSITE — that a move plans
+    * exactly one action and no `Unflag` — and it was wrong in the way that costs review history._
+    *
+    * The reasoning it encoded was half right, which is why it survived review. A `Retype`
+    * rebuilds the note's owned tags from scratch, so the stale `orphaned::` tag really is gone
+    * by that same write and a second write to remove it really would be redundant. The half it
+    * missed: `Unflag` does not only remove a tag. It UNSUSPENDS every card of the note first,
+    * and nothing else in the retype path does that. So a note that was flagged, suspended, and
+    * came back on a different note type ended up correctly keyed, correctly typed, untagged —
+    * and suspended forever, invisible to every report because reports count notes CARRYING the
+    * tag, and unreachable by every later run because content and deck then matched.
+    *
+    * The redundant tag removal is the price of reusing the action that already carries the
+    * unsuspend, and it is the right price: teaching the retype arm its own second way to
+    * unsuspend would put two mechanisms where one belongs.
     */
-  test("a move drops a stale orphan flag, and does not plan a separate Unflag for it") {
+  test("a move over a FLAGGED note unflags it first, then retypes") {
     val anki = collectionWith(stockBasic)
     val id   = seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
     anki
       .addTags(Vector(id), Vector(OwnedTag.orphaned(k)))
       .fold(e => fail(s"$e"), identity)
+    anki.cardsOf(Vector(id)).flatMap(anki.suspend).fold(e => fail(s"$e"), identity)
 
     val actions = planOf(scanOf(basicSpec), anki).actions
-    assertEquals(actions.size, 1, s"a move planned more than the one action: $actions")
-    assert(!actions.exists(_.isInstanceOf[SyncAction.Unflag]), s"an Unflag was planned too: $actions")
+    assertEquals(actions.size, 2, s"expected an Unflag AND a Retype: $actions")
+
+    // ORDER IS ASSERTED, not incidental. Interrupted between the two, an unflag-then-retype
+    // leaves the note back in the queue on its OLD type — visible and fully repairable next
+    // run. The reverse leaves the retype done and the card suspended, which IS the stranded
+    // state this test exists for.
+    assert(
+      actions.head.isInstanceOf[SyncAction.Unflag],
+      s"the Unflag must precede the Retype, or an interruption strands the card: $actions",
+    )
+    assert(actions(1).isInstanceOf[SyncAction.Retype], s"expected a Retype second: $actions")
 
     runReport(planOf(scanOf(basicSpec), anki), anki, RetypePolicy.Apply)
+
     assert(
       !tagsOf(anki, id).exists(_.startsWith(s"${OwnedTag.OrphanedPrefix}::")),
       s"the orphan flag survived the move: ${tagsOf(anki, id)}",
     )
+    anki.cardsOf(Vector(id)).fold(e => fail(s"$e"), identity).foreach { c =>
+      assert(!anki.isSuspended(c), s"card ${c.value} was left suspended by the move")
+    }
+  }
+
+  /** THE CONTROL, and the reason the fix is conditional rather than unconditional. A note the
+    * tool never flagged may still be suspended — by Marc, in Anki, on purpose. The settled
+    * ruling is that this tool cannot tell its own suspension from a person's, so the `orphaned::`
+    * tag is the ONLY evidence that a suspension was ours to undo. Without this test, the fix
+    * above is satisfiable by unsuspending on every retype.
+    */
+  test("a move over an UNFLAGGED note plans no Unflag and leaves a hand-suspension alone") {
+    val anki = collectionWith(stockBasic)
+    val id   = seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
+    anki.cardsOf(Vector(id)).flatMap(anki.suspend).fold(e => fail(s"$e"), identity)
+
+    val actions = planOf(scanOf(basicSpec), anki).actions
+    assertEquals(actions.size, 1, s"a move over an unflagged note planned more than one action: $actions")
+    assert(!actions.exists(_.isInstanceOf[SyncAction.Unflag]), s"an Unflag was planned: $actions")
+
+    runReport(planOf(scanOf(basicSpec), anki), anki, RetypePolicy.Apply)
+    anki.cardsOf(Vector(id)).fold(e => fail(s"$e"), identity).foreach { c =>
+      assert(anki.isSuspended(c), s"card ${c.value} was un-suspended by a retype that never flagged it")
+    }
   }
 
   // ============================================================== the migration ====

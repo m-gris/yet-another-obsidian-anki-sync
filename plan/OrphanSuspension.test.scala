@@ -163,6 +163,122 @@ class OrphanSuspensionTest extends munit.FunSuite:
     assertEquals(anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity), before)
   }
 
+  // ══════════════════ coming back ON A DIFFERENT NOTE TYPE ═══════════════════
+
+  /** THE SAME RETURN, THROUGH THE OTHER BRANCH — and it strands the card.
+    *
+    * Everything above exercises a heading that comes back UNCHANGED, which reaches the `Update`
+    * branch, which computes an `Unflag`, which unsuspends. A heading that comes back with a
+    * DIFFERENT MARKER — `#flashcard/1way` retagged `#flashcard/sequence`, say — reaches the
+    * `Retype` branch instead, and that branch computes no `Unflag` at all.
+    *
+    * WHY THAT LOOKED CORRECT. `Retype` rebuilds the note's owned tags from scratch, so the
+    * `orphaned::` tag really does disappear by the same write, and `plan/Planner.scala:307-312`
+    * says so and concludes a separate `Unflag` is unnecessary. The reasoning is sound about
+    * TAGS and silently incomplete: `Unflag` does two things, and the second one — unsuspending
+    * every card of the note — has no other home.
+    *
+    * WHAT THE CARD IS LEFT AS. Correctly keyed, correctly typed, in the right deck, carrying no
+    * orphan tag, holding its full review history — and suspended forever. Nothing reports it:
+    * `Report.parkedNote` counts notes carrying the tag, and this note no longer carries it. No
+    * later run repairs it: content and deck now match, so no action is planned. It is exactly
+    * the state `plan/Executor.scala:367-371` argues the `Unflag` ORDERING exists to prevent —
+    * "an untagged live card is indistinguishable from a healthy one" — reintroduced through the
+    * sibling branch.
+    *
+    * REACHABLE WITHOUT ANYTHING UNUSUAL: both note types here are standard with one template
+    * each, so the retype gate admits the move. It needs `--migrate-note-types`, which is what
+    * `RetypePolicy.Apply` means here.
+    */
+  test("a heading that comes back on a DIFFERENT note type is not left suspended") {
+    val anki = InMemoryAnki()
+
+    // A one-way card: ONE Anki card, on `Obsidian Basic`.
+    val oneWay = SourcedSpec(
+      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, "Coupling"),
+      SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
+      NoRecall,
+    )
+    runSync(anki, scanOf(oneWay))
+
+    // The heading goes away: tagged and suspended.
+    runSync(anki, scanOf())
+    cardsOf(anki).foreach(c => assert(anki.isSuspended(c), "setup: the card should be suspended"))
+
+    // It comes back as a SEQUENCE — same key, same one-template shape, different note type.
+    val sequence = SourcedSpec(
+      CardSpec.Sequence(k, "front", body("first item"), "Coupling"),
+      SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
+      NoRecall,
+    )
+    runSync(anki, scanOf(sequence))
+
+    val ids = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+    val notes = anki.notesInfo(ids).fold(e => fail(s"$e"), identity)
+
+    // The retype itself happened — without this the test could pass by the move never occurring.
+    assertEquals(
+      notes.map(_.noteType),
+      Vector(Marker.NoteTypes.ClozeSequence),
+      "the note was not retyped, so this test is not exercising the branch it is about",
+    )
+
+    // And the tag really is gone, which is the half the planner reasoned about correctly.
+    assert(
+      !notes.flatMap(_.tags).exists(_.startsWith(OwnedTag.OrphanedPrefix)),
+      "the orphan tag survived the retype — a different defect from the one this test is for",
+    )
+
+    // THE DEFECT. Nothing carries the unsuspend, so the card stays out of the queue with no
+    // tag to explain it and nothing that will ever look at it again.
+    cardsOf(anki).foreach { c =>
+      assert(
+        !anki.isSuspended(c),
+        s"card ${c.value} came back on a new note type and was left SUSPENDED with its orphan " +
+          "tag removed — invisible to every report and unreachable by every later run",
+      )
+    }
+  }
+
+  /** THE CONTROL. Retyping a note that was never orphaned must not unsuspend anything, because
+    * a card the tool did not suspend is a card somebody suspended by hand — and the settled
+    * ruling is that this tool cannot tell its own suspension from Marc's. Without this, the fix
+    * above is satisfiable by unsuspending unconditionally on every retype.
+    */
+  test("retyping a note that was never orphaned leaves a hand-suspended card alone") {
+    val anki = InMemoryAnki()
+
+    val oneWay = SourcedSpec(
+      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, "Coupling"),
+      SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
+      NoRecall,
+    )
+    runSync(anki, scanOf(oneWay))
+
+    // Somebody suspends it in Anki, by hand. No orphan tag: the tool never flagged it.
+    val byHand = cardsOf(anki)
+    anki.suspend(byHand).fold(e => fail(s"$e"), identity)
+
+    val sequence = SourcedSpec(
+      CardSpec.Sequence(k, "front", body("first item"), "Coupling"),
+      SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
+      NoRecall,
+    )
+    runSync(anki, scanOf(sequence))
+
+    cardsOf(anki).foreach { c =>
+      assert(
+        anki.isSuspended(c),
+        s"card ${c.value} was un-suspended by a retype, overriding a decision the tool did not " +
+          "make and cannot distinguish from its own",
+      )
+    }
+  }
+
   // ═════════════════════════════════════════════════════════ re-running ══════
 
   test("flagging twice changes nothing the second time") {

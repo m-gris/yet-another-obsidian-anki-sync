@@ -304,12 +304,26 @@ object Planner:
               // wholesale. Nothing extra is read to do it: the fields come from the spec that
               // is already in hand, and the foreign tags from the observation already made.
               //
-              // THE OWNED TAGS ARE REBUILT RATHER THAN CARRIED OVER, which is what makes a
-              // separate Unflag unnecessary here and what stops a stale hash surviving the
-              // move: the note ends up with exactly the identity tag and the hash of the
-              // content being written, and any `sha::` or `orphaned::` it held before is gone
-              // by the same write. The key is present in the markdown — that is why this
+              // THE OWNED TAGS ARE REBUILT RATHER THAN CARRIED OVER, which stops a stale hash
+              // surviving the move: the note ends up with exactly the identity tag and the hash
+              // of the content being written, and any `sha::` or `orphaned::` it held before is
+              // gone by the same write. The key is present in the markdown — that is why this
               // branch was reached at all — so an `orphaned::` tag on it was stale.
+              //
+              // ⚠️ THAT IS TRUE OF THE TAG AND WAS NOT ENOUGH. This comment used to end by
+              // concluding "which is what makes a separate Unflag unnecessary here", and that
+              // conclusion STRANDED CARDS for as long as it stood. `Unflag` does TWO things —
+              // it unsuspends every card of the note and THEN clears the tag — and only the
+              // second has another home. A note that was flagged and comes back on a different
+              // note type had its tag rebuilt away and was never unsuspended: correctly keyed,
+              // correctly typed, in the right deck, carrying its whole review history, and
+              // suspended forever. Nothing reported it, because every report counts notes
+              // CARRYING the tag and this one no longer did; and no later run repaired it,
+              // because content and deck then matched so nothing was planned. It is precisely
+              // the state `plan/Executor.scala`'s `Unflag` ordering exists to prevent — "an
+              // untagged live card is indistinguishable from a healthy one" — arriving through
+              // the sibling branch. Fixed 2026-08-25 by emitting the `Unflag` this branch had
+              // argued itself out of.
               // DECIDED ABOVE THE BRANCH, ON PURPOSE. This used to be computed only in the
               // `else`, so a note that changed BOTH its note type and its folder had its deck
               // silently left behind: the run reported itself clean, and the NEXT run moved the
@@ -318,6 +332,20 @@ object Planner:
               val deckDiffers = !existing.deck.contains(deck)
 
               if existing.note.noteType != sourced.spec.noteTypeName then
+                // UNFLAG FIRST, RETYPE SECOND, and the order is the pessimistic one this file
+                // and the executor both use: interrupted between the two, the note is back in
+                // the queue on its OLD note type — visible, studiable, and fully repairable by
+                // the next run, which will see the note types still disagree and plan the move
+                // again. The reverse order would leave the retype done and the card suspended,
+                // which is the stranded state itself.
+                //
+                // ONLY WHEN THE NOTE IS ACTUALLY FLAGGED. Unsuspending unconditionally would
+                // override a suspension somebody made by hand in Anki, and the settled ruling is
+                // that this tool cannot tell its own suspension from a person's. The tag is the
+                // only evidence that the suspension was ours.
+                Option
+                  .when(existing.isFlaggedOrphan)(SyncAction.Unflag(key, existing.note.id))
+                  .toVector ++
                 Vector(
                   SyncAction.Retype(
                     key = key,
