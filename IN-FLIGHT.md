@@ -284,3 +284,38 @@ those references._
     **Marc's call — it is the wording of the line he reads most.** The counting lives in
     `cli/Main.scala`'s `describeSyncOutcome` / `verdict`, and `RetypeVerdict` already carries
     exactly the distinction the line needs.
+
+## PARKED, deliberately — small, cheap, and explicitly deferred on 2026-08-25
+
+_Marc asked for these to be kept warm rather than done now. They are small enough to lose and
+important enough not to, so they are named here rather than left inside a 56k-character document
+nobody re-reads. Both come out of `docs/EVOLVABILITY.md`, which carries the full reasoning._
+
+18. **TWO DOCSTRINGS ON THE HISTORY-PROTECTING PATH SAY THE OPPOSITE OF WHAT THE CODE DOES.**
+    Free to fix, actively misleading, and both sit on the mechanism that keeps review history
+    alive — which is exactly where a wrong comment costs the most.
+
+    - `plan/SyncAction.scala:162-166`, the `Flag` case's own documentation, says "WHAT THIS DOES
+      TODAY IS WRITE A TAG, AND NOTHING ELSE… that is not built: `Anki` has no suspend operation
+      yet." It is flatly false: `Anki.suspend` exists and `Executor` suspends every card of a
+      flagged note. The single place where the code describes the action that removes a card
+      from review describes an action it stopped performing.
+    - `model/CardSpec.scala:42-46`, echoed at `docs/CARD-MODEL.md:251`, promises that editing an
+      unlabelled cloze deletion's text "retires the key: the card starts over and the old one is
+      flagged as an orphan, visible in the prune list." **No such thing happens.** Orphan
+      flagging works on `CardKey`s and there is one key per SECTION, not per cloze group — the
+      planner has no cloze awareness at all. A retired cloze group produces no flag, no tag and
+      no prune-list entry.
+
+19. **THE GIT-REPLAY MEASUREMENT (called M1 in `docs/EVOLVABILITY.md`) HAS NOT BEEN RUN, AND IT
+    GATES THE IDENTITY DECISION.** Read-only, no Anki, no writes, roughly an afternoon: walk the
+    vault's git history, run the extractor over each pair of trees, diff the key sets, and
+    classify every key death — file deleted, file renamed, ancestor heading reworded, marked
+    heading reworded, frontmatter `id` changed, body-only edit. Then count how many cards each
+    ancestor rewording would have orphaned; **that number is the amplification factor.**
+
+    **Why it is worth an afternoon:** every option for making reformulation affordable is
+    currently being weighed on the assumption that heading renames dominate the cost of change.
+    Nobody has checked. Renaming is the most VIVID cost, which is not the same as the largest,
+    and the answer decides whether the effort belongs on heading renames or on ancestor renames —
+    which have a far larger blast radius and no good candidate remedy.
