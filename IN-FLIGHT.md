@@ -319,3 +319,45 @@ nobody re-reads. Both come out of `docs/EVOLVABILITY.md`, which carries the full
     Nobody has checked. Renaming is the most VIVID cost, which is not the same as the largest,
     and the answer decides whether the effort belongs on heading renames or on ancestor renames —
     which have a far larger blast radius and no good candidate remedy.
+
+## Method — what the last two days added to "the mistakes worth not repeating"
+
+_Written 2026-08-26. Each of these cost real time on 2026-08-25 and every one is the same shape as
+the bugs this project keeps finding in itself: **something that looks like verification and is
+not.**_
+
+- **A TEST THAT COMPARES TWO ABSENT THINGS PASSES.** Three separate instances in two days. A new
+  parser test asserted "the inline spelling reads the same as the block spelling" and was green
+  while BOTH were `None` — it would have stayed green through the entire defect it was written for.
+  The measurement of whether unsuspending restores scheduling compared ten card columns and
+  reported every one identical; three of them, **including `interval`, the one that matters most**,
+  were `None` on both sides, because `cardsInfo` returns `interval` and not `ivl`. **Assert
+  presence before asserting agreement, and make the check abort when a field is absent on both
+  sides rather than counting it as a match.**
+
+- **A GUARD CAN BE DEAD CODE AND ITS TEST STILL PASS.** `TagCodec.decode` grew a clause refusing a
+  path marked as non-heading that names no kind. Deleting the clause killed no test — such a tag is
+  ALREADY refused, for a different reason, because its first heading segment is empty. The clause's
+  only real product is its MESSAGE. A test asserting `isLeft` could not see that; one asserting the
+  reason can. **When a mutation survives, the usual finding is not that the code is unnecessary but
+  that the test is measuring the wrong thing.**
+
+- **A DOCSTRING THAT PROMISES A TEST MUST BE WRITTEN WITH THAT TEST, IN THE SAME PASS.** The
+  `CardPath.Note` documentation said "a test asserts that nothing produces it yet" before any such
+  test existed. That is the same false-comment defect being fixed elsewhere in this file, committed
+  fresh. Write the sentence and the assertion together or write neither.
+
+- **A COMPILE ERROR CAN BE A GHOST.** A `match may not be exhaustive` names a case that exists in
+  neither the working tree nor `HEAD` — that is a stale incremental-compile artifact from an
+  earlier mutation run, not a real error. Check `git grep` before debugging it.
+
+- **PERL WITH `-CSD` DOUBLE-ENCODES LITERAL UTF-8 IN A HEREDOC.** Section signs and em dashes came
+  out as mojibake in a committed document. Every doc edit since is done in Python with an explicit
+  `encoding="utf-8"` on both the read and the write, and checked with a grep for the mojibake
+  bytes afterwards.
+
+- **DELETE BY LOCATING TWO EXACT LITERALS, NEVER BY A REGEX WITH A LAZY MULTILINE WILDCARD.** One
+  such regex deleted an entire type: the replacement docstring reused the opening sentence of the
+  docstring being removed, so the match started from the wrong occurrence. The `cp` backup made it
+  a non-event. Compute the span, assert the start is unique, refuse if the span is an implausible
+  number of lines, and print what is about to go.

@@ -27,7 +27,7 @@ Every existing Obsidian→Anki bridge matches lines with regular expressions and
 
 **The concept comes from the note's H1 or filename**, or the nearest ancestor heading in multi-topic files. The description is the whole section body — prose, lists, formulae — which is why headings beat an inline one-line form, and which leaves the `::` family unused entirely, so no delimiter ever competes with Dataview inline fields.
 
-**Identity is derived, not written.** The key is `(frontmatter id, heading path)` — the chain of ancestor headings, not just the marked one, since a bare heading name is not unique within a file — extended with row and column for tables — built from text already present. The binding to an Anki note is stored *in Anki*, as a `src::` tag, because a derived artifact can carry bookkeeping that a source file should not. Nothing generated enters the markdown, and the marker count stays at zero regardless of how many cards a note holds. The sync never deletes: absent cards are suspended in place and flagged, and an explicit `prune` command removes them once reviewed, because an undetected rename is indistinguishable from a deletion. A local sidecar is a cache, rebuildable from those tags. Renaming a heading breaks its key: the old card is suspended and reported with its review history intact, and pairing it with the renamed one is done by hand — automatic rename detection is **not built**. _Amended 2026-08-19._
+**Identity is derived, not written.** The key is `(frontmatter id, anchor)`, where an anchor names WHICH NODE OF THE NOTE the card hangs off — built from text already present. _Widened 2026-08-25 from `(frontmatter id, heading path)`; see **What a card can be anchored to** below._ The binding to an Anki note is stored *in Anki*, as a `src::` tag, because a derived artifact can carry bookkeeping that a source file should not. Nothing generated enters the markdown, and the marker count stays at zero regardless of how many cards a note holds. The sync never deletes: absent cards are suspended in place and flagged, and an explicit `prune` command removes them once reviewed, because an undetected rename is indistinguishable from a deletion. A local sidecar is a cache, rebuildable from those tags. Renaming a heading breaks its key: the old card is suspended and reported with its review history intact, and pairing it with the renamed one is done by hand — automatic rename detection is **not built**. _Amended 2026-08-19._
 
 **Decks mirror folder paths** under a root prefix, with the file deliberately *not* a deck level; otherwise every concept becomes its own two-card deck. Decks are filing only. Study scope comes from filtered decks over tags, and introduction order from new-card position — conflating the three is what sank the earlier design.
 
@@ -150,7 +150,37 @@ The binding between a markdown card and its Anki note must survive editing, or e
 concept/descriptor cards   (frontmatter id, heading path)
 table cards                (frontmatter id, heading path, row concept, column header)
 cloze sections             (frontmatter id, heading path)
+typed-edge cards           (frontmatter id, property name)
+the note itself            (frontmatter id, nothing below it)     [shape settled, not yet produced]
 ```
+
+### What a card can be anchored to
+
+_Widened 2026-08-25. Until then a heading was the only markable thing, so an anchor could be a bare
+chain of heading names._
+
+A note is a **tree of nodes** and a card hangs off one of them. A heading is one kind of node, in
+the same way a directory is one kind of filesystem entry. A frontmatter property is a node. The
+note itself is a node. Neither is reachable through a chain of headings and neither is a special
+case of one.
+
+**A mixed anchor is not representable, and that is correct rather than restrictive.** A property
+belongs to the NOTE and never to a heading inside it, because Obsidian has no per-heading
+frontmatter — so `headings / property` is not a shape the domain has. Modelling the anchor as a
+list of kinded segments would admit it, and every consumer would then need a rule for something
+that cannot occur.
+
+**The KIND is part of identity, not a label beside it**, and the reason is a collision that was
+about to be real. Writing a relation as the property `special-case-of:` and writing it as the
+heading `# Special-Case-Of` were both genuinely on the table as ways of saying the same thing, and
+an anchor of bare names gives those two different cards ONE key. One key for two cards is a
+duplicate identity, which refuses the entire run until somebody renames something.
+
+**The note-itself anchor is admitted by the type and produced by nothing yet.** Identity is the
+most expensive thing in this system to change once review history has accumulated, and the
+cheapest while a collection is nearly empty, so its shape was settled ahead of the behaviour that
+fills it. A test asserts that extraction produces only heading anchors, so the day one produces a
+note anchor is a decision somebody made rather than a drift nobody noticed.
 
 **The heading *path*, not the heading text.** The path is the chain of ancestor headings down to the marked one, joined — `CAP Theorem/Definition`, not `Definition`.
 
@@ -167,7 +197,16 @@ Two different cards, one key — the second would simply overwrite the first's A
 
 _Amended 2026-08-19. This previously said the collision was **silent**, in contrast to the rename case. It is no longer either: the reconciler refuses to plan when two sources derive one key, and — since 2026-08-19 — when two **Anki notes** claim one key, which had been collapsing silently in the opposite direction and making the losing note invisible to every later run. Those checks are a backstop, not a substitute. Full-path keying removes the collision; a check only reports it._
 
-**The binding is stored in Anki**, as a tag on each note: `src::{id}::{heading path}`. Anki is a derived artifact, so bookkeeping there costs nothing — which is precisely the objection that applies to putting it in the source.
+**The binding is stored in Anki**, as a tag on each note: `src::{id}::{anchor}`. Anki is a derived artifact, so bookkeeping there costs nothing — which is precisely the objection that applies to putting it in the source.
+
+**A heading anchor encodes exactly as it always has**, `{seg}/{seg}/…`, and that was a requirement
+rather than a nicety: `extract/golden/fixture-cards.txt` pins fifty-five identity tags and opens
+with `DO NOT REGENERATE THIS FILE`, so rewriting all of them by hand is indistinguishable, in a
+diff, from the blind regeneration it exists to catch. The other anchors therefore take a shape no
+heading anchor can produce — a **leading empty token**, `/p/{property}` and `/n` — which is
+unambiguous because a heading segment is refused when empty both at construction and when decoded,
+so percent-encoding one can never yield an empty string. That invariant is pinned by a test rather
+than trusted, including against headings named `p` and `n` and one containing a slash.
 
 **The tag must be encoded, and this is not optional.** _Amended 2026-08-19._ The naive form above cannot work: **Anki tags are whitespace-delimited**, and most headings in a real vault contain spaces — `src::x::CAP Theorem/Definition` silently becomes *two* tags. (Corroboration: the one leftover note in the `POC-test` profile is tagged `Obsidian_to_Anki`; the dead plugin hit the same wall and solved it with an underscore.)
 

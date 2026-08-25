@@ -39,7 +39,7 @@ at something this repository does not contain. It was superseded and to be ignor
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
 `just test` runs everything, as does `scala-cli test .` from the repository root.
-**32 suites, 651 tests, 0 failures, 0 warnings** — measured on 2026-08-24 by running it and
+**33 suites, 706 tests, 0 failures, 0 warnings** — measured on 2026-08-26 by running it and
 summing the per-suite totals. _The line has said 493, then 511; the suite keeps growing, so
 treat the number as a reading rather than a fact and re-measure before quoting it._
 
@@ -243,6 +243,30 @@ Six so far. **Every one produced plausible output instead of failing.**
 
 ## Design decisions you must not relitigate
 
+- **A card is anchored at a NODE of a note, and a heading is one kind of node** (2026-08-25). The
+  key is `(frontmatter id, anchor)` where an anchor is a chain of headings, a frontmatter property,
+  or the note itself. A mixed anchor is unrepresentable because a property belongs to the note and
+  never to a heading inside it. **The KIND is part of identity**, because `special-case-of:` and
+  `# Special-Case-Of` were both live candidates for writing one relation, and bare names give two
+  different cards one key — a duplicate identity, which refuses the whole run. Full reasoning in
+  `docs/CARD-MODEL.md` under *What a card can be anchored to*.
+- **A heading anchor encodes byte-for-byte as it always has.** Not aesthetics: the golden pins 55
+  identity tags under `DO NOT REGENERATE THIS FILE`, so rewriting them by hand is indistinguishable
+  from the blind regeneration it exists to catch. The other anchors use a leading empty token,
+  which no heading anchor can produce because a heading segment is refused when empty. A test pins
+  that invariant.
+- **A typed edge IS a concept-descriptor card** (2026-08-25). Subject-predicate-object and
+  concept-descriptor-description are the same triple, which is why edges need no note type, no card
+  shape and nothing downstream of `CardSpec`. What varies is only how many of the three are asked.
+- **The edge vocabulary lives in the VAULT, the marker vocabulary lives in the SOURCE.** Markers are
+  universal; edge kinds are one person's domain. This is not the configuration that was tried and
+  removed — that decided presentation, and a breadcrumb is a rule rather than a setting. A
+  vocabulary is a dictionary, and the dictionary belongs to whoever owns the words.
+- **`suspend`/`unsuspend` preserves scheduling exactly — MEASURED 2026-08-25**, not assumed. Ten
+  card columns and the whole review log came back identical; suspension moves `queue` to `-1` and
+  touches nothing else. This is the premise the entire never-delete design substitutes for
+  deletion, and it had been asserted in five places and cited in none.
+
 Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
 
 - **B1 tag encoding.** Percent-encode outside `[A-Za-z0-9.-]`. Anki tags are whitespace-delimited — a tag **cannot contain a space**, and 62 of 80 real headings do. `_` and `*` are search wildcards. `/` occurs inside real headings so it cannot double as the separator.
@@ -414,3 +438,27 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
       the values. Needs a second template; not designed.
     - **Whether to drop the `3way` / `3way/all` aliases** once the vault is rewritten to `cdd/`,
       which would turn the old spelling from a silent synonym into a loud refusal.
+
+13. **THE TYPED-EDGE FEATURE IS TWO-THIRDS BUILT, AND THE REMAINING THIRD IS THE CARD'S FACE.**
+    _Added 2026-08-26._
+
+    Built and tested: the frontmatter parser now reads list-valued properties, which had been
+    dropped since the beginning (`extract/Frontmatter.scala`); the key can name a property anchor
+    (`model/CardKey.scala`); and the vault's edge vocabulary is read from a
+    `# Properties-to-Flashcards` note (`extract/EdgeSchema.scala`). **Nothing consumes the schema
+    yet** — a property does not become a card.
+
+    What remains is extraction, and it is small, but it carries three decisions that are about what
+    the card LOOKS LIKE rather than how it works, so they belong to Marc:
+
+    - **What supplies the SUBJECT of the triple.** For `Function Space.md` the concept is
+      `Function Space`, but that note's headings are `# Definition` and `# Notation` — nothing in
+      the body names the concept. The FILENAME is the only candidate. It is a field rather than
+      part of the key, so renaming the file stays free and costs only a content update.
+    - **What becomes of a wikilink value's brackets.** `special-case-of: "[[HomSet]]"` on a card
+      face: `HomSet`, or `[[HomSet]]`? Anki cannot follow the link either way.
+    - **Whether `2way` may be declared for a many-to-one edge.** "What is a special case of
+      HomSet?" has several right answers living in different notes, so several cards would ask one
+      question and each hold a different answer. Three options: trust the author; refuse `2way` for
+      edges outright; or detect the collision at scan time and refuse then — which is the only one
+      that fails on the real condition rather than on a guess, because the tool can see every note.

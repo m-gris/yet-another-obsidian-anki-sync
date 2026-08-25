@@ -235,7 +235,34 @@ Requests for a general, subject-agnostic version recur on the Anki forums and ha
 
 1. ~~**CLI or Obsidian plugin?**~~ **Decided 2026-08-18: a standalone tool, not a plugin.** Authoring happens in nvim and reviewing in Anki, so Obsidian is infrastructure rather than an interface anyone lives in. The vault is markdown in a folder and AnkiConnect is an HTTP API; nothing requires plugin hosting. This also removes an entire class of plugin-abandonment risk — the one that just killed Obsidian_to_Anki.
 
-2. ~~**The edge schema**~~ — **deferred** with the typed-edge graph. Not needed for v0.
+2. **The edge schema** — **PARTLY BUILT, 2026-08-25**, and it arrived through a door nobody planned.
+
+   It was deferred with the typed-edge graph on the grounds that neither was needed for v0. What
+   revived it was not the graph: it was the observation that **a typed edge and a
+   concept-descriptor card are the same shape**. `Function Space` / `special-case-of` / `HomSet`
+   is subject-predicate-object, and a concept-descriptor card is three fields asked in one, two or
+   three directions. So an edge needs no note type of its own, no new card shape, and nothing
+   downstream of `CardSpec` — it inherits identity, hashing, decks, breadcrumbs, orphan handling
+   and the whole reconciler unchanged.
+
+   What exists: `extract/EdgeSchema.scala` reads a vault-declared vocabulary from a note, under a
+   heading `# Properties-to-Flashcards`, as list items of the form `- special-case-of: 1way`. It
+   is read and tested; **nothing consumes it yet**.
+
+   **It lives in the vault, and that is a ruling rather than a convenience.** Heading markers are
+   universal — every vault that wants a two-way card writes the same token — so their vocabulary
+   is this tool's business and belongs in its source. Edge kinds are not: `special-case-of` and
+   `dual-of` are mathematics, another vault wants other words, and putting them in Scala would make
+   one person's domain vocabulary a matter for this repository's release cycle. This is a different
+   thing from the configuration that was tried and removed, which decided PRESENTATION and was
+   rightly ruled a rule rather than a setting. A vocabulary is a dictionary, and the dictionary
+   belongs to whoever owns the words.
+
+   Still open, and they are the card's face rather than its plumbing: what supplies the SUBJECT of
+   the triple when nothing in the body names the concept (the filename is the only candidate);
+   what becomes of a wikilink value's brackets; and whether `2way` may be declared at all for an
+   edge that is many-to-one, where "what is a special case of HomSet?" has several right answers
+   living in different notes.
 
 3. ~~**What defines a block's card set**~~ — **deferred** with the route and linearization.
 
