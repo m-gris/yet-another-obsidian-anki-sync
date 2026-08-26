@@ -389,3 +389,43 @@ not.**_
   first — and the second one clashed, since `1way` on a heading is a two-field card. Composing
   `Marker.parse` deleted the drift, the lookup table, the word list its messages needed, and the
   guard. **Before writing a test that two things agree, ask why they are two things.**
+
+## OPEN — verified by the pipeline brainstorm, 2026-08-26
+
+_Three facts, each checked by running or reading rather than inferred, and each surviving the
+adversarial review at `docs/PIPELINE-DESIGN-REVIEW.md`. They are lifted out of that 38,000-character
+document because a finding nobody can find is a finding nobody acts on._
+
+20. ⚠️ **AN OBSIDIAN BLOCK REFERENCE PRINTS ON THE CARD FACE.** VERIFIED BY EXECUTION through this
+    project's own parser: `The outermost layer is the ==epidermis==. ^abc123` renders as
+    `<p>The outermost layer is the {{c1::epidermis}}. ^abc123</p>`.
+
+    **Structural, not accidental.** `^` is a delimiter nowhere in the stack — not in Laika's
+    `Markdown.spanParsers`, not in `GitHubFlavor`, not among the six parsers
+    `ObsidianSyntax.bundle` registers, and `Html.escape` covers `& < > " { }` and leaves `^` alone.
+    So no Laika change will start eating carets, and nothing will start dropping them either.
+
+    **NOT LIVE IN MARC'S VAULT TODAY, and one edit from being live.** His `^` definitions sit in
+    unmarked `## Sources` sections. Mark a section that contains one and it goes onto a card.
+
+    Candidates, not a prescription: strip a trailing `^id` when lowering a block; render it as
+    nothing the way `%%comments%%` already are; or leave it and document the trap. **It also
+    kills `^blockid` as a card ANCHOR**, which is what the brainstorm went looking for.
+
+21. ⚠️ **EVERY BLOCK-ID DEFINITION IN `References/Modern Mathematics.md` IS INSIDE A CALLOUT, AND
+    CALLOUTS FAIL THE STRICT PARSE.** VERIFIED BY EXECUTION against the real file: `> [!note] Page
+    31` yields `unresolved link id reference: !note`, because CommonMark reads `[!note]` as a
+    shortcut reference link — the same mechanism the wikilink handling exists for.
+
+    **It is silent only because that note has no `id:` in its frontmatter**, so the walk takes the
+    `CouldNotLook => ()` arm and says nothing. **Giving it an id — which is exactly what somebody
+    does when they want its annotations to become cards — is what makes the failure appear.**
+    All 125 definitions are affected.
+
+    A latent trap of the shape this project keeps finding: correct behaviour today, and the
+    obvious next action detonates it.
+
+22. **`Marker.NoteTypes` HAS NO PRODUCTION CONSUMERS.** Only tests reference it, plus one comment.
+    Dead API sitting in the middle of the back end the brainstorm was convened to examine. _Audit
+    before deleting: parked-not-dead is a real category, and the five names it holds are the ones
+    the manifests install._

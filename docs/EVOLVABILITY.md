@@ -289,10 +289,24 @@ I mark each item **[NOW-OR-PRICIER]** or **[SAME-COST-WHENEVER]**.
 
 ### Next few days
 
-1. **Fix the retype-over-orphan stranding.** [SAME-COST-WHENEVER, but the state it mints is permanent and invisible.] Either emit `Unflag` alongside `Retype`, or have the retype path unsuspend. Every day this exists is a day a stranded card can be created, and nothing will ever find it. This is the only confirmed permanent removal of accumulated value in the system (§3.1).
+> **STATUS, 2026-08-26.** Items 1 and 4 are DONE and struck through below; the rest of this list
+> stands. It is annotated rather than rewritten because an adversarial reviewer read it on
+> 2026-08-26, saw item 1 unstruck, and correctly filed a finding that this project's own top
+> priority was missing from a design document. **The reviewer reasoned properly from a document
+> that was wrong** — which is the failure this repository keeps catching in its own comments,
+> arriving in a document instead. A staging list nobody strikes through is a list that misinforms
+> the next careful reader, and the more careful they are the more it costs them.
+
+
+1. ~~**Fix the retype-over-orphan stranding.**~~ **DONE 2026-08-25** (`41a3081`). The `Retype`
+   branch now emits the `Unflag` it had argued itself out of, before the retype rather than after,
+   and only when the note actually carries the orphan tag — a card somebody suspended by hand is
+   left alone. Three mutations confirm it. _Original entry follows._ [SAME-COST-WHENEVER, but the state it mints is permanent and invisible.] Either emit `Unflag` alongside `Retype`, or have the retype path unsuspend. Every day this exists is a day a stranded card can be created, and nothing will ever find it. This is the only confirmed permanent removal of accumulated value in the system (§3.1).
 2. **Fix the two false docstrings** on the history-protecting path: `plan/SyncAction.scala:162-166` (says suspension is not built) and `model/CardSpec.scala:42-46` / `docs/CARD-MODEL.md:251` (promises an orphan that never comes). [SAME-COST-WHENEVER.] Free, and they are actively misleading the next reader about the mechanism that protects history.
 3. **Run M1** — the git replay. [SAME-COST-WHENEVER, but it gates the one NOW-OR-PRICIER decision.] No Anki, no writes, an afternoon.
-4. **Run M3** — does unsuspend restore scheduling. [SAME-COST-WHENEVER.] Five minutes, and it is the premise everything else rests on.
+4. ~~**Run M3** — does unsuspend restore scheduling.~~ **RUN 2026-08-25, and it holds.** Ten card
+   columns and the whole review log came back identical; suspension moves `queue` to `-1` and
+   touches nothing else. See §2's row and §3.6. _Original entry follows._ [SAME-COST-WHENEVER.] Five minutes, and it is the premise everything else rests on.
 5. **Say "suspend" in the plan line, and name every `Flag` key.** [SAME-COST-WHENEVER.] `Flag` is the action that removes cards from review, and it is exactly as unlisted as `create`. This also closes `README.md:342-344`'s unkept promise, and `Plan.parked` already carries the keys the report discards (`plan/SyncAction.scala:332-344` says so in as many words: "KEYS RATHER THAN A COUNT, because the count is derivable from the keys and the keys are not derivable from the count").
 6. **Refuse a run whose complete scan yields zero cards while the collection holds some.** [SAME-COST-WHENEVER.] This is precisely the revisit `docs/CARD-MODEL.md:214` asked for "before or alongside" suspension, whose condition expired when suspension shipped. Note what it is *not*: the **proportional** guard was considered and rejected on the stated grounds that "the proportion is a number nobody can justify". Zero needs no justified number. Say plainly that it does not catch a *half*-arrived vault.
 
