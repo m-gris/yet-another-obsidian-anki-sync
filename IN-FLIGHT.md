@@ -29,7 +29,7 @@ Two changes DO rewrite content. Both were deliberate and both were reported to M
    difference. Cause: `cli/Main.scala:929` returns `PlannedOnly` for a dry run and never reaches
    `Executor.run`, the only place note-type shapes are read. A dry run whose whole job is to say
    what a real run will do cannot see the one check that would stop it.
-2. **STILL OPEN — but the MESSAGE is fixed.** Each direction now names its own unknown, and a
+2. ~~**STILL OPEN**~~ **RESOLVED 2026-08-26 by measuring it.** Growth was measured lossless — every card, id, interval, ease and review log survived, and Anki honoured the gate fields, so the move is two cards to two cards rather than two templates to three. The gate now refuses only SHRINKING, which is still genuinely unmeasured. _The entry below is kept because its reasoning was right and its framing was wrong: it argued about template counts, and a template count is an upper bound on a note's cards rather than the number it has._ Each direction now names its own unknown, and a
    test pins them apart; the gate itself still refuses both, pending the measurement below.
    **THE RETYPE GATE COMPARES TEMPLATE COUNTS, WHICH CONFLATES TWO UNLIKE RISKS.** It refuses any
    difference. But growing and shrinking fail differently, and only one of the two failures is
@@ -176,7 +176,7 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
     (exact hash, exact fields) are built. Anything fuzzy may only RANK candidates, never apply.
 15. **`ZZ-probe-delete-me`** — a note type left in `claude-POC-test` by a migration probe.
     AnkiConnect has no delete-model action; Tools → Manage Note Types.
-16. **Marc's vault still has one note on the wrong note type** — but it is a DIFFERENT note
+16. ~~**Marc's vault still has one note on the wrong note type**~~ **FIXED 2026-08-26.** `framework` was migrated onto `Obsidian Concept-Descriptor` with `--migrate-note-types` after the gate was widened. Verified against the live collection: two cards before, two after, the same card ids, zero drift on interval, ease, reps, lapses or review log — and its concept now sits in the `Concept` field instead of being demoted to the breadcrumb, which is what Marc reported in the first place. _Original entry follows._ — but it is a DIFFERENT note
     from the one this entry first named. _Re-measured 2026-08-25 by dry-running the live vault._
     `3 components` is gone from the plan; the note now blocked is `framework`, on
     `Obsidian Basic (and reversed card)` (2 card templates) while the vault asks for
@@ -429,3 +429,39 @@ document because a finding nobody can find is a finding nobody acts on._
     Dead API sitting in the middle of the back end the brainstorm was convened to examine. _Audit
     before deleting: parked-not-dead is a real category, and the five names it holds are the ones
     the manifests install._
+
+
+## OPEN — decided 2026-08-26, not yet built
+
+23. **A CARD RETIRED BY NARROWING GETS FLAGGED AND REPORTED.** Ruled by Marc after two rounds:
+    first "tag it", which turned out to be unbuildable, then "flag it".
+
+    **Why a tag cannot do it.** Anki tags live on NOTES; suspension and flags live on CARDS. The
+    tool's own algebra shows the split — `addTags` takes note ids, `suspend` takes card ids.
+    Narrowing retires ONE card of a note whose siblings are healthy, so a note-level tag would mark
+    all of them and every report would call the whole note parked.
+
+    **Why a flag rather than suspension.** The settled ruling is that the tool cannot tell its own
+    suspension from Marc's, which is exactly why an orphan carries a tag ALONGSIDE its suspension —
+    the tag is the record. For a single card there is no tag available, so suspension alone would
+    leave the tool unable to recognise its own work and unable to undo it safely when the marker is
+    widened again. A flag is per-card AND self-identifying: it does both jobs. The counter-argument
+    for suspension — that a flag does not remove the card from review — is void, because a retired
+    card's front renders empty and Anki never queues it.
+
+    **Colour 7**, all seven being free in the live collection today.
+
+    **What is still to build:** the tool must work out which ordinals a spec calls for, compare
+    that against the note's current gate field values — available in `ObservedNote.fields`, which
+    is fetched on every run and consumed by NOTHING today — flag the difference, un-flag on
+    widening, and say so in the report.
+
+    **Cloze is out of scope and must say so.** A cloze note's card count comes from its CONTENT,
+    not from gate fields, so "which ordinals should exist" is not answerable the same way. Retiring
+    a cloze deletion is the separate, still-open ordinal-drift problem.
+
+    **One correspondence needs pinning by a test.** `{{^ValueOnly}}` and `{{#ThreeWay}}` OPEN their
+    front templates and wrap them entirely, which is what makes them card gates; `{{#Context}}` and
+    `{{#ConceptLabel}}` sit inside wrapping display fragments and are not. That distinction lives
+    only in the template text today, so a template edit could silently change which cards exist —
+    and this feature would then flag the wrong card.
