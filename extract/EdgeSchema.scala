@@ -1,7 +1,7 @@
 package obsidiananki.extract
 
 import cats.data.NonEmptyVector
-import obsidiananki.model.{KeyError, PropertyName, ThreeFieldDirections}
+import obsidiananki.model.{KeyError, Marker, MarkerError, PropertyName, ThreeFieldDirections}
 
 /** THE VAULT'S DECLARED VOCABULARY OF TYPED EDGES — which frontmatter properties make cards, and
   * how many ways each is asked.
@@ -64,10 +64,19 @@ enum EdgeSchemaError:
   /** The entry has no separator, so there is no way to tell the property from the direction. */
   case NotAnEntry(line: String)
 
-  /** The direction is not one this tool knows. Names what was written AND what is available,
-    * because a reader who mistypes `2-way` cannot guess the spelling from a refusal alone.
+  /** The right-hand side does not name a shape a relation can take.
+    *
+    * IT IS READ BY THE SAME PARSER A HEADING'S MARKER IS, so `cdd/1way` here and
+    * `#flashcard/cdd/1way` on a heading are the same tokens through the same code. _Until
+    * 2026-08-26 this was a bare `1way`, which was a second vocabulary and, worse, a clashing one:
+    * `#flashcard/1way` on a heading is a TWO-field card, while `1way` here meant a three-field
+    * one. One token, two note types._
+    *
+    * A relation is a triple — this note, the relation, the thing on the far end — so the only
+    * shapes it can take are the concept-descriptor ones. `cloze` and `sequence` parse perfectly
+    * well and are refused here for that reason, which is a better message than "unrecognised".
     */
-  case UnknownDirection(property: String, raw: String)
+  case NotAnEdgeShape(property: String, raw: String, reason: String)
 
   /** The property name canonicalises to nothing. */
   case UnusableProperty(raw: String, why: KeyError)
@@ -85,9 +94,10 @@ enum EdgeSchemaError:
     case NotAnEntry(line) =>
       s"'$line' is a list item under the schema heading but names no property: a rule reads " +
         "'- property-name: 1way'. Prose is ignored here; a bullet is taken as a rule"
-    case UnknownDirection(property, raw) =>
-      s"'$property' asks to be a '$raw' card, which is not a direction this tool knows. " +
-        s"The choices are ${EdgeSchema.Directions.mkString(", ")} — the same words a heading uses"
+    case NotAnEdgeShape(property, raw, reason) =>
+      s"'$property' asks to be a '$raw' card, and $reason. A relation is a triple — this note, " +
+        "the relation, and the thing on the far end — so it may be 'cdd/1way', 'cdd/2way' or " +
+        "'cdd/3way', which are the same tokens a heading marker uses"
     case UnusableProperty(raw, why) =>
       s"'$raw' cannot be a property name ($why)"
     case DeclaredTwice(property) =>
@@ -188,20 +198,65 @@ object EdgeSchema:
         val direction = rawDirection.trim
         for
           property <- PropertyName.fromFrontmatter(name).left.map(EdgeSchemaError.UnusableProperty(name, _))
-          dirs <- directionOf(direction).toRight(EdgeSchemaError.UnknownDirection(name, direction))
+          dirs     <- shapeOf(name, direction)
         yield (property, name, dirs)
       case _ => Left(EdgeSchemaError.NotAnEntry(body))
 
   /** `1way` / `2way` / `3way`, and nothing else. */
-  private[extract] def directionOf(raw: String): Option[ThreeFieldDirections] =
-    raw.trim.toLowerCase(java.util.Locale.ROOT) match
-      case "1way" => Some(ThreeFieldDirections.ValueOnly)
-      case "2way" => Some(ThreeFieldDirections.Default)
-      case "3way" => Some(ThreeFieldDirections.All)
-      case _      => None
-
-  /** The vocabulary, for a message that has to name the alternatives. Kept beside
-    * [[directionOf]] so the two are read together; `EdgeSchemaTest` pins them against each other
-    * so a word added to one and not the other fails rather than misinforming.
+  /** THE RIGHT-HAND SIDE OF A REWRITE RULE, READ BY THE PARSER OF THE LANGUAGE IT REWRITES INTO.
+    *
+    * This is the whole of the vocabulary question, and it needs no vocabulary of its own. A
+    * declaration says what a property expands into; what it expands into is a card marker; so the
+    * text is normalised to marker syntax and handed to [[Marker.parse]]. `cdd/1way` here and
+    * `#flashcard/cdd/1way` on a heading are then the same tokens through the same code, and there
+    * is nothing that can drift apart.
+    *
+    * THE `#` IS TOLERATED AND NOT RECOMMENDED. People will write `#flashcard/cdd/1way` because
+    * that is what they type on a heading, so refusing it would be pedantry. But a literal
+    * `#flashcard/...` typed into a note's BODY is exactly what Obsidian's editor lifts out into
+    * the frontmatter `tags` property — the accident this tool already reports elsewhere — so the
+    * bare form is the one the documentation gives.
+    *
+    * ONLY THE CONCEPT-DESCRIPTOR SHAPES ARE ADMITTED, and the others are refused by NAME rather
+    * than as gibberish. A relation is a triple, so `cloze` and `sequence` parse perfectly well and
+    * are still wrong here; saying which is more use than "unrecognised".
     */
-  private[extract] val Directions: Vector[String] = Vector("1way", "2way", "3way")
+  /** A marker named for somebody reading a refusal, rather than dumped as a case class.
+    *
+    * Total on purpose: a marker added later has to be given words here before this compiles, and
+    * a refusal that names the shape is the entire value of reusing the marker parser — "`1way` is
+    * a two-field card" says why it is wrong where "unrecognised" would not.
+    */
+  private def inWords(m: Marker): String = m match
+    case Marker.TwoField(_)      => "a two-field card, and a relation needs three"
+    case Marker.ThreeField(_)    => "a concept-descriptor card"
+    case Marker.Cloze            => "a cloze card, which fills gaps in prose rather than relating two things"
+    case Marker.Sequence         => "a sequence card, which reveals a list in order"
+    case Marker.Table(_, _)      => "a table card, which needs a table in the body"
+
+  private[extract] def shapeOf(
+      property: String,
+      raw: String,
+  ): Either[EdgeSchemaError, ThreeFieldDirections] =
+    val token = raw.trim.stripPrefix("#").stripPrefix("flashcard/")
+    Marker.parse(s"#flashcard/$token") match
+      case Right(Some(Marker.ThreeField(directions))) => Right(directions)
+
+      case Right(Some(other)) =>
+        Left(EdgeSchemaError.NotAnEdgeShape(property, raw, s"that is ${inWords(other)}"))
+
+      case Right(None) =>
+        Left(EdgeSchemaError.NotAnEdgeShape(property, raw, "that names no card shape at all"))
+
+      // The marker parser's own refusals, passed through rather than flattened to one message:
+      // "several markers at once" and "unrecognised" send a reader to different places.
+      case Left(MarkerError.Unrecognised(token)) =>
+        Left(EdgeSchemaError.NotAnEdgeShape(property, raw, s"'$token' is not a marker this tool knows"))
+      case Left(MarkerError.Multiple(tokens)) =>
+        Left(
+          EdgeSchemaError.NotAnEdgeShape(
+            property,
+            raw,
+            s"that names several markers at once (${tokens.mkString(", ")}) — a rule names one",
+          )
+        )

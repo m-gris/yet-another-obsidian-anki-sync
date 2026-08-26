@@ -35,9 +35,9 @@ class EdgeSchemaTest extends munit.FunSuite:
 
   test("a schema maps each declared property to how it is asked") {
     val schema = parsed(
-      """- special-case-of: 1way
-        |- dual-of: 3way
-        |- defined-in: 2way
+      """- special-case-of: cdd/1way
+        |- dual-of: cdd/3way
+        |- defined-in: cdd/2way
         |""".stripMargin
     )
 
@@ -51,7 +51,7 @@ class EdgeSchemaTest extends munit.FunSuite:
     * unreadable, and one that made cards from them would fill a collection with `created:`.
     */
   test("a property nobody declared is simply not a card") {
-    val schema = parsed("- special-case-of: 1way\n")
+    val schema = parsed("- special-case-of: cdd/1way\n")
     assertEquals(schema.directionsFor(prop("created")), None)
     assertEquals(schema.directionsFor(prop("aliases")), None)
     assertEquals(schema.directionsFor(prop("special-case-off")), None, "a typo is not a near-miss")
@@ -72,11 +72,11 @@ class EdgeSchemaTest extends munit.FunSuite:
     val schema = parsed(
       """These are the relations I use. A one-way card asks for the target only.
         |
-        |- special-case-of: 1way
+        |- special-case-of: cdd/1way
         |
         |Three-way also asks which relation holds between two things, which is the hard one.
         |
-        |- dual-of: 3way
+        |- dual-of: cdd/3way
         |""".stripMargin
     )
     assertEquals(schema.rules.size, 2, s"prose was read as rules, or rules were lost: ${schema.rules}")
@@ -85,8 +85,8 @@ class EdgeSchemaTest extends munit.FunSuite:
 
   test("both list bullets are accepted, and spacing around the separator does not matter") {
     val schema = parsed(
-      """* special-case-of:1way
-        |-    dual-of   :   3way
+      """* special-case-of:cdd/1way
+        |-    dual-of   :   cdd/3way
         |""".stripMargin
     )
     assertEquals(schema.directionsFor(prop("special-case-of")), Some(ValueOnly))
@@ -97,20 +97,54 @@ class EdgeSchemaTest extends munit.FunSuite:
     * spelled must not change which card it makes.
     */
   test("a property name is canonicalised, so its spelling in the schema need not match the note") {
-    val schema = parsed("- Special-Case-Of: 1way\n")
+    val schema = parsed("- Special-Case-Of: cdd/1way\n")
     assertEquals(schema.directionsFor(prop("special-case-of")), Some(ValueOnly))
   }
 
   // --------------------------------------------------------- what is refused, and why ----
 
-  test("an unknown direction is refused, and the refusal names what was written") {
+  test("a right-hand side that names no card shape is refused, quoting what was written") {
     val errs = errorsOf("- special-case-of: 2-way\n")
     assertEquals(errs.size, 1, s"expected exactly one error: $errs")
     errs.head match
-      case EdgeSchemaError.UnknownDirection(property, raw) =>
+      case EdgeSchemaError.NotAnEdgeShape(property, raw, _) =>
         assertEquals(property, "special-case-of")
         assertEquals(raw, "2-way")
-      case other => fail(s"expected UnknownDirection, got $other")
+      case other => fail(s"expected NotAnEdgeShape, got $other")
+  }
+
+  /** THE RIGHT-HAND SIDE IS MARKER SYNTAX, READ BY THE MARKER PARSER — which is the whole reason
+    * there is no second vocabulary to keep in step. _There was a test here pinning three bare
+    * words against the marker table; composing the parser deletes the drift it guarded, so the
+    * test goes with it._
+    */
+  test("a rule's right-hand side is the same token a heading marker uses") {
+    assertEquals(parsed("- r: cdd/1way\n").directionsFor(prop("r")), Some(ValueOnly))
+    assertEquals(parsed("- r: cdd/2way\n").directionsFor(prop("r")), Some(Default))
+    assertEquals(parsed("- r: cdd/3way\n").directionsFor(prop("r")), Some(All))
+  }
+
+  /** TOLERATED BECAUSE PEOPLE WILL WRITE IT, since it is what they type on a heading. The bare
+    * form is what the documentation gives, because a literal `#flashcard/...` in a note's BODY is
+    * exactly what Obsidian's editor lifts into the frontmatter `tags` property.
+    */
+  test("the flashcard prefix is tolerated, with or without its hash") {
+    assertEquals(parsed("- r: flashcard/cdd/2way\n").directionsFor(prop("r")), Some(Default))
+    assertEquals(parsed("- r: #flashcard/cdd/2way\n").directionsFor(prop("r")), Some(Default))
+  }
+
+  /** REFUSED BY NAME RATHER THAN AS GIBBERISH. A relation is a triple, so these parse perfectly
+    * well as markers and are still wrong here — and saying WHICH is more use than "unrecognised".
+    * A bare `1way` is the sharpest case: on a heading it is a legitimate TWO-field card, so it
+    * would silently have meant something else had the two vocabularies stayed separate.
+    */
+  test("a shape a relation cannot take is refused, including one that is valid on a heading") {
+    for token <- Vector("cloze", "sequence", "table", "1way", "2way") do
+      val errs = errorsOf(s"- r: $token\n")
+      assert(
+        errs.exists { case EdgeSchemaError.NotAnEdgeShape(_, _, _) => true; case _ => false },
+        s"'$token' was not refused as a relation shape: $errs",
+      )
   }
 
   test("a list item with no separator is refused rather than guessed at") {
@@ -126,7 +160,7 @@ class EdgeSchemaTest extends munit.FunSuite:
     * though it says two things.
     */
   test("the same property declared twice is refused, even when the spellings differ") {
-    val errs = errorsOf("- special-case-of: 1way\n- Special-Case-Of: 3way\n")
+    val errs = errorsOf("- special-case-of: cdd/1way\n- Special-Case-Of: 3way\n")
     assert(
       errs.exists { case EdgeSchemaError.DeclaredTwice(_) => true; case _ => false },
       s"expected DeclaredTwice — the two spellings canonicalise alike: $errs",
@@ -152,7 +186,7 @@ class EdgeSchemaTest extends munit.FunSuite:
     * the properties it failed to read, which looks exactly like an author having deleted them.
     */
   test("a schema with any unreadable line yields no schema at all") {
-    assert(EdgeSchema.parse("- special-case-of: 1way\n- dual-of: sideways\n").isLeft)
+    assert(EdgeSchema.parse("- special-case-of: cdd/1way\n- dual-of: sideways\n").isLeft)
   }
 
   test("every error describes itself in words a reader can act on") {
@@ -165,19 +199,7 @@ class EdgeSchemaTest extends munit.FunSuite:
 
   // ------------------------------------------------------------------ the vocabulary ----
 
-  /** THE SAME WORDS A HEADING USES. `1way` here means what `#flashcard/cdd/1way` means on a
-    * heading, so an author learns one vocabulary rather than two. If these ever diverge, the
-    * divergence should be a decision rather than a drift.
-    */
-  test("the three directions are the ones a heading marker already offers") {
-    assertEquals(EdgeSchema.directionOf("1way"), Some(ValueOnly))
-    assertEquals(EdgeSchema.directionOf("2way"), Some(Default))
-    assertEquals(EdgeSchema.directionOf("3way"), Some(All))
-    assertEquals(EdgeSchema.directionOf("4way"), None)
-    assertEquals(EdgeSchema.directionOf(""), None)
-  }
-
-  // ------------------------------------------- finding the schema inside a note ----
+// ------------------------------------------- finding the schema inside a note ----
 
   /** READ OFF RAW MARKDOWN, NOT A PARSED DOCUMENT. A schema note is prose with a list in it, and
     * parsing is strict — an array index written as `[0]` in a sentence fails. Were the schema read
@@ -192,11 +214,11 @@ class EdgeSchemaTest extends munit.FunSuite:
         |
         |# Properties-to-Flashcards
         |
-        |- special-case-of: 1way
+        |- special-case-of: cdd/1way
         |
         |# Something Else
         |
-        |- not-a-rule: 3way
+        |- not-a-rule: cdd/3way
         |""".stripMargin
 
     val found = EdgeSchema.findIn(note).getOrElse(fail("the schema heading was not found"))
@@ -211,13 +233,13 @@ class EdgeSchemaTest extends munit.FunSuite:
     * heading with spaces and you get no schema, no cards, and no message about either.
     */
   test("the heading is matched loosely enough that a near-miss cannot fail silently") {
-    assert(EdgeSchema.findIn("## properties to flashcards\n- a: 1way\n").isDefined)
-    assert(EdgeSchema.findIn("### PROPERTIES-TO-FLASHCARDS\n- a: 1way\n").isDefined)
-    assert(EdgeSchema.findIn("# Properties To Flashcards\n- a: 1way\n").isDefined)
-    assert(EdgeSchema.findIn("#  properties_to_flashcards  \n- a: 1way\n").isDefined)
+    assert(EdgeSchema.findIn("## properties to flashcards\n- a: cdd/1way\n").isDefined)
+    assert(EdgeSchema.findIn("### PROPERTIES-TO-FLASHCARDS\n- a: cdd/1way\n").isDefined)
+    assert(EdgeSchema.findIn("# Properties To Flashcards\n- a: cdd/1way\n").isDefined)
+    assert(EdgeSchema.findIn("#  properties_to_flashcards  \n- a: cdd/1way\n").isDefined)
 
     // Still a heading match, not a substring one.
-    assertEquals(EdgeSchema.findIn("# Properties to Flashcards and more\n- a: 1way\n"), None)
+    assertEquals(EdgeSchema.findIn("# Properties to Flashcards and more\n- a: cdd/1way\n"), None)
   }
 
   test("a note without the heading carries no schema") {

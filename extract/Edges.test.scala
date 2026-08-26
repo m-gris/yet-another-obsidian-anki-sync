@@ -19,7 +19,7 @@ class EdgesTest extends munit.FunSuite:
   def schemaOf(text: String): EdgeSchema =
     EdgeSchema.parse(text).fold(e => fail(s"bad fixture schema: $e"), identity)
 
-  val schema: EdgeSchema = schemaOf("- special-case-of: 1way\n- dual-of: 3way\n- status: 2way\n")
+  val schema: EdgeSchema = schemaOf("- special-case-of: cdd/1way\n- dual-of: cdd/3way\n- status: cdd/2way\n")
 
   def run(
       properties: (String, PropertyValue)*,

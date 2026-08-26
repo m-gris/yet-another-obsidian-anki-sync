@@ -783,7 +783,7 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   val declares: String =
     "\n# Properties-to-Flashcards\n\nThe relations I use here.\n\n" +
-      "- special-case-of: 1way\n- dual-of: 2way\n"
+      "- special-case-of: cdd/1way\n- dual-of: cdd/2way\n"
 
   test("a declared property becomes a card, with the file name as its subject") {
     val index = scan(
@@ -861,9 +861,9 @@ class VaultWalkerTest extends munit.FunSuite:
   test("two notes may declare the same property differently, each for itself") {
     val index = scan(
       "One.md" -> ("---\nid: n1\ndual-of: \"[[A]]\"\n---\n\n# X\n\ny\n" +
-        "\n# Properties-to-Flashcards\n\n- dual-of: 1way\n"),
+        "\n# Properties-to-Flashcards\n\n- dual-of: cdd/1way\n"),
       "Two.md" -> ("---\nid: n2\ndual-of: \"[[B]]\"\n---\n\n# X\n\ny\n" +
-        "\n# Properties-to-Flashcards\n\n- dual-of: 3way\n"),
+        "\n# Properties-to-Flashcards\n\n- dual-of: cdd/3way\n"),
     )
     assertEquals(index.scan.failures, Vector.empty, s"${index.scan.failures}")
     assertEquals(
