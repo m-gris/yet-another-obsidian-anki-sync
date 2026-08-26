@@ -78,20 +78,21 @@ class FixtureVaultTest extends munit.FunSuite:
     assert(index.scan.specs.sizeIs > 20, s"only ${index.scan.specs.size} specs extracted")
   }
 
-  /** WHICH KINDS OF NODE EXTRACTION CURRENTLY ANCHORS CARDS TO, asserted so that gaining a new
-    * one is a decision somebody made rather than a drift nobody noticed.
+  /** WHICH KINDS OF NODE THIS FIXTURE VAULT ANCHORS CARDS TO, asserted so that gaining a new one
+    * is a decision somebody made rather than a drift nobody noticed.
     *
-    * [[CardPath]] admits three anchors — a chain of headings, a frontmatter property, and the
-    * note itself. Only the first is produced today. The other two exist because identity is the
-    * most expensive thing in this system to change once review history has accumulated and the
-    * cheapest while the collection is nearly empty, so their SHAPE was settled ahead of the
-    * behaviour that fills them.
+    * [[CardPath]] admits three anchors — a chain of headings, a frontmatter property, and the note
+    * itself — and all three are now produced somewhere. **This vault exercises only headings**,
+    * which is a fact about these fixtures rather than about the tool: no fixture note declares a
+    * relation, and none is headingless with a marker. The other two anchors are covered by
+    * `VaultWalkerTest` and `EdgesTest`.
     *
-    * WHEN THIS TEST FAILS, IT HAS DONE ITS JOB. It means extraction started producing an anchor
-    * it did not before, which is exactly the moment to check that the golden was reviewed rather
-    * than regenerated. Widen the expectation deliberately; do not delete the test.
+    * WHEN THIS TEST FAILS, IT HAS DONE ITS JOB. It means a fixture started producing an anchor it
+    * did not before, which is exactly the moment to check that the golden was reviewed rather than
+    * regenerated — the golden pins these cards by identity tag, and a new anchor kind is a new
+    * tag shape. Widen the expectation deliberately; do not delete the test.
     */
-  test("extraction anchors every card at a heading, and at nothing else yet") {
+  test("this fixture vault anchors every card at a heading, and at nothing else") {
     val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
 
     val kinds = index.scan.specs.map(_.key.path).map {

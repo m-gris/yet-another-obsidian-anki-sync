@@ -55,6 +55,20 @@ final case class ClozeDeletion(ordinal: Int, group: ClozeGroup, texts: Vector[St
 
 /** Why a marked heading could not produce a spec. */
 enum SpecError:
+
+  /** A WHOLE NOTE ASKED TO BE A THREE-FIELD CARD, which needs three parts where a note has two.
+    *
+    * A concept-descriptor card is a thing, an aspect of it, and the value of that aspect. A marked
+    * HEADING supplies all three — the note or ancestor heading is the concept, the heading itself
+    * is the aspect, its body is the value. A whole note supplies only two: its name and its body.
+    * The aspect would have to be the name a second time, so the card would ask "Essential Numbers"
+    * about "Essential Numbers", which is not a question.
+    *
+    * REFUSED RATHER THAN QUIETLY DEGRADED to a two-field card, because the marker says what the
+    * author wanted and the tool silently making something else is how you end up reviewing a card
+    * you did not ask for and cannot find the source of.
+    */
+  case WholeNoteCannotBeThreeField(fileName: String, marker: String)
   /** RULED (B6). A marked heading whose own prose is empty is a HARD ERROR.
     *
     * This is not pedantry. The body stops at the next heading of any level, so a marked

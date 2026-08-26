@@ -916,3 +916,117 @@ class VaultWalkerTest extends munit.FunSuite:
       case CardPath.Property(_) => true
       case _                    => false), 2)
   }
+
+  // ═════════════════════════════ a note with no headings IS the card ═════════
+
+  /** THE NOTE THAT STARTED THIS. `Essential Numbers (for System Design Interview).md` is three
+    * list items and a frontmatter tag saying `flashcard/sequence`. It has no headings, and asking
+    * its author to add one that restates the file name is ceremony — the heading would be a worse
+    * name for the card than the file already is.
+    *
+    * A note is a tree of nodes and a card hangs off one of them. A heading is one kind of node,
+    * the way a directory is one kind of filesystem entry. A note with no headings is a leaf.
+    */
+  test("a headingless note whose frontmatter carries a marker becomes one card") {
+    val index = scan(
+      "Essential Numbers.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/sequence\n---\n\n" +
+          "- scale (users, requests per second, data size)\n- read/write ratio\n- the cost of downtime\n")
+    )
+
+    assertEquals(index.scan.failures, Vector.empty, s"the note was refused: ${index.scan.failures}")
+    assertEquals(index.scan.specs.map(_.key.path), Vector(CardPath.Note))
+    assertEquals(index.scan.specs.head.spec.noteTypeName, Marker.NoteTypes.ClozeSequence)
+  }
+
+  test("the whole-note card is named by its file, since nothing else names it") {
+    val index = scan(
+      "Essential Numbers.md" -> "---\nid: n1\ntags:\n  - flashcard/sequence\n---\n\n- a\n- b\n"
+    )
+    val fields = index.scan.specs.head.spec.fields.toMap
+    assert(
+      fields.values.exists(_.contains("Essential Numbers")),
+      s"the file name reached no field: $fields",
+    )
+  }
+
+  /** THE CASE THIS MUST NOT SWALLOW. Typing `#flashcard/2way` into the body in Obsidian lifts the
+    * tag out of the text and files it under `tags`, leaving a note that LOOKS marked and makes
+    * nothing. A frontmatter marker therefore means "this note is the card" exactly when there is
+    * no heading it could have fallen off — which the note's own shape decides.
+    */
+  test("a note WITH headings and a frontmatter marker is still the Obsidian accident") {
+    val index = scan(
+      "Concept.md" -> "---\nid: n1\ntags:\n  - flashcard/2way\n---\n\n# Descriptor\n\nDescription.\n"
+    )
+    assertEquals(index.scan.specs, Vector.empty, "a preamble card was invented")
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector("Concept.md"),
+    )
+  }
+
+  test("a marked heading still silences the frontmatter check and makes no note card") {
+    val index = scan(
+      "Good.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/2way\n---\n\n# Concept\n\n" +
+          "## Descriptor #flashcard/2way\n\nDescription.\n")
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+    assert(!index.scan.specs.map(_.key.path).contains(CardPath.Note), "a note card was also made")
+  }
+
+  /** EVERY MARKER MEANS HERE WHAT IT MEANS ON A HEADING, because the note is handed to the same
+    * builder as a synthetic section. Nothing was written per marker, so this test is what says
+    * they all arrived.
+    */
+  test("the shapes that need a name and a body all work on a whole note") {
+    def one(tag: String, body: String) =
+      scan("N.md" -> s"---\nid: n1\ntags:\n  - $tag\n---\n\n$body")
+
+    assertEquals(one("flashcard/1way", "Just prose.\n").scan.specs.head.spec.noteTypeName,
+                 Marker.NoteTypes.Basic)
+    assertEquals(one("flashcard/2way", "Just prose.\n").scan.specs.head.spec.noteTypeName,
+                 Marker.NoteTypes.BasicAndReversed)
+    assertEquals(one("flashcard/cloze", "A ==highlighted== fact.\n").scan.specs.head.spec.noteTypeName,
+                 Marker.NoteTypes.Cloze)
+  }
+
+  /** THE ONE SHAPE A WHOLE NOTE CANNOT BE, refused rather than quietly degraded. A
+    * concept-descriptor card needs three parts; a note has two, its name and its body. The aspect
+    * would have to be the name a second time, which is not a question.
+    */
+  test("a whole note cannot be a concept-descriptor card, and is told so") {
+    val index = scan("N.md" -> "---\nid: n1\ntags:\n  - flashcard/cdd/2way\n---\n\nProse.\n")
+    assertEquals(index.scan.specs, Vector.empty)
+    assertEquals(index.scan.failures.size, 1, s"${index.scan.failures}")
+
+    // ASSERTED AS THE RIGHT REFUSAL, not merely as A refusal. Before the whole-note card existed
+    // this note was refused too, with "no HEADING carries a marker" — so a test counting failures
+    // passed on the old behaviour and could not see the new one arrive.
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "refused for the old reason: the marker IS the note's, there is no heading it fell off",
+    )
+  }
+
+  test("a headingless note with an empty body is refused, like an empty section") {
+    val index = scan("N.md" -> "---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n")
+    assertEquals(index.scan.specs, Vector.empty)
+    assertEquals(index.scan.failures.size, 1, s"${index.scan.failures}")
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "refused for the old reason rather than for having nothing to make a card from",
+    )
+  }
+
+  /** THE CONTROL. Ordinary prose with no marker anywhere is the vast majority of a real vault and
+    * must stay silent — a note is not a card merely by having no headings.
+    */
+  test("a headingless note with no marker is not a card and is not mentioned") {
+    val index = scan("Prose.md" -> "---\nid: n1\n---\n\nJust some notes to myself.\n")
+    assertEquals(index.scan.specs, Vector.empty)
+    assertEquals(index.scan.failures, Vector.empty)
+  }

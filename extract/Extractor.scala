@@ -84,6 +84,82 @@ object Extractor:
       case Marker.Cloze | Marker.Sequence                    => RecallText.none
       case Marker.Table(_, _)                                => RecallText.none
 
+  /** THE WHOLE NOTE AS ONE CARD, for a note that carries a marker in its frontmatter and has no
+    * headings at all.
+    *
+    * ==Why a note is a markable thing==
+    *
+    * A note is a tree of nodes and a card hangs off one of them. A heading is one kind of node,
+    * the way a directory is one kind of filesystem entry; a note with no headings is a leaf, and
+    * there is nothing else in it that could carry the marker. `Essential Numbers (for System
+    * Design Interview).md` is three list items and a frontmatter tag — asking its author to add a
+    * heading that restates the file name is ceremony, and the heading would be a worse name for
+    * the card than the file already is.
+    *
+    * ==Why ONLY when there are no headings==
+    *
+    * A note that HAS headings and carries a `flashcard` tag in its frontmatter is the case
+    * Obsidian's editor creates by accident: typing `#flashcard/2way` into the body lifts the tag
+    * out of the text and files it under `tags`, leaving a note that looks marked and makes
+    * nothing. That is already reported, and it must stay reported — so the frontmatter marker
+    * means "this note is the card" exactly when there is no heading it could have fallen off.
+    * The two cases are told apart by the note's own shape, which is decidable from the parse.
+    *
+    * ==Why it reuses the section builder rather than having its own==
+    *
+    * Every marker means the same thing here as it does on a heading, so every marker should be
+    * built the same way. The note is handed to [[buildSpecs]] as a synthetic section whose title
+    * is the file name and whose content is the whole body, which is why `cloze`, `sequence`,
+    * `table`, `1way` and `2way` all work with nothing written for them. `cdd` is the exception
+    * and is refused — see [[SpecError.WholeNoteCannotBeThreeField]].
+    */
+  def fromWholeNote(
+      noteId: NoteId,
+      fileName: String,
+      filePath: String,
+      marker: Marker,
+      root: RootElement,
+      bodyFirstLine: Int = 1,
+  ): ExtractedNote =
+    val key = CardKey(noteId, CardPath.Note)
+    val ref = SourceRef(filePath, bodyFirstLine, SourceKind.Heading)
+
+    marker match
+      // THE ONE SHAPE A NOTE CANNOT BE. See `SpecError.WholeNoteCannotBeThreeField`: three parts
+      // are needed and a note has its name and its body. Matched before anything is built,
+      // because the alternative is a card asking the file name about the file name.
+      case Marker.ThreeField(_) =>
+        ExtractedNote(
+          Vector.empty,
+          Vector(
+            BuildFailure.KeyKnown(
+              key,
+              ref,
+              describe(SpecError.WholeNoteCannotBeThreeField(fileName, "cdd")),
+            )
+          ),
+        )
+
+      case _ =>
+        // A SYNTHETIC SECTION, so every other marker is built by exactly the code that builds it
+        // for a heading. The header is never read by `buildSpecs` — it reads `section.content` —
+        // but it is filled with the file name rather than left blank, so that anything reading
+        // it later finds the note's own name rather than an empty string.
+        val section = Section(Header(1, Seq(Text(fileName))), root.content)
+
+        buildSpecs(key, marker, fileName, Vector.empty, section, fileName, foldersOf(filePath)) match
+          case Left(err) => ExtractedNote(Vector.empty, Vector(BuildFailure.KeyKnown(key, ref, describe(err))))
+          case Right(built) =>
+            ExtractedNote(
+              built.map { case (spec, src) =>
+                SourcedSpec(spec, ref.copy(kind = src.kind, detail = src.detail), Vector.empty, RecallText.none)
+              },
+              Vector.empty,
+            )
+
+  private def foldersOf(filePath: String): Vector[String] =
+    filePath.split('/').dropRight(1).toVector
+
   def fromDocument(
       noteId: NoteId,
       fileName: String,
@@ -214,6 +290,10 @@ object Extractor:
 
   private def describe(e: SpecError): String = e match
     case SpecError.EmptyBody(p)              => s"empty body at '$p'"
+    case SpecError.WholeNoteCannotBeThreeField(file, marker) =>
+      s"'$file' asks in its frontmatter to be a whole-note '$marker' card, but a " +
+        "concept-descriptor card needs three parts and a note has two — its name and its body. " +
+        "Put the marker on a heading, which supplies the third, or ask for a shape that needs two"
     case SpecError.ClozeWithoutDeletions(p)  => s"cloze section with no ==highlight== at '$p'"
     case SpecError.AmbiguousClozeDeletion(p, t) =>
       s"two unlabelled '==$t==' highlights at '$p' cannot be told apart — label them, e.g. ==1|$t=="

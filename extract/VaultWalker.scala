@@ -264,6 +264,24 @@ object Decks:
     compose(root, DeckShape.FoldersOnly, sourceFor(relativeFilePath, Vector.empty), RecallText.none)
       .map(_.path)
 
+/** Whether a parsed document has no headings at all.
+  *
+  * ASKED OF THE PARSE RATHER THAN THE TEXT, because `#` at the start of a line is a heading in
+  * markdown and a tag anywhere else, and only the parser knows which — a line reading
+  * `#flashcard/sequence` in the body is a tag, not a heading called "flashcard/sequence".
+  *
+  * A document that did not parse answers FALSE — it is not known to have no headings, and this
+  * predicate must never turn "could not look" into "there are none". That is the same collapse
+  * `MarkedHeadings` exists to prevent, arriving one function along.
+  */
+private def hasNoHeadings(root: laika.ast.RootElement): Boolean =
+  def anyHeading(block: laika.ast.Block): Boolean = block match
+    case _: laika.ast.Header  => true
+    case _: laika.ast.Section => true
+    case c: laika.ast.BlockContainer => c.content.exists(anyHeading)
+    case _                    => false
+  !root.content.exists(anyHeading)
+
 /** Whether any heading in a file carries a `#flashcard` marker — INCLUDING the case where the
   * question could not be asked.
   *
@@ -387,6 +405,20 @@ object VaultWalker:
           val frontmatterNamesFlashcard =
             split.frontmatter.exists(_.toLowerCase.contains("flashcard"))
 
+          // WHICH SHAPE THE FRONTMATTER ASKS FOR, as opposed to merely THAT it asks. Reading this
+          // needs `tags` to survive parsing, which it did not until the property parser was
+          // widened: Obsidian writes it as a YAML list, lists were dropped, and the only thing
+          // left was the substring check above — enough to complain about, never enough to act on.
+          val frontmatterMarker: Option[Marker] =
+            keys.get("tags").toVector.flatMap {
+              case PropertyValue.One(t)    => Vector(t)
+              case PropertyValue.Many(ts)  => ts
+              case PropertyValue.Unreadable(_) => Vector.empty
+            }
+              .filter(_.toLowerCase.startsWith("flashcard"))
+              .flatMap(t => Marker.parse(s"#$t").toOption.flatten)
+              .headOption
+
           val identity = keys.get("id").map(noteIdFrom)
 
           // WHAT TO SAY TO A FILE THAT DECLARED INTENT AND MADE NO CARDS, which depends on
@@ -404,6 +436,37 @@ object VaultWalker:
               // nothing. Reported wherever it happens — with an id or without one — because
               // the note has said what it was for and the gap between that and its headings is
               // the whole message.
+              // THE NOTE ITSELF IS THE CARD, when there is no heading the marker could have
+              // fallen off. `MarkedHeadings.Absent` covers two situations that look alike and are
+              // not: a note WITH headings none of which is marked — the Obsidian accident, where
+              // the editor lifted a typed marker out of the body into `tags` — and a note with NO
+              // headings at all, where the frontmatter is the only place a marker could live and
+              // the note is a leaf. Only the first is a mistake.
+              case MarkedHeadings.Absent
+                  if frontmatterMarker.isDefined &&
+                    parsed.fold(_ => false, doc => hasNoHeadings(doc.content)) =>
+                identity match
+                  case Some(Right(noteId)) =>
+                    val note = Extractor.fromWholeNote(
+                      noteId,
+                      fileName,
+                      file.relativePath,
+                      frontmatterMarker.get,
+                      parsed.toOption.get.content,
+                      split.bodyFirstLine,
+                    )
+                    specs ++= note.specs
+                    failures ++= note.failures
+                    note.specs.foreach { s =>
+                      Decks
+                        .compose(deckRoot, shape, Decks.sourceFor(file.relativePath, Vector.empty), s.recall)
+                        .foreach(composed => decks += s.key -> composed.path)
+                    }
+
+                  // No usable id, so the card cannot be keyed. Reported below by the id branch,
+                  // which says exactly that; a second message here would be the same news twice.
+                  case _ => ()
+
               case MarkedHeadings.Absent =>
                 failures += BuildFailure.MarkerNotOnHeading(
                   file.relativePath,

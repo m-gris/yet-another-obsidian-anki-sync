@@ -138,11 +138,11 @@ enum CardPath:
   /** The note itself, carrying no anchor below it — a note with no headings whose whole body is
     * the card.
     *
-    * ADMITTED BY THE TYPE AND NOT YET PRODUCED BY EXTRACTION, deliberately. Identity is the most
-    * expensive thing in this system to change once review history exists and the cheapest while
-    * the collection is nearly empty, so the shape is being settled now and the behaviour that
-    * fills it can arrive whenever. A test asserts that nothing produces it yet, so the day one
-    * does is a visible decision rather than a drift.
+    * _Admitted by the type on 2026-08-25 and PRODUCED FROM 2026-08-26, by `Extractor.fromWholeNote`
+    * when a note carries a marker in its frontmatter and has no heading it could have fallen off._
+    * The shape was settled a day before the behaviour arrived, on purpose: identity is the most
+    * expensive thing in this system to change once review history exists and the cheapest while a
+    * collection is nearly empty.
     */
   case Note
 
