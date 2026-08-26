@@ -395,6 +395,6 @@ object Report:
     case BuildFailure.MarkerUnknowable(file, reason) =>
       s"$file: $reason"
     case BuildFailure.EdgeVocabularyUnusable(file, reason) =>
-      s"$file: $reason (NO PROPERTY MAKES A CARD ANYWHERE until this is fixed)"
+      s"$file: $reason (none of this note's properties makes a card until this is fixed)"
     case BuildFailure.FileUnreadable(file, reason) =>
       s"$file: $reason (SCAN IS PARTIAL — no orphans will be computed)"

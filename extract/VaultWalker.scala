@@ -274,10 +274,31 @@ object Decks:
   * predicate must never turn "could not look" into "there are none". That is the same collapse
   * `MarkedHeadings` exists to prevent, arriving one function along.
   */
-private def hasNoHeadings(root: laika.ast.RootElement): Boolean =
+private[extract] def hasNoHeadings(root: laika.ast.RootElement): Boolean =
+  // THE DECLARATIONS HEADING IS NOT STRUCTURE, and this is a ruling rather than an exception
+  // grudgingly made. `# Properties-to-Flashcards` is metadata that happens to be written in the
+  // body — frontmatter with room to explain itself. Counting it would mean that adding a
+  // declarations block to a headingless note SILENTLY retires its whole-note card: a behaviour
+  // change arriving from an unrelated edit, which is the worst shape of failure this project
+  // recognises.
+  def isDeclarations(h: laika.ast.Header): Boolean =
+    def loosely(raw: String) =
+      obsidiananki.model.TagCodec.canonical(raw).replace('-', ' ').replace('_', ' ')
+    loosely(h.extractText) == loosely(EdgeSchema.Heading)
+
+  // BOTH SHAPES ARE HANDLED, AND ONLY ONE OF THEM OCCURS IN PRACTICE. Laika's section builder
+  // wraps every heading in a `Section`, so the bare-`Header` arm below is not reached by any
+  // vault this tool has parsed — verified by making it throw, which killed no test.
+  //
+  // IT IS KEPT AND UNIT-TESTED DIRECTLY rather than deleted, because deleting it would send a
+  // bare header to the catch-all and be answered "not a heading". A document full of headings
+  // would then report having none, and every marked note in it would become a candidate for a
+  // whole-note card. That is a silent, total misreading resting on an implementation detail of
+  // somebody else's rewrite rules; the arm costs one line and removes the dependency.
   def anyHeading(block: laika.ast.Block): Boolean = block match
-    case _: laika.ast.Header  => true
-    case _: laika.ast.Section => true
+    case h: laika.ast.Header => !isDeclarations(h)
+    case sec: laika.ast.Section =>
+      !isDeclarations(sec.header) || sec.content.exists(anyHeading)
     case c: laika.ast.BlockContainer => c.content.exists(anyHeading)
     case _                    => false
   !root.content.exists(anyHeading)
@@ -354,12 +375,6 @@ object VaultWalker:
     val failures = Vector.newBuilder[BuildFailure]
     val decks    = Map.newBuilder[CardKey, DeckPath]
 
-    // THE VOCABULARY IS READ BEFORE ANYTHING ELSE, because it applies to every note and a note
-    // cannot be processed without it. It costs one pass over text already in memory and no
-    // parsing at all — `EdgeSchema.findIn` reads lines, which is what makes a schema note immune
-    // to a strict parser refusing something elsewhere in it.
-    val (schema, schemaFailures) = readVocabulary(files)
-    failures ++= schemaFailures
 
     // Sorted so a scan is reproducible: the same vault must always yield the same plan, or
     // "a second run changes nothing" becomes dependent on directory iteration order.
@@ -409,6 +424,38 @@ object VaultWalker:
           // needs `tags` to survive parsing, which it did not until the property parser was
           // widened: Obsidian writes it as a YAML list, lists were dropped, and the only thing
           // left was the substring check above — enough to complain about, never enough to act on.
+          // WHICH OF THIS NOTE'S PROPERTIES MAKE CARDS — declared by THIS NOTE, for itself.
+          //
+          // LEXICAL SCOPE, AND THAT IS THE WHOLE POINT. _It was one vault-wide declaration until
+          // 2026-08-26._ A relation earns its place in frontmatter for querying and for the graph,
+          // which is most of its value; whether to be DRILLED on it is a separate decision and
+          // belongs to the note carrying it. A vault-wide vocabulary turns every occurrence
+          // everywhere into a card whether that was meant or not — the difference between a
+          // lexically scoped expansion and a global rewrite.
+          //
+          // A NOTE THAT DECLARES NOTHING MAKES NO RELATION CARDS, silently, and that is the
+          // ordinary case: most notes carry properties and want none of them drilled.
+          val (declared, declarationFailures) =
+            EdgeSchema.findIn(split.body) match
+              case None => (EdgeSchema.empty, Vector.empty[BuildFailure])
+              case Some(text) =>
+                EdgeSchema
+                  .parse(text)
+                  .fold(
+                    errs =>
+                      (
+                        EdgeSchema.empty,
+                        Vector(
+                          BuildFailure.EdgeVocabularyUnusable(
+                            file.relativePath,
+                            errs.toVector.map(_.describe).mkString("; "),
+                          )
+                        ),
+                      ),
+                    ok => (ok, Vector.empty[BuildFailure]),
+                  )
+          failures ++= declarationFailures
+
           val frontmatterMarker: Option[Marker] =
             keys.get("tags").toVector.flatMap {
               case PropertyValue.One(t)    => Vector(t)
@@ -537,7 +584,7 @@ object VaultWalker:
                 location = file.relativePath.split('/').dropRight(1).toVector :+ fileName,
                 properties = keys,
                 rawFrontmatter = split.frontmatter.getOrElse(""),
-                schema = schema,
+                schema = declared,
               )
               specs ++= edgeSpecs
               failures ++= edgeFailures
@@ -605,52 +652,3 @@ object VaultWalker:
       VaultScan.from(built, failures.result() ++ Edges.reverseCollisions(built)),
       decks.result(),
     )
-
-  /** The vault's edge vocabulary, and any reason it could not be used.
-    *
-    * TWO SCHEMA NOTES YIELD NO SCHEMA AT ALL rather than an arbitrary one. Which of two
-    * vocabularies a tool silently picked is not something an author can discover by reading their
-    * vault, and the consequence — some relations making cards and others not — looks exactly like
-    * the tool being broken.
-    *
-    * NO SCHEMA IS NOT A FAILURE. Most vaults have no typed edges and never will; a tool that
-    * complained about a missing schema note would complain in every one of them.
-    */
-  private def readVocabulary(files: Vector[VaultFile]): (EdgeSchema, Vector[BuildFailure]) =
-    val carriers = files.sortBy(_.relativePath).flatMap { f =>
-      Frontmatter.split(f.content).toOption
-        .flatMap(split => EdgeSchema.findIn(split.body).map(f.relativePath -> _))
-    }
-
-    carriers match
-      case Vector() => (EdgeSchema.empty, Vector.empty)
-
-      case Vector((path, text)) =>
-        EdgeSchema
-          .parse(text)
-          .fold(
-            errs =>
-              (
-                EdgeSchema.empty,
-                Vector(
-                  BuildFailure.EdgeVocabularyUnusable(
-                    path,
-                    errs.toVector.map(_.describe).mkString("; "),
-                  )
-                ),
-              ),
-            schema => (schema, Vector.empty),
-          )
-
-      case many =>
-        (
-          EdgeSchema.empty,
-          Vector(
-            BuildFailure.EdgeVocabularyUnusable(
-              many.head._1,
-              s"the vault has ${many.size} notes carrying a '${EdgeSchema.Heading}' heading " +
-                s"(${many.map(_._1).mkString(", ")}), and this tool will not choose between two " +
-                "vocabularies — keep one",
-            )
-          ),
-        )

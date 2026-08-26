@@ -123,15 +123,18 @@ enum BuildFailure:
     */
   case MarkedWithoutNoteId(file: String, reason: String)
 
-  /** THE VAULT'S EDGE VOCABULARY COULD NOT BE READ, so no property makes a card anywhere.
+  /** A NOTE'S DECLARATIONS BLOCK COULD NOT BE READ, so none of ITS properties makes a card.
     *
-    * ITS BLAST RADIUS IS THE WHOLE VAULT, which is why it is reported once and loudly rather than
-    * per note. A schema that cannot be read is not the same as a vault with no schema: the second
-    * is the ordinary case and says nothing, while the first means every typed-edge card the author
-    * expects is silently absent. Without this, the two are indistinguishable.
+    * ITS BLAST RADIUS IS THE NOTE. _It was the whole vault until 2026-08-26, when the vocabulary
+    * moved from one vault-wide note to a heading in each note that wants one — lexical scope
+    * rather than a global rewrite._
     *
-    * Non-degrading: it says nothing about which notes own which cards, so orphan inference for
-    * everything else is untouched. The heading cards of every note are unaffected.
+    * REPORTED RATHER THAN PASSED OVER, because a note that DECLARES relations and makes none is
+    * not the same as a note that declares none. The second is the ordinary case and says nothing;
+    * the first means the cards this note's author expects are silently absent.
+    *
+    * Non-degrading: it says nothing about which notes own which cards, so orphan inference is
+    * untouched, and this note's heading cards are unaffected.
     */
   case EdgeVocabularyUnusable(file: String, reason: String)
 

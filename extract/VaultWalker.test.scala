@@ -778,14 +778,17 @@ class VaultWalkerTest extends munit.FunSuite:
     * `special-case-of: "[[HomSet]]"`, and its headings name aspects of the concept rather than the
     * concept itself — which is why the subject can only be the file name.
     */
-  val vocabulary: String =
-    "---\nid: schema\n---\n\n# Properties-to-Flashcards\n\n" +
-      "The relations I use.\n\n- special-case-of: 1way\n- dual-of: 2way\n"
+  /** THE DECLARATIONS BLOCK A NOTE CARRIES FOR ITSELF. Appended to a note's body in the tests
+    * below, exactly as an author would write it under the properties it describes.
+    */
+  val declares: String =
+    "\n# Properties-to-Flashcards\n\nThe relations I use here.\n\n" +
+      "- special-case-of: 1way\n- dual-of: 2way\n"
 
   test("a declared property becomes a card, with the file name as its subject") {
     val index = scan(
-      "Schema.md"         -> vocabulary,
-      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# Definition\n\nProse.\n",
+      "Function Space.md" ->
+        ("---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# Definition\n\nProse.\n" + declares)
     )
 
     val edges = index.scan.specs.filter(_.key.path match
@@ -801,56 +804,74 @@ class VaultWalkerTest extends munit.FunSuite:
       case other => fail(s"an edge must be a three-field card: $other")
   }
 
-  test("a vault with no schema note makes no edge cards and says nothing about it") {
+  /** THE WHOLE REASON THE VOCABULARY IS PER NOTE. A relation earns its place in frontmatter for
+    * querying and for the graph; being DRILLED on it is a separate decision. A note that carries
+    * `special-case-of` and declares nothing gets no card, even though another note in the same
+    * vault may declare that very property — which a vault-wide vocabulary could not express.
+    */
+  test("a note that carries a relation but declares nothing makes no card") {
     val index = scan(
-      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A #flashcard/1way\n\nb\n"
+      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A #flashcard/1way\n\nb\n",
+      // Another note declaring the SAME property, which must not reach across.
+      "Elsewhere.md" -> ("---\nid: n2\nspecial-case-of: \"[[Thing]]\"\n---\n\n# B\n\nc\n" + declares),
     )
-    assert(
-      !index.scan.specs.exists(_.key.path match
-        case CardPath.Property(_) => true
-        case _                    => false),
-      "a property made a card with no vocabulary declaring it",
+    assertEquals(
+      index.scan.specs.map(_.key).collect { case k if isProperty(k.path) => k.noteId.value },
+      Vector("n2"),
+      "a declaration in one note reached across into another",
     )
-    assertEquals(index.scan.failures, Vector.empty, "the absence of a schema was reported as a problem")
+    assertEquals(index.scan.failures, Vector.empty, "declaring nothing was reported as a problem")
   }
+
+  def isProperty(p: CardPath): Boolean = p match
+    case CardPath.Property(_) => true
+    case _                    => false
 
   /** AN UNREADABLE VOCABULARY IS NOT THE SAME AS NO VOCABULARY, and the difference is the whole
     * reason it is reported. With no schema, nothing was expected. With a broken one, every
     * typed-edge card the author expects is silently absent.
     */
-  test("a vocabulary that cannot be read is reported once, loudly, for the whole vault") {
+  /** A NOTE THAT DECLARES RELATIONS AND MAKES NONE IS NOT THE SAME as one that declares none. The
+    * second is the ordinary case and says nothing; the first means the cards this note's author
+    * expects are silently absent — so it is reported, and only for that note.
+    */
+  test("a declarations block that cannot be read is reported, and only for its own note") {
     val index = scan(
-      "Schema.md"         -> "---\nid: s\n---\n\n# Properties-to-Flashcards\n\n- special-case-of: sideways\n",
-      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+      "Broken.md" ->
+        ("---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n" +
+          "\n# Properties-to-Flashcards\n\n- special-case-of: sideways\n"),
+      "Fine.md" ->
+        ("---\nid: n2\nspecial-case-of: \"[[Thing]]\"\n---\n\n# B\n\nc\n" + declares),
     )
     assertEquals(
       index.scan.failures.collect { case BuildFailure.EdgeVocabularyUnusable(f, _) => f },
-      Vector("Schema.md"),
+      Vector("Broken.md"),
+    )
+    assertEquals(
+      index.scan.specs.map(_.key).collect { case k if isProperty(k.path) => k.noteId.value },
+      Vector("n2"),
+      "one note's broken declaration cost another note its cards",
     )
   }
 
-  test("two schema notes yield no vocabulary at all rather than an arbitrary one") {
+  /** TWO NOTES MAY DECLARE THE SAME PROPERTY DIFFERENTLY, and that is not a conflict — it is the
+    * feature. _There was a test here refusing a vault with two vocabulary notes; per-note scoping
+    * deletes the ambiguity rather than resolving it, so the test goes with it._
+    */
+  test("two notes may declare the same property differently, each for itself") {
     val index = scan(
-      "A.md" -> "---\nid: a\n---\n\n# Properties-to-Flashcards\n\n- special-case-of: 1way\n",
-      "B.md" -> "---\nid: b\n---\n\n# Properties-to-Flashcards\n\n- special-case-of: 3way\n",
-      // A note that WOULD make a card under either vocabulary, which is what turns this from a
-      // test of the message into a test of the behaviour.
-      "Function Space.md" -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+      "One.md" -> ("---\nid: n1\ndual-of: \"[[A]]\"\n---\n\n# X\n\ny\n" +
+        "\n# Properties-to-Flashcards\n\n- dual-of: 1way\n"),
+      "Two.md" -> ("---\nid: n2\ndual-of: \"[[B]]\"\n---\n\n# X\n\ny\n" +
+        "\n# Properties-to-Flashcards\n\n- dual-of: 3way\n"),
     )
-
-    val reported = index.scan.failures.collect { case BuildFailure.EdgeVocabularyUnusable(_, r) => r }
-    assertEquals(reported.size, 1, s"expected exactly one report: ${index.scan.failures}")
-    assert(reported.head.contains("A.md") && reported.head.contains("B.md"), reported.head)
-
-    // THE CONSEQUENCE, AND A MUTATION IS WHAT FORCED IT. Silently adopting the first of the two
-    // vocabularies left this suite entirely green: the report above is emitted either way, so a
-    // test that asserted only the message could not see that a vocabulary had been used anyway.
-    // Which of two vocabularies a tool silently picked is not something an author can discover by
-    // reading their vault.
+    assertEquals(index.scan.failures, Vector.empty, s"${index.scan.failures}")
     assertEquals(
-      index.scan.specs.map(_.key.path).collect { case CardPath.Property(p) => p.value },
-      Vector.empty,
-      "a vocabulary was used despite the vault declaring two",
+      index.scan.specs.collect {
+        case sp if isProperty(sp.key.path) =>
+          sp.spec.asInstanceOf[CardSpec.ThreeField].directions
+      }.toSet,
+      Set(ThreeFieldDirections.ValueOnly, ThreeFieldDirections.All),
     )
   }
 
@@ -861,9 +882,8 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   test("a note whose body will not parse still declares its relations") {
     val index = scan(
-      "Schema.md" -> vocabulary,
       "Broken.md" -> ("---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n" +
-        "# Definition #flashcard/1way\n\nAn array index like [0] in prose.\n"),
+        "# Definition #flashcard/1way\n\nAn array index like [0] in prose.\n" + declares),
     )
 
     assert(
@@ -889,9 +909,8 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   test("a reversible edge with several right answers is refused, naming them") {
     val index = scan(
-      "Schema.md"  -> vocabulary,
-      "Product.md" -> "---\nid: n1\ndual-of: \"[[Category]]\"\n---\n\n# A\n\nb\n",
-      "Sum.md"     -> "---\nid: n2\ndual-of: \"[[Category]]\"\n---\n\n# A\n\nb\n",
+      "Product.md" -> ("---\nid: n1\ndual-of: \"[[Category]]\"\n---\n\n# A\n\nb\n" + declares),
+      "Sum.md"     -> ("---\nid: n2\ndual-of: \"[[Category]]\"\n---\n\n# A\n\nb\n" + declares),
     )
 
     val refusals = index.scan.failures.collect {
@@ -907,9 +926,8 @@ class VaultWalkerTest extends munit.FunSuite:
     */
   test("a one-way edge may point many notes at the same thing") {
     val index = scan(
-      "Schema.md"          -> vocabulary,
-      "Function Space.md"  -> "---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
-      "Exponential.md"     -> "---\nid: n2\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n",
+      "Function Space.md" -> ("---\nid: n1\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n" + declares),
+      "Exponential.md"    -> ("---\nid: n2\nspecial-case-of: \"[[HomSet]]\"\n---\n\n# A\n\nb\n" + declares),
     )
     assertEquals(index.scan.failures, Vector.empty, s"a 1way edge was refused: ${index.scan.failures}")
     assertEquals(index.scan.specs.count(_.key.path match
@@ -1029,4 +1047,57 @@ class VaultWalkerTest extends munit.FunSuite:
     val index = scan("Prose.md" -> "---\nid: n1\n---\n\nJust some notes to myself.\n")
     assertEquals(index.scan.specs, Vector.empty)
     assertEquals(index.scan.failures, Vector.empty)
+  }
+
+  /** A DECLARATIONS BLOCK IS METADATA, NOT STRUCTURE — and this test is the reason that ruling
+    * exists rather than being an exception grudgingly made.
+    *
+    * A whole-note card is made when a note has no headings. `# Properties-to-Flashcards` is a
+    * heading. So without the exclusion, adding a declarations block to a headingless note would
+    * SILENTLY retire its whole-note card and orphan it in Anki — a behaviour change arriving from
+    * an edit that has nothing to do with it, which is the worst shape of failure this project
+    * recognises. The note keeps both cards.
+    */
+  test("declaring a relation does not cost a headingless note its whole-note card") {
+    val index = scan(
+      "Essential Numbers.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/sequence\nspecial-case-of: \"[[Interviewing]]\"\n---\n\n" +
+          "- scale\n- read/write ratio\n" + declares)
+    )
+
+    assertEquals(index.scan.failures, Vector.empty, s"${index.scan.failures}")
+    assertEquals(
+      index.scan.specs.map(_.key.path).map {
+        case CardPath.Note        => "note"
+        case CardPath.Property(_) => "property"
+        case CardPath.Headings(_) => "headings"
+      }.sorted,
+      Vector("note", "property"),
+      "the declarations heading was counted as structure and cost the note its whole-note card",
+    )
+  }
+
+  // ────────────────── the heading predicate, driven directly ──────────────────
+
+  /** DRIVEN ON HAND-BUILT SYNTAX TREES, because one of its two arms is unreachable through any
+    * vault. Laika's section builder wraps every heading in a `Section`, so the bare-`Header` arm
+    * is never exercised by a parsed note — a mutation proved it, by throwing from that arm and
+    * killing no test.
+    *
+    * The arm is kept, so it is tested here. Deleting it would send a bare header to the catch-all
+    * and answer "not a heading": a document full of headings would report having none, and every
+    * marked note in it would become a candidate for a whole-note card. That is a total, silent
+    * misreading resting on an implementation detail of Laika's rewrite rules.
+    */
+  test("the heading predicate answers correctly for a BARE header, which no vault produces") {
+    import laika.ast.*
+    def root(blocks: Block*) = RootElement(blocks.toSeq)
+
+    assert(!hasNoHeadings(root(Header(1, Seq(Text("Concept"))))),
+           "a bare header was not seen as a heading")
+    assert(hasNoHeadings(root(Header(1, Seq(Text("Properties-to-Flashcards"))))),
+           "a bare declarations header was counted as structure")
+    assert(hasNoHeadings(root(Paragraph(Seq(Text("just prose"))))),
+           "prose was counted as a heading")
+    assert(hasNoHeadings(root()), "an empty document has no headings")
   }
