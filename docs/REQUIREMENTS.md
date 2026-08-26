@@ -245,9 +245,15 @@ Requests for a general, subject-agnostic version recur on the Anki forums and ha
    downstream of `CardSpec` — it inherits identity, hashing, decks, breadcrumbs, orphan handling
    and the whole reconciler unchanged.
 
-   **BUILT AND WIRED 2026-08-26.** `extract/EdgeSchema.scala` reads a vault-declared vocabulary
-   from a note under a `# Properties-to-Flashcards` heading, and `extract/Edges.scala` turns each
-   declared property into a `ThreeField` card. Verified against the live vault.
+   **BUILT AND WIRED 2026-08-26.** `extract/EdgeSchema.scala` reads the declarations a note makes
+   for ITSELF, under a `# Properties-to-Flashcards` heading in its own body, and
+   `extract/Edges.scala` turns each declared property into a `ThreeField` card. Verified against
+   the live vault.
+
+   **Scope is per note, not per vault** — a relation is worth carrying in frontmatter for querying
+   and the graph whether or not you want to be drilled on it, and those are separate decisions.
+   **The right-hand side is marker syntax**, read by `Marker.parse`, so a rule and a heading share
+   one vocabulary rather than two that can drift.
 
    **It lives in the vault, and that is a ruling rather than a convenience.** Heading markers are
    universal — every vault that wants a two-way card writes the same token — so their vocabulary

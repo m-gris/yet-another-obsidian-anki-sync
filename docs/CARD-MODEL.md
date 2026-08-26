@@ -198,10 +198,28 @@ key, so correcting a typo in one would retire that card and mint a replacement w
 frontmatter, and the frontmatter parsed or the note would have no id. A body the strict parser
 refuses costs the note its heading cards and none of its relations.
 
-**Which properties are relations is declared in the VAULT**, under a `# Properties-to-Flashcards`
-heading, and that split is deliberate — see `docs/REQUIREMENTS.md` item 2. The heading is matched
-leniently about spaces and hyphens, because a vault with no schema is the ordinary case and
-therefore cannot be an error, which makes a near-miss the worst outcome available.
+**Which properties are relations is declared BY EACH NOTE, for itself**, under a
+`# Properties-to-Flashcards` heading in its own body. _It was one vault-wide declaration until
+2026-08-26._ A relation earns its place in frontmatter for querying and for the graph, which is most
+of its value; whether to be DRILLED on it is a separate decision belonging to the note that carries
+it. A vault-wide vocabulary turns every occurrence everywhere into a card whether that was meant or
+not — the difference between a lexically scoped expansion and a global rewrite.
+
+**A declarations block is a set of REWRITE RULES, and that framing does work rather than decorating.**
+`CardSpec` is the intermediate representation; markers and relations are two surface syntaxes over
+it. A rule's right-hand side names what the property expands INTO, so it must be written in the
+target language and read by the target language's parser — which is why `cdd/1way` in a rule is the
+same token as `#flashcard/cdd/1way` on a heading, through `Marker.parse`. A rule written in a
+vocabulary of its own was the first attempt, and it made one token mean two things: `1way` on a
+heading is a two-field card. The frame catches that before the clash is noticed.
+
+**A declarations block is metadata, not structure.** It does not count as a heading for the purpose
+of deciding whether a note is headingless — otherwise declaring a relation on a headingless note
+would silently retire its whole-note card.
+
+The heading is matched leniently about spaces and hyphens, because a note with no declarations is
+the ordinary case and therefore cannot be an error, which makes a near-miss the worst outcome
+available.
 
 **A reversible relation is CHECKED, not trusted or forbidden.** A `2way` or `3way` relation also
 asks which thing has the far end, and for a many-to-one relation several notes answer that — the

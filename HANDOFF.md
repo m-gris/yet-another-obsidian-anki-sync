@@ -39,7 +39,7 @@ at something this repository does not contain. It was superseded and to be ignor
 **Three vaults, do not confuse them.** Marc's real vault is *parser-hazard evidence only* — its heterogeneous ids and stray aliases are leftovers from an abandoned experiment, **not** intended design. Never infer conventions from it.
 
 `just test` runs everything, as does `scala-cli test .` from the repository root.
-**34 suites, 732 tests, 0 failures, 0 warnings** — measured on 2026-08-26 by running it and
+**34 suites, 744 tests, 0 failures, 0 warnings** — measured on 2026-08-26 by running it and
 summing the per-suite totals. _The line has said 493, then 511; the suite keeps growing, so
 treat the number as a reading rather than a fact and re-measure before quoting it._
 
@@ -243,6 +243,13 @@ Six so far. **Every one produced plausible output instead of failing.**
 
 ## Design decisions you must not relitigate
 
+- **A declarations block is a set of REWRITE RULES, lexically scoped to its note** (2026-08-26).
+  `CardSpec` is the IR; markers and relations are two surface syntaxes over it. Three things follow
+  and none of them is a preference: the scope is the NOTE (a global vocabulary is a global rewrite);
+  the right-hand side is written in the TARGET language and read by `Marker.parse` (a rule in its own
+  vocabulary made `1way` mean a two-field card on a heading and a three-field one in a rule); and the
+  declarations heading is METADATA, not structure, so declaring a relation cannot silently retire a
+  headingless note's whole-note card.
 - **A card is anchored at a NODE of a note, and a heading is one kind of node** (2026-08-25). The
   key is `(frontmatter id, anchor)` where an anchor is a chain of headings, a frontmatter property,
   or the note itself. A mixed anchor is unrepresentable because a property belongs to the note and

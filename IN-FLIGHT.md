@@ -374,3 +374,18 @@ not.**_
   the two vocabularies left it green, because the report is emitted either way. A test that names a
   behaviour in its title and checks only the diagnostic is the same class of thing as a docstring
   that promises a test: it reads as verification and is not.
+
+- **WHEN A MUTATION SURVIVES, FIND OUT WHICH ARM IS LOAD-BEARING BEFORE BLAMING THE TEST.**
+  _2026-08-26._ The usual finding is a weak test. This time it was DEAD CODE: making the
+  bare-`Header` arm of the heading predicate throw killed nothing, because Laika's section builder
+  wraps every heading in a `Section` and that arm is unreachable through any vault. The arm was
+  kept — deleting it would send a bare header to the catch-all and answer "not a heading", so a
+  document full of headings would report having none — and the predicate is now driven directly on
+  hand-built syntax trees so both arms are covered.
+
+- **A DRIFT-GUARD TEST YOU WROTE YOURSELF IS EVIDENCE YOU CREATED THE DRIFT.** _2026-08-26._ The
+  declarations parser had a test asserting its three words agreed with the marker vocabulary. That
+  test existed only because the parser had invented a second vocabulary instead of composing the
+  first — and the second one clashed, since `1way` on a heading is a two-field card. Composing
+  `Marker.parse` deleted the drift, the lookup table, the word list its messages needed, and the
+  guard. **Before writing a test that two things agree, ask why they are two things.**

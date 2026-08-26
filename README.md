@@ -284,7 +284,7 @@ has nothing to apply to when there are no cell cards.
 ## Relations in the frontmatter
 
 A marker on a heading is not the only way to make a card. A **relation** written as a frontmatter
-property makes one too:
+property makes one too — if the note says so:
 
 ```markdown
 ---
@@ -295,78 +295,90 @@ special-case-of: "[[HomSet]]"
 # Definition #flashcard/cdd/2way
 
 The set of all functions from a domain to a codomain.
+
+# Properties-to-Flashcards
+
+- special-case-of: cdd/1way
 ```
 
 `Function Space.md` now yields **two** cards: the definition, from the marked heading, and
 
 > **Function Space** — *special-case-of* — ? → **HomSet**
 
-### Why this is a concept-descriptor card
+### Why this is a concept–descriptor card
 
 A relation is a triple — this note, the relation, the thing on the far end. So is a
 concept–descriptor card: a thing, an aspect of it, the value of that aspect. They are the same
 shape, which is why a relation needs no new note type and no new marker. It is a `cdd` card whose
 descriptor happens to be a property name.
 
-That also means `3way` works on a relation, and asks the card you cannot get any other way:
+That also means `cdd/3way` works on a relation, and asks the card you cannot get any other way:
 *Function Space — ? — HomSet*. Not "what is it related to", but **which relation holds**.
 
-### Declaring which properties are cards
+### Declaring, per note
 
-By default no property makes a card — otherwise `created:` and `aliases:` would fill your
-collection, and a typo would quietly make a *different* card rather than being refused. Declare
-them in **one note in the vault**, under a heading `# Properties-to-Flashcards`:
+**No property makes a card unless its own note says so.** A relation earns its place in frontmatter
+for querying and for the graph — that is most of its value — and whether you want to be *drilled*
+on it is a separate decision. So the declaration lives in the note that carries the property, under
+a `# Properties-to-Flashcards` heading:
 
 ```markdown
 # Properties-to-Flashcards
 
-Which frontmatter properties become flashcards, and how many ways each is asked.
+Relations I want drilled on this note.
 
-- special-case-of: 1way
-- dual-of: 3way
+- special-case-of: cdd/1way
+- dual-of: cdd/3way
 ```
 
-The words are the ones a heading already uses. Prose around the rules is ignored, so explain your
-vocabulary beside it — that is the point of keeping this in the vault rather than in a config file.
+It declares for **that note only**. Another note may carry `special-case-of` and declare nothing,
+and gets no card. Two notes may declare the same property differently. Prose around the rules is
+ignored, so explain your vocabulary beside it.
 
-This vocabulary lives in your vault, unlike the `#flashcard` markers which live in the tool.
-Markers are universal; every vault that wants a two-way card writes the same thing. Relations are
-yours — `special-case-of` is mathematics, another vault wants other words entirely.
+The right-hand side is **the same token a heading marker uses**, read by the same parser — `cdd/1way`
+here means what `#flashcard/cdd/1way` means on a heading. `flashcard/cdd/1way` and
+`#flashcard/cdd/1way` are accepted too, but the bare form is recommended: a literal `#flashcard/…`
+typed into a note's body is what Obsidian's editor lifts into the frontmatter `tags` property.
 
-### Before you write `2way` or `3way` on a relation
+Anything that isn't a `cdd` shape is refused by name. `cloze` is a real marker and still wrong for a
+relation; so is a bare `1way`, which on a heading is a **two-field** card and has no third field for
+the relation to go in.
 
-A reversible card also asks the question backwards: *what is a special case of HomSet?* That is
-only a sound question when **one** note answers it. If three notes are each a special case of
-HomSet, three cards ask the identical question holding three different right answers, and whichever
-comes up you are wrong twice out of three times.
+### Before you write `cdd/2way` or `cdd/3way`
+
+A reversible card also asks the question backwards: *what is a special case of HomSet?* That is only
+a sound question when **one** note answers it. If three notes are each a special case of HomSet,
+three cards ask the identical question holding three different right answers, and whichever comes up
+you are wrong twice out of three times.
 
 The tool checks rather than trusting you or forbidding it, because it holds the whole vault at once
-and can simply look. If the collision is there it refuses those cards and names every note
-involved. Note that adding a third answer months later breaks two cards that were fine until then
-— the run that does it will say so.
+and can simply look. If the collision is there it refuses those cards and names every note involved.
+Note that adding a third answer months later breaks two cards that were fine until then — the run
+that does it will say so.
 
-`1way` is never affected: pointing many notes at the same thing is the normal case.
+`cdd/1way` is never affected: pointing many notes at the same thing is the normal case.
 
 ### What it does with the value
 
 - `[[HomSet]]` shows as **HomSet** — a card face is read, not clicked, and Anki cannot follow a
   wikilink whatever it looks like.
 - `[[HomSet|the hom-set]]` shows as **the hom-set** — you already said how you wanted it to read.
-- Several values make **one** card, answered `A, B`. It is one question whose honest answer is
-  both; and it keeps the card's identity stable when you correct a typo in one of them.
+- Several values make **one** card, answered `A, B`. It is one question whose honest answer is both;
+  and it keeps the card's identity stable when you correct a typo in one of them.
 - Anything that is not a link is left exactly as written, so `status: draft` is as good a relation
   as a link.
 
 ### Two things worth knowing
 
 **Renaming the file is free.** A relation card is identified by the note's `id` and the property
-name, so the file name is only something the card *displays*. Rename the note, reword every
-heading in it — the card keeps its review history. Heading cards do not have this property:
-rewording a marked heading retires that card and makes a new one.
+name, so the file name is only something the card *displays*. Rename the note, reword every heading
+in it — the card keeps its review history. Heading cards do not have this property: rewording a
+marked heading retires that card and makes a new one.
 
-**A relation survives a body the parser refuses.** Parsing is strict, and an array index written
-as `[0]` in a sentence is enough to fail it. Such a note loses its heading cards and keeps its
-relations, because relations live in the frontmatter.
+**A relation survives a body the parser refuses.** Parsing is strict, and an array index written as
+`[0]` in a sentence is enough to fail it. Such a note loses its heading cards and keeps its
+relations, because relations live in the frontmatter — and the declarations block is read as lines,
+so it survives too.
 
 ## Decks
 
