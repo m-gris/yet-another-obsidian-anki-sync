@@ -80,6 +80,24 @@ class RetypingTest extends munit.FunSuite:
     * count and its cloze flag are the two properties the gate reads; the template TEXT is
     * irrelevant to every assertion here and is a placeholder.
     */
+  /** A THREE-TEMPLATE STOCK TYPE, so a test can exercise a move the gate still refuses.
+    *
+    * Needed from 2026-08-26, when growth was measured and admitted: seeding a one-template type
+    * and asking for a two-template one is no longer a refusal, so the tests about refusals seed
+    * this instead and narrow away from it.
+    */
+  val stockWide: NoteTypeSpec = NoteTypeSpec(
+    name = "Wide",
+    isCloze = false,
+    fields = NonEmptyVector.of(Marker.BasicFields.Front, Marker.BasicFields.Back),
+    templates = NonEmptyVector.of(
+      "Card 1" -> CardTemplate("{{Front}}", "{{FrontSide}}{{Back}}"),
+      "Card 2" -> CardTemplate("{{Back}}", "{{FrontSide}}{{Front}}"),
+      "Card 3" -> CardTemplate("{{Front}}{{Back}}", "{{FrontSide}}"),
+    ),
+    styling = ".card { }",
+  )
+
   val stockBasic: NoteTypeSpec = NoteTypeSpec(
     name = "Basic",
     isCloze = false,
@@ -160,10 +178,21 @@ class RetypingTest extends munit.FunSuite:
       "cloze to cloze was refused",
     )
 
+    // GROWTH IS ADMITTED, AND IT WAS MEASURED RATHER THAN ARGUED. This asserted a REFUSAL until
+    // 2026-08-26, on the grounds that card generation was unmeasured. It was then measured in a
+    // throwaway profile: a two-card note retyped onto a three-template type kept both cards, both
+    // card IDS, both intervals, both ease factors and both review logs — zero drift on every
+    // column — and settled on the card set the new type's GATE FIELDS called for rather than one
+    // card per template.
     assertEquals(
       Retyping.refusalFor("A", shape(1, false), "B", shape(2, false)),
-      Some(RetypeRefusal.TemplateCountDiffers("A", 1, "B", 2)),
-      "growing the template count was allowed, and card GENERATION is unmeasured",
+      None,
+      "growing the template count is refused, though it has been measured to be lossless",
+    )
+    assertEquals(
+      Retyping.refusalFor("A", shape(1, false), "B", shape(5, false)),
+      None,
+      "growth by more than one was refused",
     )
     assertEquals(
       Retyping.refusalFor("A", shape(2, false), "B", shape(1, false)),
@@ -222,10 +251,12 @@ class RetypingTest extends munit.FunSuite:
     // BOTH STILL REFUSED. The message changed; the gate did not. If this ever fails because
     // growing now returns None, that is the measurement having landed — update `IN-FLIGHT.md`
     // and this test together, and say which profile it was measured in.
+    // The growth direction was admitted on 2026-08-26 after being measured, so the pair that
+    // exercises a refusal is the shrinking one.
     assertEquals(
-      Retyping.refusalFor("Narrow", NoteTypeShape(1, false), "Wide", NoteTypeShape(3, false)),
-      Some(RetypeRefusal.TemplateCountDiffers("Narrow", 1, "Wide", 3)),
-      "the growth direction was admitted without a measurement to justify it",
+      Retyping.refusalFor("Wide", NoteTypeShape(3, false), "Narrow", NoteTypeShape(1, false)),
+      Some(RetypeRefusal.TemplateCountDiffers("Wide", 3, "Narrow", 1)),
+      "the shrinking direction was admitted, and it is the one that strands a card",
     )
   }
 
@@ -282,9 +313,9 @@ class RetypingTest extends munit.FunSuite:
         "A",
         "B",
         RetypePolicy.Apply,
-        Map("A" -> NoteTypeShape(1, false), "B" -> NoteTypeShape(3, false)),
+        Map("A" -> NoteTypeShape(3, false), "B" -> NoteTypeShape(1, false)),
       ),
-      RetypeVerdict.RefusedByShapes(RetypeRefusal.TemplateCountDiffers("A", 1, "B", 3)),
+      RetypeVerdict.RefusedByShapes(RetypeRefusal.TemplateCountDiffers("A", 3, "B", 1)),
       "the verdict must carry the refusal so the preview can print the SAME sentence the run " +
         "would have printed — a bare 'refused' would drift from it",
     )
@@ -584,12 +615,11 @@ class RetypingTest extends munit.FunSuite:
     * A deferral says "you did not ask me to"; a refusal says "you asked and I will not".
     */
   test("a refused move is reported as a failure and never as a deferral") {
-    val anki = collectionWith(stockBasic)
-    seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
+    // SEEDED WIDE AND NARROWED, because narrowing is the direction still refused.
+    val anki = collectionWith(stockWide)
+    seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
 
-    val reversed =
-      CardSpec.TwoField(k, "Temporal coupling", body("All up at once."), TwoFieldDirections.Both, testContext)
-    val report = runReport(planOf(scanOf(reversed), anki), anki, RetypePolicy.Apply)
+    val report = runReport(planOf(scanOf(basicSpec), anki), anki, RetypePolicy.Apply)
 
     assertEquals(report.failures.size, 1, s"expected one refusal: $report")
     assert(report.deferred.isEmpty, s"a refusal was reported as a deferral: $report")
@@ -616,14 +646,14 @@ class RetypingTest extends munit.FunSuite:
       .map(_._2)
 
   test("LAW: a move the run refuses is previewed as refused, not as work") {
-    val anki = collectionWith(stockBasic)
-    seedOnOldType(anki, "Basic", k, Vector("Front" -> "f", "Back" -> "b"))
+    val anki = collectionWith(stockWide)
+    seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
 
-    // `Basic` has one card template; asking for both directions needs the tool's own two-card
-    // note type, so this is a 1 -> 2 move and the gate refuses it.
-    val reversed =
-      CardSpec.TwoField(k, "Temporal coupling", body("All up at once."), TwoFieldDirections.Both, testContext)
-    val plan = planOf(scanOf(reversed), anki)
+    // `Wide` has three card templates; asking for one direction needs the tool's one-card note
+    // type, so this is a 3 -> 1 move and the gate refuses it — cards at ordinals 1 and 2 would
+    // have no template to generate them. _This was a 1 -> 2 move until 2026-08-26, when growth
+    // was measured to keep every card and its history, and stopped being a refusal._
+    val plan = planOf(scanOf(basicSpec), anki)
 
     // PREVIEW FIRST, AGAINST THE UNTOUCHED COLLECTION — the order a person experiences.
     val previewed = previewOf(plan, anki, RetypePolicy.Apply)

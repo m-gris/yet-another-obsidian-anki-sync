@@ -30,12 +30,30 @@ import obsidiananki.anki.Anki
   *   - cloze to cloze: an ordinal is a cloze number, and a cloze type generates a card for
   *     whichever cloze numbers its text holds, whatever its template count.
   *
-  * EVERYTHING ELSE IS REFUSED, INCLUDING CASES THAT ARE PROBABLY FINE. Moving from one
-  * template to two — a heading retagged `#flashcard/1way` to `#flashcard/2way` — cannot strand
-  * a card, but it needs Anki to GENERATE the second one, and non-generation is the silent
-  * failure [[SyncAction.Retype]] exists to prevent. Both directions are unmeasured, so neither
-  * is taken. This is a deliberately narrow gate rather than a permanent ruling: measuring the
-  * behaviour once, in a throwaway profile, is what would widen it.
+  * GROWTH IS NOW ADMITTED, BECAUSE IT WAS MEASURED. _Until 2026-08-26 this gate refused ANY
+  * difference in template count, on the stated grounds that growing needs Anki to GENERATE the
+  * extra cards and non-generation is silent. That was the right reflex and the wrong permanent
+  * answer; the paragraph here said so, and said that measuring it once in a throwaway profile is
+  * what would widen it. It was measured, and it widened._
+  *
+  * What the measurement found, in `claude-POC-test`: a two-card note whose cards had been
+  * reviewed to intervals of 21 and 7 days, retyped onto a THREE-template note type, kept both
+  * cards — the same card IDS, the same intervals, ease, reps, queue and review logs, with zero
+  * drift on every column read back. And it settled on TWO cards rather than three, because this
+  * tool's note types GATE their templates on field values: the Concept-Descriptor type has three
+  * templates and a `cdd/2way` note wants two of them.
+  *
+  * THAT IS ALSO WHY THE COMPARISON IS NOT A COUNT OF CARDS. A template count is an upper bound on
+  * a note's cards, never the number it has. What matters is that every ordinal the note ALREADY
+  * holds exists on the new type — and since every existing ordinal is below the old template
+  * count, `fromCount <= toCount` guarantees it without needing to read a single card.
+  *
+  * SHRINKING IS STILL REFUSED, and that refusal is the original argument intact: cards at
+  * ordinals the new type cannot generate are stranded, and what Anki does with them — survives,
+  * orphaned until Check Database, or destroyed — is a question this repository has not answered.
+  * The comparison is deliberately conservative in one respect: a note may hold FEWER cards than
+  * its type has templates, so a shrink that would in fact strand nothing is refused too. That
+  * costs a rare admissible move and needs no card to be read to be safe.
   *
   * THE REMEDY OFFERED IS ANKI'S OWN, and it is a real one rather than a shrug: Browse, select
   * the notes, Notes > Change Note Type. That dialogue maps templates and fields explicitly and
@@ -192,7 +210,10 @@ object Retyping:
   ): Option[RetypeRefusal] =
     if fromShape.isCloze != toShape.isCloze then
       Some(RetypeRefusal.ClozeKindDiffers(from, fromShape.isCloze, to, toShape.isCloze))
-    else if fromShape.templateCount != toShape.templateCount then
+    // ONLY SHRINKING IS REFUSED. Growth cannot strand a card by arithmetic — every ordinal the
+    // note already holds is below the old template count, and therefore below the new one — and
+    // the other half of the worry has now been MEASURED rather than reasoned about.
+    else if fromShape.templateCount > toShape.templateCount then
       Some(RetypeRefusal.TemplateCountDiffers(from, fromShape.templateCount, to, toShape.templateCount))
     else None
 

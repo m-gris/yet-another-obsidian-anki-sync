@@ -505,29 +505,34 @@ class PlannerTest extends munit.FunSuite:
     * this asserts a failure rather than merely "the note did not move".
     */
   test("a move between differently-shaped note types is REFUSED, loudly and by name") {
+    // NARROWING, NOT WIDENING. This test seeded a one-way card and asked for a two-way one until
+    // 2026-08-26 — a move the gate refused then and admits now, because growth was measured to
+    // keep every card, every id and every review log. The refusal this test is about is the other
+    // direction: a card that went both ways, narrowed to one, whose second card would be stranded
+    // on a note type that cannot generate its ordinal.
     val anki = InMemoryAnki()
     val k    = key("n1", "A", "Term")
-    runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "Term", "def"))), observe(anki)), anki)
+    val both = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
+    runPlan(planOf(scanOf(sourced(both)), observe(anki)), anki)
 
-    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
-    val plan     = planOf(scanOf(sourced(reversed)), observe(anki))
+    val plan     = planOf(scanOf(sourced(twoFieldSpec(k, "Term", "def"))), observe(anki))
     val failures = runPlanCollecting(plan, anki)
 
     assertEquals(failures.size, 1, s"expected one reported failure, got $failures")
     failures.head.error match
       case AnkiError.UnsupportedOperation(what, why) =>
-        assert(what.contains(Marker.NoteTypes.Basic), s"the source note type is not named: $what")
         assert(
           what.contains(Marker.NoteTypes.BasicAndReversed),
-          s"the target note type is not named: $what",
+          s"the source note type is not named: $what",
         )
+        assert(what.contains(Marker.NoteTypes.Basic), s"the target note type is not named: $what")
         assert(why.contains("template"), s"the reason does not say what differs: $why")
         assert(why.contains("Change Note Type"), s"no remedy is offered: $why")
       case other => fail(s"expected UnsupportedOperation, got $other")
 
     assertEquals(
       observe(anki).notes.head.note.noteType,
-      Marker.NoteTypes.Basic,
+      Marker.NoteTypes.BasicAndReversed,
       "a refused move changed the note's type anyway",
     )
   }
@@ -539,12 +544,19 @@ class PlannerTest extends munit.FunSuite:
     val bad   = key("n1", "A", "Retyped")
     val good2 = key("n1", "A", "Two")
 
-    // Seed the card that will need a retype, plus nothing else.
-    runPlan(planOf(scanOf(sourced(twoFieldSpec(bad, "Term", "def"))), observe(anki)), anki)
+    // Seed the card that will need a retype, plus nothing else. It is seeded WIDE and narrowed
+    // below, because narrowing is the direction the gate still refuses.
+    runPlan(
+      planOf(
+        scanOf(sourced(CardSpec.TwoField(bad, "Term", body("def"), TwoFieldDirections.Both, testContext))),
+        observe(anki),
+      ),
+      anki,
+    )
 
     val scan = scanOf(
       sourced(twoFieldSpec(good1, "f", "b")),
-      sourced(CardSpec.TwoField(bad, "Term", body("def"), TwoFieldDirections.Both, testContext)),
+      sourced(twoFieldSpec(bad, "Term", "def")),
       sourced(twoFieldSpec(good2, "f", "b")),
     )
     val failures = runPlanCollecting(planOf(scan, observe(anki)), anki)
