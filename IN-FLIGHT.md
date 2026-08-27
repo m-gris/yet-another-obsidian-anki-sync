@@ -593,3 +593,70 @@ document because a finding nobody can find is a finding nobody acts on._
     what a card IS against what the vault ASKS, which is the whole content of "what state is this
     card in". Recorded twice already (`docs/EVOLVABILITY.md` §3.7, and item 23 above) and applied
     to neither.
+
+---
+
+## OPEN — requested by Marc, 2026-08-27
+
+28. **A HEADING'S SUBHEADINGS BECOME ONE SEQUENCE CARD — `#flashcard/sequence/headers`.**
+    Requested by Marc 2026-08-27. **Nothing is built.**
+
+    **What it is.** The child headings of a marked heading become the ordered items of a sequence
+    card, so the STRUCTURE of a document becomes the thing recalled — a table of contents you can
+    be tested on. Two forms: direct children only, and `/recursive` for the whole subtree, nested.
+
+    ```markdown
+    ## bar #flashcard/sequence/headers        # foo #flashcard/sequence/headers/recursive
+    ### bar1                                  ## bar
+    ### bar2                                  ### bar1
+    ### bar3                                  #### bar1.1
+    ## baz    <- sibling, excluded            ## baz
+    ```
+
+    **WHY IT IS SMALL: it is not a new card kind, it is a new SOURCE for one that already works.**
+    `#flashcard/sequence` already builds exactly this card — ONE note, ONE schedule, items revealed
+    one at a time — from the body's LIST ITEMS. This feeds the same path from CHILD HEADINGS. The
+    note type, its templates, the reveal script and the scheduling model all already exist.
+
+    **VERIFIED by reading, 2026-08-27:** the front template's script binds
+    `document.querySelectorAll("#text li")` — a DESCENDANT selector, so items nest at any depth are
+    hidden. **`/recursive` needs no template change.**
+    (`resources/note-types/cloze-sequence/templates/cloze-sequence.front.html`)
+
+    **IT FILLS A HOLE RATHER THAN ADDING A CORNER.** Ruled B6 (`extract/Extractor.scala:653`): a
+    section's own body stops at the next heading of ANY level, descendants excluded, so **a marked
+    heading immediately followed by a subheading has an EMPTY body — today a hard error,
+    `SpecError.EmptyBody`.** Both examples above are exactly that shape, so they refuse today. This
+    marker converts a refusal into a card — the same move `#flashcard/sequence` itself made, one
+    level up.
+
+    **RULED by Marc 2026-08-27: `EmptyBody` is a rule for SOME card kinds, not all of them.**
+    CONFIRMED in code the same day — it is raised in exactly two places, `extract/Extractor.scala:405`
+    and `extract/Cloze.scala:113`, each on its own card-kind path. **So nothing has to be relaxed
+    and no existing rule weakens: the new path simply does not call it, and the change is purely
+    additive.** Claude had framed this as "EmptyBody must relax for this marker", which was wrong.
+
+    **It composes with the sequence contract for free.** That contract is: the body's list items are
+    the answer, EVERYTHING ELSE IN THE BODY IS PRINTED ON THE QUESTION SIDE. So prose written under
+    the marked heading before its first subheading becomes the prompt, with no new rule invented.
+
+    **NAMING — one spelling, not two.** Marc's request wrote `sequenced/headers`; the existing
+    marker is `sequence`. An unrecognised marker fails loudly by design (`MarkerError.Unrecognised`),
+    so two spellings of one word in this namespace is a typo generator. Use
+    `#flashcard/sequence/headers`.
+
+    **RULED by Marc 2026-08-27: heading levels must not skip, and a skip is a lint error.**
+    MEASURED the same day across the live vault: **23 notes, ZERO skipped levels**, so adopting the
+    lint refuses nothing that currently exists. Worth knowing why it is harmless today — `# foo`
+    followed by `### bar` nests exactly as `## bar` would, so the card's anchor path is identical
+    either way. **A skip only becomes load-bearing under THIS marker**, where "direct child" stops
+    being well-defined. NOT DECIDED: whether the lint is global or scoped to this marker. Claude
+    argued global, on the grounds that it is free now and the cost only grows.
+
+    **NOT DECIDED: what happens when the marker is present and there are NO child headings at all.**
+    A one-item sequence card is useless, so this presumably refuses — but which error, and whether
+    it reuses `EmptyBody`'s channel or needs its own, is open.
+
+    **Build method, stated by Marc when the item was filed:** functional core / DDD, a
+    parser-writer's mindset, **types first and hole-driven wherever the compiler allows it**, then
+    tests, then implementation — in that order, per concept rather than per phase.
