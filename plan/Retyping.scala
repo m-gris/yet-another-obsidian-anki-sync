@@ -1,7 +1,7 @@
 package obsidiananki.plan
 
 import cats.syntax.all.*
-import obsidiananki.anki.Anki
+import obsidiananki.anki.{Anki, AnkiNoteId, CardStanding}
 
 /** When a note may be moved from one Anki note type to another, and when it may not.
   *
@@ -143,6 +143,25 @@ final case class RetypeDestroysCards(from: String, fromCount: Int, to: String, t
     "this tool will not move it; do it in Anki if you want it — Browse, select the notes, " +
       "Notes > Change Note Type, which maps templates and fields explicitly"
 
+/** WHAT NARROWING THIS PARTICULAR NOTE WOULD ACTUALLY COST.
+  *
+  * [[RetypeDestroysCards]] is about two NOTE TYPES and says how many cards *any* note would
+  * lose. This is about ONE NOTE and says which cards, and what review they carry. The
+  * distinction is the whole reason the ruling of 2026-08-27 is buildable: a message quoting the
+  * template arithmetic tells the author nothing they can weigh, and a message saying "this
+  * strands two cards holding 47 reviews" tells them everything.
+  *
+  * EMPTY IS MEANINGFUL AND MUST NOT BE CONFLATED WITH FREE. A note whose doomed cards have
+  * never been reviewed costs nothing in history and still loses the cards — which is exactly
+  * the case Marc hit on 2026-08-27, six cards at zero reviews. So `reviews == 0` is a fact
+  * about history, not a licence to proceed unasked: the ruling is that HE decides, and the
+  * rejected alternative was precisely a tool that decides for itself whenever the number is
+  * small enough.
+  */
+final case class RetypePrice(doomed: Vector[CardStanding]):
+  def cards: Int   = doomed.size
+  def reviews: Int = doomed.map(_.reviews).sum
+
 /** WHAT THE TWO SHAPES SAY ABOUT A MOVE, before any policy is consulted.
   *
   * CLOSED, so that adding a third thing shapes can say is a compile error at every consumer
@@ -270,6 +289,38 @@ object Retyping:
         RetypeDestroysCards(from, fromShape.templateCount, to, toShape.templateCount)
       )
     else ShapeJudgement.Admissible
+
+  /** PURE — which of a note's cards this narrowing dooms.
+    *
+    * SEPARATE FROM THE READING OF THEM, so the selection is drivable without a collection and
+    * the effectful part has no logic in it worth testing. Anki numbers a note's cards from
+    * zero, so a note type with N templates generates ordinals 0..N-1 and everything at or
+    * above N has nowhere to go.
+    *
+    * IT FILTERS RATHER THAN ASSUMING THE STANDINGS ARE COMPLETE OR ORDERED. A note does not
+    * necessarily hold a card at every ordinal — a concept-descriptor note with its gate field
+    * clear holds two cards on a three-template type — so "drop the last k" would be wrong, and
+    * wrong in the direction that under-counts the price.
+    */
+  def doomedBy(standings: Vector[CardStanding], loss: RetypeDestroysCards): Vector[CardStanding] =
+    standings.filter(standing => standing.ordinal >= loss.toCount)
+
+  /** WHAT THIS NOTE WOULD LOSE — the reading, with the deciding left to [[doomedBy]].
+    *
+    * READ BEFORE THE MOVE, NEVER AFTER, AND THAT IS A MEASURED CONSTRAINT RATHER THAN A
+    * PREFERENCE. Once the note is on the narrower type, AnkiConnect's `cardsInfo` fails for the
+    * WHOLE note rather than for the doomed cards alone, so there is no reading this back to
+    * check afterwards. See [[Anki.standingOf]] and `docs/EVOLVABILITY.md` § M4.
+    */
+  def priceOf[F[_]: cats.Monad](
+      anki: Anki[F],
+      note: AnkiNoteId,
+      loss: RetypeDestroysCards,
+  ): F[RetypePrice] =
+    for
+      cards     <- anki.cardsOf(Vector(note))
+      standings <- anki.standingOf(cards)
+    yield RetypePrice(doomedBy(standings, loss))
 
   /** Read the shape of each named note type, ONCE per name.
     *

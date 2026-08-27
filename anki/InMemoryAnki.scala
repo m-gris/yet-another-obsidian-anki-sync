@@ -1,6 +1,7 @@
 package obsidiananki.anki
 
 import cats.data.NonEmptyVector
+import cats.syntax.all.*
 import obsidiananki.model.{Marker, OwnedTag}
 
 /** A working in-memory Anki collection: a FAKE, not a mock.
@@ -50,6 +51,19 @@ final class InMemoryAnki private (
   private var notes: Map[Long, StoredNote]   = Map.empty
   private var cardDecks: Map[Long, DeckPath] = Map.empty
   private var cardsByNote: Map[Long, Vector[Long]] = Map.empty
+
+  /** HOW MUCH REVIEW EACH CARD CARRIES, and the ONLY fact here that is not already derivable.
+    *
+    * A card's ORDINAL is not stored, because `cardsByNote` holds its note's cards in order and
+    * the ordinal is the position — storing it too would be a second copy that can disagree
+    * with the first. Review counts have no such source, so they are held explicitly.
+    *
+    * EVERY CARD IS ENTERED HERE AT CREATION, at zero, rather than being absent until reviewed.
+    * An absent entry would make "never reviewed" and "no such card" the same observation, and
+    * telling those apart is the whole job of [[standingOf]]: pricing a destructive move at zero
+    * because the card could not be found is the failure this fake exists to make impossible.
+    */
+  private var cardReviews: Map[Long, Int] = Map.empty
   private var nextId: Long                   = 1000L
 
   private def fresh(): Long = { nextId += 1; nextId }
@@ -128,13 +142,54 @@ final class InMemoryAnki private (
   def cardsOf(ids: Vector[AnkiNoteId]): Either[AnkiError, Vector[AnkiCardId]] =
     Right(ids.flatMap(i => cardsByNote.getOrElse(i.value, Vector.empty)).map(AnkiCardId(_)))
 
-  /** HOLE — the in-memory collection does not yet model a card's ordinal or its review count.
+  /** WHERE EACH CARD SITS AND WHAT IT CARRIES.
     *
-    * Filling this is a DATA MODEL change here, not a method body: `cardsByNote` holds bare ids,
-    * so there is nowhere to put either fact. That is the point of leaving it as a hole — the
-    * shape of the fake has to change before any test can drive a priced decision through it.
+    * THE ORDINAL IS DERIVED, NOT STORED. `cardsByNote` holds a note's cards in the order Anki
+    * generated them, so a card's ordinal IS its position in that vector. Deriving it keeps one
+    * source of truth; storing it beside would let the two disagree, and a disagreement about an
+    * ordinal is a disagreement about which card a narrowing destroys.
+    *
+    * AN UNKNOWN CARD IS A LOUD FAILURE, WHICH IS THE POINT. The real interpreter's `cardsInfo`
+    * answers `{}` for a card that does not exist rather than erroring (MEASURED 2026-08-27), so
+    * a caller that shrugged at a missing card would price a destructive move at zero reviews —
+    * the one answer that makes it look free. This fake refuses instead, so that any code with
+    * that shape fails here rather than in somebody's collection.
     */
-  def standingOf(cards: Vector[AnkiCardId]): Either[AnkiError, Vector[CardStanding]] = ???
+  def standingOf(cards: Vector[AnkiCardId]): Either[AnkiError, Vector[CardStanding]] =
+    cards.traverse { card =>
+      for
+        ordinal <- cardsByNote.collectFirst {
+          case (_, siblings) if siblings.contains(card.value) => siblings.indexOf(card.value)
+        }.toRight(
+          AnkiError.UnsupportedOperation(
+            s"read the standing of card ${card.value}",
+            "no note in this collection holds that card, so it has no ordinal",
+          )
+        )
+        reviews <- cardReviews
+          .get(card.value)
+          .toRight(
+            AnkiError.UnsupportedOperation(
+              s"read the standing of card ${card.value}",
+              "that card has no review record, which cannot happen for a card this collection created",
+            )
+          )
+      yield CardStanding(card, ordinal, reviews)
+    }
+
+  /** Test-only: give a card a review history, so that a priced decision can be driven.
+    *
+    * A COUNT RATHER THAN REVIEWS. Nothing in this tool replays a review, and
+    * [[CardStanding]] carries a count for the same reason — modelling individual reviews here
+    * would invite code written as though the history could be restored, and it cannot.
+    *
+    * REFUSES AN UNKNOWN CARD, so a test that mistypes an id fails on the setup line rather
+    * than by quietly asserting against a price that was never recorded.
+    */
+  def recordReviews(card: AnkiCardId, reviews: Int): Unit =
+    if !cardReviews.contains(card.value) then
+      throw IllegalArgumentException(s"no such card in this collection: ${card.value}")
+    cardReviews += card.value -> reviews
 
   def deckOf(card: AnkiCardId): Either[AnkiError, Option[DeckPath]] =
     Right(cardDecks.get(card.value))
@@ -231,6 +286,7 @@ final class InMemoryAnki private (
       val cards = Vector.fill(cardCountOf(note.noteType, note.fields))(fresh())
       cardsByNote += id -> cards
       cards.foreach(c => cardDecks += c -> note.deck)
+      cards.foreach(c => cardReviews += c -> 0)
       AnkiNoteId(id)
 
   /** No early-out, deliberately. Anki moves the modification stamp even for an identical

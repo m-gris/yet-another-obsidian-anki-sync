@@ -257,6 +257,111 @@ class RetypingTest extends munit.FunSuite:
     )
   }
 
+  // ------------------------------------------------ what one note would lose ----
+
+  def standing(ordinal: Int, reviews: Int): CardStanding =
+    CardStanding(AnkiCardId(1000L + ordinal), ordinal, reviews)
+
+  /** THE SELECTION IS BY ORDINAL, NOT BY POSITION IN THE LIST, and the difference is a real
+    * note rather than a hypothetical one. A concept-descriptor note with its gate field clear
+    * holds TWO cards on a THREE-template type, at ordinals 0 and 2 — so "drop the last k
+    * entries" would blame the wrong card, and would under-count when the gap is at the end.
+    */
+  test("only the cards at ordinals the new note type cannot generate are doomed") {
+    val threeToOne = RetypeDestroysCards("Wide", 3, "Narrow", 1)
+
+    assertEquals(
+      Retyping.doomedBy(Vector(standing(0, 9), standing(1, 4), standing(2, 1)), threeToOne),
+      Vector(standing(1, 4), standing(2, 1)),
+      "ordinal 0 survives a narrowing to one template; 1 and 2 do not",
+    )
+
+    // THE GAPPY NOTE. Cards at 0 and 2 only, narrowing three templates to two: ordinal 2 is
+    // doomed and ordinal 0 is not. A rule that dropped "the last one" would agree here by
+    // accident, so the next assertion is the one that separates them.
+    assertEquals(
+      Retyping.doomedBy(Vector(standing(0, 9), standing(2, 1)), RetypeDestroysCards("W", 3, "N", 2)),
+      Vector(standing(2, 1)),
+      "the card at the doomed ordinal must be chosen by its ordinal, not by being last",
+    )
+    assertEquals(
+      Retyping.doomedBy(Vector(standing(0, 9), standing(2, 1)), RetypeDestroysCards("W", 3, "N", 1)),
+      Vector(standing(2, 1)),
+      "narrowing to ONE template must still doom only the card that exists at 2, not two cards",
+    )
+  }
+
+  test("a note holding fewer cards than the narrower type can generate loses nothing") {
+    assertEquals(
+      Retyping.doomedBy(Vector(standing(0, 9)), RetypeDestroysCards("Wide", 3, "Narrow", 2)),
+      Vector.empty,
+      "a one-card note moving onto a two-template type has nothing at a doomed ordinal",
+    )
+  }
+
+  /** ZERO REVIEWS IS A FACT, NOT A LICENCE. Marc's case on 2026-08-27 was six cards at zero
+    * reviews, and the ruling is still that HE decides — the rejected alternative was precisely
+    * a tool that proceeds unasked whenever the number is small enough. So a price of zero must
+    * still be a price, with the cards counted.
+    */
+  test("a price of zero reviews still counts the cards being destroyed") {
+    val price = RetypePrice(Vector(standing(1, 0), standing(2, 0)))
+    assertEquals(price.reviews, 0)
+    assertEquals(price.cards, 2, "the cards vanish whether or not they were ever reviewed")
+  }
+
+  test("a price sums the review history of every card it would destroy") {
+    val price = RetypePrice(Vector(standing(1, 4), standing(2, 1)))
+    assertEquals(price.reviews, 5)
+    assertEquals(price.cards, 2)
+  }
+
+  /** THE PRICE IS READ FROM THE COLLECTION, and this is the test that makes the fake carry
+    * enough to be read. It is written against the API this needs rather than the one that
+    * exists, so it fails to compile until the fake can record a review — which is the first
+    * red of this slice.
+    */
+  test("the price of narrowing a real note names its doomed cards and their reviews") {
+    // THE CONCEPT-DESCRIPTOR TYPE WITH ITS GATE FIELD SET, which is Marc's own case from
+    // 2026-08-27 — three cards, then the marker turned down to a two-card shape.
+    //
+    // NOT `stockWide`, THOUGH IT DECLARES THREE TEMPLATES. `InMemoryAnki.cardCountOf` decides a
+    // note's card count from the note type's NAME rather than from the spec it was given, so a
+    // locally-defined three-template type yields ONE card here. That is a fidelity gap in the
+    // fake rather than something this test should work around, and it is why the note type is
+    // named rather than constructed.
+    val anki = collectionWith()
+    val note = seedOnOldType(
+      anki,
+      Marker.NoteTypes.ConceptDescriptor,
+      k,
+      Vector(
+        "Concept"     -> "Database Scaleability",
+        "Descriptor"  -> "Reads",
+        "Description" -> "Replication",
+        Marker.ThreeWayField -> "1",
+      ),
+    )
+    val cards = anki.cardsOf(Vector(note)).fold(e => fail(s"cardsOf: $e"), identity)
+    assertEquals(cards.size, 3, "the gate field is set, so this note should hold three cards")
+
+    anki.recordReviews(cards(0), 9)
+    anki.recordReviews(cards(1), 4)
+    anki.recordReviews(cards(2), 1)
+
+    val price = Retyping
+      .priceOf(anki, note, RetypeDestroysCards("Wide", 3, "Obsidian Basic", 1))
+      .fold(e => fail(s"priceOf: $e"), identity)
+
+    assertEquals(price.cards, 2, "narrowing three templates to one destroys two cards")
+    assertEquals(price.reviews, 5, "and it spends the review history of those two, not of all three")
+    assertEquals(
+      price.doomed.map(_.ordinal),
+      Vector(1, 2),
+      "the surviving card is the one at ordinal 0, so the doomed ones are 1 and 2",
+    )
+  }
+
   // ------------------------------------------- the verdict: both halves at once ----
 
   /** `verdictFor` IS THE FIX FOR A PREVIEW THAT LIED. The policy half was pure and the report
