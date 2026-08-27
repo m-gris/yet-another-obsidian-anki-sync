@@ -44,6 +44,20 @@ final case class ExecutionReport(
       * `attempted: 1 / failed: 0`. The report that names what moved is `Report.appliedRetypes`.
       */
     applied: Vector[SyncAction],
+
+    /** CHANGES THE RUN WITHHELD BECAUSE NOBODY HAS ANSWERED FOR THEM, with the price each would
+      * cost and the name to answer with.
+      *
+      * SEPARATE FROM `failures`, AND THAT SEPARATION IS THE POINT. These used to be raised as
+      * errors, so a run that had made a correct and deliberate decision announced it under
+      * `SOME ACTIONS FAILED`. Nothing failed: the tool declined to destroy cards without being
+      * asked, which is the behaviour Marc ruled for on 2026-08-27.
+      *
+      * SEPARATE FROM `deferred` TOO, though both are withheld. A deferral is this tool obeying
+      * an instruction it was given — `--no-migrate-note-types` — and needs no answer. This is a
+      * question nobody has been asked yet, and it stays until somebody answers it.
+      */
+    pending: Vector[PendingRetype],
 )
 
 object Observer:
@@ -237,18 +251,34 @@ object Executor:
         // an already-decided split rather than the decision itself — which is the difference
         // between a partial function used for its type and one used for its control flow.
         val deferred = setAside.collect { case retype: SyncAction.Retype => retype }
+        // NOTHING IS WAITING UNDER `Defer`: no retype is attempted at all, so none of them
+        // reaches the point where a price would be quoted.
         applyEach(rest, anki, Map.empty, policy).map((failures, applied) =>
-          ExecutionReport(failures, deferred, applied)
+          ExecutionReport(failures, deferred, applied, Vector.empty)
         )
 
       case RetypePolicy.Apply =>
-        Retyping
-          .shapesOf(anki, Retyping.noteTypesIn(plan))
-          .flatMap(shapes =>
-            applyEach(plan.actions, anki, shapes, policy).map((failures, applied) =>
-              ExecutionReport(failures, Vector.empty, applied)
-            )
-          )
+        // PRICED BEFORE ANYTHING IS WRITTEN, AND THAT ORDER IS A MEASURED CONSTRAINT RATHER
+        // THAN A PREFERENCE. Once a note sits on a narrower note type, AnkiConnect's
+        // `cardsInfo` fails for the WHOLE note, so what a narrowing would have cost cannot be
+        // read back afterwards. See `docs/EVOLVABILITY.md` § M4.
+        //
+        // AND SET ASIDE THE SAME WAY A DEFERRAL IS, rather than being refused inside the
+        // executor. A change nobody has answered for is not attempted, so it cannot fail, so it
+        // has no business in the failure count.
+        for
+          shapes <- Retyping.shapesOf(anki, Retyping.noteTypesIn(plan))
+          retypes = plan.actions.collect { case retype: SyncAction.Retype => retype }
+          verdicts = retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, shapes))
+          pending <- Retyping.pendingOf(anki, verdicts)
+          // WIDENED TO `SyncAction` SO THE COMPARISON IS THE ONE INTENDED. `waiting` is a set
+          // of `Retype`, and asking it about a `SyncAction` compiles only once the element type
+          // matches — the alternative would have been a cast, which would silently answer false
+          // for every action and quietly execute the very changes being withheld.
+          waiting: Set[SyncAction] = pending.map(_.retype: SyncAction).toSet
+          rest = plan.actions.filterNot(waiting.contains)
+          outcome <- applyEach(rest, anki, shapes, policy)
+        yield ExecutionReport(outcome._1, Vector.empty, outcome._2, pending)
 
   /** WHAT A REAL RUN WOULD DECIDE ABOUT EVERY RETYPE, WITHOUT WRITING ANYTHING.
     *
@@ -352,15 +382,18 @@ object Executor:
               AnkiError.UnsupportedOperation(what, s"${refusal.describe} — ${refusal.remedy}")
             )
 
-          // THE SAME BEHAVIOUR AS A REFUSAL, AND ONLY FOR NOW. Marc ruled on 2026-08-27 that
-          // this is HIS decision rather than the tool's — the move is coherent, it simply costs
-          // cards — but the command that lets him answer does not exist yet. Until it does,
-          // declining is the only honest thing to do with a question nobody can be asked; what
-          // changed in that commit is that the TYPE now records why, so the day the decision
-          // command lands, this branch is the one place that has to change.
-          case RetypeVerdict.DestroysCards(loss) =>
+          // AN INVARIANT BREAK, NOT A CASE TO HANDLE. `Executor.run` prices every change that
+          // would destroy cards and partitions it out before `applyEach` is reached, exactly as
+          // it does a deferral — so arriving here means that partition and this branch disagree
+          // about which changes are withheld. Refusing politely would hide that disagreement and
+          // leave the person with a change reported as neither applied nor waiting.
+          case RetypeVerdict.DestroysCards(_) =>
             F.raiseError(
-              AnkiError.UnsupportedOperation(what, s"${loss.describe} — ${loss.remedy}")
+              AnkiError.UnsupportedOperation(
+                what,
+                "a change awaiting an answer reached the executor — the partition in " +
+                  "`Executor.run` and this branch disagree, which is a defect in this tool",
+              )
             )
 
           // AN INVARIANT BREAK, NOT A CASE TO HANDLE GRACEFULLY. Under `Defer` every Retype is

@@ -282,9 +282,9 @@ class MainTest extends munit.FunSuite:
 
     def code(o: Main.SyncOutcome) = Main.exitCodeFor(Main.verdict(o))
 
-    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty, Vector.empty))), ExitCode.Success)
+    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty, Vector.empty, Vector.empty))), ExitCode.Success)
     assertNotEquals(
-      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty))),
+      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty, Vector.empty))),
       ExitCode.Success,
       "a run whose actions failed reported success",
     )
@@ -337,7 +337,7 @@ class MainTest extends munit.FunSuite:
       ),
       AnkiError.Remote("addTags", "refused"),
     )
-    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty)))
+    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty, Vector.empty)))
     assert(
       partlyFailed.toUpperCase.contains("FAIL"),
       s"a run whose actions failed does not say so on screen:\n$partlyFailed",
@@ -354,7 +354,7 @@ class MainTest extends munit.FunSuite:
       Vector.empty,
       Vector.empty,
     )
-    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty, Vector.empty))) match
+    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty, Vector.empty, Vector.empty))) match
       case Main.Verdict.Clean(_) => fail("a run with orphan inference suppressed reported clean")
       case _                     => ()
   }

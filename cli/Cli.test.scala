@@ -2,7 +2,7 @@ package obsidiananki.cli
 
 import cats.data.NonEmptyVector
 import com.monovore.decline.Command as DeclineCommand
-import obsidiananki.anki.{AnkiNoteId, DeckPath}
+import obsidiananki.anki.{AnkiCardId, AnkiNoteId, CardStanding, DeckPath}
 import obsidiananki.extract.{DeckLevel, DeckShape, VaultFile, VaultWalker}
 import obsidiananki.locate.VaultName
 import obsidiananki.model.*
@@ -594,6 +594,78 @@ class CliTest extends munit.FunSuite:
     * preview for the largest write this tool performs became less informative at exactly the
     * moment that write became automatic.
     */
+  // ------------------------------------ what the run says it is waiting on ----
+
+  private def waitingScreen(price: RetypePrice, loss: RetypeDestroysCards): String =
+    Report
+      .waitingOnYou(
+        Vector(
+          PendingRetype(
+            DecisionHandle.of(retypeOf("Reads", "A", "B").key),
+            retypeOf("Reads", Marker.NoteTypes.ConceptDescriptor, "Obsidian Basic"),
+            loss,
+            price,
+          )
+        )
+      )
+      .mkString("\n")
+
+  /** THE PRICE IS THE REASON THIS BLOCK EXISTS. Template counts are arithmetic anybody could
+    * do; what cannot be seen without asking the collection is how much review history sits on
+    * the cards that would go — and WHEN they actually go, which is not at the moment of the
+    * change.
+    */
+  test("what the run is waiting on names the cost and when it falls due") {
+    val screen = waitingScreen(
+      RetypePrice(Vector(CardStanding(AnkiCardId(11L), 1, 4), CardStanding(AnkiCardId(12L), 2, 1))),
+      RetypeDestroysCards(Marker.NoteTypes.ConceptDescriptor, 3, "Obsidian Basic", 1),
+    )
+
+    assert(screen.contains("2 cards"), s"the number of cards destroyed is missing:\n$screen")
+    assert(screen.contains("5 reviews"), s"the review history at stake is missing:\n$screen")
+    assert(
+      screen.contains("Check Database"),
+      s"when the cards actually go is missing, and it is not at the moment of the change:\n$screen",
+    )
+  }
+
+  /** NOT IN THE VOCABULARY OF BREAKAGE. Reporting a deliberate decision as a failure is what
+    * made a correct refusal indistinguishable from a crash, which is the defect this block was
+    * written to end.
+    */
+  test("what the run is waiting on is not described as a failure") {
+    val screen = waitingScreen(
+      RetypePrice(Vector(CardStanding(AnkiCardId(11L), 1, 0))),
+      RetypeDestroysCards(Marker.NoteTypes.ConceptDescriptor, 3, "Obsidian Basic", 2),
+    )
+
+    assert(!screen.contains("FAILED"), s"a decision was announced as a failure:\n$screen")
+    assert(!screen.contains("PROBLEM"), s"a decision was announced as a problem:\n$screen")
+    assert(
+      screen.contains("will not") || screen.contains("without being asked"),
+      s"the block does not say why nothing happened:\n$screen",
+    )
+  }
+
+  /** BOTH HALVES OF THE IDENTITY. `path.render` is file-independent, and Marc's vault holds two
+    * notes whose card path is exactly `definition` — measured 2026-08-27 — so a block naming
+    * only the path would print two identical lines for two different notes.
+    */
+  test("what the run is waiting on names the note, not only the heading") {
+    val screen = waitingScreen(
+      RetypePrice(Vector(CardStanding(AnkiCardId(11L), 1, 3))),
+      RetypeDestroysCards(Marker.NoteTypes.ConceptDescriptor, 3, "Obsidian Basic", 2),
+    )
+    // LOWERCASE, because a card path is canonicalised on the way into the identity — `Reads`
+    // written in the vault is `reads` everywhere this tool speaks about it.
+    assert(screen.contains("reads"), s"the heading is missing:\n$screen")
+    assert(screen.contains("note '"), s"the note is not named, so two headings could collide:\n$screen")
+  }
+
+  test("a run with nothing waiting says nothing at all") {
+    assertEquals(Report.waitingOnYou(Vector.empty), Vector.empty)
+  }
+
   private def previewOf(verdicts: (SyncAction.Retype, RetypeVerdict)*): String =
     Report.retypePreview(verdicts.toVector).mkString("\n")
 

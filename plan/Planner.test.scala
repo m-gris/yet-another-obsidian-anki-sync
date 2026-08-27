@@ -515,25 +515,32 @@ class PlannerTest extends munit.FunSuite:
     val both = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
     runPlan(planOf(scanOf(sourced(both)), observe(anki)), anki)
 
-    val plan     = planOf(scanOf(sourced(twoFieldSpec(k, "Term", "def"))), observe(anki))
-    val failures = runPlanCollecting(plan, anki)
+    // REPORTED AS WAITING SINCE 2026-08-27, NOT AS A FAILURE. What this test is about has not
+    // changed — both note types must be named, the reason must say what differs, a remedy must
+    // be offered, and the note must not have moved — but those sentences now live on the price
+    // rather than on a raised error, so they are read off the report.
+    val plan   = planOf(scanOf(sourced(twoFieldSpec(k, "Term", "def"))), observe(anki))
+    val report = runReport(plan, anki, RetypePolicy.Apply)
 
-    assertEquals(failures.size, 1, s"expected one reported failure, got $failures")
-    failures.head.error match
-      case AnkiError.UnsupportedOperation(what, why) =>
-        assert(
-          what.contains(Marker.NoteTypes.BasicAndReversed),
-          s"the source note type is not named: $what",
-        )
-        assert(what.contains(Marker.NoteTypes.Basic), s"the target note type is not named: $what")
-        assert(why.contains("template"), s"the reason does not say what differs: $why")
-        assert(why.contains("Change Note Type"), s"no remedy is offered: $why")
-      case other => fail(s"expected UnsupportedOperation, got $other")
+    assertEquals(report.failures, Vector.empty, s"a decision was reported as a failure: $report")
+    assertEquals(report.pending.size, 1, s"expected one change waiting on an answer: $report")
+
+    val loss = report.pending.head.loss
+    assert(
+      loss.describe.contains(Marker.NoteTypes.BasicAndReversed),
+      s"the source note type is not named: ${loss.describe}",
+    )
+    assert(
+      loss.describe.contains(Marker.NoteTypes.Basic),
+      s"the target note type is not named: ${loss.describe}",
+    )
+    assert(loss.describe.contains("template"), s"the reason does not say what differs: ${loss.describe}")
+    assert(loss.remedy.contains("Change Note Type"), s"no remedy is offered: ${loss.remedy}")
 
     assertEquals(
       observe(anki).notes.head.note.noteType,
       Marker.NoteTypes.BasicAndReversed,
-      "a refused move changed the note's type anyway",
+      "a change that was only being asked about moved the note anyway",
     )
   }
 
@@ -559,12 +566,26 @@ class PlannerTest extends munit.FunSuite:
       sourced(twoFieldSpec(bad, "Term", "def")),
       sourced(twoFieldSpec(good2, "f", "b")),
     )
-    val failures = runPlanCollecting(planOf(scan, observe(anki)), anki)
+    // WHAT THIS NOW EXERCISES, AND WHAT IT NO LONGER DOES — worth stating, because the change
+    // is a real loss of coverage rather than a rewording.
+    //
+    // The action in the middle used to FAIL, and this test's name is about a failure not
+    // aborting the rest. Since 2026-08-27 a narrowing does not fail: `Executor.run` prices it
+    // and partitions it out BEFORE execution, so it never reaches the code that could abort.
+    //
+    // What is asserted below is therefore the PARTITION rather than failure resilience: setting
+    // one action aside must not drop the actions around it, which is a genuine risk of the way
+    // that partition rebuilds the action list, and which nothing else covers.
+    //
+    // THE ORIGINAL INVARIANT IS NOW UNCOVERED. Only a cloze-kind mismatch still raises, and
+    // building that fixture here is more than a rename — see `IN-FLIGHT.md`.
+    val report = runReport(planOf(scan, observe(anki)), anki, RetypePolicy.Apply)
 
-    assertEquals(failures.size, 1, "expected exactly the retype to fail")
+    assertEquals(report.failures, Vector.empty, s"nothing here should fail any more: $report")
+    assertEquals(report.pending.size, 1, "expected exactly the narrowing to be set aside")
     val present = observe(anki).notes.map(_.key).toSet
-    assert(present.contains(good1), "an action after the failure was abandoned")
-    assert(present.contains(good2), "an action after the failure was abandoned")
+    assert(present.contains(good1), "an action beside the one set aside was abandoned")
+    assert(present.contains(good2), "an action beside the one set aside was abandoned")
   }
 
   /** The executor's analogue of the law. Without this, "idempotent" covers only the happy

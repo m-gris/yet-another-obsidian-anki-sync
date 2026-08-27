@@ -348,6 +348,53 @@ object Report:
       */
     case Unremarkable
 
+  /** WHAT THE RUN IS WAITING ON, WITH WHAT EACH WOULD COST.
+    *
+    * NOT UNDER `SOME ACTIONS FAILED`, which is where these appeared until 2026-08-27. Nothing
+    * failed: the tool declined to destroy cards without being asked, which is the behaviour
+    * Marc ruled for. Reporting a correct decision in the vocabulary of breakage makes it
+    * indistinguishable from a crash, and teaches a reader to skim the block.
+    *
+    * THE PRICE IS THE WHOLE POINT OF THE BLOCK. The count of templates is arithmetic anybody
+    * could do; what nobody can see without asking the collection is how much review history
+    * sits on the cards that would go, and when they actually go. Both are printed.
+    *
+    * NO HANDLE AND NO COMMAND YET, DELIBERATELY. The name to answer with exists
+    * ([[obsidiananki.plan.DecisionHandle]]) and the command that would take it does not, so
+    * printing either would be an instruction that does not work. The block says plainly that
+    * answering from this tool is unbuilt and names what to do instead — see `IN-FLIGHT.md`
+    * item 29, where the handle joins these lines once the command lands.
+    */
+  def waitingOnYou(pending: Vector[PendingRetype]): Vector[String] =
+    if pending.isEmpty then Vector.empty
+    else
+      val entries = pending.flatMap { p =>
+        val cards   = quantify(p.price.cards, "card")
+        val reviews = quantify(p.price.reviews, "review")
+        Vector(
+          "",
+          // BOTH HALVES OF THE IDENTITY, as the failure block already prints. `path.render`
+          // joins heading segments only and is file-independent, so two notes sharing a heading
+          // would otherwise produce two identical lines — and Marc's vault holds exactly that:
+          // two notes whose card path is `definition`, measured 2026-08-27.
+          s"  '${p.retype.key.path.render}' (note '${p.retype.key.noteId.value}')",
+          s"      the vault asks for '${p.loss.to}', which makes ${p.loss.toCount} card(s);",
+          s"      Anki holds ${p.loss.fromCount} for this note on '${p.loss.from}'.",
+          s"      going ahead destroys $cards, holding $reviews between them.",
+          "      they go the next time you run Anki's Tools > Check Database, not at once.",
+        )
+      }
+
+      Vector("", s"WAITING ON YOU: ${quantify(pending.size, "note")} nobody has answered for.") ++
+        entries ++
+        Vector(
+          "",
+          "Nothing was changed for these, and nothing about them failed — this tool will not",
+          "destroy a card without being asked. Answering from this tool is NOT BUILT YET",
+          "(IN-FLIGHT.md item 29). To go ahead now, do it in Anki: Browse, select the note,",
+          "Notes > Change Note Type, which maps templates and fields explicitly.",
+        )
+
   /** WHAT A DRY RUN SAYS ABOUT THE RETYPES IT IS PREVIEWING.
     *
     * ONLY THE VERDICTS THAT CONTRADICT THE PLAN SUMMARY ARE PRINTED. `Report.plan` above

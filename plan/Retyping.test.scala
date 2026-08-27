@@ -801,18 +801,26 @@ class RetypingTest extends munit.FunSuite:
     assertEquals(noteAt(anki, id).noteType, "Cloze", "a refused move moved the note anyway")
   }
 
-  /** A REFUSAL IS A FAILURE, NOT A DEFERRAL, and the two must not be reported as one thing.
-    * A deferral says "you did not ask me to"; a refusal says "you asked and I will not".
+  /** THREE WAYS OF NOT HAPPENING, AND THEY MUST NOT BE REPORTED AS ONE THING.
+    *
+    * A DEFERRAL says "you did not ask me to" — the author passed `--no-migrate-note-types`.
+    * A FAILURE says "it broke". WAITING says "you have not answered yet", which since
+    * 2026-08-27 is what a narrowing is: the tool declined to destroy cards unasked, and that is
+    * a decision rather than a fault.
+    *
+    * THIS TEST ASSERTED A FAILURE UNTIL THAT DATE, which is what made a correct decision appear
+    * under `SOME ACTIONS FAILED`. Narrowing is the case it exercises, so it moved with it.
     */
-  test("a refused move is reported as a failure and never as a deferral") {
-    // SEEDED WIDE AND NARROWED, because narrowing is the direction still refused.
+  test("a change nobody has answered for is reported as waiting, not as a failure or a deferral") {
+    // SEEDED WIDE AND NARROWED, which is the direction that costs cards.
     val anki = collectionWith(stockWide)
     seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
 
     val report = runReport(planOf(scanOf(basicSpec), anki), anki, RetypePolicy.Apply)
 
-    assertEquals(report.failures.size, 1, s"expected one refusal: $report")
-    assert(report.deferred.isEmpty, s"a refusal was reported as a deferral: $report")
+    assertEquals(report.pending.size, 1, s"expected one change waiting on an answer: $report")
+    assert(report.failures.isEmpty, s"a decision was reported as a failure: $report")
+    assert(report.deferred.isEmpty, s"a decision was reported as a deferral: $report")
   }
 
   // ------------------------------- the preview must agree with the run it previews ----
@@ -870,8 +878,15 @@ class RetypingTest extends munit.FunSuite:
 
     // AND THE RUN AGREES. Asserted rather than assumed: if this ever reports success the law is
     // still broken, only in the other direction.
+    // THE LAW IS THAT THE TWO AGREE, not that either says any particular word. The preview
+    // showed this as withheld; the run must withhold it. Since 2026-08-27 it does so by setting
+    // it aside for an answer rather than by failing, so this asserts on the withholding.
     val report = runReport(plan, anki, RetypePolicy.Apply)
-    assertEquals(report.failures.size, 1, s"the run did not refuse what the preview refused: $report")
+    assertEquals(
+      report.pending.size,
+      1,
+      s"the run did not withhold what the preview withheld: $report",
+    )
   }
 
   test("LAW: a move the run makes is previewed as work, not as refused") {

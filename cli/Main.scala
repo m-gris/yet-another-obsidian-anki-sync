@@ -1090,7 +1090,7 @@ object Main
       case SyncOutcome.PlannedOnly(_) =>
         Vector("", "DRY RUN — nothing was written.")
 
-      case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, applied)) =>
+      case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, applied, pending)) =>
         // `attempted:` and `failed:`, never "applied N of M". `Executor.runOne` traverses an
         // Update's changes, so a failure on the first change abandons the rest of THAT action
         // while recording one failure — "applied" would assert more than the code guarantees.
@@ -1098,11 +1098,15 @@ object Main
         // DEFERRED ACTIONS ARE SUBTRACTED FROM `attempted:` rather than counted in it. They
         // were not attempted; printing them as attempts and then as zero failures would say
         // they succeeded.
+        // NEITHER ATTEMPTED NOR FAILED. A change nobody has answered for was set aside before
+        // execution, exactly as a deferral is, so counting it as attempted would say the tool
+        // tried something it deliberately did not try.
         val counts = Vector(
           "",
-          s"attempted: ${plan.actions.size - deferred.size}",
+          s"attempted: ${plan.actions.size - deferred.size - pending.size}",
           s"failed:    ${failures.size}",
         ) ++ Option.when(deferred.nonEmpty)(s"deferred:  ${deferred.size}")
+          ++ Option.when(pending.nonEmpty)(s"waiting:   ${pending.size}")
         val failureLines =
           if failures.isEmpty then Vector.empty
           else
@@ -1121,7 +1125,8 @@ object Main
                 "and the collection and attempts them again. Whether that succeeds depends on why each one",
                 "failed — an action this tool cannot yet carry out will fail again.",
               )
-        counts ++ failureLines ++ Report.appliedRetypes(applied) ++ Report.deferredRetypes(deferred)
+        counts ++ failureLines ++ Report.appliedRetypes(applied) ++
+          Report.deferredRetypes(deferred) ++ Report.waitingOnYou(pending)
 
       case SyncOutcome.AbortedDuringExecution(error) =>
         Vector(
@@ -1234,7 +1239,7 @@ object Main
           else s"dry run; ${plan.actions.size} actions are outstanding"
         )
 
-    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, _)) =>
+    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, _, pending)) =>
       // DEFERRED WORK MAKES A RUN NON-CLEAN, deliberately, even though nothing went wrong.
       // The precedent this departs from is the dry run, which is clean with actions
       // outstanding — but a dry run's work is outstanding until the NEXT ordinary run, whereas
@@ -1250,7 +1255,14 @@ object Main
                  "on the wrong note type and " +
                  (if deferred.size == 1 then "was" else "were") + " left alone at your request " +
                  "(--no-migrate-note-types) — drop the flag to move them"
-             )) ++ problemsIn(plan)
+             )) ++
+             // NOT CLEAN, BUT NOT A PROBLEM WITH THE RUN. Something the vault asked for did not
+             // happen, so the run cannot claim to have matched the collection to the vault —
+             // and the reason is that nobody has answered a question, not that anything broke.
+             Option.when(pending.nonEmpty)(
+               s"${pending.size} note(s) would destroy cards that have nowhere to go, and " +
+                 "nothing has answered for them — see WAITING ON YOU above"
+             ) ++ problemsIn(plan)
       if reasons.nonEmpty then Verdict.Problems(reasons)
       else
         Verdict.Clean(
