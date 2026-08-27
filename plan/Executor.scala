@@ -352,6 +352,17 @@ object Executor:
               AnkiError.UnsupportedOperation(what, s"${refusal.describe} — ${refusal.remedy}")
             )
 
+          // THE SAME BEHAVIOUR AS A REFUSAL, AND ONLY FOR NOW. Marc ruled on 2026-08-27 that
+          // this is HIS decision rather than the tool's — the move is coherent, it simply costs
+          // cards — but the command that lets him answer does not exist yet. Until it does,
+          // declining is the only honest thing to do with a question nobody can be asked; what
+          // changed in that commit is that the TYPE now records why, so the day the decision
+          // command lands, this branch is the one place that has to change.
+          case RetypeVerdict.DestroysCards(loss) =>
+            F.raiseError(
+              AnkiError.UnsupportedOperation(what, s"${loss.describe} — ${loss.remedy}")
+            )
+
           // AN INVARIANT BREAK, NOT A CASE TO HANDLE GRACEFULLY. Under `Defer` every Retype is
           // partitioned out of execution by `dispositionUnder` before `applyEach` is reached,
           // so arriving here means that partition and this decision disagree about what

@@ -382,6 +382,11 @@ object Report:
       verdict match
         case RetypeVerdict.RefusedByShapes(refusal) =>
           PreviewRow.Blocked(retype, refusal.describe, refusal.remedy)
+        // Printed as blocked because that is what the run currently does with it. When the
+        // per-note decision lands this becomes a row of its own, since "you have not been asked
+        // yet" is a different thing to tell a reader than "this will not happen".
+        case RetypeVerdict.DestroysCards(loss) =>
+          PreviewRow.Blocked(retype, loss.describe, loss.remedy)
         case RetypeVerdict.ShapesUnavailable(from, to) =>
           PreviewRow.Blocked(
             retype,

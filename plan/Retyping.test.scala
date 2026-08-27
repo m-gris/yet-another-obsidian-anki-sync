@@ -163,18 +163,18 @@ class RetypingTest extends munit.FunSuite:
     def shape(templates: Int, cloze: Boolean) = NoteTypeShape(templates, cloze)
 
     assertEquals(
-      Retyping.refusalFor("A", shape(1, false), "B", shape(1, false)),
-      None,
+      Retyping.judgeShapes("A", shape(1, false), "B", shape(1, false)),
+      ShapeJudgement.Admissible,
       "a move that cannot strand a card was refused",
     )
     assertEquals(
-      Retyping.refusalFor("A", shape(3, false), "B", shape(3, false)),
-      None,
+      Retyping.judgeShapes("A", shape(3, false), "B", shape(3, false)),
+      ShapeJudgement.Admissible,
       "three templates to three templates was refused",
     )
     assertEquals(
-      Retyping.refusalFor("A", shape(1, true), "B", shape(1, true)),
-      None,
+      Retyping.judgeShapes("A", shape(1, true), "B", shape(1, true)),
+      ShapeJudgement.Admissible,
       "cloze to cloze was refused",
     )
 
@@ -185,78 +185,75 @@ class RetypingTest extends munit.FunSuite:
     // column — and settled on the card set the new type's GATE FIELDS called for rather than one
     // card per template.
     assertEquals(
-      Retyping.refusalFor("A", shape(1, false), "B", shape(2, false)),
-      None,
+      Retyping.judgeShapes("A", shape(1, false), "B", shape(2, false)),
+      ShapeJudgement.Admissible,
       "growing the template count is refused, though it has been measured to be lossless",
     )
     assertEquals(
-      Retyping.refusalFor("A", shape(1, false), "B", shape(5, false)),
-      None,
+      Retyping.judgeShapes("A", shape(1, false), "B", shape(5, false)),
+      ShapeJudgement.Admissible,
       "growth by more than one was refused",
     )
     assertEquals(
-      Retyping.refusalFor("A", shape(2, false), "B", shape(1, false)),
-      Some(RetypeRefusal.TemplateCountDiffers("A", 2, "B", 1)),
-      "shrinking the template count was allowed, and that is the case that strands a card",
+      Retyping.judgeShapes("A", shape(2, false), "B", shape(1, false)),
+      ShapeJudgement.Destroys(RetypeDestroysCards("A", 2, "B", 1)),
+      "narrowing is no longer PRICED — it must come back as a cost the author can be shown, " +
+        "not as an admission and not as a refusal",
     )
     assertEquals(
-      Retyping.refusalFor("A", shape(1, true), "B", shape(1, false)),
-      Some(RetypeRefusal.ClozeKindDiffers("A", true, "B", false)),
+      Retyping.judgeShapes("A", shape(1, true), "B", shape(1, false)),
+      ShapeJudgement.Refused(RetypeRefusal.ClozeKindDiffers("A", true, "B", false)),
       "a cloze note was allowed onto a standard note type on equal template counts",
     )
   }
 
-  /** THE REFUSAL MUST NAME THE RIGHT UNKNOWN, and the two directions have different ones.
+  /** THE PRICE MUST SAY *WHEN*, NOT ONLY HOW MANY — and that is what the measurement changed.
     *
-    * A single sentence covered both until 2026-08-24 and was accurate for only one: it said the
-    * cards might carry an ordinal the new note type cannot generate, which is what happens when
-    * the template count SHRINKS and cannot happen when it grows. Somebody retagging a heading
-    * from one card to two was sent to reason about stranded cards that do not exist, while the
-    * actual reason the tool withholds the move — that card GENERATION on a note-type change is
-    * unmeasured — appeared nowhere.
+    * THIS TEST REPLACED ONE THAT PINNED SOMETHING NO LONGER TRUE. Until 2026-08-27 both
+    * directions of a template-count change were refused, for two DIFFERENT unknowns, and the
+    * test existed to stop the two reasons collapsing into one sentence. Growth was admitted on
+    * 2026-08-26 after measurement, and narrowing stopped being a refusal at all on 2026-08-27
+    * when Marc ruled it his decision — so neither half of that pairing survives. One description
+    * is left, and what it has to get right is a different thing.
     *
-    * ASSERTED ON THE DISTINGUISHING CLAUSE, not on the whole sentence. Pinning the full text
-    * would make this a change-detector that fails on any rewording; pinning the clause that
-    * differs is what stops the two reasons being collapsed back into one.
+    * IT HAS TO GET THE DELAY RIGHT. MEASURED 2026-08-27: the cards are NOT destroyed by the
+    * move. They survive it, unusable, and Anki destroys them at the next `Tools > Check
+    * Database` — possibly days later, for an unrelated reason. A sentence saying only "these
+    * cards will be lost" would be found wrong by somebody whose collection looked untouched for
+    * a fortnight, so the MOMENT is part of the claim rather than a detail of it.
     */
-  test("a refusal explains the direction it is refusing, and the two directions differ") {
-    val shrinking = RetypeRefusal.TemplateCountDiffers("Wide", 3, "Narrow", 1).describe
-    val growing   = RetypeRefusal.TemplateCountDiffers("Narrow", 1, "Wide", 3).describe
+  test("the price of narrowing says how many cards, and when they actually die") {
+    val price = RetypeDestroysCards("Wide", 3, "Narrow", 1).describe
 
+    assert(price.contains("2 card"), s"the price stopped counting what it costs: $price")
     assert(
-      shrinking.contains("ordinals it cannot generate"),
-      s"the shrinking refusal stopped naming the stranded card, which is its whole reason: $shrinking",
-    )
-    assert(
-      !shrinking.contains("GENERATES"),
-      s"the shrinking refusal blamed generation, which is the other direction's unknown: $shrinking",
-    )
-
-    assert(
-      growing.contains("GENERATES"),
-      s"the growing refusal stopped naming card generation, which is its only reason: $growing",
+      price.contains("Check Database"),
+      s"the price stopped naming WHEN the cards die, which is the half a reader cannot guess: $price",
     )
     assert(
-      growing.contains("No existing card would be stranded"),
-      s"the growing refusal did not say that stranding cannot happen here: $growing",
+      price.contains("review history"),
+      s"the price stopped saying the review history goes with them: $price",
     )
-
-    assertNotEquals(
-      shrinking,
-      growing,
-      "both directions gave the same reason again — one of them is therefore wrong, which is " +
-        "exactly the state this test was written to end",
+    assert(
+      !price.contains("has not established"),
+      s"the price still calls the outcome unmeasured; it was measured on 2026-08-27: $price",
     )
+  }
 
-    // BOTH STILL REFUSED. The message changed; the gate did not. If this ever fails because
-    // growing now returns None, that is the measurement having landed — update `IN-FLIGHT.md`
-    // and this test together, and say which profile it was measured in.
-    // The growth direction was admitted on 2026-08-26 after being measured, so the pair that
-    // exercises a refusal is the shrinking one.
+  /** THE DOOMED ORDINALS ARE THE PRICE'S ARITHMETIC, and they are what a future per-note
+    * decision will read the review counts of. Anki numbers a note's cards from zero, so a type
+    * with N templates generates 0..N-1 and every ordinal at or above N has nowhere to go.
+    */
+  test("the doomed ordinals are exactly those the new note type cannot generate") {
     assertEquals(
-      Retyping.refusalFor("Wide", NoteTypeShape(3, false), "Narrow", NoteTypeShape(1, false)),
-      Some(RetypeRefusal.TemplateCountDiffers("Wide", 3, "Narrow", 1)),
-      "the shrinking direction was admitted, and it is the one that strands a card",
+      RetypeDestroysCards("Wide", 3, "Narrow", 1).doomedOrdinals.toVector,
+      Vector(1, 2),
+      "three templates down to one must doom ordinals 1 and 2, and keep 0",
+    )
+    assertEquals(
+      RetypeDestroysCards("Wide", 5, "Narrow", 4).doomedOrdinals.toVector,
+      Vector(4),
+      "a narrowing of one must doom exactly one ordinal, the last",
     )
   }
 
@@ -315,9 +312,10 @@ class RetypingTest extends munit.FunSuite:
         RetypePolicy.Apply,
         Map("A" -> NoteTypeShape(3, false), "B" -> NoteTypeShape(1, false)),
       ),
-      RetypeVerdict.RefusedByShapes(RetypeRefusal.TemplateCountDiffers("A", 3, "B", 1)),
-      "the verdict must carry the refusal so the preview can print the SAME sentence the run " +
-        "would have printed — a bare 'refused' would drift from it",
+      RetypeVerdict.DestroysCards(RetypeDestroysCards("A", 3, "B", 1)),
+      "the verdict must carry the price so the preview can print the SAME sentence the run " +
+        "would have printed — a bare 'refused' would drift from it, and this is no longer a " +
+        "refusal at all: it is a cost awaiting an answer",
     )
   }
 
@@ -349,13 +347,16 @@ class RetypingTest extends munit.FunSuite:
     */
   test("when both differ, the cloze kind is what gets reported") {
     assertEquals(
-      Retyping.refusalFor("A", NoteTypeShape(1, true), "B", NoteTypeShape(3, false)),
-      Some(RetypeRefusal.ClozeKindDiffers("A", true, "B", false)),
+      Retyping.judgeShapes("A", NoteTypeShape(1, true), "B", NoteTypeShape(3, false)),
+      ShapeJudgement.Refused(RetypeRefusal.ClozeKindDiffers("A", true, "B", false)),
     )
   }
 
   test("a refusal names both note types, what differs, and what to do instead") {
-    val counts = RetypeRefusal.TemplateCountDiffers("Basic", 1, "Obsidian Basic (and reversed card)", 2)
+    // NARROWING VALUES, NOT GROWING ONES. This read (1, 2) until 2026-08-27, when growth
+    // stopped being describable at all — `RetypeDestroysCards` is only ever constructed for a
+    // narrowing, so a growing pair here would assert on a state the type cannot reach.
+    val counts = RetypeDestroysCards("Obsidian Basic (and reversed card)", 2, "Basic", 1)
     assert(counts.describe.contains("Basic"), counts.describe)
     assert(counts.describe.contains("Obsidian Basic (and reversed card)"), counts.describe)
     assert(counts.describe.contains("1") && counts.describe.contains("2"), counts.describe)
@@ -658,9 +659,24 @@ class RetypingTest extends munit.FunSuite:
     // PREVIEW FIRST, AGAINST THE UNTOUCHED COLLECTION — the order a person experiences.
     val previewed = previewOf(plan, anki, RetypePolicy.Apply)
     assertEquals(previewed.size, 1, s"expected exactly one retype to preview: $previewed")
+    // WITHHELD BY WHICHEVER ROUTE, and the law is about the withholding rather than the reason.
+    // This asserted `RefusedByShapes` alone until 2026-08-27, when a 3 -> 1 move stopped being a
+    // refusal and became a PRICE the author has not yet been asked to accept. The law did not
+    // change — a move the run will not carry out must never be previewed as work — only the set
+    // of verdicts that satisfy it did.
+    //
+    // WRITTEN AS A TOTAL MATCH ON PURPOSE. An `isInstanceOf` check, or a match with a default,
+    // would let a verdict added later fall silently into "work" or silently into "withheld",
+    // and this law is precisely the one that a silent misclassification breaks.
+    val previewedAsWork = previewed.head match
+      case RetypeVerdict.WillApply               => true
+      case RetypeVerdict.RefusedByShapes(_)      => false
+      case RetypeVerdict.DestroysCards(_)        => false
+      case RetypeVerdict.DeferredByPolicy        => false
+      case RetypeVerdict.ShapesUnavailable(_, _) => false
     assert(
-      previewed.head.isInstanceOf[RetypeVerdict.RefusedByShapes],
-      s"the preview called a refusable move ordinary work — this IS the dry-run defect: $previewed",
+      !previewedAsWork,
+      s"the preview called a withheld move ordinary work — this IS the dry-run defect: $previewed",
     )
 
     // AND THE RUN AGREES. Asserted rather than assumed: if this ever reports success the law is

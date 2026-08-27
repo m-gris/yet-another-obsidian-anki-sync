@@ -68,15 +68,25 @@ import obsidiananki.anki.Anki
   */
 final case class NoteTypeShape(templateCount: Int, isCloze: Boolean)
 
-/** Why a note may not be moved between two note types.
+/** Why a note may not be moved between two note types, WHATEVER THE AUTHOR SAYS.
+  *
+  * THIS TYPE SHRANK ON 2026-08-27, AND THE REASON IS A RULING RATHER THAN A TIDY-UP. It used to
+  * hold a second case, `TemplateCountDiffers`, covering a move onto a note type with fewer
+  * templates. Marc ruled that such a move is HIS DECISION: it is perfectly coherent, it simply
+  * costs cards, and a tool that forbids it has substituted its judgement for its author's. That
+  * case is now [[RetypeDestroysCards]], which is a PRICE rather than a refusal.
+  *
+  * WHAT IS LEFT HERE IS THE GENUINELY IMPOSSIBLE. A cloze note holds as many cards as its text
+  * has cloze numbers, with no relation to how many templates its note type declares, so the
+  * cards that would be left behind cannot even be ENUMERATED — there is no price to quote and
+  * therefore no decision to offer. That is the difference the split encodes: a refusal is what
+  * remains when there is nothing to put in front of the author.
   *
   * BOTH SHAPES ARE NAMED IN THE MESSAGE. "Incompatible note types" tells the reader nothing
-  * they can act on; the counts are what makes it obvious that a `2way` heading was retagged
-  * `1way`, or that a cloze section became a plain one.
+  * they can act on; naming the two makes it obvious that a cloze section became a plain one.
   */
 enum RetypeRefusal:
   case ClozeKindDiffers(from: String, fromIsCloze: Boolean, to: String, toIsCloze: Boolean)
-  case TemplateCountDiffers(from: String, fromCount: Int, to: String, toCount: Int)
 
   private def kindOf(isCloze: Boolean): String = if isCloze then "a cloze" else "a standard"
 
@@ -85,39 +95,64 @@ enum RetypeRefusal:
       s"'$from' is ${kindOf(fromIsCloze)} note type and '$to' is ${kindOf(toIsCloze)} one. " +
         "A card's ordinal means a template on one and a cloze number on the other, so the " +
         "existing cards would carry ordinals the new note type does not generate"
-    // THE TWO DIRECTIONS ARE REFUSED FOR DIFFERENT REASONS, AND SAYING SO IS THE POINT.
-    // One sentence used to cover both, and it was accurate for only one of them: it told the
-    // reader that a card might carry an ordinal the new note type cannot generate, which is
-    // true when the template count SHRINKS and simply false when it grows — growing cannot
-    // strand anything, by arithmetic. A person retagging `#flashcard/1way` as `2way` was
-    // therefore sent to think about stranded cards that cannot exist, and the real reason the
-    // move is withheld — that card GENERATION on a note-type change is unmeasured — was never
-    // stated.
-    //
-    // THE GATE ITSELF IS UNCHANGED: both directions are still refused, because the growth case
-    // is unmeasured rather than known-safe. What changes is that the refusal now names which
-    // unknown it is protecting the reader from. See `IN-FLIGHT.md` for the one measurement
-    // that would let the growth branch be admitted.
-    case TemplateCountDiffers(from, fromCount, to, toCount) =>
-      val counts = s"'$from' has $fromCount card template(s) and '$to' has $toCount. "
-      if fromCount > toCount then
-        counts +
-          "Moving a note between note types keeps its cards and their ordinals, so the cards " +
-          "past the new note type's last template would carry ordinals it cannot generate, and " +
-          "this tool has not established what Anki then does with them"
-      else
-        counts +
-          "No existing card would be stranded by this — every ordinal the note already has " +
-          "exists on the wider note type. What is unestablished is the other half: whether " +
-          "Anki GENERATES the additional cards when a note changes type, or leaves the note " +
-          "silently short of them"
 
-  /** The sentence that follows the reason wherever this is reported. Written once, here,
-    * because it is the same remedy in every case and a second copy would drift from this one.
+  /** The sentence that follows the reason wherever this is reported. */
+  def remedy: String =
+    "this tool will not move it; do it in Anki if you want it — Browse, select the notes, " +
+      "Notes > Change Note Type, which maps templates and fields explicitly"
+
+/** A move that is COHERENT and DESTROYS CARDS — a price, not a refusal.
+  *
+  * NOT AN ERROR TYPE. Ruled by Marc 2026-08-27: narrowing a marker is a thing an author is
+  * entitled to do knowingly, so this tool's job is to say what it costs and let him answer, not
+  * to withhold it. See `docs/REVIEW-QUEUE.md` § *Three stances on a refusal*, which records the
+  * weaker proposal — refusing only when the cards happen to hold reviews — and why it was
+  * rejected: it keeps the tool forbidding and merely moves the threshold.
+  *
+  * ONLY NARROWING REACHES HERE. Widening cannot destroy a card by arithmetic — every ordinal the
+  * note already holds is below the old template count and therefore below the new one.
+  *
+  * WHAT IT COSTS IS NOW KNOWN, AND THAT IS RECENT. Until 2026-08-27 the answer was genuinely
+  * unestablished and the refusal said so. It was then MEASURED (`docs/EVOLVABILITY.md` § M4):
+  * the cards are NOT destroyed by the move. They survive it, unusable, and Anki's
+  * `Tools > Check Database` destroys them at some later moment of the author's choosing — which
+  * is why the sentence below states WHEN, not merely how many. A warning that said only "these
+  * cards will be lost" would be discovered to be wrong by someone whose collection looked
+  * untouched for a fortnight.
+  */
+final case class RetypeDestroysCards(from: String, fromCount: Int, to: String, toCount: Int):
+
+  /** The ordinals the new note type cannot generate. Empty is unrepresentable in practice —
+    * this type is only constructed when `fromCount > toCount` — but the range says it anyway.
+    */
+  def doomedOrdinals: Range = toCount until fromCount
+
+  def describe: String =
+    val n = fromCount - toCount
+    s"'$from' has $fromCount card template(s) and '$to' has $toCount, so $n card(s) of this " +
+      "note would have nowhere to go. They are not deleted by the move itself: they survive it " +
+      "unusable, and Anki destroys them the next time Tools > Check Database is run, taking " +
+      "their review history with them"
+
+  /** WORDED AS A REFUSAL FOR NOW, DELIBERATELY. The ruling says the author decides, but the
+    * command that lets him say so does not exist yet, so this slice changes the TYPES without
+    * changing what a run does. When the per-note decision lands this becomes an invitation to
+    * authorise the move by name, and `IN-FLIGHT.md` item 29 is where that is tracked.
     */
   def remedy: String =
     "this tool will not move it; do it in Anki if you want it — Browse, select the notes, " +
       "Notes > Change Note Type, which maps templates and fields explicitly"
+
+/** WHAT THE TWO SHAPES SAY ABOUT A MOVE, before any policy is consulted.
+  *
+  * CLOSED, so that adding a third thing shapes can say is a compile error at every consumer
+  * rather than a case that quietly falls through. It replaces an `Option[RetypeRefusal]`, whose
+  * `None` had to carry "admissible" and whose `Some` had to carry two unlike things.
+  */
+enum ShapeJudgement:
+  case Admissible
+  case Refused(refusal: RetypeRefusal)
+  case Destroys(loss: RetypeDestroysCards)
 
 /** Whether a run is permitted to move notes between note types.
   *
@@ -164,6 +199,15 @@ enum RetypeVerdict:
     */
   case RefusedByShapes(refusal: RetypeRefusal)
 
+  /** The move is COHERENT and would DESTROY CARDS. Distinct from a refusal on purpose:
+    * refusing says this tool will not do it, whereas this says the author has not yet been
+    * asked. Ruled by Marc 2026-08-27 — see [[RetypeDestroysCards]].
+    *
+    * IT STILL BEHAVES AS A REFUSAL AT THE MOMENT, because the command that lets the author
+    * answer does not exist yet. The type is what changed here, not the run.
+    */
+  case DestroysCards(loss: RetypeDestroysCards)
+
   /** A note type the plan names could not be measured. Distinct from a refusal on purpose:
     * refusing says the move is wrong, this says the question could not be asked.
     */
@@ -190,32 +234,42 @@ object Retyping:
     case RetypePolicy.Apply =>
       (shapes.get(from), shapes.get(to)) match
         case (Some(fromShape), Some(toShape)) =>
-          refusalFor(from, fromShape, to, toShape)
-            .fold(RetypeVerdict.WillApply)(RetypeVerdict.RefusedByShapes(_))
+          judgeShapes(from, fromShape, to, toShape) match
+            case ShapeJudgement.Admissible     => RetypeVerdict.WillApply
+            case ShapeJudgement.Refused(r)     => RetypeVerdict.RefusedByShapes(r)
+            case ShapeJudgement.Destroys(loss) => RetypeVerdict.DestroysCards(loss)
         case _ => RetypeVerdict.ShapesUnavailable(from, to)
 
 
-  /** PURE, so every branch is drivable without a collection.
+  /** WHAT THE SHAPES ALONE SAY. Pure, so every branch is drivable without a collection.
     *
-    * `None` means the move is admissible. The cloze test comes first because it is the one
-    * whose failure mode is unbounded: a cloze note may hold any number of cards regardless of
-    * how many templates its type has, so a count comparison would pass while the ordinals ran
-    * far past anything the new type could generate.
+    * WAS `refusalFor`, RETURNING `Option[RetypeRefusal]`, UNTIL 2026-08-27. That signature had
+    * to make `None` mean "admissible" and `Some` mean two unlike things — one move this tool
+    * will never make, and one it will make once its author says so. Renamed and widened to a
+    * closed type so the difference is visible to the compiler rather than to a reader.
+    *
+    * THE CLOZE TEST COMES FIRST, and that ordering is load-bearing. A cloze note may hold any
+    * number of cards regardless of how many templates its type declares, so a count comparison
+    * would pass while the ordinals ran far past anything the new type could generate.
     */
-  def refusalFor(
+  def judgeShapes(
       from: String,
       fromShape: NoteTypeShape,
       to: String,
       toShape: NoteTypeShape,
-  ): Option[RetypeRefusal] =
+  ): ShapeJudgement =
     if fromShape.isCloze != toShape.isCloze then
-      Some(RetypeRefusal.ClozeKindDiffers(from, fromShape.isCloze, to, toShape.isCloze))
-    // ONLY SHRINKING IS REFUSED. Growth cannot strand a card by arithmetic — every ordinal the
-    // note already holds is below the old template count, and therefore below the new one — and
-    // the other half of the worry has now been MEASURED rather than reasoned about.
+      ShapeJudgement.Refused(
+        RetypeRefusal.ClozeKindDiffers(from, fromShape.isCloze, to, toShape.isCloze)
+      )
+    // ONLY NARROWING COSTS ANYTHING. Widening cannot destroy a card by arithmetic — every
+    // ordinal the note already holds is below the old template count, and therefore below the
+    // new one — and whether Anki GENERATES the extra cards was measured on 2026-08-26: it does.
     else if fromShape.templateCount > toShape.templateCount then
-      Some(RetypeRefusal.TemplateCountDiffers(from, fromShape.templateCount, to, toShape.templateCount))
-    else None
+      ShapeJudgement.Destroys(
+        RetypeDestroysCards(from, fromShape.templateCount, to, toShape.templateCount)
+      )
+    else ShapeJudgement.Admissible
 
   /** Read the shape of each named note type, ONCE per name.
     *
