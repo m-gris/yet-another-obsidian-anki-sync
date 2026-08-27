@@ -6,7 +6,7 @@ _How markdown becomes Anki cards: what is marked, what is generated, and how ide
 
 ## TLDR
 
-Headings marked under one `#flashcard/` root become Anki notes — `1way` and `2way` for a heading and its body, `3way` for concept–descriptor–description, plus `cloze` and `table`; unmarked headings generate nothing, at any depth.
+Headings marked under one `#flashcard/` root become Anki notes — `1way` and `2way` for a heading and its body, `cdd/1way`, `cdd/2way` and `cdd/3way` for a concept, an aspect of it and that aspect's value, `sequence` for a list revealed one item at a time, `3way` for concept–descriptor–description, plus `cloze` and `table`; unmarked headings generate nothing, at any depth.
 
 A card's concept comes from its note title or nearest ancestor heading, its descriptor from the marked heading, and its description from that section's body — a shape no existing bridge can express, because they all match lines rather than positions in the document tree.
 
@@ -52,14 +52,36 @@ The design below is therefore not a replacement for a dead plugin. It does somet
 
 A heading opts in explicitly. Headings without a marker generate nothing, so ordinary prose sections — `## Introduction`, `## Best practices` — stay ordinary. Marked headings may sit at **any depth**; nothing depends on the level.
 
+_**Vocabulary corrected 2026-08-27**, against `model/Marker.scala`'s `Documented` table — which
+`--help` prints and which a test ties to the source, so it is the one place that cannot drift. This
+table had said `3way` / `3way/all` since before the 2026-08-24 rename, and had never mentioned
+`sequence` at all, though `sequence` has a note type, a fixture and a section in the README. **The
+one-card concept-descriptor shape, `cdd/1way`, did not appear in the ratified model at any point.**_
+
 | Marker | Fields | Cards | Anki note type |
 |---|---|---|---|
 | `#flashcard/1way` | heading, body | 1 | Basic |
 | `#flashcard/2way` | heading, body | 2 — heading ⇄ body | Basic (and reversed) |
-| `#flashcard/3way` | concept, descriptor, description | **2** | 3 way Concept-Descriptor |
-| `#flashcard/3way/all` | the same | 3 | the same, `ThreeWay` field set |
+| `#flashcard/cdd/1way` | concept, descriptor, description | 1 — recall the description | Concept-Descriptor, `ValueOnly` set |
+| `#flashcard/cdd/2way` | the same | **2** — and also which thing has this | the same, no gate set |
+| `#flashcard/cdd/3way` | the same | 3 — and also which aspect this is | the same, `ThreeWay` set |
 | `#flashcard/cloze` | section body | 1 per deletion **group** | Cloze |
+| `#flashcard/sequence` | heading, a list | 1 — items revealed one at a time, on one schedule | Cloze Sequence |
 | `#flashcard/table` | per row and column | n pair cards + 1 row card | mixed |
+
+`table` takes the same direction suffixes (`table/1way`, `/2way`, `/3way`) and a scope suffix
+(`/cells`, `/rows`); `--help` lists all eighteen spellings.
+
+**`3way` and `3way/all` remain as ALIASES** of `cdd/2way` and `cdd/3way` — the same values, so
+rewriting a vault's markers changes no key, no note type and no field, and syncs nothing.
+`IN-FLIGHT.md` item 11 carries the open question of whether to retire them.
+
+**Why the rename.** `Nway` counts RETRIEVAL DIRECTIONS everywhere, and the ceiling is a property of
+the SHAPE — a heading-and-body card has two fields and so at most two directions, a
+concept-descriptor card has three. `#flashcard/3way` broke that: it used a direction word to select
+a SHAPE and then produced two cards, needing `/all` for a third. The shape is now named, mirroring
+`table`, which was always coherent. Front-back stays unprefixed — it is what you get when you name
+no shape.
 
 **Every marker uses the identical markdown shape — a heading and its body.** They differ only in how those two pieces map to fields, and whether an ancestor heading is pulled in as a third:
 
@@ -122,6 +144,14 @@ Concept, Descriptor and Description — three fields, three possible directions,
 | 3 | concept + description | **descriptor** | only with `#flashcard/3way/all` |
 
 The Anki note type for this already exists (`3 way Concept-Descriptor` — resolve **by name**; note-type ids are collection-local, so hardcoding one breaks the moment a profile is duplicated) with exactly these three templates in this order. Making the third optional needs no new note type — add a field (`ThreeWay`) and wrap Card 3's *front* in `{{#ThreeWay}}…{{/ThreeWay}}`. Anki generates a card only when its front renders non-empty, which is how the stock "Basic (optional reversed card)" works.
+
+> **THIS DEFECT NO LONGER EXISTS. Verified 2026-08-27** by reading `Obsidian Concept-Descriptor`
+> out of the live collection: all three FRONTS carry a `class="blank"` marker where their own
+> answer would go, and all three BACKS render the whole triple. The paragraph below described the
+> HAND-MADE note type this tool inherited; the note types it now installs from
+> `resources/note-types/` are idiomatic. `NOTE-TYPES-AND-CONTEXT-DESIGN.md` recorded a reader
+> reaching the same conclusion and being unable to say which document was current — so it is said
+> here, with what was read. _Original entry follows._
 
 **Known defect in the existing note type.** All three templates currently render the answer field on both sides of the divider, so the prompt never appears on the answer side and self-grading is impossible. The fix is the idiomatic `{{FrontSide}}<hr id=answer>{{Answer}}`.
 
@@ -332,6 +362,17 @@ Two of the three ways in are now closed at the command line, by requiring the va
 
 The third is not closed and cannot be by this means: **a vault whose files have not finished arriving**. With the vault on Dropbox or iCloud, `.obsidian` may land before the notes do, and a partially materialised vault is indistinguishable from one whose headings were removed.
 
+> **⚠️ THE CONDITION ON THIS ACCEPTANCE HAS EXPIRED. Amended 2026-08-27, not withdrawn.** The
+> acceptance below is explicitly conditional — it says the hazard is cheap "because the damage is
+> self-repairing" and that it "stops being cheap the moment flagged cards are also **suspended**",
+> and instructs a reader to revisit it then. **Suspension shipped on 2026-08-19 and nobody
+> revisited.** So the paragraph below currently reads as a live, valid acceptance of a hazard whose
+> own stated precondition no longer holds: a mistimed run over a half-materialised vault now
+> empties the review queue rather than merely tagging it, and a `prune` command would make that
+> irreversible. `docs/EVOLVABILITY.md` §3.4 carries the full chain and programme item 6 carries the
+> candidate guard — refuse a run whose COMPLETE scan yields zero cards while the collection holds
+> some, which needs no proportion and therefore no unjustifiable number.
+
 It is accepted for v0 because the damage is self-repairing: flagging is reversible, and the next run over a complete vault clears the flags. It stops being cheap the moment flagged cards are also **suspended** — a mistimed sync would then empty the review queue until the next correct run. Revisit before or alongside that work; the candidates considered and not taken were refusing when the vault yields zero cards while the collection holds some, and refusing above some proportion of the collection going orphan at once. The second was rejected on the grounds that the proportion is a number nobody can justify.
 
 It costs the reconciler nothing: `Flag` is already one of the `SyncAction` cases, and `prune` is a separate command reading those tags.
@@ -403,6 +444,14 @@ Plus one **row card** per row: concept on the front, all descriptors on the back
 ### Lists
 
 **Unordered** — membership is the knowledge, not sequence. Plain multi-cloze covers it, with the existing key scheme unchanged.
+
+> **SHIPPED, CONTRADICTING THE SENTENCE BELOW. Amended 2026-08-27.** `#flashcard/sequence` exists,
+> has its own note type (`Obsidian Cloze Sequence`, **one** template), a fixture, and a section in
+> `README.md` describing it as *"one card, whose items reveal one at a time, on one schedule"*.
+> `NOTE-TYPES-AND-CONTEXT-DESIGN.md` argued that generating N notes was "the opposite of what is
+> wanted", and the built shape agrees with it. The sentence below is left in place because its
+> REASONING about what one Anki note can express is what led to the cloze-sequence design; it is
+> the conclusion that was overtaken. _Original follows._
 
 **Ordered** — sequence is the knowledge, and progressive disclosure (each card revealing prior items and hiding the rest) **cannot be expressed by one Anki note**: a cloze note has a single text, and its cards differ only in which deletion is hidden. True progressive disclosure requires generating N notes, one per step — which is what the Cloze Overlapper add-on does.
 

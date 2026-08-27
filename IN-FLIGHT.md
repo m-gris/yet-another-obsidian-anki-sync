@@ -1,8 +1,12 @@
 # In flight — delete this file when the work below has landed
 
-_Rewritten 2026-08-24. Everything here was checked, not remembered. **Nothing is running.**
-Working tree clean; 651 tests, 0 failures, 0 warnings. 10 commits were unpushed when this was
-written — run `git push origin main` if that is still true._
+_Rewritten 2026-08-24, appended to daily since. Everything here was checked, not remembered._
+
+_**Test count last measured 2026-08-27: 34 suites, 744 tests, 0 failures, 0 warnings.** The
+figure in this header read 651 until then, three days after it stopped being true — a number in a
+header is the easiest thing in a document to leave behind, and `HANDOFF.md` carries the same
+figure independently, so the two can disagree without either looking wrong. Treat both as a
+reading rather than a fact: run the suite._
 
 ## Where things stand
 

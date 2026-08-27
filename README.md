@@ -1,4 +1,4 @@
-# obsidian-anki-custom-sync
+# yet-another-obsidian-anki-sync
 
 A command-line tool that turns marked headings in an [Obsidian](https://obsidian.md) vault
 into [Anki](https://apps.ankiweb.net) notes, and keeps them in step as the vault changes.
@@ -439,8 +439,15 @@ refuses, naming the file and line, when:
 
 **The sync never deletes anything.** A card in Anki whose source heading has gone is *flagged*
 with an `orphaned::` tag and *suspended* — Anki's own mechanism, which keeps the card, its deck
-and its whole scheduling state while taking it out of the daily rotation. The run reports what
-it suspended. Put the heading back and the flag is cleared and the card unsuspended.
+and its whole scheduling state while taking it out of the daily rotation. Put the heading back and
+the flag is cleared and the card unsuspended.
+
+_**Corrected 2026-08-27.** This said "The run reports what it suspended", and it does not. The run
+that suspends a card prints `N flag as orphaned` — the word *suspend* is not in that line. Every
+run **afterwards** does say it, in the standing count of parked notes. So the run that takes cards
+out of your review queue is the quiet one, and the ones that change nothing are loud about it.
+Naming the suspension in the plan line is programme item 5 of `docs/EVOLVABILITY.md`; this sentence
+is corrected rather than left describing the intention._
 
 A separate `prune` command to delete flagged cards after you have read the list **is not built
 yet**.
@@ -454,11 +461,17 @@ lossless precisely because the orphan is still there.
 | Code | Meaning |
 |---|---|
 | 0 | it ran and nothing is wrong — a dry run with pending actions is 0 |
-| 1 | it ran and something is wrong: actions failed, cards could not be built, or it stopped early |
+| 1 | it ran and something needs your attention: an action failed, a card could not be built, a note was left on the wrong note type, or it stopped early |
 | 2 | it **refused** and nothing was written |
 
 One exception worth knowing for scripts: a command line rejected by the argument parser exits 1
 on stderr, without the run having started.
+
+_**Corrected 2026-08-27.** The `1` row listed three causes and there are four: a note left on a
+different note type from the one the vault asks for also exits 1 (`cli/Main.scala:1159-1170` folds
+it into the same reasons list). That matters for a script, because it is not a failure — nothing
+went wrong and nothing was written — it is the tool declining to restructure a note without being
+asked. A caller cannot currently tell the two apart from the exit code alone._
 
 ## Not built yet
 

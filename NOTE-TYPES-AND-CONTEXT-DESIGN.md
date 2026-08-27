@@ -1,5 +1,14 @@
 # Owned note types, and a visible Context field
 
+> **PATHS CORRECTED 2026-08-27.** This document was written while the tool lived inside
+> `backend-interview-prep/`, and gave paths under `obsidian-anki-custom-sync/` and
+> `srs-obsidian-anki/`. **That copy still exists on disk and is an armed trap** — `HANDOFF.md`
+> records that four tests, including the golden, silently resolved files there and passed because
+> the copies were still identical. A document directing a reader to those paths is dangerous rather
+> than merely out of date, so they now name this repository. Nothing else in this file was touched,
+> and its reasoning is of its time.
+
+
 _Written 2026-08-21 as the design the build phase follows. Every claim below is marked
 verified, derived, or predicted. Nothing here is remembered._
 
@@ -53,7 +62,7 @@ them.
 
 ## 1. Repository layout
 
-`git mv obsidian-anki-custom-sync/note-types obsidian-anki-custom-sync/resources/note-types`,
+`git mv note-types resources/note-types`,
 then add one line to `project.scala`:
 
 ```
@@ -69,7 +78,7 @@ directive today (verified by reading it).
 The full tree after the move:
 
 ```
-obsidian-anki-custom-sync/
+<repository root>/
   project.scala                              (+ //> using resourceDir ./resources)
   resources/
     note-types/
@@ -901,7 +910,7 @@ Named as deferred, so nobody treats any of them as an oversight:
   "no" above; reversible, Marc's to overrule.
 - **Migrating notes in profile `User 1`.** Out of scope entirely. The tool writes only to its
   own five types from now on; nothing in Marc's real collection is touched by any of this.
-- **Amending `srs-obsidian-anki/CARD-MODEL.md`.** Its §Lists still says progressive disclosure
+- **Amending `docs/CARD-MODEL.md`.** Its §Lists still says progressive disclosure
   "cannot be expressed by one Anki note" and "requires generating N notes" — both false, and
   the second is the opposite of what is wanted. Its §"Known defect in the existing note type"
   and REQUIREMENTS.md §Accepted 3 may also be stale (§10 item 3). Document changes are Marc's

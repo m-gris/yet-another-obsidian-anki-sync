@@ -384,12 +384,28 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
    refused, and a move the run makes must preview as work — because the first alone is satisfied
    by a preview that refuses everything. Restoring the old behaviour fails it.
 
-9. **THE COMPATIBILITY GATE IS DELIBERATELY NARROWER THAN THE TRUTH, AND WIDENING IT IS AN
+9. ~~**THE COMPATIBILITY GATE IS DELIBERATELY NARROWER THAN THE TRUTH.**~~ **THE EXPERIMENT WAS
+   RUN AND THE GATE WAS WIDENED, 2026-08-26.** `plan/Retyping.scala:216` now refuses only
+   `fromCount > toCount` — shrinking. Growth was measured in a throwaway profile: a two-card note
+   whose cards were reviewed to intervals of 21 and 7 days kept both **card ids** and every
+   scheduling column and both review logs, with zero drift, and settled on the card set the new
+   type's GATE FIELDS called for rather than one card per template. The live `framework` note was
+   migrated afterwards, also with zero drift.
+
+   **The entry below was right that it was an experiment and wrong about what to measure.** It
+   asked what Anki does with a card whose ordinal the new type cannot generate — the SHRINKING
+   question, which is still open and still refused. Marc's blocked note needed the other
+   direction, and the reason it was refused at all is that the gate compared TEMPLATE COUNTS,
+   which is an upper bound on a note's cards rather than the number it has: a `cdd/2way` note on a
+   three-template type wants two cards, so the move was two cards to two. _Original entry
+   follows._
+
+9b. **THE COMPATIBILITY GATE IS DELIBERATELY NARROWER THAN THE TRUTH, AND WIDENING IT IS AN
    EXPERIMENT, NOT AN EDIT.** Not a defect — `plan/Retyping.scala`'s header says so plainly —
    but it is the reason a `1way` heading retagged `2way` will not migrate, which reads as a bug
    from the outside. It refuses one-template-to-two even though that CANNOT strand a card,
    because the move needs Anki to GENERATE the second card and non-generation is the silent
-   failure `SyncAction.Retype` exists to prevent. Both directions are unmeasured. What would
+   failure `SyncAction.Retype` exists to prevent. Both directions are unmeasured _(true when written; growth was measured 2026-08-26)_. What would
    settle it is one measurement in a throwaway profile — never `User 1` — recording what Anki
    actually does to a card whose ordinal its new note type cannot generate: survives, is
    orphaned until Check Database, or is destroyed. Until somebody runs that, widening the gate
@@ -427,7 +443,7 @@ Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
     belongs here; an item finished this week belongs there and then disappears.
 
 12. **FIVE DECISIONS ARE WAITING ON MARC, none of them blocking.** Named here so a later session
-    does not rediscover them as bugs and 'fix' them. Each is written out in full as items 7–11
+    does not rediscover them as bugs and 'fix' them. Four of the five are written out in full as items 7–11
     of `IN-FLIGHT.md`.
 
     - **Blank-rendering cards.** NOT the same thing as an empty section body, which is already a

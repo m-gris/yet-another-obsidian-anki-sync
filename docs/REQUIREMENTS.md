@@ -36,6 +36,13 @@ Every requirement carries an evidence class — **stated**, **verified**, **unra
 
 **Deletion — decided 2026-08-18.** The sync only ever flags; a separate explicit `prune` command deletes flagged notes after the list has been reviewed. Delete-on-absence was rejected because an undetected heading rename would be indistinguishable from a deletion, silently destroying that card's scheduling history.
 
+_**Marker vocabulary note, added 2026-08-27.** This document nowhere names `cdd`, which since
+2026-08-24 is how a concept-descriptor card is marked — `#flashcard/cdd/{1,2,3}way`, replacing
+`3way` and `3way/all`, which survive as aliases. Nor does it name `sequence`. The authoritative
+list is `model/Marker.scala`'s `Documented` table, which `--help` prints and which a test ties to
+the source; `docs/CARD-MODEL.md` carries a rendered copy. Nothing in this document's REASONING
+depends on the spelling, which is why only this note is added rather than the text being rewritten._
+
 **Deferred, not rejected.** The MOC and authored route; new-card position pushing, which rests on an assumption still untested; the typed-edge graph and its schema; structure cards; ordered-list progressive disclosure; deletion handling beyond flagging.
 
 **Open.** What becomes of the superseded documents in `../poc-obsidian-vault/`. _(Resolved 2026-08-18: the `::` family is **not** used at all — every card kind, including plain one- and two-way cards, is marked by a heading tag, so no delimiter is in play.)_
@@ -72,6 +79,10 @@ _Superseded 2026-08-18._ This previously read "indentation should be simultaneou
 **3. A concept–descriptor–description card shape, generating multiple retrieval paths.** **[verified]**
 
 The note type exists and works: three fields, three card templates testing different directions of recall. Its existence constrains tool choice — see _Rejected_.
+
+_**No longer true — verified 2026-08-27** against the live `Obsidian Concept-Descriptor`: every
+front blanks its own answer and every back shows the full triple. This described the hand-made note
+type, not the ones installed from `resources/note-types/`. Original text follows._
 
 _Known defect:_ all three templates currently render the answer field on both sides of the divider, so the prompt is not visible on the answer side. Idiomatic form places the question side above the divider and the answer below.
 
