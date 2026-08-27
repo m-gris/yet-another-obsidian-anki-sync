@@ -10,3 +10,13 @@ target/
 
 # OS
 .DS_Store
+
+# Anki writes the add-on's USER configuration here, and the installed add-on is a symlink back
+# into this directory -- so Anki's write lands in the repository. The file holds one person's
+# vault path and binary location; `addon/obsidian_edit/config.json` carries the empty defaults
+# that ship instead.
+addon/obsidian_edit/meta.json
+
+# Anki compiles the add-on when it loads it, and the installed add-on is a symlink back into
+# this directory, so the bytecode lands here.
+addon/**/__pycache__/
