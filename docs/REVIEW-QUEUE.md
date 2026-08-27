@@ -4,7 +4,7 @@ _Written 2026-08-27, from a design conversation between Marc and Claude. **Nothi
 Claims marked VERIFIED were established by running something or by reading the file cited;
 everything else is reasoning, and says so. It opens with the answer rather than the three-layer
 TLDR / Summary / Full form, following its siblings — `EVOLVABILITY.md`,
-`ANCHORS-BELOW-A-HEADING.md`, `EDIT-IN-OBSIDIAN.md`, `PARSER-DISAGREEMENTS.md`._
+`CLOZE-REDESIGN.md`, `EDIT-IN-OBSIDIAN.md`, `PARSER-DISAGREEMENTS.md`._
 
 ---
 
@@ -156,7 +156,7 @@ disappears. That is a smaller surface and a stronger guarantee.
    simply prints as text until the plugin exists.
 4. **Whether cloze groups at risk of ordinal drift belong here.** They are a *risk*, not a pending
    decision — nothing is waiting, and the vault can be edited to remove the risk. Arguably a
-   different category, and `ANCHORS-BELOW-A-HEADING.md` covers it.
+   different category, and `CLOZE-REDESIGN.md` covers it.
 
 ---
 

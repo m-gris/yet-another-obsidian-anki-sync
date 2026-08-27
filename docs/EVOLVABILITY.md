@@ -296,7 +296,7 @@ One thing the restatement does **not** license: a sidecar being off-limits. It i
 
 **M1 — Replay the vault's git history and classify every key death.** ⚠️ **IT CANNOT RUN: THE
 VAULT IS NOT UNDER GIT** (verified 2026-08-27). One `git init` and a habit of committing unblocks
-both this and the git-traced anchor candidate in `docs/ANCHORS-BELOW-A-HEADING.md`. Running it
+both this and the git-traced anchor candidate in `docs/CLOZE-REDESIGN.md`. Running it
 against this repository's fixture vault instead would measure how the fixtures were authored rather
 than how Marc edits, and the result would be easy to mistake for the real one. *No Anki. No writes.
 Read-only. An afternoon, once there is history to read.*

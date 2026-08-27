@@ -4,7 +4,7 @@ _Written 2026-08-27, from a design conversation between Marc and Claude. **Nothi
 built.** Claims marked VERIFIED were established by reading the file cited or by running
 something in this session; everything else is reasoning or expectation, and says so. It follows
 this repository's convention of opening with the answer rather than the three-layer TLDR /
-Summary / Full form, because its siblings — `ANCHORS-BELOW-A-HEADING.md`, `EVOLVABILITY.md` —
+Summary / Full form, because its siblings — `CLOZE-REDESIGN.md`, `EVOLVABILITY.md` —
 do._
 
 ---

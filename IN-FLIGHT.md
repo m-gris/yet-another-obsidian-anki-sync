@@ -404,7 +404,7 @@ adversarial review at `docs/PIPELINE-DESIGN-REVIEW.md`. They are lifted out of t
 document because a finding nobody can find is a finding nobody acts on._
 
 20. ⚠️ **AN OBSIDIAN BLOCK REFERENCE PRINTS ON THE CARD FACE.** _This is also why `^blockid` is
-    eliminated as a card ANCHOR — see `docs/ANCHORS-BELOW-A-HEADING.md`._ VERIFIED BY EXECUTION through this
+    eliminated as a card ANCHOR — see `docs/CLOZE-REDESIGN.md`._ VERIFIED BY EXECUTION through this
     project's own parser: `The outermost layer is the ==epidermis==. ^abc123` renders as
     `<p>The outermost layer is the {{c1::epidermis}}. ^abc123</p>`.
 
