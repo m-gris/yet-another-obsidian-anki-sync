@@ -10,6 +10,15 @@ Claims marked VERIFIED were established by running something; everything else is
 says so. It follows this repository's convention of opening with the answer rather than the
 three-layer form, because its siblings — `EVOLVABILITY.md`, `PIPELINE-DESIGN.md` — do._
 
+_**A warning about evidence, learned the hard way on 2026-08-27.** Claude surveyed what the vault
+contains today — `==` appearing outside any cloze marker — and proposed a design rule from it.
+Marc rejected the move: this is a tool under construction, and it may **impose** conventions on
+whoever uses it, its author included. **What the vault contains today is the status quo. It is not
+evidence about what the design ought to be.** The survey was also wrong on its facts: a `==3==`
+that Claude classified as emphasis had in fact been written in the hope that it would become a
+cloze. Both halves are worth remembering — the vault is weak evidence, and inferring an author's
+intent from syntax is guessing._
+
 ---
 
 ## The one-paragraph answer
@@ -52,6 +61,20 @@ cost centre, arriving one level further down.
 
 So every candidate below is judged on one question: **does the anchor survive the author editing
 the thing it anchors?**
+
+_**Two clarifications added 2026-08-27, because this heading now over-claims.**_
+
+_First, there **is** a syntax question, and it is a different one. This section is about the
+**anchor** — what identifies a card. *The marker* — what syntax tells the tool a phrase is a cloze
+at all — is genuinely a syntax question, it is open, and it is upstream of this. See
+*The marker: what syntax says "this is a cloze"* below. The two do not compete; a decision on one
+constrains nothing on the other._
+
+_Second, the "one question" above assumes the answer must be an anchor that survives on its own.
+See *Identity is a matching problem, not a naming problem* below, which argues the tool holds both
+sides at sync time and can pair them by comparing text — in which case surviving unaided is a
+stronger property than is needed. If that argument holds, this section's framing is not wrong so
+much as **narrow**._
 
 ---
 
@@ -104,6 +127,56 @@ nobody has answered it, and the option should not be adopted until somebody does
 
 ---
 
+## The marker: what syntax says "this is a cloze"
+
+_OPEN, raised by Marc 2026-08-27 and NOT settled. It sits upstream of everything below, because it
+decides which text in a note the tool looks at in the first place._
+
+The tool reads `==highlighted==`, Obsidian's own highlight syntax, chosen for two stated reasons:
+it renders as a highlight, which is apt for "phrase you will be asked about", and it is the
+convention across the Obsidian spaced-repetition ecosystem.
+
+Adopting it **fully** — every `==…==` anywhere is a cloze, no heading marker, no declaration — is
+the shortest route to what Marc asked for: *highlight a phrase anywhere and get a card.* The price
+is that `==` becomes **reserved**, unavailable as a third level of emphasis beside bold and italic.
+Marc has said he is willing to pay it.
+
+### The three options, and what separates them
+
+| written as | renders in Obsidian as | leaves `==` free for emphasis | can you see which highlights are cards |
+|---|---|---|---|
+| `==radius==` | a highlight | no | **no** |
+| `<<radius>>` | the literal text `<<radius>>` | yes | yes |
+| `==<<radius>>==` | a highlight reading `<<radius>>` | yes | yes |
+
+**The hybrid is Marc's proposal, and its strength is how it fails.** A bare custom delimiter
+renders as literal brackets and no highlight at all — on mobile, in a preview, on a machine without
+the plugin. The hybrid still gets a real Obsidian highlight in every one of those places; it merely
+has visible brackets inside it.
+
+### What CSS can and cannot do
+
+**CSS alone cannot hide the inner `<<>>`.** Obsidian renders `==<<radius>>==` as
+`<mark><<radius>></mark>` — HTML identical to a plain highlight, with the brackets a fragment of a
+text node. CSS selects elements, and there is no element here to select. This is the same wall the
+`1|` group labels hit, for the same reason.
+
+**A plugin can, and gets more for the same work.** Post-process each `<mark>` whose text matches
+`<<…>>`: strip the brackets, add a class. Clozes then carry their own colour, visibly distinct from
+emphasis highlights. This is the plugin possibility already noted for hiding the group labels — not
+a second one.
+
+### What the decision turns on
+
+If `==` is not wanted for emphasis, the hybrid's one remaining benefit is that **you can tell at a
+glance which highlights are cards.** The plain form gives no way to know without checking. So the
+question is narrow: is that worth four extra characters on every cloze ever written?
+
+**Nobody has decided. Do not read the tool's current use of `==` as the answer** — it was
+inherited, not chosen.
+
+---
+
 ## What the scope of such a card would be
 
 Distinct from the anchor question, and settled more easily. What delineates the text a cloze card
@@ -123,6 +196,69 @@ the tool already receives. It is also what Obsidian's own block references addre
 Scoping to the block fixes the original complaint directly: today the body is the whole **section**,
 so a section with three paragraphs and five highlights produces five cards *each showing all three
 paragraphs*. That is the bundling.
+
+---
+
+## Identity is a matching problem, not a naming problem
+
+_Raised by Claude 2026-08-27, answering Marc's request for a deeper reflection. **NOT decided.** If
+it holds, it makes the two candidates below optional rather than necessary, so it should be weighed
+before either is treated as settled._
+
+Both candidates below assume identity means a **name** — a label, a block id, a fingerprint;
+something written down that must survive arbitrary editing on its own. That may be answering a
+harder question than the tool actually asks.
+
+**The tool does not need to name a card. It needs to pair the cards Anki holds with the cards the
+vault now produces.** Those are different problems:
+
+- **Naming** is global and one-sided. The name must survive unaided, with nothing to compare against.
+- **Matching** is local and two-sided. Both collections are in hand at the moment of the sync.
+
+Matching also runs in a tiny arena: the scope is a single note — typically one to ten cards — and
+**Anki's `Text` field holds the previous content verbatim**, so the old text itself is available for
+comparison, not merely a hash of it.
+
+### The drift case dissolves with no fuzziness at all
+
+Ordinal drift is the failure this document exists to prevent: insert a highlight earlier in a
+paragraph and every later ordinal rotates, so review history silently re-attaches to different
+content under an ordinary update.
+
+```
+old note in Anki:  {{c1::radius}}   {{c2::ulna}}
+new text in vault: {{c1::forearm}}  {{c2::radius}}  {{c3::ulna}}
+```
+
+**Exact string equality pairs old `c1` with new `c2`, and old `c2` with new `c3`.** No threshold,
+no similarity score, no git history, no author-supplied label. The failure this whole document is
+organised around is resolved by comparing strings.
+
+### What is left over, and where it goes
+
+The residue is a card whose text was **edited and moved in the same sitting**, leaving exact
+matching no partner for it. In a scope of five cards that is one or two items — and it is precisely
+the shape `REVIEW-QUEUE.md` describes: propose the pairing, show what it costs, let the author
+confirm.
+
+That also honours the standing ruling that **fuzzy matching may rank but must never apply on its
+own.** The ranking becomes a proposal in a queue, not a silent write.
+
+### What it would change about labels
+
+Labels stop being a requirement and become **a way to buy certainty on the residue** — written
+where you want a card pinned, not on every highlight. That is a materially different burden to ask
+an author to carry, and it is the strongest argument against treating candidate A as the default.
+
+### What has not been checked, and must be before this is relied on
+
+- **That AnkiConnect returns the `Text` field for cloze notes on `notesInfo`.** Assumed here,
+  UNVERIFIED, and the entire reframe rests on it.
+- **What matching does when a card is genuinely deleted** rather than moved. Two leftovers must not
+  be paired with each other merely because both were left over — that would silently graft one
+  card's history onto unrelated content, which is the exact harm being prevented.
+- **Whether within-note matching is enough**, or whether a card can move between notes and needs a
+  wider arena.
 
 ---
 
