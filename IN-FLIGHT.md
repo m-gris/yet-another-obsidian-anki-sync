@@ -474,7 +474,22 @@ document because a finding nobody can find is a finding nobody acts on._
     only in the template text today, so a template edit could silently change which cards exist —
     and this feature would then flag the wrong card.
 
-24. **A NOTE-TYPE MOVE SHOULD APPLY BY DEFAULT.** Ruled by Marc 2026-08-27. Not built.
+24. ~~**A NOTE-TYPE MOVE SHOULD APPLY BY DEFAULT.**~~ **BUILT 2026-08-27**, in four commits: the
+    default flipped and the flag inverted to `--no-migrate-note-types`; the run gained a `MOVED`
+    block naming every note it moved and between which note types; a dry run gained the matching
+    `WOULD MOVE` block; and `README.md` gained a section, having previously never mentioned the
+    operation at all.
+
+    **Two things learned in the building, both worth carrying forward.** The executor did not know
+    what it had applied — the function that ran each action returned only the failures — so the
+    field had to be added rather than derived from "the plan minus the deferred minus the failed",
+    which is the catch-all shape this codebase keeps removing. And flipping the default caused a
+    REGRESSION nobody would have caught by reading the diff: notes that used to be reported by the
+    deferred block moved into the applied path, where the dry run said nothing about them, so the
+    preview for the largest write the tool makes went quiet exactly as that write became automatic.
+    It was found by running the tool against the real vault afterwards. _Original entry follows._
+
+24b. **A NOTE-TYPE MOVE SHOULD APPLY BY DEFAULT.** Ruled by Marc 2026-08-27. Not built.
 
     **What changes.** `sync` moves a note onto the note type the vault asks for without being told
     to. `--migrate-note-types` inverts into `--no-migrate-note-types`, kept as a brake rather than

@@ -463,6 +463,62 @@ refuses, naming the file and line, when:
   part is actually being used as a deck level
 - **the open Anki profile is not the one you named**
 
+## Changing your mind about a card's shape
+
+Change a marker and you have changed the card's **shape** — how many fields it has and how many
+ways it is asked. Anki calls that a *note type*, and a note can only be on one at a time, so the
+note has to move.
+
+**`sync` moves it for you, and every card keeps its review history.** Interval, ease, due date and
+the whole review log survive the move; that was measured rather than assumed. The run says which
+notes it moved and between which note types:
+
+```
+MOVED: 1 note put on the note type the vault asks for.
+
+  Obsidian Basic (and reversed card)  ->  Obsidian Concept-Descriptor
+
+  'system design interview / framework'
+```
+
+A dry run tells you the same thing before anything is written, under `WOULD MOVE`. It is worth
+looking, because a move rewrites **every field and every tag** of the note before writing them
+back — the largest single write this tool makes.
+
+If you would rather sync your content today and think about shapes another time, pass
+**`--no-migrate-note-types`** and the notes are left exactly where they are. The run then names
+them and says what it did not do.
+
+### The change that needs no move at all
+
+`cdd/1way`, `cdd/2way` and `cdd/3way` are all the **same** note type with a field flipped, so
+changing between them is an ordinary update.
+
+**Widening generates the new card by itself.** Go from `cdd/2way` to `cdd/3way` and Anki creates
+the third card, with fresh scheduling, while the two you already had keep everything. Nothing is
+migrated and nothing is at risk.
+
+### Narrowing, which is the one to know about
+
+Going the other way — `cdd/3way` back to `cdd/2way`, or `2way` to `1way` — is where care is
+needed, and the two cases behave differently.
+
+**Within the `cdd` family**, narrowing does *not* delete the card it retires. It stays, holding its
+review history, with nothing on its front, so it never comes up again. Anki's **Tools → Empty
+Cards** will offer to delete exactly those, so read that dialogue rather than confirming it.
+_Reporting and flagging such a card is decided and not yet built; see `IN-FLIGHT.md` item 23._
+
+**Across note types** — anything that would leave a card on a note type with fewer templates than
+it needs — is **refused**, whatever flags you pass. Not out of caution about your files: nobody has
+measured what Anki does with a card whose template no longer exists, and the honest answer is that
+it might be kept, orphaned, or destroyed. The run tells you which notes it refused and why, and
+suggests doing it by hand in Anki's own *Change Note Type* dialogue, which shows you the mapping
+before it acts.
+
+That refusal runs **regardless of the flag above**. `--no-migrate-note-types` only decides whether
+moves that have already been judged safe are carried out; it cannot make an unmeasured one happen,
+and dropping it cannot either.
+
 ## Deletion, and orphans
 
 **The sync never deletes anything.** A card in Anki whose source heading has gone is *flagged*
