@@ -333,6 +333,21 @@ object Report:
         "a question you did not write. Drop the flag to move them.",
       )
 
+  /** WHAT THE PREVIEW DOES WITH ONE VERDICT — closed, so the compiler can check the sorting.
+    *
+    * Local and private because it is a presentation concern and nothing outside this file has
+    * any use for it. Its only job is to give [[retypePreview]] a TOTAL match to write against,
+    * which a `collect` over [[RetypeVerdict]] cannot provide.
+    */
+  private enum PreviewRow:
+    case Blocked(retype: SyncAction.Retype, what: String, remedy: String)
+    case Proceeding(retype: SyncAction.Retype)
+
+    /** Nothing to print. Named rather than represented by absence, so that choosing silence is
+      * a decision the reader can see being made.
+      */
+    case Unremarkable
+
   /** WHAT A DRY RUN SAYS ABOUT THE RETYPES IT IS PREVIEWING.
     *
     * ONLY THE VERDICTS THAT CONTRADICT THE PLAN SUMMARY ARE PRINTED. `Report.plan` above
@@ -350,16 +365,36 @@ object Report:
     * would eventually disagree about the same collection.
     */
   def retypePreview(verdicts: Vector[(SyncAction.Retype, RetypeVerdict)]): Vector[String] =
-    val blocked = verdicts.collect {
-      case (retype, RetypeVerdict.RefusedByShapes(refusal)) =>
-        (retype, refusal.describe, refusal.remedy)
-      case (retype, RetypeVerdict.ShapesUnavailable(from, to)) =>
-        (
-          retype,
-          s"the shape of note type '$from' or '$to' could not be read from the collection",
-          "this is a connection or collection fault rather than anything about the move",
-        )
+    // EVERY VERDICT IS SORTED BY A TOTAL MATCH, AND THAT IS THE POINT OF THE SHAPE.
+    //
+    // This block used to be two separate `verdicts.collect { ... }` passes, one picking the
+    // blocked verdicts and one picking `WillApply`. A `collect` takes a PARTIAL function, so it
+    // OPTS OUT of the exhaustiveness the build otherwise treats as an error
+    // (`project.scala`'s `-Wconf:msg=exhaustive:e`). A new `RetypeVerdict` case therefore
+    // compiled cleanly here and was simply absent from the report — the run would do something
+    // it never mentioned, which is the failure `Executor.ExecutionReport` argues against in its
+    // own docstring: "a fourth outcome arrives one day and is silently counted as done".
+    //
+    // Sorting through a closed local type restores the guarantee where it was lost: adding a
+    // verdict now fails to compile HERE as well as in the executor, so the report cannot fall
+    // silently behind the decision it reports on. Found 2026-08-27, while adding a verdict.
+    val rows = verdicts.map { (retype, verdict) =>
+      verdict match
+        case RetypeVerdict.RefusedByShapes(refusal) =>
+          PreviewRow.Blocked(retype, refusal.describe, refusal.remedy)
+        case RetypeVerdict.ShapesUnavailable(from, to) =>
+          PreviewRow.Blocked(
+            retype,
+            s"the shape of note type '$from' or '$to' could not be read from the collection",
+            "this is a connection or collection fault rather than anything about the move",
+          )
+        case RetypeVerdict.WillApply => PreviewRow.Proceeding(retype)
+        // SILENT ON PURPOSE, not overlooked — `kindOf` already labels a deferral in the summary
+        // itself, so repeating it here would be the noise the docstring above rules out.
+        case RetypeVerdict.DeferredByPolicy => PreviewRow.Unremarkable
     }
+
+    val blocked = rows.collect { case PreviewRow.Blocked(r, what, remedy) => (r, what, remedy) }
 
     // WHAT WILL HAPPEN, NOT ONLY WHAT WILL NOT. _Added 2026-08-27, closing a regression this
     // report caused two commits earlier._ While migration was opt-in, a move the run would not
@@ -368,7 +403,7 @@ object Report:
     // over a note needing a move printed `1 move to another note type` and stopped, naming
     // neither the note nor the note types. The preview for the largest write this tool performs
     // became less informative at the moment that write became automatic.
-    val proceeding = verdicts.collect { case (retype, RetypeVerdict.WillApply) => retype }
+    val proceeding = rows.collect { case PreviewRow.Proceeding(retype) => retype }
 
     val willMove =
       if proceeding.isEmpty then Vector.empty
