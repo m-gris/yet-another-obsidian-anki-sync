@@ -29,6 +29,21 @@ final case class ExecutionFailure(action: SyncAction, error: AnkiError)
 final case class ExecutionReport(
     failures: Vector[ExecutionFailure],
     deferred: Vector[SyncAction.Retype],
+
+    /** EVERY ACTION THAT WAS CARRIED OUT, in the order it was carried out.
+      *
+      * STATED BY THE EXECUTOR RATHER THAN DERIVED BY A READER. A caller holding the plan and this
+      * report could compute "applied" as everything that is neither deferred nor failed, and that
+      * subtraction is exactly the catch-all shape this codebase keeps removing: a fourth outcome
+      * arrives one day and is silently counted as done. The executor knows which calls returned;
+      * nothing else does.
+      *
+      * IT EXISTS BECAUSE A RETYPE BECAME THE DEFAULT (2026-08-27). Moving a note between note
+      * types blanks every field and replaces every tag before writing them back — the largest
+      * single write this tool performs — and until this field existed a run that did it said only
+      * `attempted: 1 / failed: 0`. The report that names what moved is `Report.appliedRetypes`.
+      */
+    applied: Vector[SyncAction],
 )
 
 object Observer:
@@ -222,12 +237,18 @@ object Executor:
         // an already-decided split rather than the decision itself — which is the difference
         // between a partial function used for its type and one used for its control flow.
         val deferred = setAside.collect { case retype: SyncAction.Retype => retype }
-        applyEach(rest, anki, Map.empty, policy).map(ExecutionReport(_, deferred))
+        applyEach(rest, anki, Map.empty, policy).map((failures, applied) =>
+          ExecutionReport(failures, deferred, applied)
+        )
 
       case RetypePolicy.Apply =>
         Retyping
           .shapesOf(anki, Retyping.noteTypesIn(plan))
-          .flatMap(shapes => applyEach(plan.actions, anki, shapes, policy).map(ExecutionReport(_, Vector.empty)))
+          .flatMap(shapes =>
+            applyEach(plan.actions, anki, shapes, policy).map((failures, applied) =>
+              ExecutionReport(failures, Vector.empty, applied)
+            )
+          )
 
   /** WHAT A REAL RUN WOULD DECIDE ABOUT EVERY RETYPE, WITHOUT WRITING ANYTHING.
     *
@@ -270,12 +291,18 @@ object Executor:
       anki: Anki[F],
       shapes: Map[String, NoteTypeShape],
       policy: RetypePolicy,
-  )(using F: MonadError[F, AnkiError]): F[Vector[ExecutionFailure]] =
+  )(using F: MonadError[F, AnkiError]): F[(Vector[ExecutionFailure], Vector[SyncAction])] =
+    // EACH ACTION ANSWERS FOR ITSELF, as a Left or a Right, rather than as an `Option` whose
+    // `None` means success. The old shape discarded which actions had succeeded, so the report
+    // could say how many failed and never what was done.
     actions
       .traverse(action =>
-        runOne(action, anki, shapes, policy).attempt.map(_.left.toOption.map(ExecutionFailure(action, _)))
+        runOne(action, anki, shapes, policy).attempt.map {
+          case Left(error) => Left(ExecutionFailure(action, error))
+          case Right(_)    => Right(action)
+        }
       )
-      .map(_.flatten)
+      .map(results => (results.collect { case Left(f) => f }, results.collect { case Right(a) => a }))
 
   private def runOne[F[_]](
       action: SyncAction,

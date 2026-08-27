@@ -270,6 +270,44 @@ object Report:
     * someone can see whether the list is the migration they expect or a heading they retagged
     * by accident.
     */
+  /** WHICH NOTES WERE MOVED BETWEEN NOTE TYPES, and between which.
+    *
+    * SAID BECAUSE IT IS THE LARGEST WRITE THIS TOOL MAKES, and since 2026-08-27 it happens by
+    * default. Moving a note blanks every field and replaces every tag before writing them back;
+    * a run that did that and reported only `attempted: 1 / failed: 0` would be describing its own
+    * effort rather than its effect.
+    *
+    * IT NAMES THE PAIRS AND THEN THE CARDS, in that order, because the pairs are what a reader
+    * checks — "did it move things between the two types I expected?" — and the cards are what
+    * they scan afterwards. The same shape as the block that reports what was left alone, so the
+    * two read alike whichever way the flag was set.
+    *
+    * SILENT WHEN NOTHING MOVED. A standing `0 notes moved` line on every ordinary run is noise in
+    * a fixed position, which teaches a reader to skip exactly the block where the real number
+    * will one day appear.
+    */
+  def appliedRetypes(applied: Vector[SyncAction]): Vector[String] =
+    val moved = applied.collect { case r: SyncAction.Retype => r }
+    if moved.isEmpty then Vector.empty
+    else
+      val shown = 10
+      val pairs = moved.map(r => s"${r.from}  ->  ${r.to}").distinct.sorted
+      val listed = moved.take(shown).map(r => s"  '${r.key.path.render}'")
+      val elided =
+        if moved.sizeIs <= shown then Vector.empty
+        else Vector(s"  ... and ${moved.size - shown} more")
+
+      Vector(
+        "",
+        s"MOVED: ${quantify(moved.size, "note")} put on the note type the vault asks for.",
+        "",
+      ) ++ pairs.map("  " + _) ++ Vector("") ++ listed ++ elided ++ Vector(
+        "",
+        "Their fields and tags were rewritten in place. Every card kept its scheduling — its",
+        "interval, its ease and its whole review history — which was measured rather than assumed.",
+        "Pass --no-migrate-note-types to leave such notes alone instead.",
+      )
+
   def deferredRetypes(deferred: Vector[SyncAction.Retype]): Vector[String] =
     if deferred.isEmpty then Vector.empty
     else

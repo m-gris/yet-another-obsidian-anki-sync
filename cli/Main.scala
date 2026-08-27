@@ -1013,7 +1013,7 @@ object Main
       case SyncOutcome.PlannedOnly(_) =>
         Vector("", "DRY RUN — nothing was written.")
 
-      case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred)) =>
+      case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, applied)) =>
         // `attempted:` and `failed:`, never "applied N of M". `Executor.runOne` traverses an
         // Update's changes, so a failure on the first change abandons the rest of THAT action
         // while recording one failure — "applied" would assert more than the code guarantees.
@@ -1044,7 +1044,7 @@ object Main
                 "and the collection and attempts them again. Whether that succeeds depends on why each one",
                 "failed — an action this tool cannot yet carry out will fail again.",
               )
-        counts ++ failureLines ++ Report.deferredRetypes(deferred)
+        counts ++ failureLines ++ Report.appliedRetypes(applied) ++ Report.deferredRetypes(deferred)
 
       case SyncOutcome.AbortedDuringExecution(error) =>
         Vector(
@@ -1157,7 +1157,7 @@ object Main
           else s"dry run; ${plan.actions.size} actions are outstanding"
         )
 
-    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred)) =>
+    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, _)) =>
       // DEFERRED WORK MAKES A RUN NON-CLEAN, deliberately, even though nothing went wrong.
       // The precedent this departs from is the dry run, which is clean with actions
       // outstanding — but a dry run's work is outstanding until the NEXT ordinary run, whereas

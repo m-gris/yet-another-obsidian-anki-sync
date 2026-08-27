@@ -281,9 +281,9 @@ class MainTest extends munit.FunSuite:
 
     def code(o: Main.SyncOutcome) = Main.exitCodeFor(Main.verdict(o))
 
-    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty))), ExitCode.Success)
+    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty, Vector.empty))), ExitCode.Success)
     assertNotEquals(
-      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty))),
+      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty))),
       ExitCode.Success,
       "a run whose actions failed reported success",
     )
@@ -336,7 +336,7 @@ class MainTest extends munit.FunSuite:
       ),
       AnkiError.Remote("addTags", "refused"),
     )
-    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty)))
+    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty)))
     assert(
       partlyFailed.toUpperCase.contains("FAIL"),
       s"a run whose actions failed does not say so on screen:\n$partlyFailed",
@@ -353,7 +353,7 @@ class MainTest extends munit.FunSuite:
       Vector.empty,
       Vector.empty,
     )
-    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty))) match
+    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty, Vector.empty))) match
       case Main.Verdict.Clean(_) => fail("a run with orphan inference suppressed reported clean")
       case _                     => ()
   }
@@ -963,4 +963,51 @@ class MainTest extends munit.FunSuite:
       .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Apply, anki)
       .unsafeRunSync()
     assertEquals(state.notes(id).model, "Basic", "a dry run moved a note")
+  }
+
+  // ────────────────── saying what was MOVED, not only what was not ──────────────────
+
+  /** A RUN THAT MOVES A NOTE MUST SAY SO. Moving a note between note types blanks every field and
+    * replaces every tag before writing them back — the largest single write this tool performs —
+    * and since 2026-08-27 it happens by DEFAULT. Until this block existed such a run printed
+    * `attempted: 1 / failed: 0`, which describes its effort rather than its effect.
+    */
+  test("a run that moves a note between note types names it, and both note types") {
+    val (_, anki, _) = collectionWithANoteOnTheStockType()
+
+    val outcome = Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .unsafeRunSync()
+
+    val screen = Main.describeSyncOutcome(outcome).mkString("\n")
+    assert(screen.contains("MOVED"), s"a note changed note type and the run did not say so:\n$screen")
+
+    // THE PAIR, NOT THE TWO NAMES SEPARATELY. This fixture moves the stock `Basic` onto this
+    // tool's `Obsidian Basic`, and the first is a SUBSTRING of the second — so asserting each
+    // name on its own would pass on a line that mentioned only the destination.
+    assert(
+      screen.contains(s"Basic  ->  ${Marker.NoteTypes.Basic}"),
+      s"the pair it moved between is not named:\n$screen",
+    )
+
+    // And the card, so a reader can find it rather than only knowing a count moved.
+    assert(
+      screen.contains("temporal coupling"),
+      s"the note that moved is not named:\n$screen",
+    )
+  }
+
+  /** THE CONTROL, and it is what stops the block above being satisfied by a line printed always.
+    * A standing `0 notes moved` on every ordinary run is noise in a fixed position, which teaches
+    * a reader to skip exactly the block where a real number will one day appear.
+    */
+  test("a run that moves nothing says nothing about moving") {
+    // An ordinary first sync into an empty collection: it CREATES a note and moves none.
+    val (_, anki) = fixture()
+    val outcome = Main
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .unsafeRunSync()
+
+    val screen = Main.describeSyncOutcome(outcome).mkString("\n")
+    assert(!screen.contains("MOVED"), s"a run that moved nothing reported a move:\n$screen")
   }
