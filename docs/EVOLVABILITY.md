@@ -252,7 +252,12 @@ One thing the restatement does **not** license: a sidecar being off-limits. It i
 
 **Anki was not running during this brainstorm. Nothing below marked as needing a collection was probed.** Every UNMEASURED row in §2 stays unmeasured, and every conclusion resting on one is provisional — specifically §2's `changeDeck` and `suspend`/`unsuspend` rows, §3.2's Anki half, §3.3's Anki half, and §3.8 in both directions.
 
-**M1 — Replay the vault's git history and classify every key death.** *No Anki. No writes. Read-only. An afternoon.*
+**M1 — Replay the vault's git history and classify every key death.** ⚠️ **IT CANNOT RUN: THE
+VAULT IS NOT UNDER GIT** (verified 2026-08-27). One `git init` and a habit of committing unblocks
+both this and the git-traced anchor candidate in `docs/ANCHORS-BELOW-A-HEADING.md`. Running it
+against this repository's fixture vault instead would measure how the fixtures were authored rather
+than how Marc edits, and the result would be easy to mistake for the real one. *No Anki. No writes.
+Read-only. An afternoon, once there is history to read.*
 For each commit, run the extractor over both trees and diff the key sets. Classify each key death as: file deleted, file renamed, ancestor heading reworded, marked heading reworded, frontmatter `id` changed, body-only edit (no key change). Count how many cards each ancestor rewording would have orphaned — **that number is the amplification factor**.
 *Unblocks:* everything in §4. It decides C-versus-A/B, decides whether the ancestor channel or the heading channel deserves the investment, and puts a date on "later". Cheaper than it looks: `inspect` already runs read-only and `extract/Golden.test.scala` already compares an extracted card set including `src::` lines, so this is a `git worktree` loop plus a key-set diff, not a subsystem.
 
