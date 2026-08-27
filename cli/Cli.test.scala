@@ -580,3 +580,76 @@ class CliTest extends munit.FunSuite:
       "the summary wording changed with the order the changes were computed in",
     )
   }
+
+  // ──────────────── what a DRY RUN says about the moves it would make ────────────────
+
+  /** A PREVIEW MUST NAME WHAT WILL HAPPEN, NOT ONLY WHAT WILL NOT.
+    *
+    * _Added 2026-08-27, closing a regression introduced two commits earlier._ While migration was
+    * opt-in, a move the run would not make was DEFERRED, and the deferred block named every note
+    * and every pair of note types. Making migration the default moved those notes out of that
+    * block and into the applied path — so a dry run over a note needing a move printed
+    * `1 move to another note type` and stopped, naming neither the note nor the note types. The
+    * preview for the largest write this tool performs became less informative at exactly the
+    * moment that write became automatic.
+    */
+  private def previewOf(verdicts: (SyncAction.Retype, RetypeVerdict)*): String =
+    Report.retypePreview(verdicts.toVector).mkString("\n")
+
+  private def retypeOf(heading: String, from: String, to: String): SyncAction.Retype =
+    val k = parkedKey("n1", heading)
+    SyncAction.Retype(
+      key = k,
+      noteId = obsidiananki.anki.AnkiNoteId(1L),
+      from = from,
+      to = to,
+      fields = Vector("Front" -> "f", "Back" -> "b"),
+      ownedTags = NonEmptyVector.one(obsidiananki.model.TagCodec.encode(k)),
+      preservedTags = Vector.empty,
+      deck = None,
+    )
+
+  test("a dry run names the note it would move, and the note types it would move between") {
+    val screen = previewOf(
+      retypeOf("Definition", "Obsidian Basic", Marker.NoteTypes.ConceptDescriptor) -> RetypeVerdict.WillApply
+    )
+
+    assert(screen.contains("WOULD MOVE"), s"a move that will happen is not previewed at all:\n$screen")
+    assert(
+      screen.contains(s"Obsidian Basic  ->  ${Marker.NoteTypes.ConceptDescriptor}"),
+      s"the pair it would move between is not named:\n$screen",
+    )
+    assert(screen.contains("definition"), s"the note that would move is not named:\n$screen")
+    assert(
+      screen.contains("--no-migrate-note-types"),
+      s"the flag that would prevent it is not named:\n$screen",
+    )
+  }
+
+  /** THE CONTROL. Without it the block above is satisfied by a heading printed unconditionally,
+    * and a standing "would move 0 notes" on every dry run is noise in a fixed position.
+    */
+  test("a dry run with no moves to make says nothing about moving") {
+    assertEquals(previewOf(), "")
+  }
+
+  /** BOTH HALVES AT ONCE, in the order a person reads them: what will happen, then what will not.
+    * A run can perfectly well move one note and refuse another, and a preview that showed only
+    * one of the two would be worse than one that showed neither.
+    */
+  test("a dry run that would move one note and refuse another says both") {
+    val screen = previewOf(
+      retypeOf("Definition", "Obsidian Basic", Marker.NoteTypes.ConceptDescriptor) -> RetypeVerdict.WillApply,
+      retypeOf("Cost", Marker.NoteTypes.ConceptDescriptor, "Obsidian Basic") ->
+        RetypeVerdict.RefusedByShapes(
+          RetypeRefusal.TemplateCountDiffers(Marker.NoteTypes.ConceptDescriptor, 3, "Obsidian Basic", 1)
+        ),
+    )
+
+    assert(screen.contains("WOULD MOVE"), s"the move that will happen is missing:\n$screen")
+    assert(screen.contains("WILL NOT HAPPEN"), s"the move that will be refused is missing:\n$screen")
+    assert(
+      screen.indexOf("WOULD MOVE") < screen.indexOf("WILL NOT HAPPEN"),
+      s"what will happen must be read before what will not:\n$screen",
+    )
+  }

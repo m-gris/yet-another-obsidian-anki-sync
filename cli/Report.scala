@@ -360,26 +360,60 @@ object Report:
         )
     }
 
-    if blocked.isEmpty then Vector.empty
-    else
-      Vector(
-        "",
-        s"OF THE MOVES COUNTED ABOVE, ${blocked.size} WILL NOT HAPPEN.",
-        "",
-        "This is what the run itself would refuse, checked here against the same note types",
-        "rather than assumed — so this preview and the run agree.",
-        "",
-      ) ++ blocked.flatMap { (retype, why, remedy) =>
+    // WHAT WILL HAPPEN, NOT ONLY WHAT WILL NOT. _Added 2026-08-27, closing a regression this
+    // report caused two commits earlier._ While migration was opt-in, a move the run would not
+    // make was DEFERRED, and the deferred block named every note and every pair. Making migration
+    // the default moved those notes out of that block and into the applied path — so a dry run
+    // over a note needing a move printed `1 move to another note type` and stopped, naming
+    // neither the note nor the note types. The preview for the largest write this tool performs
+    // became less informative at the moment that write became automatic.
+    val proceeding = verdicts.collect { case (retype, RetypeVerdict.WillApply) => retype }
+
+    val willMove =
+      if proceeding.isEmpty then Vector.empty
+      else
+        val shown = 10
+        val pairs = proceeding.map(r => s"${r.from}  ->  ${r.to}").distinct.sorted
+        val listed = proceeding.take(shown).map(r => s"  '${r.key.path.render}'")
+        val elided =
+          if proceeding.sizeIs <= shown then Vector.empty
+          else Vector(s"  ... and ${proceeding.size - shown} more")
+
         Vector(
-          s"  '${retype.key.path.render}'  (${retype.from} -> ${retype.to})",
-          s"    $why.",
-          s"    $remedy.",
+          "",
+          s"WOULD MOVE ${quantify(proceeding.size, "note")} onto the note type the vault asks for.",
+          "",
+        ) ++ pairs.map("  " + _) ++ Vector("") ++ listed ++ elided ++ Vector(
+          "",
+          "Every field and every tag of each is rewritten in place; the cards keep their",
+          "scheduling. Pass --no-migrate-note-types to leave them as they are.",
         )
-      } ++ Vector(
+
+    val refusals =
+      if blocked.isEmpty then Vector.empty
+      else
+        Vector(
         "",
-        "Everything else in the plan is unaffected: a note that is not moved stays on the note",
-        "type it is on, and nothing in this tool ever deletes a note.",
-      )
+          s"OF THE MOVES COUNTED ABOVE, ${blocked.size} WILL NOT HAPPEN.",
+          "",
+          "This is what the run itself would refuse, checked here against the same note types",
+          "rather than assumed — so this preview and the run agree.",
+          "",
+        ) ++ blocked.flatMap { (retype, why, remedy) =>
+          Vector(
+            s"  '${retype.key.path.render}'  (${retype.from} -> ${retype.to})",
+            s"    $why.",
+            s"    $remedy.",
+          )
+        } ++ Vector(
+          "",
+          "Everything else in the plan is unaffected: a note that is not moved stays on the note",
+          "type it is on, and nothing in this tool ever deletes a note.",
+        )
+
+      // WHAT WILL HAPPEN FIRST, THEN WHAT WILL NOT — the order a person reads in, and the same
+      // order a real run prints them.
+    willMove ++ refusals
 
   private def kindOf(a: SyncAction, retypePolicy: RetypePolicy): String = a match
     case _: SyncAction.Create => "create"
