@@ -281,19 +281,132 @@ image. Recorded now so that the wrong lever is not pulled later.
 
 Both are pinned by tests in `cli/Main.test.scala`.
 
-## Phase 5 — the add-on shell
+## Phase 5 — the add-on shell — DONE 2026-08-27, AND IT WORKS
 
-- [ ] Interception, the ours/not-ours decision, and delegation to Anki's editor for everything
-      else. Thin by construction: every decision was made upstream of it.
+`addon/obsidian_edit/`. Confirmed by Marc pressing `e` on a real card in a real review session.
 
-## Phase 6 — configuration
+- [x] `core.py` — every judgement the add-on makes, as pure functions of strings. **25 tests**,
+      no Anki required, no interpreter newer than 3.9 required.
+- [x] `__init__.py` — the wiring. Registers a replacement creator for `EditCurrent` through
+      `aqt.dialogs.register_dialog`, hitting the single choke point all three Edit routes share.
+- [x] `config.json`, `config.md`, `manifest.json`.
 
-- [ ] The vault the add-on opens into, typed once.
+**The split is the point.** `aqt` imports only inside a running Anki, so nothing in the wiring
+has a unit test, and the design document said so before any of it was written. Everything that
+could be a decision was therefore moved into `core.py`, which is driven directly. What is left in
+the shell is reading configuration, starting a process, and dispatching on three cases.
 
-This inherits a constraint rather than introducing one: `README.md`, "ONE VAULT PER ANKI PROFILE"
-— nothing this tool writes into Anki records which vault a note came from, so a profile holds one
-vault whether or not this feature exists. The add-on's single-vault configuration is downstream of
-that, which makes it cheaper to accept than §7 of the design doc originally suggested.
+**Three outcomes, never a fourth.** Obsidian opens; or Anki's editor opens; or a message appears
+AND Anki's editor opens. A keypress that does nothing is indistinguishable from a broken add-on,
+so it is not a state the code can reach — which is what §8 of the design doc asked the types to
+make unrepresentable, honoured here by the shell rather than by the types.
+
+**`--uri-only` was added to `locate` for this**, and it splits channels rather than silencing
+one: the link on standard output, the explanation on standard error, in a single run. A flag that
+merely suppressed the prose would force a SECOND run — and a second JVM — to find out why nothing
+came back.
+
+_A defect that fell out of it, now fixed: a successful lookup was writing its URI to BOTH
+channels, which reads as though something had gone wrong on the one reserved for saying so.
+`Report.located` (for a person at a terminal) and `Report.explanation` (for a caller that already
+holds the link) are now separate, and a placed card is silent on the second — so silence there
+means "no caveats", which is a usable signal._
+
+**What running it caught that no test would have:** Anki is launched from the Dock and does not
+inherit a shell's `PATH`, so a version-manager JVM is invisible to it. See Phase 6 — this is the
+single largest piece of setup friction, and it is the one a stranger meets first.
+
+## Phase 6 — configuration, and `install-addon`
+
+**Done for one machine, unsolved for everyone else.** The add-on works and is configured by hand.
+What follows is the design for removing the hand.
+
+### What a stranger has to do today
+
+1. Build the tool and get it on disk.
+2. Copy `addon/obsidian_edit/` into Anki's add-on directory.
+3. Type in `binary`, `vault_path` and `java_home`.
+4. Install and enable Advanced URI in Obsidian.
+5. Run `install-note-types`.
+6. Have `id:` in their notes' frontmatter.
+
+**Steps 2 and 3 are the ones that lose people, and step 3 already lost Marc** — on his own
+machine, with the person who wrote it watching. His JVM came from a version manager, so it sat on
+a `PATH` that only a shell assembles, and the launcher reported "Unable to locate a Java Runtime"
+— true, and thoroughly misleading, since the JVM was installed and merely unreachable from a
+process Anki had started. That is the calibration for how a stranger's first hour would go.
+
+### The reframe that makes this small
+
+The add-on looks as though it carries an awkward extra dependency: a JVM binary. **It does not.**
+Anyone installing it already has the sync tool, because the add-on is useless without cards the
+tool created. There is no dependency to install — only a pointer to configure. So the whole
+problem is *how that pointer gets set without a human typing three paths*.
+
+### `install-addon`, a sibling to `install-note-types`
+
+It can be genuinely zero-configuration, because **every value is available by introspection
+rather than by asking**:
+
+| Setting | Where it comes from | Checked |
+|---|---|---|
+| `java_home` | the tool IS a JVM process, so `java.home` answers | 2026-08-27: reports the version-manager path exactly, which `/usr/libexec/java_home` does not |
+| `binary` | the tool knows its own path | — |
+| `vault_path` | already resolved, and the vault registry is already read | — |
+
+It should also **verify what it cannot set**, turning failures that are currently silent or
+cryptic into refusals that name the remedy — the pattern the rest of the tool already follows:
+
+- **Advanced URI ENABLED, not merely present.** `.obsidian/community-plugins.json` lists the
+  enabled ones, so the distinction is available and worth making: a plugin that is installed and
+  switched off fails exactly like one that is absent, and says nothing either way. _Checked
+  2026-08-27 against Marc's vault._
+- The note types installed, and the collection reachable — both already have refusal vocabulary.
+
+### It should PRINT the Obsidian half, not write it
+
+The reverse direction — a hotkey in Obsidian that opens Anki's Browse filtered to the current
+note's cards — is a shell command in a third-party plugin's configuration, and setting it up here
+by hand on 2026-08-27 cost three failed attempts. None of them were the idea; all three were that
+plugin's undocumented behaviour:
+
+1. Its Obsidian command id is `"shell-command-" + <the id in its own settings>`, which had to be
+   read out of the bundle. A hotkey bound to the id without that infix silently does nothing.
+2. It escapes variable values for the shell, turning a UUID's hyphens into `\-`. Interpolated
+   into a JSON body those are an invalid JSON escape, AnkiConnect refuses the whole request, and
+   nothing happens visibly at all.
+3. Ordering: `open -a Anki` after `guiBrowse` raises the main window over the Browse window that
+   just opened, which is indistinguishable from Browse never opening.
+
+**Every one of those is invisible until it bites, and a stranger has no bundle to read.** So this
+half is documented in `README.md` and printed by the command — never written into
+`.obsidian/plugins/*/data.json`. Anki's add-on directory is a documented layout; a plugin's
+private settings file and its internal id scheme are not, and they are free to change in a point
+release.
+
+_An opt-in `--write-shellcommands` could exist for people who accept the coupling, refusing
+outright when it meets a `settings_version` it has not seen. Off by default._
+
+### What it must not pretend to do
+
+Install Advanced URI. Restart Anki, without which the add-on does not load. Choose a profile
+silently — the `--profile` guardrail applies here as everywhere. And Anki's add-on directory is
+platform-specific: a guess should be SHOWN and confirmed, never acted on.
+
+### Why not AnkiWeb
+
+**Recommendation: do not publish there.** An AnkiWeb add-on has to be self-contained and
+configured by hand, which is precisely the friction this removes. The add-on cannot work without
+the tool, so their versions should move together; a version skew between an AnkiWeb add-on and a
+locally built binary is a bug report nobody can diagnose. Shipping the add-on inside this
+repository, installed by the tool, keeps that impossible.
+
+### The larger question this does not answer
+
+How the TOOL itself is distributed. A package manager formula declaring a JVM dependency would
+make the JVM someone else's problem entirely — the single biggest simplification available, and
+it would delete `java_home` outright. A prebuilt assembly on a releases page is cheaper and
+leaves the JVM to the user. Not decided, and out of scope for this feature.
 
 ## Out of scope for a first version
 

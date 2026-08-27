@@ -540,6 +540,123 @@ Because a rename is indistinguishable from a deletion followed by an unrelated c
 also how a renamed heading surfaces: an orphan plus a new card, reconciled by hand. That is
 lossless precisely because the orphan is still there.
 
+## Editing a card at its source
+
+Reviewing is when you notice a card is badly worded, and **Anki is the one place you must not fix
+it**: an edit made there never reaches your vault and is overwritten by the next sync.
+
+So there is an Anki add-on, in `addon/obsidian_edit/`, that redirects Anki's **Edit** action. For
+a card this tool created, pressing `e` opens the source note in Obsidian, at the card's own line.
+For every other card in the collection it opens Anki's editor exactly as before — which is most
+of them, and is the case that must never break.
+
+**Nothing changes in Anki until you sync.** The card in front of you keeps its old wording for
+the rest of the session. The loop is: press `e` → edit in Obsidian → run `sync` → the card
+updates on the next review.
+
+**It shortens the path to the expensive edit, and that is worth knowing before you use it.** The
+natural fix for a badly worded card is to reword its heading, and *Changing your mind about a
+card's shape* above explains what that costs: the card is retired and a new one is minted with no
+review history. When the wording is wrong, prefer fixing the body. The add-on says so at the
+moment it matters — if the card you are opening has already lost its anchor, it tells you.
+
+### The command underneath it
+
+The add-on decodes nothing. It reads the card's `src::` tag and asks the tool:
+
+```bash
+obsidian-anki-sync locate --vault-path ~/my-vault 'src::abc123::cap%20theorem/definition'
+```
+
+which prints an `obsidian://` URI, or says why it cannot. `--uri-only` puts the URI on standard
+output and any explanation on standard error, which is how the add-on reads it. It needs no
+`--profile`, because it reads no collection.
+
+That split is the whole design. Decoding the tag inside the add-on would mean a **second
+implementation of card identity**, in a second language, kept honest only by a test — the defect
+class this project fights hardest. The tool that wrote the tag is the thing that reads it.
+
+`locate` is useful on its own. Run it over every tag in your collection and you have an audit of
+which cards still point at live notes.
+
+### Setting it up
+
+**1. The Obsidian side.** Install and enable
+[Advanced URI](https://github.com/Vinzent03/obsidian-advanced-uri). Its default *UID field in
+frontmatter* setting is already `id`, which is the field this tool derives identity from, so
+there is normally nothing to configure.
+
+**2. The Anki side.** Put `addon/obsidian_edit/` where Anki looks for add-ons — on macOS,
+`~/Library/Application Support/Anki2/addons21/`. A symlink works and keeps it updated in place.
+
+**3. Configure it** in Anki under *Tools → Add-ons → Edit in Obsidian → Config*:
+
+| Setting | What it is |
+|---|---|
+| `binary` | full path to `obsidian-anki-sync`. A bare name will not do — see below |
+| `vault_path` | the vault directory, the one holding `.obsidian` |
+| `vault_name` | usually empty. Only if Obsidian shows your vault under a name other than its directory's |
+| `java_home` | usually empty. See below |
+
+**4. Restart Anki.** The add-on does not load until you do.
+
+### ⚠️ Anki does not inherit your shell's `PATH`
+
+It is launched from the Dock or a launcher, not from a terminal, so it sees the session's
+environment rather than the one your shell builds. Two consequences, and both have already caught
+someone:
+
+- **`binary` must be an absolute path.** `which obsidian-anki-sync` and paste what it prints.
+- **`java_home` must be set if your JVM came from a version manager** — mise, asdf, sdkman. Those
+  put `java` on a `PATH` that only a shell assembles, so Anki cannot see it. The symptom is
+  *"Unable to locate a Java Runtime"*, which is true and thoroughly misleading: the JVM is
+  installed and merely unreachable from a process Anki started. macOS's own
+  `/usr/libexec/java_home` does not find a version-manager install either. Run `echo $JAVA_HOME`
+  and paste that. Leave it empty if `java` works from a bare `/usr/bin:/bin` path.
+
+The add-on adds that instruction to the error when it recognises the failure, but it is written
+here too, because the error you get is from a launcher that does not know why it cannot see a JVM.
+
+### The other direction — the cards a note produced
+
+The dual of the above: from a note in Obsidian, a keystroke that opens Anki's **Browse** window
+filtered to the cards that note produced. Together the two close the loop — a card takes you to
+its source, and a note takes you to everything it became.
+
+**This needs nothing from this tool.** A card's identity tag begins `src::{frontmatter id}::`, and
+the id is already sitting in the note's frontmatter, so the Anki search is composable without
+decoding anything: `tag:src::<id>::*`. That is the whole trick, and it is why this direction is a
+shell command rather than a feature.
+
+It uses [Shell commands](https://github.com/Taitava/obsidian-shellcommands) and Anki's
+**AnkiConnect** add-on, which the tool already requires. Create a shell command with this as its
+body, give it an alias, and bind it:
+
+```bash
+open -a Anki ; ID={{yaml_value:id}} ; curl -sS localhost:8765 -X POST -d "{\"action\":\"guiBrowse\",\"version\":6,\"params\":{\"query\":\"tag:src::$ID::*\"}}" > /dev/null
+```
+
+`open -a Anki` is macOS. Elsewhere, whatever raises a window: `wmctrl -a Anki`, or nothing at all
+if your window manager already follows focus.
+
+**Two details in that line are load-bearing, and both were found the hard way.**
+
+**The id is assigned unquoted, and it must be.** Shell commands escapes variable values so they
+are safe for a shell — it turns every hyphen of a UUID into `\-`. Interpolated straight into a
+JSON body those backslashes are an *invalid JSON escape*, AnkiConnect rejects the entire request,
+and nothing happens: no window, no visible error. An unquoted assignment is the context that
+escaping exists for — the shell strips it, `$ID` holds the clean value, and the JSON is built from
+that. Verified identical under `sh`, `zsh` and `bash`.
+
+**`open -a Anki` runs FIRST.** `guiBrowse` opens the Browse window and raises it *within* Anki,
+but macOS will not let Anki pull itself in front of Obsidian, so the app has to be raised
+separately. Do that last and it raises Anki's *main* window over the Browse window that just
+opened — which looks exactly like Browse never opening.
+
+**Orphaned cards appear too**, which is a feature rather than an accident: a flagged card keeps
+its `src::` tag beside the `orphaned::` one. A note whose heading you reworded shows the live card
+and the retired one side by side, which is the clearest view you will get of what a rewording cost.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -564,6 +681,12 @@ Named here so their absence is not mistaken for a promise:
 - `prune`, the command that deletes flagged cards
 - rename detection, deliberately cut — a rename is an orphan plus a create
 - pushing new-card position, so introduction order follows an authored route
+- **`install-addon`.** Every value the *Editing a card at its source* setup asks you to type is
+  one this tool could work out for itself — it is a JVM process, so `java.home` is its own
+  location; it knows its own path; it already resolves the vault. A sibling to
+  `install-note-types` would write the add-on into Anki's add-on directory fully configured, and
+  check what it cannot set: that Advanced URI is *enabled* rather than merely present, and that
+  the note types are installed. The design is `docs/EDIT-IN-OBSIDIAN-PLAN.md`, Phase 6
 - **any check that a collection belongs to the vault being synced.** See *One vault per Anki
   profile* above: the tool cannot tell one vault's notes from another's, so it cannot warn you.
   A `vault::` tag written beside `src::` would give it the means — tags are not hashed, so that
@@ -577,6 +700,8 @@ Named here so their absence is not mistaken for a promise:
 | `docs/REQUIREMENTS.md` | what this must do and must not, with each claim marked as stated, verified or inferred |
 | `docs/CARD-MODEL.md` | the card model, markers and identity scheme in full |
 | `docs/LEARNING-MODEL.md` | the pedagogy the card shapes come from |
+| `docs/EDIT-IN-OBSIDIAN.md` | why Edit redirects to Obsidian, and where the identity tag gets decoded |
+| `docs/EDIT-IN-OBSIDIAN-PLAN.md` | what was built for it, what was measured, and what is left |
 | `HANDOFF.md` | how the code is laid out, and the AnkiConnect behaviours it defends against |
 | `FIXTURES.md` | what every file in `dummy-vault/` and `hostile-vaults/` is for, and which are meant to fail |
 | `NOTE-TYPES-AND-CONTEXT-DESIGN.md` | why the note types are shaped as they are |
