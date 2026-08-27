@@ -162,6 +162,31 @@ final case class RetypePrice(doomed: Vector[CardStanding]):
   def cards: Int   = doomed.size
   def reviews: Int = doomed.map(_.reviews).sum
 
+/** ONE CHANGE THE RUN IS WAITING ON: which note, what it costs, and the name to answer with.
+  *
+  * NOT A FAILURE, AND THE DISTINCTION IS THE DEFECT THIS FIXES. Until now a narrowing was
+  * raised as an error, so a run that had made a correct and deliberate decision announced it
+  * under `SOME ACTIONS FAILED` / `PROBLEMS`. Nothing failed. The tool declined to destroy cards
+  * without being asked, which is the behaviour Marc wants — reported in the vocabulary of
+  * breakage, where it is indistinguishable from a crash.
+  *
+  * IT CARRIES THE PRICE IT QUOTED. Whoever renders this must not recompute the cost: the number
+  * shown to the author and the number the decision is answered against have to be the same one,
+  * or the two can disagree across a vault edit and the author approves something other than
+  * what they read.
+  *
+  * NAMED FOR RETYPES ONLY, DELIBERATELY. `docs/REVIEW-QUEUE.md` describes four kinds of pending
+  * decision and this is the first to be built. A `PendingDecision` covering all four would be a
+  * type designed against three cases nobody has written yet; the generalisation is cheap once a
+  * second one exists and dishonest before then.
+  */
+final case class PendingRetype(
+    handle: DecisionHandle,
+    retype: SyncAction.Retype,
+    loss: RetypeDestroysCards,
+    price: RetypePrice,
+)
+
 /** WHAT THE TWO SHAPES SAY ABOUT A MOVE, before any policy is consulted.
   *
   * CLOSED, so that adding a third thing shapes can say is a compile error at every consumer
@@ -321,6 +346,35 @@ object Retyping:
       cards     <- anki.cardsOf(Vector(note))
       standings <- anki.standingOf(cards)
     yield RetypePrice(doomedBy(standings, loss))
+
+  /** PRICE EVERY CHANGE THE RUN IS WAITING ON, and leave every other verdict alone.
+    *
+    * ONE READ PER AFFECTED NOTE, and none at all when nothing is waiting — which is the ordinary
+    * case. A run that priced every retype would pay for a read per note to answer a question
+    * only a narrowing asks.
+    */
+  def pendingOf[F[_]: cats.Monad](
+      anki: Anki[F],
+      verdicts: Vector[(SyncAction.Retype, RetypeVerdict)],
+  ): F[Vector[PendingRetype]] =
+    verdicts
+      // A TOTAL MATCH RATHER THAN A `collect`, for the reason `cli/Report.scala` records at
+      // length: a partial function opts out of the exhaustiveness this build otherwise treats as
+      // an error, so a verdict added later would silently never be presented as a question —
+      // which here means a change the run withholds and never mentions to anybody.
+      .flatMap { (retype, verdict) =>
+        verdict match
+          case RetypeVerdict.DestroysCards(loss)     => Vector(retype -> loss)
+          case RetypeVerdict.WillApply               => Vector.empty
+          case RetypeVerdict.DeferredByPolicy        => Vector.empty
+          case RetypeVerdict.RefusedByShapes(_)      => Vector.empty
+          case RetypeVerdict.ShapesUnavailable(_, _) => Vector.empty
+      }
+      .traverse { (retype, loss) =>
+        priceOf(anki, retype.noteId, loss).map(price =>
+          PendingRetype(DecisionHandle.of(retype.key), retype, loss, price)
+        )
+      }
 
   /** Read the shape of each named note type, ONCE per name.
     *

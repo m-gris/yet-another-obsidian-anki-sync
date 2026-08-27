@@ -362,6 +362,90 @@ class RetypingTest extends munit.FunSuite:
     )
   }
 
+  // -------------------------------------- what the run is waiting on ----
+
+  /** BUILT ON A REAL COLLECTION rather than on a hand-made verdict list, because the price has
+    * to come out of the collection and a fabricated one would test only the plumbing.
+    */
+  def retypeOnto(anki: InMemoryAnki, to: String): (SyncAction.Retype, AnkiNoteId) =
+    val note = seedOnOldType(
+      anki,
+      Marker.NoteTypes.ConceptDescriptor,
+      k,
+      Vector(
+        "Concept"            -> "Database Scaleability",
+        "Descriptor"         -> "Reads",
+        "Description"        -> "Replication",
+        Marker.ThreeWayField -> "1",
+      ),
+    )
+    val action: SyncAction.Retype = SyncAction.Retype(
+      key = k,
+      noteId = note,
+      from = Marker.NoteTypes.ConceptDescriptor,
+      to = to,
+      fields = Vector("Front" -> "Reads", "Back" -> "Replication"),
+      ownedTags = NonEmptyVector.one(TagCodec.encode(k)),
+      preservedTags = Vector.empty,
+      deck = None,
+    )
+    (action, note)
+
+  test("a change that would destroy cards comes back priced, and named to answer with") {
+    val anki            = collectionWith()
+    val (retype, note)  = retypeOnto(anki, Marker.NoteTypes.Basic)
+    val cards           = anki.cardsOf(Vector(note)).fold(e => fail(s"cardsOf: $e"), identity)
+    anki.recordReviews(cards(0), 9)
+    anki.recordReviews(cards(1), 4)
+    anki.recordReviews(cards(2), 1)
+
+    val loss = RetypeDestroysCards(Marker.NoteTypes.ConceptDescriptor, 3, Marker.NoteTypes.Basic, 1)
+    val pending = Retyping
+      .pendingOf(anki, Vector(retype -> RetypeVerdict.DestroysCards(loss)))
+      .fold(e => fail(s"pendingOf: $e"), identity)
+
+    assertEquals(pending.size, 1)
+    assertEquals(pending.head.price.cards, 2, "two cards have nowhere to go on a one-template type")
+    assertEquals(pending.head.price.reviews, 5, "and they carry five reviews between them")
+    assertEquals(
+      pending.head.handle.value,
+      DecisionHandle.of(k).value,
+      "the name offered must be the note's own, or answering it could reach a different note",
+    )
+  }
+
+  /** NOTHING ELSE IS WAITING. A verdict the run will carry out, one it refuses outright, and one
+    * it was told not to attempt are all decided already — presenting them as questions would
+    * teach the author to page past the block where a real question appears.
+    */
+  test("only a change that destroys cards is waiting on an answer") {
+    val anki           = collectionWith()
+    val (retype, _)    = retypeOnto(anki, Marker.NoteTypes.Basic)
+    val refusal        = RetypeRefusal.ClozeKindDiffers("A", true, "B", false)
+
+    val pending = Retyping
+      .pendingOf(
+        anki,
+        Vector(
+          retype -> RetypeVerdict.WillApply,
+          retype -> RetypeVerdict.DeferredByPolicy,
+          retype -> RetypeVerdict.RefusedByShapes(refusal),
+          retype -> RetypeVerdict.ShapesUnavailable("A", "B"),
+        ),
+      )
+      .fold(e => fail(s"pendingOf: $e"), identity)
+
+    assertEquals(pending, Vector.empty, "a decided verdict must not be presented as a question")
+  }
+
+  test("a run with nothing to decide reads nothing from the collection") {
+    val anki = collectionWith()
+    assertEquals(
+      Retyping.pendingOf(anki, Vector.empty).fold(e => fail(s"pendingOf: $e"), identity),
+      Vector.empty,
+    )
+  }
+
   // ------------------------------------------- the verdict: both halves at once ----
 
   /** `verdictFor` IS THE FIX FOR A PREVIEW THAT LIED. The policy half was pure and the report
