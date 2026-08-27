@@ -667,8 +667,8 @@ class CliTest extends munit.FunSuite:
 
   test("locate takes the tag as a positional argument") {
     parse("locate", "--vault-path", existingDir, "src::abc::intro") match
-      case Right(Command.Locate(_, None, tag)) => assertEquals(tag, "src::abc::intro")
-      case other                               => fail(s"unexpected parse: $other")
+      case Right(Command.Locate(_, None, tag, _)) => assertEquals(tag, "src::abc::intro")
+      case other                                  => fail(s"unexpected parse: $other")
   }
 
   /** A MALFORMED TAG IS NOT A USAGE ERROR. It came off a card in somebody's collection, so it
@@ -685,8 +685,8 @@ class CliTest extends munit.FunSuite:
 
   test("--vault-name is carried through when given") {
     parse("locate", "--vault-path", existingDir, "--vault-name", "Study", "src::a::b") match
-      case Right(Command.Locate(_, Some(name), _)) => assertEquals(name.value, "Study")
-      case other                                   => fail(s"unexpected parse: $other")
+      case Right(Command.Locate(_, Some(name), _, _)) => assertEquals(name.value, "Study")
+      case other                                      => fail(s"unexpected parse: $other")
   }
 
   /** A blank name addresses no vault. Refused here rather than sent, because Obsidian's answer
@@ -696,4 +696,16 @@ class CliTest extends munit.FunSuite:
     val result = parse("locate", "--vault-path", existingDir, "--vault-name", "  ", "src::a::b")
     assert(result.isLeft, "a blank vault name was accepted")
     assert(result.left.exists(_.contains("vault-name")), s"error does not name the flag: $result")
+  }
+
+  /** OFF BY DEFAULT: a person typing `locate` wants the report, and a program has to ask for
+    * the machine form by name. The reverse default would make the human case the odd one.
+    */
+  test("--uri-only is off unless asked for") {
+    parse("locate", "--vault-path", existingDir, "src::a::b") match
+      case Right(Command.Locate(_, _, _, uriOnly)) => assertEquals(uriOnly, false)
+      case other                                   => fail(s"unexpected parse: $other")
+    parse("locate", "--vault-path", existingDir, "--uri-only", "src::a::b") match
+      case Right(Command.Locate(_, _, _, uriOnly)) => assertEquals(uriOnly, true)
+      case other                                   => fail(s"unexpected parse: $other")
   }

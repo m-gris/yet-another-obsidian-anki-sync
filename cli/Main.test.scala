@@ -1051,3 +1051,48 @@ class MainTest extends munit.FunSuite:
   }
 
   val emptyScan: VaultScan = VaultScan.from(Vector.empty, Vector.empty)
+
+  /** SILENCE ON THE EXPLANATION CHANNEL MEANS "NO CAVEATS", and that is only usable if a
+    * successful lookup is actually silent there. It was not: `--uri-only` wrote the URI to
+    * standard output and the same URI, as the whole report, to standard error -- which reads as
+    * though something had gone wrong on the channel reserved for saying so.
+    */
+  test("a placed card explains nothing, because there is nothing to add") {
+    val k = key("n1", "Definition")
+    val result = Locate.decide(TagCodec.encode(k).value, VaultName("V"), Vector(idNote("n1")), oneCard(k, 5))
+    assert(Report.located(result).nonEmpty, "the human report lost its URI")
+    assertEquals(Report.explanation(result), Vector.empty, "a placed card wrote to the explanation channel")
+  }
+
+  /** The other side of the same rule: an outcome with something to say must still say it, and
+    * must NOT repeat the link the caller already holds.
+    */
+  test("an unplaced card explains itself without repeating the link") {
+    val k = key("n1", "Definition")
+    val result = Locate.decide(TagCodec.encode(k).value, VaultName("V"), Vector(idNote("n1")), emptyScan)
+    val lines = Report.explanation(result)
+    assert(lines.nonEmpty, "an unplaced card said nothing")
+    assert(!lines.exists(_.contains("obsidian://")), s"the explanation repeats the URI:\n${lines.mkString("\n")}")
+  }
+
+  def idNote(id: String): VaultFile =
+    VaultFile("Note.md", s"---\nid: $id\n---\n\n# Definition #flashcard\nText.\n")
+
+  def oneCard(k: CardKey, line: Int): VaultScan =
+    VaultScan.from(
+      Vector(
+        SourcedSpec(
+          CardSpec.TwoField(k, "f", Body.fromExtracted("b").get, TwoFieldDirections.Forward, "C"),
+          SourceRef("Note.md", line, SourceKind.Heading),
+          SectionChain.NoSectionChain,
+          SectionChain.NoRecall,
+        )
+      ),
+      Vector.empty,
+    )
+
+  def key(id: String, seg: String): CardKey =
+    CardKey(
+      NoteId.fromFrontmatter(id).toOption.get,
+      CardPath.Headings(HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText(seg).toOption.get))),
+    )

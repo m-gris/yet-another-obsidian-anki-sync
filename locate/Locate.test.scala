@@ -151,3 +151,18 @@ class LocateTest extends munit.FunSuite:
         assertEquals(java.net.URLDecoder.decode(sent, "UTF-8"), name)
       case other => fail(s"expected Placed, got $other")
   }
+
+  // ------------------------------------------------- the machine-readable half ----
+
+  /** The add-on cannot read prose, and it must not have to guess which line of a report is the
+    * link. `uriOf` is the seam: exactly the outcomes that opened something answer with a URI.
+    */
+  test("E11: a URI comes back for exactly the outcomes that open something") {
+    val k     = key("n1", "Definition")
+    val files = Vector(note("n1"))
+
+    assert(Locate.uriOf(Locate.decide(tagOf(k), vault, files, scanOf(k -> 5))).isDefined, "placed")
+    assert(Locate.uriOf(Locate.decide(tagOf(k), vault, files, scanOf())).isDefined, "unplaced still opens the note")
+    assert(Locate.uriOf(Locate.decide(tagOf(k), vault, Vector.empty, scanOf())).isEmpty, "no note, no URI")
+    assert(Locate.uriOf(Locate.decide("junk", vault, files, scanOf())).isEmpty, "no tag, no URI")
+  }

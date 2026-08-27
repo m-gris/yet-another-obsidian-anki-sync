@@ -82,8 +82,8 @@ object Main
       )
     case Command.InstallNoteTypes(profile, repair) =>
       withVerifiedProfile(profile)(installNoteTypes(_, repair))
-    case Command.Locate(selection, vaultName, tag) =>
-      withChosenVault(selection)(locate(_, vaultName, tag))
+    case Command.Locate(selection, vaultName, tag, uriOnly) =>
+      withChosenVault(selection)(locate(_, vaultName, tag, uriOnly))
   }
 
   // ------------------------------------------------------------------ locate ----
@@ -104,16 +104,25 @@ object Main
       vault: VaultRoot,
       vaultName: Option[VaultName],
       tag: String,
+      uriOnly: Boolean,
   ): IO[ExitCode] =
     derivedVaultName(vault, vaultName) match
-      case Left(refusal) => refusal.traverse_(IO.println).as(ExitCode(2))
+      case Left(refusal) => emit(refusal, uriOnly).as(ExitCode(2))
       case Right(name) =>
         for
           files <- readVault(vault)
           index = VaultWalker.scan(files, LocateDeckRoot, DeckShape.FoldersOnly)
           result = Locate.decide(tag, name, files, index.scan)
-          _ <- Report.located(result).traverse_(IO.println)
+          _ <- IO.whenA(uriOnly)(Locate.uriOf(result).traverse_(u => IO.println(u.value)))
+          _ <- emit(if uriOnly then Report.explanation(result) else Report.located(result), uriOnly)
         yield exitCodeForLocate(result)
+
+  /** Prose to the channel it belongs on: standard output for a person, standard error when a
+    * program has claimed standard output for the link.
+    */
+  private def emit(lines: Vector[String], uriOnly: Boolean): IO[Unit] =
+    if uriOnly then lines.traverse_(l => IO(System.err.println(l)))
+    else lines.traverse_(IO.println)
 
   /** The vault's name for a URI: the one given, or the vault directory's own name.
     *

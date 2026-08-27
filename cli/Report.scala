@@ -487,8 +487,26 @@ object Report:
     case Located.Placed(uri) =>
       Vector(uri.value)
 
-    case Located.Unplaced(uri, why) =>
-      unplaceable(why) ++ Vector("", "Opens the note at its top:", uri.value)
+    case Located.Unplaced(uri, _) =>
+      explanation(result) ++ Vector("", "Opens the note at its top:", uri.value)
+
+    case Located.NoteMissing(_) | Located.Undecodable(_, _) =>
+      explanation(result)
+
+  /** THE SAME ANSWER FOR A CALLER THAT ALREADY HAS THE LINK — everything a person needs to know
+    * BEYOND the URI, and nothing that repeats it.
+    *
+    * `--uri-only` puts the link on standard output and this on standard error. Without the
+    * split a successful lookup wrote its URI to BOTH channels, which reads as though something
+    * had gone wrong on the one reserved for saying so. A placed card has nothing to add, so it
+    * says nothing: silence on that channel means "no caveats", which is a usable signal.
+    */
+  def explanation(result: Located): Vector[String] = result match
+    case Located.Placed(_) =>
+      Vector.empty
+
+    case Located.Unplaced(_, why) =>
+      unplaceable(why)
 
     case Located.NoteMissing(id) =>
       Vector(

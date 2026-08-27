@@ -87,7 +87,12 @@ enum Command:
     *   rather than something Obsidian told us. `VaultRegistry` deliberately carries no name
     *   field for exactly that reason.
     */
-  case Locate(vault: VaultSelection, vaultName: Option[VaultName], tag: String)
+  case Locate(
+      vault: VaultSelection,
+      vaultName: Option[VaultName],
+      tag: String,
+      uriOnly: Boolean,
+  )
 
 object Cli:
 
@@ -341,12 +346,24 @@ object Cli:
       }
       .orNone
 
+  /** FOR A CALLER THAT IS A PROGRAM, and the Anki add-on is the one that matters.
+    *
+    * IT SPLITS THE CHANNELS RATHER THAN SILENCING ONE. The link goes to standard output, alone,
+    * so the caller can use it without parsing anything; the explanation goes to standard error,
+    * in full, so the caller can show it to a person. A flag that suppressed the explanation
+    * would force a SECOND run to find out why nothing came back, and each run pays for a JVM.
+    */
+  private val uriOnlyOpt: Opts[Boolean] =
+    Opts
+      .flag("uri-only", "Print just the URI on stdout; send the explanation to stderr.")
+      .orFalse
+
   private val locate: Opts[Command] =
     Opts.subcommand(
       "locate",
       "Say where in the vault a card came from, and print a URI that opens it there.",
     ) {
-      (vaultSelectionOpt, vaultNameOpt, tagArg).mapN(Command.Locate.apply)
+      (vaultSelectionOpt, vaultNameOpt, tagArg, uriOnlyOpt).mapN(Command.Locate.apply)
     }
 
   val command: Opts[Command] = inspect orElse sync orElse installNoteTypes orElse locate

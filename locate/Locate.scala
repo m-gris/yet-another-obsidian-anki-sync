@@ -250,6 +250,19 @@ object Locate:
           .fold(Unplaceable.LineUnknown(key.path))(Unplaceable.KeyedTwice(key.path, _))
       )
 
+  /** The link, if the answer has one. THE SEAM BETWEEN A REPORT AND A CALLER THAT IS A PROGRAM.
+    *
+    * The Anki add-on cannot read prose and must not have to work out which line of a report is
+    * the link. Asking here is total over [[Located]], so a fifth outcome has to say whether it
+    * opens anything before this compiles — which is the question that would otherwise be settled
+    * by accident, inside a string.
+    */
+  def uriOf(result: Located): Option[ObsidianUri] = result match
+    case Located.Placed(uri)      => Some(uri)
+    case Located.Unplaced(uri, _) => Some(uri)
+    case Located.NoteMissing(_)   => None
+    case Located.Undecodable(_, _) => None
+
   /** The whole question, composed. THE ONE SIGNATURE THE ADD-ON DEPENDS ON.
     *
     * NO URI IS EMITTED FOR A NOTE THAT WAS NOT FOUND, and that is a decision rather than an
