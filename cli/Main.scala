@@ -713,12 +713,19 @@ object Main
     * later edit that inserts a call above it, or branches around it, disarms it and nothing
     * fails.
     *
-    * THE HONEST LIMITS OF THAT GUARANTEE, both of which are real:
+    * THE HONEST LIMITS OF THAT GUARANTEE, all three of which are real:
     *   - It is MODULE-LOCAL. Nothing stops a future file from constructing an
     *     [[AnkiConnectClient]] directly. Making that impossible needs a type only this check
     *     can mint, which would live in `anki/`.
     *   - The profile is CHECKED ONCE, AT THE START OF THE RUN. A profile switched inside
     *     Anki while a run is in progress is not detected.
+    *   - ⚠️ IT BINDS A RUN TO A COLLECTION, NOT A VAULT TO A COLLECTION, and that is the
+    *     consequential one. Naming another vault's path alongside the profile you use for this
+    *     one passes this gate cleanly, and the run then flags and SUSPENDS every card the first
+    *     vault put there — because nothing in a `src::` tag says which vault a note came from,
+    *     so `Observer.observe` cannot tell the two apart. This check is the only thing standing
+    *     in the way, and it was not built for that job. `README.md`, "ONE VAULT PER ANKI
+    *     PROFILE".
     *
     * The check runs BEFORE the vault is read, so a refusal can make the strongest claim that
     * is actually true — the collection was neither read nor written — and so a mismatch is

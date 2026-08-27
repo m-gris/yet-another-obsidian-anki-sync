@@ -385,6 +385,13 @@ object Planner:
 
         // ORPHANS. "Present in Anki, absent from markdown" is sound only if the markdown side
         // was seen in full AND every key it owns is accounted for.
+        //
+        // ⚠️ IT ALSO ASSUMES THE COLLECTION HOLDS ONE VAULT, and nothing checks that.
+        // `observed.notes` is every note this tool created in the open collection, from any
+        // vault — see `Observer.observe`, which cannot filter by a vault no tag records. Sync a
+        // second vault into the same profile and every card the first one owns is absent from
+        // this scan, so every one of them is flagged and suspended below. `README.md`, "ONE
+        // VAULT PER ANKI PROFILE", carries the argument.
         val (orphanActions, inference) =
           if !scan.canInferOrphans then
             (

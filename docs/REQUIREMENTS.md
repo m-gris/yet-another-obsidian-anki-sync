@@ -12,6 +12,8 @@ Cards live inside the documents that explain them: a heading marked under the `#
 
 Card identity is **derived** from `(frontmatter id, heading path)` and stored as a tag inside Anki, so nothing generated is ever written into the markdown — superseding the earlier decision to accept an in-file identifier.
 
+⚠️ That key has no room for a vault, so **one vault per Anki profile** — and nothing enforces it. Syncing a second vault into a collection flags and suspends the first vault's whole card set.
+
 A survey of all 92 Obsidian spaced-repetition plugins found that **none generates concept–descriptor cards**, and that Obsidian_to_Anki — the only bridge that could carry a custom note type — is dead and delisted. Hence a standalone sync tool, decided over an Obsidian plugin.
 
 How things look and how they are filed are options to compose, not decisions the tool makes for you; identity, history and refusing-rather-than-guessing are not, because an option to be silently wrong is a defect with a switch on it.
@@ -35,6 +37,15 @@ Every requirement carries an evidence class — **stated**, **verified**, **unra
 **Decided.** A standalone sync tool rather than an Obsidian plugin. The card model, markers, identity scheme, deck mapping, cloze and table handling are specified in [CARD-MODEL.md](./CARD-MODEL.md).
 
 **Deletion — decided 2026-08-18.** The sync only ever flags; a separate explicit `prune` command deletes flagged notes after the list has been reviewed. Delete-on-absence was rejected because an undetected heading rename would be indistinguishable from a deletion, silently destroying that card's scheduling history.
+
+**⚠️ One vault per Anki profile — recorded 2026-08-27, and nothing enforces it.** The derived key
+records no vault, and there is nowhere else it could be recorded either, so the orphan search that
+sweeps the collection cannot be scoped to the vault being synced. Point the tool at a second vault
+while a profile already holds a first one and every card the first vault owns is flagged **and
+suspended**: recoverable, shown in the plan before anything is written, and still the worst thing
+this tool can do to a review history. It is a consequence of the identity scheme rather than a bug
+beside it, so it sits under _Constraints on any implementation_ below rather than under _Open_. The
+argument, and the cost of a fix, is `README.md`, "ONE VAULT PER ANKI PROFILE".
 
 _**Marker vocabulary note, added 2026-08-27.** This document nowhere names `cdd`, which since
 2026-08-24 is how a concept-descriptor card is marked — `#flashcard/cdd/{1,2,3}way`, replacing
@@ -237,6 +248,17 @@ Requests for a general, subject-agnostic version recur on the Anki forums and ha
 - Reviews happen on both desktop and phone.
 - Fail fast, loud and clear; no defensive handling that hides a problem.
 - Detection over enforcement, since the encoding layer cannot type-check itself.
+- ⚠️ **ONE VAULT PER ANKI PROFILE, and nothing enforces it.** _Added 2026-08-27._ The identity
+  scheme of item 10 above derives a key from `(frontmatter id, heading path)` and stops there — it
+  has no room for a vault, and the deck root is a command-line flag rather than a property of the
+  collection. So the reconciler's orphan search, which must enumerate every note carrying a `src::`
+  tag in the open collection, cannot be scoped to one vault: there is nothing to scope it by. Sync
+  a second vault into a collection that already holds one and the first vault's entire card set
+  reads as deleted headings, so it is flagged **and suspended** — recoverable, and visible in the
+  printed plan beforehand, but the most destructive thing this tool can do. It falls out of the
+  identity scheme rather than being a separable defect, which is why it is recorded here as a
+  constraint. The argument in full, and what a fix would cost, is `README.md`, "ONE VAULT PER ANKI
+  PROFILE".
 
 ### Unverified assumptions
 

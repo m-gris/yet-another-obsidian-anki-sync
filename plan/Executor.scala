@@ -38,6 +38,17 @@ object Observer:
     * A lookup driven by the markdown's keys can never find an orphan, because an orphan is
     * precisely a key the markdown does not have. The whole observed set has to be gathered
     * for the difference to be computable at all.
+    *
+    * ⚠️ AND IT IS VAULT-BLIND, WHICH IS WHY ONE PROFILE HOLDS ONE VAULT. Nothing in a `src::`
+    * tag records which vault a note came from — the tag is `(frontmatter id, card path)` and
+    * stops there — so this query returns every note this tool has ever created in the open
+    * collection, from any vault. A second vault's keys are absent from the current scan, so
+    * `Planner` reads every one of them as a deleted heading and flags AND SUSPENDS it.
+    *
+    * NOTHING HERE CAN DETECT THAT, and no filter can be added without a vault to filter on.
+    * The whole argument, and the operating rule that follows from it, is `README.md`, "ONE
+    * VAULT PER ANKI PROFILE"; it is not restated here, because two copies of one statement is
+    * how they drift.
     */
   def observe[F[_]: cats.Monad](anki: Anki[F]): F[ObservedState] =
     for

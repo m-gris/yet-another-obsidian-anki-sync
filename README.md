@@ -21,6 +21,34 @@ tool has no rename detection. The old card is not deleted — it is flagged and 
 can reconcile it by hand — but it will not follow the heading. Move prose around freely; think
 before you re-word a heading you have been reviewing for six months.
 
+## ⚠️ ONE VAULT PER ANKI PROFILE. NOTHING ENFORCES THIS
+
+**Nothing this tool writes into Anki records which vault a note came from.** A card's identity
+tag is `src::{frontmatter id}::{path}` and stops there. The deck comes from `--deck-root`, which
+is a flag. The breadcrumb printed on the card is vault-relative. There is no vault anywhere.
+
+The reconciler enumerates every note carrying `src::` in a single query, and it has to: an orphan
+is by definition a key the markdown does not have, so it can never be found by a lookup driven
+from the markdown. That enumeration **cannot be filtered by vault, because the vault is not there
+to filter on.**
+
+**So syncing a second vault into a collection that already holds one takes the first vault's
+entire card set out of review.** Every key the first vault owns is absent from the second vault's
+scan, so each is read as a deleted heading: tagged `orphaned::` and suspended. Sync the first
+vault again and the same thing happens to the second, in reverse.
+
+Nothing is deleted, and each run repairs what the last one did, so it is recoverable. It is also
+visible in advance, because the plan is printed before it is applied and would read
+`43  flag as orphaned`. It is still the most destructive thing this tool can do.
+
+`--profile` is what stands in the way, and it is worth being exact about what it guarantees: it
+binds a **run** to a collection, checked before anything is read. It does not bind a **vault** to
+a collection. Nothing stops `sync --vault-path ~/other-vault --profile the-one-for-this-vault`,
+and the tool would carry it out.
+
+**Use one Anki profile per vault.** Anki's profiles exist for exactly this. The check that would
+enforce it is listed under *Not built yet*.
+
 ## What you need
 
 - **Anki**, running, with the **AnkiConnect** add-on installed (it listens on
@@ -480,6 +508,11 @@ Named here so their absence is not mistaken for a promise:
 - `prune`, the command that deletes flagged cards
 - rename detection, deliberately cut — a rename is an orphan plus a create
 - pushing new-card position, so introduction order follows an authored route
+- **any check that a collection belongs to the vault being synced.** See *One vault per Anki
+  profile* above: the tool cannot tell one vault's notes from another's, so it cannot warn you.
+  A `vault::` tag written beside `src::` would give it the means — tags are not hashed, so that
+  would re-key nothing and move no golden — but notes already synced carry no such tag, and
+  adopting them needs an action the plan model does not have
 
 ## Reading further
 
