@@ -205,6 +205,15 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   /** Card ids come out of `notesInfo`, so this costs no extra request and never touches the
     * batch-poisoning action. See the note on the class.
     */
+  /** HOLE — two AnkiConnect calls, and both have a measured way of answering wrongly.
+    *
+    * `cardsInfo` gives the ordinal; `getReviewsOfCards` gives the review count. See
+    * [[Anki.standingOf]] for the two footguns this implementation must not reproduce — card ids
+    * sent as strings price everything at zero, and a card that does not exist comes back as an
+    * empty object rather than an error.
+    */
+  def standingOf(cards: Vector[AnkiCardId]): Result[Vector[CardStanding]] = ???
+
   def cardsOf(ids: Vector[AnkiNoteId]): Result[Vector[AnkiCardId]] =
     if ids.isEmpty then EitherT.pure(Vector.empty)
     else

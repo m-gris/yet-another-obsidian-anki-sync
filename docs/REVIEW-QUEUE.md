@@ -227,9 +227,21 @@ disappears. That is a smaller surface and a stronger guarantee.
    and the only one needing a target chosen. Leaving it out makes the first version much smaller;
    leaving it out also means the orphan queue can only be emptied by deleting, which is the wrong
    incentive.
-2. **Where the third state for a refused shrink lands** — an action here, or a flag on `sync`. An
-   action means the cost is shown at the moment of choosing, which is the argument for this whole
-   document; a flag means it can be scripted. They are not exclusive.
+2. ~~**Where the third state for a refused shrink lands.**~~ **DECIDED BY MARC 2026-08-27: a
+   named per-note decision, NOT a flag on `sync`.** The run reports each affected note with what
+   going ahead would cost *that* note; the author then authorises notes one at a time, by name.
+
+   **The rejected alternative was a single flag** — one `--delete-extra-cards` approving every
+   affected note in the run. It is cheaper to build and scriptable. It was rejected because it
+   **approves notes the author never read about**, including ones they did not know were
+   affected, which is the same "confirm a list you did not read" failure this document uses to
+   argue `prune` should stop being a command.
+
+   **The measurement is what settled it.** Before 2026-08-27 the cost was unknown, so a flag and
+   a decision carried the same (absent) information. Now the price is specific per note — which
+   cards, how many reviews, and that they vanish at the next `Check Database` — and a flag
+   discards that specificity at the moment it finally exists. A flag remains possible later, over
+   the same core; it is not excluded, merely not first.
 3. **Whether a terminal consumer is written at all before the plugin**, or whether enumeration
    simply prints as text until the plugin exists.
 4. **Whether cloze groups at risk of ordinal drift belong here.** They are a *risk*, not a pending

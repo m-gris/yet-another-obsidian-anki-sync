@@ -58,6 +58,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
       underlying.findNotesByTagPrefix(prefix)
     def notesInfo(ids: Vector[AnkiNoteId]): Result[Vector[ObservedNote]] = underlying.notesInfo(ids)
     def cardsOf(ids: Vector[AnkiNoteId]): Result[Vector[AnkiCardId]]     = underlying.cardsOf(ids)
+    def standingOf(cards: Vector[AnkiCardId]): Result[Vector[CardStanding]] = underlying.standingOf(cards)
     def deckOf(card: AnkiCardId): Result[Option[DeckPath]]               = underlying.deckOf(card)
 
     // COUNTED AS A WRITE, because it is one — it changes the SHAPE of the collection. Nothing

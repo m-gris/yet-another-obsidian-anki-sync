@@ -116,6 +116,7 @@ class NoteTypeRepairTest extends munit.FunSuite:
       addTags,
       removeTags,
       cardsOf,
+      standingOf,
       deckOf,
       changeDeck,
       suspend,

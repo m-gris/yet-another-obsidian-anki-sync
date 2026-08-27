@@ -150,6 +150,20 @@ enum AnkiError:
     */
   case MalformedResponse(action: String, detail: String)
 
+/** One card's position in its note, and how much review it carries.
+  *
+  * `ordinal` is Anki's own card index within the note, counted from 0, and it is what decides
+  * whether a narrowing destroys this card: a note type with N templates can generate ordinals
+  * 0..N-1, so every card at an ordinal >= N has nowhere to go.
+  *
+  * `reviews` is the number of entries in the card's review log. It is the PRICE, and it is
+  * deliberately a count rather than the log itself — nothing in this tool needs to replay a
+  * review, and carrying the whole log would invite code that pretends the history is
+  * recoverable. It is not: MEASURED 2026-08-27, the log rows outlive the card and stay
+  * readable, but Anki will not rebuild a card from them.
+  */
+final case class CardStanding(card: AnkiCardId, ordinal: Int, reviews: Int)
+
 trait Anki[F[_]]:
 
   /** Note types present in the collection, BY NAME. Ids are collection-local and must never
@@ -335,6 +349,34 @@ trait Anki[F[_]]:
     * whole design.
     */
   def cardsOf(ids: Vector[AnkiNoteId]): F[Vector[AnkiCardId]]
+
+  /** WHERE A CARD SITS, AND WHAT IT IS WORTH — enough to price a decision that would destroy it.
+    *
+    * IT EXISTS BECAUSE [[cardsOf]] CANNOT ANSWER THE QUESTION. Card ids alone say nothing about
+    * which cards a narrowing would destroy (that is the ORDINAL) or what destroying them would
+    * cost (that is the REVIEW COUNT). Marc ruled on 2026-08-27 that this tool must not forbid a
+    * narrowing but must state its price and let the author choose, and a price this algebra
+    * cannot ask for is a price nobody can state.
+    *
+    * THE ORDER OF OPERATIONS IS A CONTRACT, NOT A PREFERENCE, AND IT WAS MEASURED. After a note
+    * is moved onto a type with fewer templates, AnkiConnect's `cardsInfo` raises
+    * `missing template` FOR THE WHOLE NOTE — not merely for the cards past the last template.
+    * So the standing of a note's cards is readable ONLY BEFORE the move. Anything that prices a
+    * narrowing must read first and move second; there is no reading it back afterwards to check.
+    * (`docs/EVOLVABILITY.md` § M4, measured 2026-08-27 in a throwaway profile.)
+    *
+    * TWO FOOTGUNS THE INTERPRETER MUST NOT REPRODUCE, both of which answer WRONGLY rather than
+    * failing, and both measured rather than read:
+    *
+    *   - `getReviewsOfCards` returns an EMPTY result for card ids sent as JSON strings, and the
+    *     real log for the same ids sent as integers. It errors on neither. A stringified id
+    *     therefore prices every card at zero reviews — the exact answer that makes a destructive
+    *     move look free.
+    *   - `cardsInfo` answers `{}` for a card that does not exist, rather than failing. An
+    *     implementation must treat a missing card as a LOUD failure: a card the plan believes in
+    *     and the collection does not is a disagreement, not a zero.
+    */
+  def standingOf(cards: Vector[AnkiCardId]): F[Vector[CardStanding]]
 
   def deckOf(card: AnkiCardId): F[Option[DeckPath]]
 

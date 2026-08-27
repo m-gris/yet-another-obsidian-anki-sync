@@ -128,6 +128,14 @@ final class InMemoryAnki private (
   def cardsOf(ids: Vector[AnkiNoteId]): Either[AnkiError, Vector[AnkiCardId]] =
     Right(ids.flatMap(i => cardsByNote.getOrElse(i.value, Vector.empty)).map(AnkiCardId(_)))
 
+  /** HOLE — the in-memory collection does not yet model a card's ordinal or its review count.
+    *
+    * Filling this is a DATA MODEL change here, not a method body: `cardsByNote` holds bare ids,
+    * so there is nowhere to put either fact. That is the point of leaving it as a hole — the
+    * shape of the fake has to change before any test can drive a priced decision through it.
+    */
+  def standingOf(cards: Vector[AnkiCardId]): Either[AnkiError, Vector[CardStanding]] = ???
+
   def deckOf(card: AnkiCardId): Either[AnkiError, Option[DeckPath]] =
     Right(cardDecks.get(card.value))
 
