@@ -287,13 +287,11 @@ object Report:
       ) ++ pairs.map("  " + _) ++ Vector("") ++ listed ++ elided ++ Vector(
         "",
         "Nothing was written to those notes — not their fields, not their deck, not their tags.",
-        "Moving a note between note types blanks every field and replaces every tag before",
-        "writing them back, so this tool does not do it unless asked. Ask with:",
+        "You asked for that with --no-migrate-note-types; without it they would have moved.",
         "",
-        "  sync --migrate-note-types ...",
-        "",
-        "Leaving them is safe: a note that is not moved simply stays on the note type it is on,",
-        "and nothing in this tool ever deletes a note.",
+        "Each stays on the note type it is on, which is NOT the one its marker asks for — so its",
+        "fields are arranged for a shape you are no longer requesting, and its cards may be asking",
+        "a question you did not write. Drop the flag to move them.",
       )
 
   /** WHAT A DRY RUN SAYS ABOUT THE RETYPES IT IS PREVIEWING.
@@ -305,7 +303,7 @@ object Report:
     * is the whole point of the function.
     *
     * DEFERRALS ARE ALSO SILENT HERE, and that is not an omission: `kindOf` already labels them
-    * "(NOT APPLIED — see --migrate-note-types)" in the summary itself, so the contradiction
+    * "(NOT APPLIED — see --no-migrate-note-types)" in the summary itself, so the contradiction
     * this block reports does not arise for them.
     *
     * THE REFUSAL'S OWN SENTENCE IS REUSED, not paraphrased. The preview must print what the run
@@ -378,7 +376,7 @@ object Report:
 
     case _: SyncAction.Retype =>
       retypePolicy match
-        case RetypePolicy.Defer => "move to another note type (NOT APPLIED — see --migrate-note-types)"
+        case RetypePolicy.Defer => "move to another note type (NOT APPLIED — you passed --no-migrate-note-types)"
         case RetypePolicy.Apply => "move to another note type"
     case _: SyncAction.Flag   => "flag as orphaned"
     case _: SyncAction.Unflag => "clear orphan flag"

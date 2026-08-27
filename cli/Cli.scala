@@ -205,22 +205,56 @@ object Cli:
       ).mapN(Command.Inspect.apply)
     }
 
-  /** OPT-IN, and it maps to a two-case type rather than staying a `Boolean` past this point.
+  /** A BRAKE, NOT AN OPT-IN. _Inverted 2026-08-27; it was `--migrate-note-types`, off by
+    * default, until then._
+    *
+    * ==Why the default changed==
+    *
+    * A note is on the wrong note type because THE VAULT SAYS SO — its marker asks for a shape the
+    * note does not have. Every other such disagreement is reconciled without being asked: reword a
+    * heading's body and the fields are rewritten, move a file and the deck moves. Leaving this one
+    * alone made `sync` mean "reconcile everything except the thing you most recently changed your
+    * mind about", and the cost was not hypothetical — a card sat on the wrong note type for three
+    * days, asking a question its author never wrote, while every run reported success.
+    *
+    * ==Why defaulting to ON is safe, which is the whole argument==
+    *
+    * The dangerous half of a retype was never the POLICY. It is
+    * [[obsidiananki.plan.Retyping.refusalFor]], the compatibility gate — and **that gate runs
+    * whatever this flag says**. A move that would strand a card is refused under `Apply` exactly
+    * as it is under `Defer`. What this flag chooses is only whether a move the gate has already
+    * cleared is carried out or reported.
+    *
+    * The gate admits only what has been measured. Growth was measured in a throwaway profile on
+    * 2026-08-26: every card kept its id, its interval, its ease, its repetitions and its whole
+    * review log. Shrinking is still unmeasured and still refused, by the gate, regardless of this
+    * flag.
+    *
+    * ==Why the brake is kept rather than deleted==
+    *
+    * A retype blanks every field and replaces every tag before writing them back. That is safe as
+    * measured and it is still the largest single write this tool performs, so somebody who wants
+    * to sync content today and think about shapes tomorrow should be able to say so. Naming it
+    * negatively is what makes the default visible: a reader of `--help` sees that migration is
+    * something they would be turning OFF.
+    *
+    * ==Why a two-case type rather than a `Boolean`==
     *
     * A bare `Boolean` threaded from here to the executor would arrive as an unnamed positional
-    * argument three functions away, where `run(plan, anki, true)` says nothing about what is
-    * true. The flag is the only place the word "migrate" appears; everything downstream reads
-    * `RetypePolicy.Apply`.
+    * argument three functions away, where `run(plan, anki, true)` says nothing about what is true.
+    * This flag is the only place the word "migrate" appears; everything downstream reads
+    * `RetypePolicy`.
     */
   private val retypePolicyOpt: Opts[RetypePolicy] =
     Opts
       .flag(
-        "migrate-note-types",
-        "Also move notes that are on a different note type from the one the vault asks for. " +
-          "Off by default: this rewrites every field and every tag of each note it moves.",
+        "no-migrate-note-types",
+        "Leave notes that are on a different note type from the one the vault asks for, instead " +
+          "of moving them. Moving is the default, and is refused anyway where it could cost a " +
+          "card its review history.",
       )
       .orFalse
-      .map(if _ then RetypePolicy.Apply else RetypePolicy.Defer)
+      .map(if _ then RetypePolicy.Defer else RetypePolicy.Apply)
 
   private val sync: Opts[Command] =
     Opts.subcommand("sync", "Reconcile the vault against an Anki collection.") {

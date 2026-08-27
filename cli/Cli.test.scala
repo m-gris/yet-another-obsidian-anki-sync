@@ -54,11 +54,16 @@ class CliTest extends munit.FunSuite:
       case Right(Command.Sync(_, profile, _, _, dryRun, retypePolicy)) =>
         assertEquals(profile, "POC-test")
         assertEquals(dryRun, false)
-        // THE DEFAULT IS THE SAFE ONE, asserted rather than assumed. Without the flag a sync
-        // does not move notes between note types; a default of `Apply` would make the first
-        // ordinary sync after the note types were renamed rewrite every field and every tag of
-        // every note this tool had previously synced, unasked.
-        assertEquals(retypePolicy, RetypePolicy.Defer)
+        // THE DEFAULT IS TO MOVE, asserted rather than assumed. _Inverted 2026-08-27; this
+        // asserted `Defer` until then, on the grounds that a default of `Apply` would rewrite
+        // every field and tag of every note after a note-type rename, unasked._
+        //
+        // WHAT CHANGED IS NOT THE APPETITE FOR RISK. It is that the risk lives somewhere else:
+        // `Retyping.refusalFor` refuses a move that could strand a card WHATEVER this policy
+        // says, so a default of `Apply` cannot reach an unmeasured operation. What the old
+        // default actually bought was leaving a note on a shape its own marker no longer asks
+        // for, silently, run after run.
+        assertEquals(retypePolicy, RetypePolicy.Apply)
       case other => fail(s"expected a Sync command, got $other")
   }
 
@@ -368,7 +373,13 @@ class CliTest extends munit.FunSuite:
 
     val deferred = Report.plan(plan, RetypePolicy.Defer).mkString("\n")
     assert(deferred.contains("NOT APPLIED"), s"a deferred move reads as work that will happen:\n$deferred")
-    assert(deferred.contains("--migrate-note-types"), s"the flag that would do it is not named:\n$deferred")
+    // NAMES THE FLAG THAT CAUSED THE DEFERRAL, which since 2026-08-27 is the one the reader
+    // PASSED rather than one they might pass: moving is the default, so a deferral is something
+    // they asked for and the line should say so.
+    assert(
+      deferred.contains("--no-migrate-note-types"),
+      s"the flag that caused the deferral is not named:\n$deferred",
+    )
 
     val applying = Report.plan(plan, RetypePolicy.Apply).mkString("\n")
     assert(

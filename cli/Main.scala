@@ -1171,8 +1171,8 @@ object Main
              Vector(
                s"${Report.quantify(deferred.size, "note")} ${if deferred.size == 1 then "is" else "are"} " +
                  "on the wrong note type and " +
-                 (if deferred.size == 1 then "was" else "were") + " left alone — " +
-                 "re-run with --migrate-note-types to move them"
+                 (if deferred.size == 1 then "was" else "were") + " left alone at your request " +
+                 "(--no-migrate-note-types) — drop the flag to move them"
              )) ++ problemsIn(plan)
       if reasons.nonEmpty then Verdict.Problems(reasons)
       else

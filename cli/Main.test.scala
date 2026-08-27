@@ -902,7 +902,10 @@ class MainTest extends munit.FunSuite:
     assertEquals(deferred.size, 1, "the outstanding move was not reported at all")
 
     val screen = Main.describeSyncOutcome(outcome).mkString("\n")
-    assert(screen.contains("--migrate-note-types"), s"the flag that would do it is not named:\n$screen")
+    assert(
+      screen.contains("--no-migrate-note-types"),
+      s"the flag the reader passed to cause this is not named:\n$screen",
+    )
     assert(screen.contains("Basic"), s"the note types involved are not named:\n$screen")
 
     // AND IT IS NOT A CLEAN RUN. The collection does not match the vault, and a green result
