@@ -186,6 +186,48 @@ What the tool prints for a rename is `1 create` and `1 flag as orphaned`, as bar
 
 That is the tax. Nothing about it is lossy — the orphan keeps its `src::` tag, its `sha::`, its deck and its whole scheduling state, and `orphaned::{old key}` is deliberately readable in Anki's browser (base64url was rejected for exactly that reason, `model/CardKey.scala:169-171`). The history is technically preserved and practically abandoned, which is a slower version of losing it.
 
+### The second axis: revising SHAPE, not prose
+
+_Added 2026-08-27. Everything above and below this subsection is about revising **prose** — the key
+is a projection of the wording you are trying to improve. There is a second axis, it is taxed too,
+and it had one clause in this document and no analysis._
+
+**Anki follows you on two of the three things you can change, and not the third.**
+
+| you change | does Anki follow? | how |
+| --- | --- | --- |
+| the **content** of a card | yes | an ordinary `Update` |
+| its **location** (folder) | yes | a deck move; scheduling untouched |
+| its **shape** (which marker) | **mostly not** | a retype, and most are refused |
+
+**And "mostly not" is worse than it sounds, because the commonest changes of mind all cross note
+types.** A marker does not sit in the key, so the card keeps its identity — but the note type
+underneath it has to change, and that is the operation the gate guards:
+
+- `#flashcard/1way` → `#flashcard/2way` — *"I want this asked both ways now"*, surely the likeliest
+  change of mind of all — moves `Obsidian Basic` → `Obsidian Basic (and reversed card)`.
+- plain `2way` → `cdd/2way` — moves onto `Obsidian Concept-Descriptor`.
+- anything → `cloze` or `sequence` — crosses cloze-ness, and that one is genuinely dangerous.
+
+**The only shape edits that have always worked are within the concept-descriptor family** —
+`cdd/1way ↔ 2way ↔ 3way` — because those are the same note type with a gate field flipped, so they
+plan as an ordinary field update rather than a retype.
+
+**That this was foreseen is visible in the design.** The gate fields exist precisely so direction
+can change without a retype, and the ruling that *gate fields are inverted — empty means the old
+behaviour* is there so a note predating a field does not render blank. Somebody thought hard about
+shape revision INSIDE a note type and solved it. Crossing note types never got the same treatment.
+
+**What changed on 2026-08-26**, after the growth direction was measured (see §2): the gate now
+refuses only SHRINKING, so `1way → 2way` and plain-`2way → cdd` both work. Narrowing within the
+`cdd` family still leaves a card behind — see the narrowing row in §2 — and shrinking across note
+types is still unmeasured and still refused.
+
+**Why this belongs beside the prose axis rather than in its own section.** Both are the same
+sentence: *revision is what this system taxes.* Rewording a heading detaches a card from its
+history; changing a marker is refused outright. One is silent and one is loud, and a person doing
+either is doing the ordinary thing — improving their own notes.
+
 ### Candidate directions, with their real costs
 
 **A. Exact non-`Context` field pairing, report-only.** *This is the strongest thing to come out of this brainstorm and it was nearly missed.*

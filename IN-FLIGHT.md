@@ -127,7 +127,10 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
    _A mutation found a missing guard: widening the no-double-report condition from `case None`
    to `case _` left the whole suite green, so that claim lived in a docstring and was checked by
    nothing. There is an assertion for it now._
-6. **STYLE, ranked below everything above and possibly not worth doing.**
+6. ~~**STYLE, ranked below everything above and possibly not worth doing.**~~ **THE RANKING WAS
+   WRONG — SUPERSEDED BY ITEM 25.** _Corrected 2026-08-27._ Marc's `framework` card was the
+   counterexample: a note on the wrong note type, where the tool could say only that a NAME
+   differed and nothing about what its fields MEANT. That is not style. _Original entry follows._
    `plan/Retyping.scala`'s `isCloze: Boolean` wants a two-case enum — but no failure is nameable,
    since Anki has exactly two kinds. And note-type names as `String`, which the auditor
    deliberately declined to prescribe: one side of that string is genuinely open, because
@@ -466,3 +469,108 @@ document because a finding nobody can find is a finding nobody acts on._
     `{{#ConceptLabel}}` sit inside wrapping display fragments and are not. That distinction lives
     only in the template text today, so a template edit could silently change which cards exist —
     and this feature would then flag the wrong card.
+
+24. **A NOTE-TYPE MOVE SHOULD APPLY BY DEFAULT.** Ruled by Marc 2026-08-27. Not built.
+
+    **What changes.** `sync` moves a note onto the note type the vault asks for without being told
+    to. `--migrate-note-types` inverts into `--no-migrate-note-types`, kept as a brake rather than
+    deleted — Marc chose "apply by default" over "remove the flag entirely", so the ability to opt
+    out of a restructuring you can see coming in a dry run survives.
+
+    **Why it is safe, which is the part that would be lost if only the decision were recorded.**
+    The shape gate runs regardless of policy: under `RetypePolicy.Apply`, `Retyping.verdictFor`
+    still calls `refusalFor`, which still refuses shrinking and still refuses crossing cloze-ness.
+    **So the flag now gates ONLY moves that have been measured lossless.** It stopped protecting
+    anything on 2026-08-26, when growth was measured — cards keep their ids, intervals, ease, reps
+    and review logs — and the gate was narrowed to shrinking. A flag whose whole remaining effect
+    is to withhold a proven-safe operation is a flag that has outlived its argument.
+
+    **The original argument, for the record, because it was a good one.** `changeNoteType` blanks
+    every field and replaces the whole tag set before writing them back, a single run can carry
+    hundreds, and doing that as a side effect of a routine reconcile is a structural change to
+    somebody's collection nobody asked for. That reasoning was correct when the operation was
+    unmeasured. What survives of it is milder and is about SURPRISE rather than loss: a sync that
+    silently restructures many notes is startling even when it is right — which argues for
+    reporting loudly, not for refusing.
+
+    **What it costs, and therefore what must be built with it.** The report needs a block naming
+    every note moved and what it moved between, replacing the current "NOT DONE — ask with
+    `--migrate-note-types`" block, which stops being true. Without that, a run would restructure
+    notes and mention it only as a count.
+
+    **Follow-on, blocked on this.** `README.md` mentions retyping, migration and deferral NOWHERE
+    — so the one audience who experiences "I changed a marker and nothing happened" is told
+    nothing at all. It must gain a section once this lands, and it should document the behaviour
+    that will then be true rather than the behaviour being replaced.
+
+25. **THE ANKI-FACING SEAM IS STRINGLY TYPED, AND THAT IS A MODELLING GAP RATHER THAN A STYLE ONE.**
+    _Recorded 2026-08-27. Supersedes item 6, which ranked it "possibly not worth doing"._
+
+    **The three parts, in order of how much they hide.**
+
+    - **A field has no ROLE.** Nothing anywhere says that `Front` on `Obsidian Basic` plays the part
+      `Descriptor` plays on `Obsidian Concept-Descriptor`. The word *role* appears **zero times**
+      across the eleven markdown documents in this repository. So when a note sits on a note type
+      the vault did not ask for, the tool can say a name differs and can say nothing whatever about
+      what the note's fields currently MEAN.
+    - **A note type is a `String` on both sides** — `ObservedNote.noteType` and
+      `CardSpec.noteTypeName` — compared with `!=`. The comparison is right and the type is a bag
+      of characters at the point where the domain is richest.
+    - **Field names are strings in four places that must agree and are tied together only by
+      tests**: the manifests under `resources/note-types/`, the template text (which references
+      them in Anki's own language, type-checked by nothing), `CardSpec.fields`, and
+      `NoteTypeInstall`'s drift comparison.
+
+    **The counterexample that got it re-ranked.** A heading marked `#flashcard/cdd/2way` sat on
+    `Obsidian Basic (and reversed card)` with its DESCRIPTOR in the `Front` slot and its CONCEPT
+    demoted to `Context`. Card 2 therefore showed the description and asked for the descriptor —
+    not one of the three questions `cdd/2way` promises. Marc reviewed it repeatedly. The run
+    reported the mismatch as a note-type name difference, which is all it could say, and told him
+    "Leaving them is safe" — true about his data and false about his reviews.
+
+    _The underlying note-type mismatch is fixed (item 16) and the gate is widened. What is NOT
+    fixed is that the tool had no vocabulary for the state, which is why it could not describe it._
+
+    **Where the full diagnosis lives, and why that is not good enough.** `docs/PIPELINE-DESIGN.md`
+    surveys every site, and its back-end fact table was independently verified — nine of eleven
+    rows opened and all nine accurate. But that document opens with a warning telling readers not
+    to implement from it, because its RECOMMENDATION failed adversarial review. **A live problem
+    parked inside a discredited document is close to not being recorded at all**, which is why it
+    is restated here.
+
+    **Not urgent, and say why:** a note type is not part of the key, so unlike identity work this
+    costs the same whenever it is done. It does not compete with the now-or-never column.
+
+26. **A DEFERRED RETYPE IS MODELLED AS AN ABSENT ACTION, NOT AS A STATE THE CARD IS IN.**
+    _Recorded 2026-08-27._
+
+    `RetypeVerdict` — `WillApply`, `DeferredByPolicy`, `RefusedByShapes`, `ShapesUnavailable` — is
+    a verdict about a PLAN. Every case answers "what will this run do?" and none answers "what is
+    true of this card right now?". So the tool can say *I am not doing this* and has no way at all
+    to say **"this card is currently asking a different question from the one your vault asks."**
+
+    **What that cost.** The run printed `Leaving them is safe: a note that is not moved simply
+    stays on the note type it is on`. That sentence is true about the DATA and false about the
+    REVIEWS: the card went on asking the wrong question and Marc went on answering it. A reader
+    given a reassurance has no reason to look further.
+
+    **The general shape, which is why this is worth recording rather than only fixing.** This
+    project keeps finding CONDITIONS THE TOOL CREATES AND HAS NO NAME FOR, and each has been
+    solved one at a time without the underlying gap moving:
+
+    - a parked orphan was mentioned by the run that parked it and by no run afterwards (fixed —
+      `Report.parkedNote`);
+    - a card retired by narrowing has no marker at all (decided, item 23, not built);
+    - a note on a note type the vault did not ask for cannot be described beyond a name difference
+      (item 25);
+    - and this one.
+
+    Each fix taught the REPORT to say one more thing. None of them gave the tool a way to answer
+    "what state is this card in?", which is the question all four are instances of.
+
+    **Machinery that already exists and is used for none of it.** `ObservedNote.fields` is decoded
+    on every run from the bulk `notesInfo` the observer already makes, and consumed by NOTHING in
+    `plan/`. It holds what Anki currently believes — the values that would let the tool compare
+    what a card IS against what the vault ASKS, which is the whole content of "what state is this
+    card in". Recorded twice already (`docs/EVOLVABILITY.md` §3.7, and item 23 above) and applied
+    to neither.

@@ -252,6 +252,35 @@ _Amended 2026-08-19. This previously said the collision was **silent**, in contr
 
 **The binding is stored in Anki**, as a tag on each note: `src::{id}::{anchor}`. Anki is a derived artifact, so bookkeeping there costs nothing — which is precisely the objection that applies to putting it in the source.
 
+### What Anki actually is
+
+_Added 2026-08-27, correcting the sentence immediately above rather than deleting it, because the
+sentence is half true and the half that is true is load-bearing._
+
+**An Anki collection is not a derived artifact. It is a JOIN of a derived layer and an accumulated
+one**, and the `src::` tag is what joins them.
+
+| layer | what is in it | can it be recomputed? |
+| --- | --- | --- |
+| derived | fields, decks, note types, the tags this tool owns | **yes** — from the markdown, at any time, for nothing |
+| accumulated | interval, ease, due date, lapses, the review log | **no** — from nothing, ever. It is a record of one person's forgetting, earned one review at a time |
+
+So "bookkeeping there costs nothing" is true of the first row and false of the second, and every
+hard decision in this system sits on the seam. **What is NOT weakened is the invariant beside it:
+the tool never writes the vault.** That one is structural — nothing in `extract/`, `plan/`,
+`anki/` or `cli/` opens a vault file for writing — and it is not what this correction is about.
+
+**Two rulings that read as unrelated are the same ruling seen twice.** An orphan is the case where
+the derived side says *gone* and the accumulated side says *but I hold value*, so the tool suspends
+and waits for a person. A deferred retype is the case where the derived side says *change shape*
+and the accumulated side says *that might cost me*, so the tool defers and waits for a person. Both
+are **the tool declining to reconcile the two layers and handing the conflict back**, and neither
+is a failure — it is the only honest answer available when one layer is regenerable and the other
+is not.
+
+The tool has no word for that state, which is why the two read differently in a report: one prints
+as *parked* and the other as *safe*. See `docs/EVOLVABILITY.md` for what each costs.
+
 **A heading anchor encodes exactly as it always has**, `{seg}/{seg}/…`, and that was a requirement
 rather than a nicety: `extract/golden/fixture-cards.txt` pins fifty-five identity tags and opens
 with `DO NOT REGENERATE THIS FILE`, so rewriting all of them by hand is indistinguishable, in a
