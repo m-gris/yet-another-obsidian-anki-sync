@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import laika.ast.*
 import obsidiananki.content as C
 import obsidiananki.model.*
+import obsidiananki.parser.ObsidianSyntax
 import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef, SourcedSpec}
 
 /** Turning one parsed note into the cards it declares.
@@ -796,6 +797,24 @@ object Extractor:
   * the heading's extracted text against the raw body. A CURSOR is kept so that two headings
   * with identical text report DIFFERENT lines — reporting the first match for both would
   * reproduce the very ambiguity these positions exist to remove.
+  *
+  * ==Why the comparison happens twice==
+  *
+  * _Amended 2026-08-27, from a defect found by running `locate` over every card in Marc's
+  * collection: one of twenty-nine resolved to no line._
+  *
+  * The needle is a heading's EXTRACTED text and the haystack is RAW SOURCE, so the two agree
+  * only while the heading carries no inline markup. `# ==3== Components #flashcard/cdd/1way`
+  * extracts to `3 Components #flashcard/cdd/1way` and never equals its own line. The answer was
+  * 0, which reads downstream as "no position" and prints a file name with no line — a heading
+  * that is harder to find reported as one that cannot be found at all. Bold, wikilinks, inline
+  * code and maths all do it, and all four already occur in headings in that vault.
+  *
+  * So a candidate line is now compared BOTH raw and extracted. The raw comparison is kept and
+  * kept FIRST: it is exact for every heading that already worked, so no line that resolves today
+  * can move. The extracted comparison is reached only when the raw one misses, and it obtains
+  * its text by handing the line back to THE SAME PARSER the document came through — not by
+  * stripping markup here, which would be a second implementation of extraction and would drift.
   */
 /** @param bodyFirstLine
   *   the line of the ORIGINAL FILE that `body` starts on. Without it every position reported by
@@ -807,12 +826,42 @@ private final class LineIndex(body: String, bodyFirstLine: Int):
   private val lines  = body.linesIterator.toVector
   private var cursor = 0
 
+  /** Every heading line's text as the extractor sees it, computed once.
+    *
+    * Lazy and per-line rather than per-lookup: a note with many headings and many cards would
+    * otherwise re-parse each candidate for every card. Non-heading lines are never parsed.
+    */
+  private lazy val extractedHeadings: Vector[Option[String]] =
+    lines.map(l => if l.startsWith("#") then extractedText(l) else None)
+
+  /** One line's heading text, obtained from the real parser rather than by stripping markup.
+    *
+    * The line is parsed COMPLETE WITH ITS `#` PREFIX, so the parser sees a heading rather than a
+    * paragraph. A line that fails to parse, or parses to something that is not a heading, simply
+    * yields nothing and falls back to the raw comparison.
+    */
+  private def extractedText(line: String): Option[String] =
+    ObsidianSyntax.markupParser
+      .parse(line)
+      .toOption
+      .flatMap(
+        _.content.content.collectFirst {
+          case s: Section => s.header.extractText.trim
+          case h: Header  => h.extractText.trim
+        }
+      )
+
   def lineOf(headingText: String): Int =
     val needle = headingText.trim
     if needle.isEmpty then 0
     else
-      val idx = lines.indexWhere(l => l.startsWith("#") && l.dropWhile(_ == '#').trim == needle, cursor)
-      if idx < 0 then 0
-      else
-        cursor = idx + 1
-        idx + bodyFirstLine // the file's own line number, as an editor counts it
+      val found = lines.indices.drop(cursor).find { i =>
+        val line = lines(i)
+        line.startsWith("#") &&
+        (line.dropWhile(_ == '#').trim == needle || extractedHeadings(i).contains(needle))
+      }
+      found match
+        case None => 0
+        case Some(i) =>
+          cursor = i + 1
+          i + bodyFirstLine // the file's own line number, as an editor counts it

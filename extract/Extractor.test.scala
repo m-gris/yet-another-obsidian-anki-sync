@@ -514,6 +514,48 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(lines.distinct.size, 2, s"identical heading names reported the SAME line: $lines")
   }
 
+  /** B11 — FOUND IN MARC'S VAULT ON 2026-08-27, by running `locate` over every card in his
+    * collection: one of twenty-nine resolved to no line at all.
+    *
+    * The note was `System Design Pattern.md`, whose marked heading is
+    * `# ==3== Components #flashcard/cdd/1way`. A heading's line is recovered by matching its
+    * EXTRACTED text back against the raw body — Laika keeps no source position — and extraction
+    * strips the highlight, so `3 Components …` was compared against `==3== Components …` and
+    * missed. The answer was 0, which is printed as a file with no position at all.
+    *
+    * IT IS NOT SPECIFIC TO HIGHLIGHTS. Any inline markup in a marked heading does it: bold, a
+    * wikilink, inline code, maths. All four already appear in headings in that vault.
+    */
+  test("B11: a marked heading carrying inline markup still resolves to its line") {
+    val note = extract(
+      """|# ==3== Components #flashcard/cdd/1way
+         |
+         |- A Problem
+         |- A Solution
+         |""".stripMargin
+    )
+    val lines = note.specs.map(_.source.line)
+    assert(lines.nonEmpty, "no cards were produced, so this test proves nothing")
+    assert(lines.forall(_ > 0), s"markup in the heading lost its line: $lines")
+  }
+
+  /** The same defect reached through three other kinds of inline markup, because a fix that
+    * happens to handle `==…==` and nothing else would pass B11 and still fail in the vault.
+    */
+  test("B11b: bold, wikilinks and inline code in a marked heading keep their lines") {
+    val cases = Vector(
+      "# The **CAP** theorem #flashcard/cdd/1way",
+      "# A [[Set|set]] of things #flashcard/cdd/1way",
+      "# The `id` field #flashcard/cdd/1way",
+    )
+    cases.foreach { heading =>
+      val note  = extract(s"$heading\n\n- One\n- Two\n")
+      val lines = note.specs.map(_.source.line)
+      assert(lines.nonEmpty, s"no cards from: $heading")
+      assert(lines.forall(_ > 0), s"lost its line: $heading -> $lines")
+    }
+  }
+
   // ================================================ cloze ====
 
   def clozeOf(n: ExtractedNote, path: String): CardSpec.Cloze =
