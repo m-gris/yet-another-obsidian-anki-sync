@@ -660,3 +660,49 @@ document because a finding nobody can find is a finding nobody acts on._
     **Build method, stated by Marc when the item was filed:** functional core / DDD, a
     parser-writer's mindset, **types first and hole-driven wherever the compiler allows it**, then
     tests, then implementation — in that order, per concept rather than per phase.
+
+---
+
+## OPEN — ruled by Marc, 2026-08-27, and it outranks item 28
+
+29. ⚠️ **THE TOOL MUST NOT FORBID A NOTE-TYPE SHRINK. IT MUST STATE THE COST AND LET THE AUTHOR
+    DECIDE.** Ruled by Marc 2026-08-27, after the same refusal blocked him twice in one session.
+    **Nothing is built.** The full reasoning, including the weaker proposal that was rejected on
+    the way to this one, is `docs/REVIEW-QUEUE.md` § *Three stances on a refusal*.
+
+    **The ruling in one line.** Changing your mind about your own cards is the AUTHOR's decision,
+    made knowingly — not a privilege the tool grants once it judges the stakes low enough.
+
+    **THE REJECTED PROPOSAL IS THE INSTRUCTIVE PART.** Claude proposed making the gate
+    evidence-based: refuse a shrink only when the cards actually hold reviews. It is a strictly
+    better rule than today's, it unblocks the common case, and **Marc rejected it** — because it
+    keeps the tool FORBIDDING and merely moves the threshold. The general form is worth carrying
+    to every other gate in this codebase: **when a tool refuses, the question is not only "is the
+    threshold right?" but "who is entitled to decide?" — and tuning a threshold answers the first
+    while silently keeping the second.**
+
+    **WHY IT CANNOT SIMPLY BE SWITCHED ON, and this is the whole of the remaining work.** The tool
+    cannot state the cost because nobody has established it; the refusal's own text admits as much.
+    An "apply anyway" meaning *"proceed, and I cannot tell you what happens"* would be WORSE than
+    today's refusal, not better — it violates `REVIEW-QUEUE.md`'s founding rule that nothing is
+    applied without its cost shown, and it fails in the worse direction because it LOOKS informed.
+
+    **So the sequence is fixed, and M4 is the critical path:**
+    1. Run **M4's shrinking half** (`docs/EVOLVABILITY.md`) — an hour in a throwaway profile.
+       `Check Database` afterwards is not optional: *orphaned* and *destroyed* look identical
+       without it.
+    2. Build the third state — *apply anyway, with the cost shown* — which is
+       `REVIEW-QUEUE.md`'s row 2 and has never existed.
+    3. Only then is the refusal gone rather than relocated.
+
+    **MEASURED 2026-08-27, and it is why this outranks item 28.** `Database Scaleability.md` had
+    both headings turned down from `cdd/3way` to `2way`. The tool read the vault correctly —
+    `inspect` reports `Obsidian Basic (and reversed card)` for both — and refused the move twice,
+    under `SOME ACTIONS FAILED`. **The six cards it protected hold 0 reviews, 0 lapses and 0
+    interval between them.** Item 28 is a feature Marc WANTS; this is a defect that STOPS him.
+
+    _Three presentation defects were identified in the same output and are NOT covered by the
+    ruling above, because fixing them would not unblock anything — they are worth their own entry
+    if this one is not taken whole: a principled refusal announced as `SOME ACTIONS FAILED` /
+    `PROBLEMS`; the raw case-class `UnsupportedOperation(what,why)` toString reaching the terminal;
+    and the same 400-character reason printed once per affected note, burying the remedy._

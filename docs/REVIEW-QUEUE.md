@@ -66,6 +66,63 @@ report tells you to do it by hand in Anki instead.
 
 ---
 
+## Three stances on a refusal, and why only the third is acceptable
+
+_RULED by Marc, 2026-08-27, after the same refusal blocked him twice in one session. **This is the
+sharpest statement of what this document is for**, and it was reached by rejecting a weaker
+proposal of Claude's — which is why the rejected one is recorded beside the ruling rather than
+quietly dropped._
+
+When the vault asks for a change that might cost review history, three stances are available:
+
+| | stance | who decides | status |
+|---|---|---|---|
+| **(a)** | **refuse on SHAPE** — any shrink refused, whatever is at stake | the tool | what it does today |
+| **(b)** | **refuse on EVIDENCE** — refuse only when the cards actually hold reviews | the tool, at a better threshold | **PROPOSED BY CLAUDE, REJECTED BY MARC** |
+| **(c)** | **never refuse — state the cost, let the author choose** | the author | **RULED** |
+
+### Why (b) was rejected, and why the distinction is not a small one
+
+(b) looks like the fix. It unblocks the common case — a note whose cards have never been reviewed
+— and it is a strictly better rule than (a). **That is exactly what makes it the more dangerous
+answer: it satisfies the complaint without conceding the principle.**
+
+(b) keeps the tool in the position of FORBIDDING and merely moves the threshold at which it does.
+Marc's ruling is that changing his mind about his own cards is **his decision, made knowingly** —
+not a privilege the tool extends once it has judged the stakes low enough. A tool that permits the
+change only when it costs nothing has not accepted that; it has restated its authority with a
+friendlier face.
+
+**The general form, worth carrying to other gates in this codebase:** when a tool refuses, the
+question is never only "is the threshold right?" It is "who is entitled to decide?" Tuning a
+threshold answers the first and silently keeps the second.
+
+### What blocks (c) is a measurement, and the dependency is stronger than it looks
+
+The tool cannot state the cost, because nobody has established it. The refusal's own text says so:
+*"this tool has not established what Anki then does with them"*. Cards past the new note type's
+last ordinal might be kept, orphaned, or destroyed, and all three remain consistent with what is
+known.
+
+**SO (c) BUILT BEFORE THE MEASUREMENT WOULD BE WORSE THAN (a), NOT BETTER.** An "apply anyway" that
+means *"proceed, and I cannot tell you what happens"* violates this document's own founding rule —
+**nothing is applied that has not been shown with its cost** — and it fails in the worse direction,
+because it LOOKS informed. A refusal at least tells the truth about what the tool does not know.
+
+**This makes M4 the critical path rather than one measurement among four.** See *What must be
+measured before building anything* below.
+
+### It is not hypothetical, and the numbers say so
+
+MEASURED 2026-08-27, live: `Database Scaleability.md` had both its headings turned down from
+`cdd/3way` to `2way`. The tool read the vault correctly — `inspect` reports
+`Obsidian Basic (and reversed card)` for both — and then refused the move, twice, under
+`SOME ACTIONS FAILED`. **The six cards it protected hold 0 reviews, 0 lapses and 0 interval
+between them.** The author was blocked from an edit that would have cost nothing, and told to go
+and do it by hand in another application.
+
+---
+
 ## What each item must carry, and why it is the point
 
 The reason to build this rather than improve four reports is that **none of them shows the cost**.
@@ -162,7 +219,9 @@ disappears. That is a smaller surface and a stronger guarantee.
 
 ## What must be measured before building anything
 
-- **What a shrink actually does to a card at a stranded ordinal.** UNMEASURED, and it decides
+- ⚠️ **What a shrink actually does to a card at a stranded ordinal. THIS IS THE CRITICAL
+  PATH** — it gates stance (c) above, which is ruled and unbuildable until this is known.
+  UNMEASURED, and it decides
   whether row 2's third state is *"proceed, it is fine"*, *"proceed, the cards are recoverable via
   Check Database"*, or *"proceed and spend this much review history"*. `EVOLVABILITY.md` M4 records
   the experiment; only its growth half has been run. One hour in a throwaway profile, and the
