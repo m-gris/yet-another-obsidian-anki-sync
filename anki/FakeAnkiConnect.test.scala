@@ -56,6 +56,12 @@ object FakeAnkiConnect:
     var decks: Set[String]      = Set("Default")
     var cardDeck: Map[Long, String] = Map.empty
     var corruptCards: Set[Long] = Set.empty
+
+    /** HOW MANY REVIEWS EACH CARD CARRIES. Absent means never reviewed, which for a card this
+      * collection created is the truth rather than a fallback — a card that does not exist is
+      * a different observation, and `cardsInfo` below answers that one with `{}`.
+      */
+    var reviews: Map[Long, Int] = Map.empty
     private var next: Long      = 5000L
     def fresh(): Long = { next += 1; next }
 
@@ -227,10 +233,23 @@ object FakeAnkiConnect:
 
       // VERIFIED LIVE: one corrupt card nulls the ENTIRE batch. Present so that any future
       // use of this action fails loudly here rather than in a collection.
+      // VERIFIED LIVE 2026-08-27: an entry carries `ord` (the card's position in its note,
+      // from zero) and `reps` (its review count, which is the "Reviews" figure Anki's own card
+      // info panel shows). A card that is NOT in the collection comes back as `{}` — an empty
+      // object, with NO error — which is modelled here because an interpreter that shrugs at it
+      // prices a destructive change at zero reviews.
       case "cardsInfo" =>
         val cards = p.downField("cards").as[Vector[Long]].getOrElse(Vector.empty)
         if cards.exists(state.corruptCards.contains) then err("missing template")
-        else ok(cards.map(c => Json.obj("cardId" := c)).asJson)
+        else
+          ok(
+            cards.map { c =>
+              state.notes.collectFirst {
+                case (_, n) if n.cards.contains(c) =>
+                  Json.obj("cardId" := c, "ord" := n.cards.indexOf(c), "reps" := state.reviews.getOrElse(c, 0))
+              }.getOrElse(Json.obj())
+            }.asJson
+          )
 
       case "getDecks" =>
         val cards = p.downField("cards").as[Vector[Long]].getOrElse(Vector.empty)

@@ -182,6 +182,30 @@ object AnkiConnect:
     * card in it is corrupt. Neither hazard needs handling if the call is never made, and the
     * card ids are already present here.
     */
+  /** One entry of `cardsInfo`, read as a card's standing.
+    *
+    * `ord` IS THE CARD'S POSITION IN ITS NOTE, from zero, and it is what decides whether a
+    * narrowing destroys the card: a note type with N templates generates 0..N-1.
+    *
+    * `reps` RATHER THAN THE REVIEW LOG, and the choice is deliberate. `getReviewsOfCards`
+    * would give the log itself, but `reps` is the figure Anki's own card-info panel prints as
+    * "Reviews" — so a price quoted from it is a number the author can go and check. It also
+    * avoids a measured trap: `getReviewsOfCards` returns an EMPTY result for card ids sent as
+    * JSON strings and the real log for the same ids sent as integers, erroring on neither, so
+    * the wrong encoding prices every card at zero. Not using it removes that failure entirely
+    * rather than guarding against it. The two agreed exactly when measured on 2026-08-27
+    * (reps 1, 2, 3 against 1, 2, 3 log entries); if they are ever seen to diverge, the log is
+    * the more truthful of the two and this is the place to change.
+    */
+  val cardStanding: Decoder[CardStanding] =
+    Decoder.instance { c =>
+      for
+        id   <- c.downField("cardId").as[Long]
+        ord  <- c.downField("ord").as[Int]
+        reps <- c.downField("reps").as[Int]
+      yield CardStanding(AnkiCardId(id), ord, reps)
+    }
+
   val cardIdsOfNote: Decoder[Vector[AnkiCardId]] =
     Decoder.instance(_.downField("cards").as[Vector[Long]].map(_.map(AnkiCardId.apply)))
 

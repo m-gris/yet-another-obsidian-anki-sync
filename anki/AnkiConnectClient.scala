@@ -212,7 +212,46 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
     * sent as strings price everything at zero, and a card that does not exist comes back as an
     * empty object rather than an error.
     */
-  def standingOf(cards: Vector[AnkiCardId]): Result[Vector[CardStanding]] = ???
+  def standingOf(cards: Vector[AnkiCardId]): Result[Vector[CardStanding]] =
+    if cards.isEmpty then EitherT.pure(Vector.empty)
+    else
+      call[Vector[Json]]("cardsInfo", Json.obj("cards" := cards.map(_.value))).subflatMap { entries =>
+        // POSITIONAL, AND CHECKED BEFORE IT IS RELIED ON. `cardsInfo` answers in the order it
+        // was asked, which is the only thing tying an entry to the card it describes — an
+        // entry for a missing card carries no id to match on. A length mismatch would silently
+        // shift every card's standing onto its neighbour, so it is refused rather than zipped.
+        if entries.sizeIs != cards.size then
+          Left(
+            AnkiError.MalformedResponse(
+              "cardsInfo",
+              s"asked about ${cards.size} card(s) and got ${entries.size} answer(s), so no " +
+                "answer can be attributed to the card it describes",
+            )
+          )
+        else
+          cards.zip(entries).traverse { (card, entry) =>
+            // `{}` MEANS "NO SUCH CARD", AND IT ARRIVES WITHOUT AN ERROR. Measured 2026-08-27.
+            // Refused loudly because the alternative is pricing a card nobody can find at zero
+            // reviews, which is exactly the answer that makes destroying it look free.
+            if entry.asObject.exists(_.isEmpty) then
+              Left(
+                AnkiError.MalformedResponse(
+                  "cardsInfo",
+                  s"card ${card.value} is not in this collection — AnkiConnect answers with an " +
+                    "empty object rather than failing, so this cannot be read as 'no reviews'",
+                )
+              )
+            else
+              AnkiConnect.cardStanding
+                .decodeJson(entry)
+                .leftMap(f =>
+                  AnkiError.MalformedResponse(
+                    "cardsInfo",
+                    s"could not read the standing of card ${card.value}: ${f.message}",
+                  )
+                )
+          }
+      }
 
   def cardsOf(ids: Vector[AnkiNoteId]): Result[Vector[AnkiCardId]] =
     if ids.isEmpty then EitherT.pure(Vector.empty)

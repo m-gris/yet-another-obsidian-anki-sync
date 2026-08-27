@@ -41,6 +41,65 @@ class AnkiConnectClientTest extends munit.FunSuite:
   /** The deck must be created first, because `addNote` refuses a missing one. If the
     * interpreter skipped that step this fails with "deck was not found".
     */
+  // ------------------------------------------ what a card is worth ----
+
+  /** SEEDS A NOTE HOLDING SEVERAL CARDS, which `State.seed` cannot do — it makes one card,
+    * because until now nothing needed a note with more than one. A price is about the cards a
+    * narrowing leaves behind, so a single-card note cannot exercise it at all.
+    */
+  def seedWithCards(state: FakeAnkiConnect.State, howMany: Int): (Long, Vector[Long]) =
+    val note  = state.fresh()
+    val cards = Vector.fill(howMany)(state.fresh())
+    state.notes += note -> FakeAnkiConnect.Note("Obsidian Concept-Descriptor", Vector.empty, Vector.empty, cards)
+    (note, cards)
+
+  test("a card's standing is its position in its note and the reviews it carries") {
+    val (state, anki) = fixture
+    val (_, cards)    = seedWithCards(state, 3)
+    state.reviews += cards(0) -> 9
+    state.reviews += cards(1) -> 4
+    state.reviews += cards(2) -> 1
+
+    assertEquals(
+      anki.standingOf(cards.map(AnkiCardId.apply)).get,
+      Vector(
+        CardStanding(AnkiCardId(cards(0)), 0, 9),
+        CardStanding(AnkiCardId(cards(1)), 1, 4),
+        CardStanding(AnkiCardId(cards(2)), 2, 1),
+      ),
+      "each card must come back with its own ordinal and its own review count, in the order asked",
+    )
+  }
+
+  /** THE FOOTGUN THIS EXISTS TO CATCH, and it was MEASURED rather than imagined. AnkiConnect
+    * answers `{}` for a card that is not in the collection, and does NOT report an error. An
+    * implementation that shrugged at that would price a destructive change at ZERO REVIEWS —
+    * the single answer that makes destroying somebody's cards look free.
+    *
+    * SO THE REFUSAL IS THE FEATURE. A card the plan believes in and the collection does not is
+    * a disagreement, and this must be the loudest thing that happens rather than the quietest.
+    */
+  test("a card the collection does not have is refused, not priced at zero") {
+    val (state, anki) = fixture
+    val (_, cards)    = seedWithCards(state, 2)
+    val ghost         = AnkiCardId(999999L)
+
+    val refusal = anki.standingOf(cards.map(AnkiCardId.apply) :+ ghost).refusal
+    assert(
+      refusal.toString.contains("999999"),
+      s"the refusal must name the card that is missing, or nobody can act on it: $refusal",
+    )
+  }
+
+  /** ASSERTED AS AN OUTCOME, NOT AS AN INTERACTION. The first draft of this checked that no
+    * `cardsInfo` call was made, which this fake's own docstring rules out: interaction
+    * assertions pin the interpreter's current shape, whereas these pin Anki's behaviour.
+    */
+  test("asking about no cards answers with no standings") {
+    val (_, anki) = fixture
+    assertEquals(anki.standingOf(Vector.empty).get, Vector.empty)
+  }
+
   test("a note is created in a deck that did not exist yet") {
     val (state, anki) = fixture
     val id = anki

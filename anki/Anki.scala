@@ -365,16 +365,27 @@ trait Anki[F[_]]:
     * narrowing must read first and move second; there is no reading it back afterwards to check.
     * (`docs/EVOLVABILITY.md` § M4, measured 2026-08-27 in a throwaway profile.)
     *
-    * TWO FOOTGUNS THE INTERPRETER MUST NOT REPRODUCE, both of which answer WRONGLY rather than
-    * failing, and both measured rather than read:
+    * TWO MEASURED WAYS OF ANSWERING WRONGLY, both of which return a plausible value rather
+    * than failing. The AnkiConnect implementation deals with them differently, and the
+    * difference is worth stating because it is the better of the two shapes:
     *
     *   - `getReviewsOfCards` returns an EMPTY result for card ids sent as JSON strings, and the
-    *     real log for the same ids sent as integers. It errors on neither. A stringified id
-    *     therefore prices every card at zero reviews — the exact answer that makes a destructive
-    *     move look free.
-    *   - `cardsInfo` answers `{}` for a card that does not exist, rather than failing. An
-    *     implementation must treat a missing card as a LOUD failure: a card the plan believes in
-    *     and the collection does not is a disagreement, not a zero.
+    *     real log for the same ids sent as integers, erroring on neither — so the wrong
+    *     encoding prices every card at zero reviews, the exact answer that makes a destructive
+    *     move look free. THIS IS AVOIDED BY NOT USING THE CALL: `cardsInfo` already carries
+    *     `reps`, which is the figure Anki's own card-info panel prints as "Reviews". Removing
+    *     the trap beats guarding it, and it means a quoted price is a number the author can go
+    *     and check against what Anki shows them.
+    *   - `cardsInfo` answers `{}` for a card that does not exist, rather than failing. This one
+    *     CANNOT be avoided, only refused: an implementation must treat a missing card as a LOUD
+    *     failure, because a card the plan believes in and the collection does not is a
+    *     disagreement, not a zero.
+    *
+    * THE ANSWER IS POSITIONAL, which matters for the second of those. `cardsInfo` replies in
+    * the order it was asked and an entry for a missing card carries no id to match on, so the
+    * only thing tying an answer to its card is position — an implementation must check the
+    * lengths agree before relying on it, or one bad card shifts every standing onto its
+    * neighbour.
     */
   def standingOf(cards: Vector[AnkiCardId]): F[Vector[CardStanding]]
 
