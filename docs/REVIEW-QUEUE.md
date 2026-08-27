@@ -112,6 +112,27 @@ because it LOOKS informed. A refusal at least tells the truth about what the too
 **This makes M4 the critical path rather than one measurement among four.** See *What must be
 measured before building anything* below.
 
+### ~~What blocks (c)~~ — MEASURED 2026-08-27, AND (c) IS NOW BUILDABLE
+
+The experiment above was run the same day it was named. **The answer is that a stranded card is
+ORPHANED, NOT DESTROYED — and `Tools > Check Database` destroys it later.** Full protocol and
+figures in `docs/EVOLVABILITY.md` § M4. What it changes here:
+
+- **The cost is exactly countable.** `getReviewsOfCards` returns the complete log for the doomed
+  ordinals, *before* the retype. So row 2's third state can state a real price — *"this strands 2
+  cards holding 5 reviews"* — rather than a shrug. **The objection above no longer applies, and
+  (c) is buildable now.**
+- **The loss is DEFERRED, which the cost line must say out loud.** Nothing dies at the moment of
+  the retype. The cards die whenever the person next runs `Check Database`, days later, for
+  unrelated reasons. A message saying only "2 cards will be lost" would be wrong in a way the
+  author would discover by being surprised; it must say WHEN.
+- **A shrink leaves the note unreadable by this tool until then.** `cardsInfo` throws
+  `missing template` for the whole note, not merely the stranded ordinals. **So "apply anyway"
+  cannot simply perform the retype and stop** — it must reap the orphans itself, or the next run
+  over that note fails. NOT DECIDED, and it is the one genuinely new design question the
+  measurement raised.
+
+
 ### It is not hypothetical, and the numbers say so
 
 MEASURED 2026-08-27, live: `Database Scaleability.md` had both its headings turned down from
@@ -219,9 +240,9 @@ disappears. That is a smaller surface and a stronger guarantee.
 
 ## What must be measured before building anything
 
-- ⚠️ **What a shrink actually does to a card at a stranded ordinal. THIS IS THE CRITICAL
-  PATH** — it gates stance (c) above, which is ruled and unbuildable until this is known.
-  UNMEASURED, and it decides
+- ~~**What a shrink actually does to a card at a stranded ordinal.**~~ **MEASURED 2026-08-27:
+  orphaned, then destroyed by `Check Database`; the review log outlives the card and stays
+  readable.** It decided
   whether row 2's third state is *"proceed, it is fine"*, *"proceed, the cards are recoverable via
   Check Database"*, or *"proceed and spend this much review history"*. `EVOLVABILITY.md` M4 records
   the experiment; only its growth half has been run. One hour in a throwaway profile, and the

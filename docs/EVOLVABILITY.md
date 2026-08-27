@@ -309,7 +309,25 @@ For every note tagged `orphaned::`, compare its non-`Context` fields against the
 
 **M3 — ~~Does unsuspend restore interval, ease, due date and the review log?~~ RUN 2026-08-25, and it holds.** See §2's `suspend`/`unsuspend` row and §3.6. It was the highest load-bearing-ness per minute on this list and nobody had proposed it; it cost five minutes.
 
-**M4 — ~~Retype in both directions~~ — THE GROWTH HALF IS RUN (2026-08-26) and the gate now admits it; the SHRINKING half is still open.** Growth kept every card, every id and every review log, and honoured the gate fields. Shrinking — cards left at ordinals the new type cannot generate — remains unmeasured and refused, and needs the `Check Database` step below to tell "orphaned" from "destroyed". _Original entry follows._
+**M4 — ~~Retype in both directions~~ — BOTH HALVES ARE NOW RUN. Growth 2026-08-26; SHRINKING 2026-08-27.** Growth kept every card, every id and every review log, and honoured the gate fields.
+
+**THE SHRINKING ANSWER: a stranded card is ORPHANED, NOT DESTROYED — AND `Check Database` DESTROYS IT LATER.** MEASURED 2026-08-27 in the `claude-POC-test` profile, using the same `updateNoteModel` call the tool makes (`anki/AnkiConnect.scala:372`). One note on a three-template type, its cards reviewed to distinct intervals (1, 2 and 3 reviews; intervals 3, 9 and 34 days), retyped onto a one-template type:
+
+| moment | `findCards` | `cardsInfo` | review log |
+|---|---|---|---|
+| after the retype | **all 3 still there**, scheduling intact | **THROWS `missing template`** — for the WHOLE note, not just the stranded ordinals | intact: 1, 2, 3 entries |
+| after `Tools > Check Database` | **1** — ordinals 1 and 2 permanently reaped | works again; survivor kept `reps`, `ivl`, everything | survivor intact |
+| the reaped cards, afterwards | absent | **returns `{}` — SILENTLY, no error** | **STILL FULLY READABLE** |
+
+**Three consequences, and the middle one is the dangerous one.**
+
+**(1) The cost is exactly countable, before and after.** `getReviewsOfCards` on the doomed ordinals returns the complete log — ease, interval, factor — both before the retype and after the cards are gone. So a gate CAN state its price: *"this strands 2 cards holding 5 reviews"*. This is what unblocks stance (c) in `REVIEW-QUEUE.md`.
+
+**(2) THE LOSS IS DEFERRED AND CAUSALLY INVISIBLE.** The retype does not destroy anything. The cards die whenever the person next runs `Check Database` — days later, for unrelated reasons, with nothing connecting the two events. **This is worse than immediate destruction for diagnosis**, and it means "the retype seemed fine" is not evidence of anything.
+
+**(3) Between the two moments the note is UNREADABLE BY THIS TOOL.** `cardsInfo` throws `missing template` for the entire batch, so any later run touching that note fails, including runs that only meant to read it. A tool that performs a shrink and leaves the orphans in place has broken its own next run — which argues the shrink must reap them itself rather than wait for `Check Database`.
+
+**A NEW FOOTGUN, of the same family as the string/integer one below:** `cardsInfo` answers `{}` for a card that no longer exists, and does NOT error. A caller that indexes the result gets a `KeyError` far from the cause, or worse, treats the empty dict as data. _Original entry follows._
 Three-template type, one note, all three cards reviewed to distinct intervals; record card ids and scheduling; retype onto a one-template type; re-read; then run `Tools > Check Database` and re-read again — "orphaned until Check Database" and "destroyed" differ only after that step. Then the mirror: a reviewed one-template note retyped onto a three-template type whose extra templates render non-empty; count cards; confirm the original kept its id and scheduling.
 *Unblocks:* the retype gate in both directions, and the `framework` note waiting on the growth half (IN-FLIGHT.md:179-185). *Recorded footgun to carry into it:* `getReviewsOfCards` returns **empty** for card ids passed as strings and real entries for the same ids as integers, and errors on neither.
 
