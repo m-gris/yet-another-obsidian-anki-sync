@@ -152,3 +152,54 @@ JAVA_HINT = (
     "invisible to it. Set 'java_home' in this add-on's config: run `echo $JAVA_HOME` in a "
     "terminal and paste what it prints."
 )
+
+
+# ---------------------------------------------------------------- drilling ----
+
+#: Every deck this add-on builds starts with this, and NOTHING ELSE IS EVER TOUCHED. The sweep
+#: that removes finished drills matches on it, so the prefix is the only thing standing between
+#: a tidy-up and somebody's real deck. It is deliberately unlike a name anyone would type.
+DRILL_PREFIX = "Drill — "
+
+
+def drill_deck_name(title: str) -> str:
+    """The temporary deck a note's cards are drilled in.
+
+    TOP LEVEL, NOT NESTED. `A::B` in Anki means B inside A, so a nested name would leave an empty
+    parent deck behind after the child is swept -- exactly the residue this is supposed to avoid.
+    A `::` in the note's own title would do the same by accident, so it is flattened.
+
+    QUOTES ARE REMOVED because a deck name reaches Anki's search syntax, where `"` terminates a
+    quoted term. A deck nobody can search for is a deck nobody can empty.
+    """
+    cleaned = title.replace("::", "-").replace('"', "").strip()
+    return DRILL_PREFIX + (cleaned or "untitled")
+
+
+def is_drill_deck(name: str) -> bool:
+    """Whether a deck is one of ours, and therefore ours to remove.
+
+    Matches the prefix at the START only. A deck the person named `My Drill — French` is theirs,
+    and this must never claim it.
+    """
+    return name.startswith(DRILL_PREFIX)
+
+
+def drill_search_for_id(note_id: str) -> str:
+    """The Anki search a drill deck is built from, for one note's frontmatter id.
+
+    `-is:suspended` is stated rather than left implicit: a filtered deck will not gather
+    suspended cards anyway, but writing it down means the search explains itself when it is read
+    back in Anki's own filtered-deck dialog.
+
+    AN EMPTY ID YIELDS A SEARCH THAT MATCHES NOTHING, never `tag:src::*`, which would gather the
+    entire collection into a drill deck.
+    """
+    if not note_id.strip():
+        return "nid:0"
+    return f'"tag:src::{note_id.strip()}::*" -is:suspended'
+
+
+def drill_search(tag: str) -> str:
+    """The same search, for callers holding a full identity tag rather than a bare id."""
+    return drill_search_for_id(tag.split("::")[1] if tag.count("::") >= 2 else "")

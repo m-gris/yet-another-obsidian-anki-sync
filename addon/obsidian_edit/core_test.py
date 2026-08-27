@@ -5,8 +5,10 @@
 
 import unittest
 
-from core import (JAVA_HINT, Explain, NotOurs, Open, command, environment,
-                  interpret, missing_java, source_tag)
+from core import (DRILL_PREFIX, JAVA_HINT, Explain, NotOurs, Open, command,
+                  drill_deck_name, drill_search, drill_search_for_id, environment,
+                  interpret, is_drill_deck,
+                  missing_java, source_tag)
 
 
 class SourceTagTest(unittest.TestCase):
@@ -131,6 +133,66 @@ class MissingJavaTest(unittest.TestCase):
     def test_the_hint_names_the_setting_that_fixes_it(self) -> None:
         """A hint that does not say what to change is decoration."""
         self.assertIn("java_home", JAVA_HINT)
+
+
+class DrillDeckTest(unittest.TestCase):
+    def test_the_deck_is_named_after_the_note(self) -> None:
+        self.assertEqual(drill_deck_name("Function Space"), DRILL_PREFIX + "Function Space")
+
+    def test_a_nested_name_is_flattened(self) -> None:
+        """`A::B` means B inside A in Anki, so a title containing it would leave an empty parent
+        deck behind after the child is swept -- the residue this is meant to avoid."""
+        self.assertNotIn("::", drill_deck_name("Maths::Sets"))
+
+    def test_quotes_are_removed(self) -> None:
+        """A deck name reaches Anki's search syntax, where a quote terminates a term. A deck
+        nobody can search for is a deck nobody can empty."""
+        self.assertNotIn('"', drill_deck_name('The "CAP" theorem'))
+
+    def test_a_nameless_note_still_gets_a_deck(self) -> None:
+        for title in ("", "   ", '""'):
+            self.assertTrue(drill_deck_name(title).startswith(DRILL_PREFIX))
+            self.assertNotEqual(drill_deck_name(title), DRILL_PREFIX)
+
+
+class SweepTest(unittest.TestCase):
+    def test_our_decks_are_recognised(self) -> None:
+        self.assertTrue(is_drill_deck(drill_deck_name("anything")))
+
+    def test_a_real_deck_is_never_claimed(self) -> None:
+        """The prefix is the only thing between a tidy-up and somebody's collection."""
+        for name in ("Obsidian", "Obsidian::System-Design", "Default", "French"):
+            self.assertFalse(is_drill_deck(name), name)
+
+    def test_the_prefix_must_be_at_the_start(self) -> None:
+        """A deck the person named 'My Drill — French' is theirs."""
+        self.assertFalse(is_drill_deck("My " + DRILL_PREFIX + "French"))
+
+
+class DrillSearchTest(unittest.TestCase):
+    def test_the_search_is_anchored_to_the_note(self) -> None:
+        s = drill_search("src::abc123::cap%20theorem/definition")
+        self.assertIn("tag:src::abc123::*", s)
+
+    def test_suspended_cards_are_excluded_out_loud(self) -> None:
+        """Filtered decks skip suspended cards anyway. Saying so means the search explains
+        itself when it is read back in Anki's own filtered-deck dialog."""
+        self.assertIn("-is:suspended", drill_search("src::abc123::x"))
+
+    def test_a_tag_with_no_path_yields_no_id_rather_than_a_wild_search(self) -> None:
+        """A malformed tag must not become `tag:src::*`, which would gather the whole
+        collection into a drill deck."""
+        self.assertNotIn("tag:src::*", drill_search("src::"))
+
+    def test_an_empty_id_matches_nothing_at_all(self) -> None:
+        """The dangerous failure here is not an error, it is a search that succeeds too well."""
+        for empty in ("", "   "):
+            s = drill_search_for_id(empty)
+            self.assertNotIn("src::", s)
+            self.assertEqual(s, "nid:0")
+
+    def test_the_two_entry_points_agree(self) -> None:
+        self.assertEqual(drill_search("src::abc123::x/y"), drill_search_for_id("abc123"))
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ import subprocess
 from typing import Any
 
 import aqt
+from aqt import gui_hooks
 from aqt.utils import openLink, tooltip
 
 from . import core
@@ -133,5 +134,161 @@ def edit_current(main_window: Any) -> Any:
 
     return _delegate(main_window)
 
+
+# ------------------------------------------------------------------ drilling ----
+#
+# The other direction: gather one note's cards into a temporary deck and study them now,
+# whatever their due dates say. This is what Anki's own Custom Study builds -- a FILTERED deck --
+# and it is the right mechanism precisely because it is temporary: cards are borrowed, not moved,
+# and every card remembers the deck it came from.
+#
+# ANKICONNECT CANNOT DO THIS. Its 121 actions include `createDeck` and `changeDeck`, and neither
+# is this: `changeDeck` moves cards PERMANENTLY, which is the wrong tool wearing the right name.
+# Anki's own Python has the API, and this add-on runs inside Anki, so it is reachable from here.
+
+#: More than any one note will ever produce. A filtered deck needs a limit; this one is not
+#: trying to be a limit.
+DRILL_LIMIT = 9999
+
+
+def _drill_decks() -> list[Any]:
+    """Every deck this add-on built, and nothing else.
+
+    THE PREFIX IS THE ONLY THING between a tidy-up and somebody's collection, which is why the
+    test for it lives in `core.py` with its own tests rather than being written inline here.
+    """
+    return [
+        d for d in aqt.mw.col.decks.all_names_and_ids(include_filtered=True)
+        if core.is_drill_deck(d.name)
+    ]
+
+
+def sweep_drills(only_finished: bool) -> int:
+    """Remove drill decks, returning their cards home first.
+
+    EMPTYING BEFORE REMOVING IS NOT BELT AND BRACES. `empty_filtered_deck` is the operation that
+    puts each card back in the deck it was borrowed from; what `remove` does with a deck that
+    still holds cards lives in Anki's Rust backend, where this add-on cannot read it. Emptying
+    first means the removal is only ever the removal of an empty deck, which needs no assumption.
+
+    `only_finished` skips decks that still hold cards, so triggering a second drill does not
+    destroy a session in progress. The unconditional sweep is for shutdown.
+    """
+    from anki.decks import DeckId
+
+    col = aqt.mw.col
+    removing = []
+    for deck in _drill_decks():
+        did = DeckId(deck.id)
+        if only_finished and col.decks.card_count(did, include_subdecks=False) > 0:
+            continue
+        col.sched.empty_filtered_deck(did)
+        removing.append(did)
+    if removing:
+        col.decks.remove(removing)
+    return len(removing)
+
+
+def drill(search: str, deck_name: str) -> None:
+    """Gather what `search` matches into a temporary deck and start studying it.
+
+    RESCHEDULING IS OFF. Answers here do not touch a card's real interval, so the same note can
+    be drilled before an exam as often as you like without distorting the schedule you have
+    built. It is the difference between practising and reviewing.
+
+    AN EMPTY RESULT REMOVES THE DECK AGAIN rather than leaving one behind saying "Congratulations".
+    A drill that gathered nothing is a question about the note -- is anything marked, has it ever
+    synced -- and it should read as an answer to that, not as a finished session.
+    """
+    from anki.decks import DeckId
+    from anki.decks_pb2 import Deck
+
+    col = aqt.mw.col
+    sweep_drills(only_finished=True)
+
+    deck = col.sched.get_or_create_filtered_deck(DeckId(0))
+    deck.name = deck_name
+    deck.config.reschedule = False
+    del deck.config.search_terms[:]
+    term = deck.config.search_terms.add()
+    term.search = search
+    term.limit = DRILL_LIMIT
+    term.order = Deck.Filtered.SearchTerm.Order.Value("RANDOM")
+
+    did = DeckId(col.sched.add_or_update_filtered_deck(deck).id)
+    col.sched.rebuild_filtered_deck(did)
+
+    gathered = col.decks.card_count(did, include_subdecks=False)
+    if gathered == 0:
+        col.sched.empty_filtered_deck(did)
+        col.decks.remove([did])
+        tooltip("Nothing to drill: this note has no unsuspended cards in the collection.", period=6000)
+        return
+
+    col.decks.select(did)
+    aqt.mw.moveToState("overview")
+    tooltip(f"{gathered} card{'s' if gathered != 1 else ''} gathered — nothing here is rescheduled.")
+
+
+def drill_note(note_id: str, title: str) -> None:
+    """The entry point Obsidian reaches: one note's frontmatter id, and what to call the deck."""
+    drill(core.drill_search_for_id(note_id), core.drill_deck_name(title))
+
+
+def _drill_current_browser_search(browser: Any) -> None:
+    """Drill whatever the Browse window is showing.
+
+    Deliberately NOT restricted to this tool's cards: someone looking at a search in Anki and
+    wanting to study it has the same need, and the mechanism does not care where the cards
+    came from.
+    """
+    search = browser.current_search().strip()
+    if not search:
+        tooltip("Type a search in the browser first.")
+        return
+    drill(search, core.drill_deck_name(search[:60]))
+
+
+def _add_browser_action(browser: Any) -> None:
+    action = browser.form.menu_Cards.addAction("Study these cards now (temporary deck)")
+    action.triggered.connect(lambda _=False, b=browser: _drill_current_browser_search(b))
+
+
+def _register_ankiconnect_action() -> None:
+    """Let Obsidian reach `drill_from_tag` through AnkiConnect, which is already listening.
+
+    ANKICONNECT DISPATCHES BY INSPECTING ITS OWN METHODS for an `api` attribute, so an action can
+    be added to its class from here. That is an internal of another add-on and it is being used
+    knowingly. It is a different risk from the traps this project met while wiring the Obsidian
+    side: if AnkiConnect ever changes how it dispatches, the action is simply not found and the
+    caller is told so. LOUD, not silent.
+
+    Failure to attach is not fatal -- the Browse action still works, and this add-on's main job,
+    redirecting Edit, does not involve AnkiConnect at all.
+    """
+    import sys
+
+    module = sys.modules.get("2055492159")  # AnkiConnect's add-on id, and its module name
+    if module is None or not hasattr(module, "AnkiConnect"):
+        return
+
+    def studyFromNote(self: Any, noteId: str = "", title: str = "") -> int:  # noqa: N802
+        drill_note(noteId, title)
+        return 1
+
+    studyFromNote.api = True  # type: ignore[attr-defined]
+    setattr(module.AnkiConnect, "studyFromNote", studyFromNote)
+
+
+def _on_main_window_init() -> None:
+    # AFTER the main window exists, so load order between add-ons is not being relied on.
+    _register_ankiconnect_action()
+
+
+gui_hooks.main_window_did_init.append(_on_main_window_init)
+gui_hooks.browser_menus_did_init.append(_add_browser_action)
+# NOTHING THIS ADD-ON BUILT SURVIVES THE SESSION. Unconditional, because a half-finished drill
+# is not worth keeping: the cards are already home, and re-triggering it costs one keystroke.
+gui_hooks.profile_will_close.append(lambda: sweep_drills(only_finished=False))
 
 aqt.dialogs.register_dialog("EditCurrent", edit_current)

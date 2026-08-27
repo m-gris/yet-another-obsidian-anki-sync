@@ -657,6 +657,71 @@ opened — which looks exactly like Browse never opening.
 its `src::` tag beside the `orphaned::` one. A note whose heading you reworded shows the live card
 and the retired one side by side, which is the clearest view you will get of what a rewording cost.
 
+### Drilling a note's cards, ignoring the schedule
+
+The third of the three: from a note in Obsidian, study **that note's cards right now**, whatever
+their due dates say. Before an exam, or after rewriting a section and wanting to check the cards
+still make sense.
+
+This builds what Anki's own *Custom Study* builds — a **filtered deck**. That is the right
+mechanism precisely because it is temporary: cards are borrowed rather than moved, each one
+remembers the deck it came from, and emptying the deck sends them all home.
+
+**Rescheduling is off.** Answers here do not touch a card's real interval, so the same note can be
+drilled ten times in an evening without distorting the schedule you have built. It is the
+difference between practising and reviewing. Suspended cards are not gathered, which means a card
+retired by a reworded heading will not appear — correct, and worth knowing.
+
+**Nothing is left behind.** The deck is named after the note and lives at the top level, never
+nested — a nested name would leave an empty parent deck in your list. Finished drills are removed
+when you start the next one, and *every* drill is removed when Anki closes. Each removal empties
+the deck first, because emptying is the operation that returns the cards home; deletion is then
+only ever the deletion of an empty deck.
+
+**Unlike the other two directions, this one needs the add-on**, which adds two ways in:
+
+- **In Anki**, the Browse window gains *Cards → "Study these cards now (temporary deck)"*, which
+  drills whatever search you are looking at. Deliberately not restricted to this tool's cards.
+- **From Obsidian**, the add-on registers a `studyFromNote` action on AnkiConnect, so a shell
+  command can reach it:
+
+```bash
+open -a Anki ; ID={{yaml_value:id}} ; T={{title}} ; R=$(curl -sS localhost:8765 -X POST -d "$(jq -nc --arg id "$ID" --arg t "$T" '{action:"studyFromNote",version:6,params:{noteId:$id,title:$t}}')") ; case "$R" in *'"error": null'*|*'"error":null'*) ;; *) echo "$R" >&2 ;; esac
+```
+
+**Why `jq` and why the `case`.** The payload carries the note's *title*, which can contain quotes;
+`jq --arg` escapes its arguments correctly by construction, where a hand-stitched JSON string
+does not. And AnkiConnect answers a failed action with **HTTP 200 and an `error` field**, so
+`curl` exits 0 and a discarded body hides the reason entirely — the `case` puts anything that is
+not a success on stderr, where the plugin shows it. Both of those cost a debugging round before
+they were written down.
+
+Registering an action on AnkiConnect means reaching into another add-on: it dispatches by
+inspecting its own methods, and this attaches one. That is a knowing choice, and a different risk
+from the silent traps above — if AnkiConnect ever changes, the action is simply not found and the
+reply says so.
+
+## Keys and commands, in one place
+
+Nothing here is installed for you, and the keys are **suggestions**: bind whatever fits your
+layout. What matters is which command each is bound to.
+
+| Where | Suggested key | Command | Needs |
+|---|---|---|---|
+| Anki, reviewing | `e` (Anki's own) | open this card's note in Obsidian | the add-on; Advanced URI |
+| Anki, Browse | — (menu item) | *Cards → Study these cards now* | the add-on |
+| Obsidian | `Cmd+Alt+A` | open Anki's Browse on this note's cards | Shell commands; AnkiConnect |
+| Obsidian | `Cmd+Ctrl+Alt+D` | drill this note's cards now | Shell commands; AnkiConnect; the add-on; `jq` |
+
+**On picking keys.** `Cmd+Alt+D` looks free and is not: macOS uses it to toggle Dock hiding, and
+that shortcut is built into the Dock rather than registered in the database every other system
+shortcut lives in — so it is invisible to any check you can run. Obsidian's own hotkey settings
+will warn about a clash with Obsidian, and about nothing else. Adding `Ctrl` steps out of the way.
+
+`open -a Anki` is macOS. Elsewhere use whatever raises a window, or nothing if your window
+manager follows focus. Raising Anki must come **first** in these commands — see the note on
+ordering above.
+
 ## Exit codes
 
 | Code | Meaning |
