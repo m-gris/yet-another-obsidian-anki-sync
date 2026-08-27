@@ -1,6 +1,6 @@
 package obsidiananki.cli
 
-import cats.data.EitherT
+import cats.data.{EitherT, NonEmptyVector}
 import cats.effect.{ExitCode, IO}
 import cats.syntax.all.*
 import com.monovore.decline.Opts
@@ -17,6 +17,7 @@ import obsidiananki.anki.{
   NoteTypeProblem,
 }
 import obsidiananki.extract.{DeckShape, VaultFile, VaultIndex, VaultWalker}
+import obsidiananki.locate.{Locate, Located, VaultName}
 import obsidiananki.model.CardKey
 import obsidiananki.plan.{
   ExecutionReport,
@@ -81,7 +82,74 @@ object Main
       )
     case Command.InstallNoteTypes(profile, repair) =>
       withVerifiedProfile(profile)(installNoteTypes(_, repair))
+    case Command.Locate(selection, vaultName, tag) =>
+      withChosenVault(selection)(locate(_, vaultName, tag))
   }
+
+  // ------------------------------------------------------------------ locate ----
+
+  /** Say where a card came from. Reads the vault; touches no collection.
+    *
+    * THE DECK ARGUMENTS ARE FABRICATED HERE AND THAT IS NOT A LATENT BUG. `VaultWalker.scan`
+    * answers with a [[VaultIndex]] — a scan AND the deck each card belongs in — because every
+    * other caller wants both. This one wants only the scan, so it passes the same defaults the
+    * CLI would have and reads `.scan`. Nothing downstream of here can see a deck, so no choice
+    * made here can reach a card. Said out loud because `DeckShape.FoldersOnly` appearing in a
+    * command with no `--deck-shape` flag reads like an oversight otherwise.
+    */
+  /** Any deck root at all. See [[locate]] for why this cannot reach a card. */
+  private val LocateDeckRoot: DeckPath = DeckPath(NonEmptyVector.one("Obsidian"))
+
+  private def locate(
+      vault: VaultRoot,
+      vaultName: Option[VaultName],
+      tag: String,
+  ): IO[ExitCode] =
+    derivedVaultName(vault, vaultName) match
+      case Left(refusal) => refusal.traverse_(IO.println).as(ExitCode(2))
+      case Right(name) =>
+        for
+          files <- readVault(vault)
+          index = VaultWalker.scan(files, LocateDeckRoot, DeckShape.FoldersOnly)
+          result = Locate.decide(tag, name, files, index.scan)
+          _ <- Report.located(result).traverse_(IO.println)
+        yield exitCodeForLocate(result)
+
+  /** The vault's name for a URI: the one given, or the vault directory's own name.
+    *
+    * REFUSES RATHER THAN INVENTING when there is nothing to derive from. A path with no final
+    * component is not a vault anyone has, but `getFileName` answers null for one, and a null
+    * reaching a URI would produce a link addressed to a vault called "null".
+    */
+  private def derivedVaultName(
+      vault: VaultRoot,
+      given_ : Option[VaultName],
+  ): Either[Vector[String], VaultName] =
+    given_ match
+      case Some(name) => Right(name)
+      case None =>
+        Option(vault.path.getFileName)
+          .map(n => VaultName(n.toString))
+          .toRight(
+            Vector(
+              s"Cannot work out what Obsidian calls this vault: ${vault.render}",
+              "",
+              "The name is normally the vault directory's own name, and this path has none.",
+              "Pass --vault-name to say what it is.",
+            )
+          )
+
+  /** WHAT THE EXIT CODE MEANS HERE: zero says a URI was printed.
+    *
+    * That is the contract worth having, because the only consumer that will ever read it is a
+    * caller deciding whether it has something to open. An unplaced card still counts — the URI
+    * works and opens the right note; only the anchor is missing, and the report says so.
+    */
+  private def exitCodeForLocate(result: Located): ExitCode = result match
+    case Located.Placed(_)        => ExitCode.Success
+    case Located.Unplaced(_, _)   => ExitCode.Success
+    case Located.NoteMissing(_)   => ExitCode.Error
+    case Located.Undecodable(_, _) => ExitCode(2)
 
   /** Read the vault and say what it holds. Touches no collection. */
   private def inspect(

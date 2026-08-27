@@ -2,7 +2,8 @@ package obsidiananki.cli
 
 import obsidiananki.anki.{InstallOutcome, NoteTypeProblem, NoteTypeStatus, RepairOutcome}
 import obsidiananki.extract.VaultIndex
-import obsidiananki.model.CardKey
+import obsidiananki.locate.{Located, Unplaceable}
+import obsidiananki.model.{CardKey, KeyError}
 import obsidiananki.plan.*
 
 /** Rendering results for a human.
@@ -468,3 +469,97 @@ object Report:
       s"$file: $reason (none of this note's properties makes a card until this is fixed)"
     case BuildFailure.FileUnreadable(file, reason) =>
       s"$file: $reason (SCAN IS PARTIAL — no orphans will be computed)"
+
+  // ------------------------------------------------------------------ locate ----
+
+  /** What `locate` says about one `src::` tag.
+    *
+    * THE URI IS ON ITS OWN LINE AND IS THE ONLY LINE THAT IS NOT PROSE, so that a person can
+    * select it and a later `--uri-only` can print exactly it. The add-on's machine-readable
+    * contract is NOT being invented here — it belongs with the add-on, which does not exist yet
+    * and will say what it needs.
+    *
+    * AN UNPLACED CARD LEADS WITH THE CAVEAT, not with the URI. The URI still works and still
+    * opens the right note; what it cannot do is land on the card, and someone who reads the
+    * link first and the reason second has already clicked.
+    */
+  def located(result: Located): Vector[String] = result match
+    case Located.Placed(uri) =>
+      Vector(uri.value)
+
+    case Located.Unplaced(uri, why) =>
+      unplaceable(why) ++ Vector("", "Opens the note at its top:", uri.value)
+
+    case Located.NoteMissing(id) =>
+      Vector(
+        s"No note in this vault carries the id '${id.value}'.",
+        "",
+        "NO URI IS PRINTED, on purpose. Obsidian cannot report an id it fails to resolve — it",
+        "opens nothing and says nothing — so a link that will silently do nothing is worse than",
+        "no link at all.",
+        "",
+        "The note was probably renamed away, deleted, or belongs to a different vault. Its card",
+        "in Anki will be flagged as an orphan by the next sync.",
+      )
+
+    case Located.Undecodable(tag, reason) =>
+      if tag.isBlank then
+        Vector(
+          if tag.isEmpty then "No tag was given, so there is nothing to look up."
+          else "The tag given is empty apart from whitespace, so there is nothing to look up.",
+          "",
+          "`locate` takes one argument: the `src::` tag off the card, which you will find in the",
+          "Tags bar at the bottom of Anki's Browse window. If you called this from a shell",
+          "function or a script, the variable holding the tag was probably unset.",
+        )
+      else
+        Vector(
+          s"That is not a tag this tool wrote: '$tag'",
+          "",
+          s"  ${keyError(reason)}",
+          "",
+          "A `src::` tag binds a card to a place in the vault and is written only by this tool.",
+          "One it cannot read was hand-edited, or came from somewhere else.",
+        )
+
+  /** A key failure IN WORDS.
+    *
+    * A REPORT IS PROSE AND AN ADT'S `toString` IS NOT. `MalformedTag(<tag>, not a src:: tag)`
+    * printed the tag a second time, one line under the line that already showed it, which buried
+    * the single piece of information the reader did not already have.
+    */
+  private def keyError(reason: KeyError): String = reason match
+    case KeyError.MalformedTag(_, why)     => why
+    case KeyError.BlankNoteId              => "its note id is blank"
+    case KeyError.EmptyHeadingSegment(raw) => s"a heading in its path is empty: '$raw'"
+    case KeyError.EmptyPropertyName(raw)   => s"the property it names is empty: '$raw'"
+
+  private def unplaceable(why: Unplaceable): Vector[String] = why match
+    case Unplaceable.CardGone(path) =>
+      Vector(
+        s"The note is there; the card is not: ${path.render}",
+        "",
+        "A marked heading was reworded or removed. That RETIRES its card and mints a new one",
+        "with no review history, so the card you are looking at is the old one — the next sync",
+        "will flag it as an orphan and suspend it.",
+      )
+
+    case Unplaceable.LineUnknown(path) =>
+      Vector(
+        s"The card is in the vault and its line could not be worked out: ${path.render}",
+        "",
+        "That is a limit of this tool rather than anything wrong with the note. Headings carry",
+        "no source position through the markdown parser, so the line is recovered by matching",
+        "the heading's text back against the file, and that match did not land.",
+      )
+
+    case Unplaceable.KeyedTwice(path, lines) =>
+      Vector(
+        s"TWO CARDS IN THIS VAULT CARRY ONE IDENTITY: ${path.render}",
+        "",
+        s"  lines ${lines.toVector.map(_.value).sorted.mkString(", ")}",
+        "",
+        "This is not really about the link. A duplicate identity refuses the whole sync, so the",
+        "vault cannot be synced at all until one of the two is renamed. Reported rather than",
+        "guessed between, because picking one would hide the thing that needs fixing.",
+      )

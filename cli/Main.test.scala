@@ -5,6 +5,7 @@ import cats.effect.{ExitCode, IO}
 import cats.effect.unsafe.implicits.global
 import obsidiananki.anki.*
 import obsidiananki.extract.{DeckShape, VaultFile, VaultWalker}
+import obsidiananki.locate.{Locate, VaultName}
 import obsidiananki.model.*
 import obsidiananki.plan.*
 import org.http4s.{HttpApp, Uri}
@@ -1011,3 +1012,42 @@ class MainTest extends munit.FunSuite:
     val screen = Main.describeSyncOutcome(outcome).mkString("\n")
     assert(!screen.contains("MOVED"), s"a run that moved nothing reported a move:\n$screen")
   }
+
+  // ================================================ locate's report ====
+
+  /** FOUND BY MARC RUNNING IT, 2026-08-27. A shell function pasted without its wrapper called
+    * `locate` with an unset argument, and the refusal rendered as
+    * `That is not a tag this tool wrote:` followed by nothing at all.
+    *
+    * A BLANK WHERE A VALUE SHOULD BE READS AS A LOST VALUE, not as an empty one. Someone
+    * looking at that has to work out whether the tool dropped their tag or their tag was
+    * genuinely empty, and those call for opposite next actions.
+    */
+  test("an EMPTY tag is reported as empty, not as a blank") {
+    val lines = Report.located(Locate.decide("", VaultName("V"), Vector.empty, emptyScan)).mkString("\n")
+    assert(!lines.contains("wrote:\n"), s"a bare blank followed the colon:\n$lines")
+    assert(
+      lines.toLowerCase.contains("empty") || lines.toLowerCase.contains("no tag"),
+      s"the emptiness is not named:\n$lines",
+    )
+  }
+
+  /** The same argument one step along: whitespace is not nothing, and a message that trims it
+    * away is back to showing a blank.
+    */
+  test("a whitespace-only tag does not render as a blank either") {
+    val lines = Report.located(Locate.decide("   ", VaultName("V"), Vector.empty, emptyScan)).mkString("\n")
+    assert(lines.toLowerCase.contains("empty") || lines.contains("'"), s"blank-looking report:\n$lines")
+  }
+
+  /** A REPORT IS PROSE, AND AN ADT'S `toString` IS NOT PROSE. The refusal used to print
+    * `MalformedTag(<tag>,not a src:: tag)` — which also repeats the tag the line above already
+    * showed, so the one genuinely new piece of information was the hardest part to find.
+    */
+  test("a malformed tag is explained in words, not as a case class") {
+    val lines = Report.located(Locate.decide("nonsense", VaultName("V"), Vector.empty, emptyScan)).mkString("\n")
+    assert(!lines.contains("MalformedTag("), s"the report prints an ADT:\n$lines")
+    assertEquals(lines.sliding("nonsense".length).count(_ == "nonsense"), 1, s"the tag is repeated:\n$lines")
+  }
+
+  val emptyScan: VaultScan = VaultScan.from(Vector.empty, Vector.empty)

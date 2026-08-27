@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import com.monovore.decline.Command as DeclineCommand
 import obsidiananki.anki.{AnkiNoteId, DeckPath}
 import obsidiananki.extract.{DeckLevel, DeckShape, VaultFile, VaultWalker}
+import obsidiananki.locate.VaultName
 import obsidiananki.model.*
 import obsidiananki.plan.*
 
@@ -652,4 +653,47 @@ class CliTest extends munit.FunSuite:
       screen.indexOf("WOULD MOVE") < screen.indexOf("WILL NOT HAPPEN"),
       s"what will happen must be read before what will not:\n$screen",
     )
+  }
+
+  // ================================================ locate ====
+
+  /** `locate` reads a vault and no collection, so a profile would be a lie about what it
+    * touches. This is the same guardrail as the `sync` test above, pointing the other way.
+    */
+  test("locate takes NO profile, because it reads no collection") {
+    assert(parse("locate", "--vault-path", existingDir, "--profile", "x", "src::a::b").isLeft)
+    assert(parse("locate", "--vault-path", existingDir, "src::a::b").isRight)
+  }
+
+  test("locate takes the tag as a positional argument") {
+    parse("locate", "--vault-path", existingDir, "src::abc::intro") match
+      case Right(Command.Locate(_, None, tag)) => assertEquals(tag, "src::abc::intro")
+      case other                               => fail(s"unexpected parse: $other")
+  }
+
+  /** A MALFORMED TAG IS NOT A USAGE ERROR. It came off a card in somebody's collection, so it
+    * is a finding about that collection and deserves an answer rather than a synopsis. The
+    * parser must therefore accept anything and let `TagCodec.decode` do the judging.
+    */
+  test("locate accepts a tag it cannot possibly decode") {
+    assert(parse("locate", "--vault-path", existingDir, "not a tag at all").isRight)
+  }
+
+  test("locate requires a tag") {
+    assert(parse("locate", "--vault-path", existingDir).isLeft)
+  }
+
+  test("--vault-name is carried through when given") {
+    parse("locate", "--vault-path", existingDir, "--vault-name", "Study", "src::a::b") match
+      case Right(Command.Locate(_, Some(name), _)) => assertEquals(name.value, "Study")
+      case other                                   => fail(s"unexpected parse: $other")
+  }
+
+  /** A blank name addresses no vault. Refused here rather than sent, because Obsidian's answer
+    * to a vault it cannot find is to do nothing at all and say nothing.
+    */
+  test("a blank --vault-name is refused, not silently ignored") {
+    val result = parse("locate", "--vault-path", existingDir, "--vault-name", "  ", "src::a::b")
+    assert(result.isLeft, "a blank vault name was accepted")
+    assert(result.left.exists(_.contains("vault-name")), s"error does not name the flag: $result")
   }

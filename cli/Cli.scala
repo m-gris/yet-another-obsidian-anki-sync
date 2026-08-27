@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import com.monovore.decline.Opts
 import obsidiananki.anki.DeckPath
 import obsidiananki.extract.{DeckLevel, DeckShape}
+import obsidiananki.locate.VaultName
 import obsidiananki.plan.RetypePolicy
 import java.nio.file.Paths
 
@@ -72,6 +73,21 @@ enum Command:
     * without ever having been asked to.
     */
   case InstallNoteTypes(profile: String, repair: Boolean)
+
+  /** Say where in the vault a card came from, and print a URI that opens it there.
+    *
+    * NO PROFILE, because it reads no collection. The `src::` tag is handed IN — by the Anki
+    * add-on, which has the note in front of it — so this command never needs to ask Anki
+    * anything. That is what keeps it usable by hand: paste a tag off a card in Anki's browser
+    * and see where it points.
+    *
+    * @param vaultName
+    *   what Obsidian's URI scheme calls this vault. Optional because it is DERIVABLE — Obsidian
+    *   displays a vault by its directory's name — and a flag because the derivation is ours
+    *   rather than something Obsidian told us. `VaultRegistry` deliberately carries no name
+    *   field for exactly that reason.
+    */
+  case Locate(vault: VaultSelection, vaultName: Option[VaultName], tag: String)
 
 object Cli:
 
@@ -291,4 +307,46 @@ object Cli:
       ).mapN(Command.InstallNoteTypes.apply)
     }
 
-  val command: Opts[Command] = inspect orElse sync orElse installNoteTypes
+  /** THE TAG IS A POSITIONAL ARGUMENT, not an option, because it is the whole subject of the
+    * command — `locate src::abc::intro` reads as a sentence and `locate --tag src::abc::intro`
+    * does not. It is taken as an opaque String and validated by `TagCodec.decode` downstream:
+    * refusing a malformed tag HERE would report it as a usage error, and it is not one. The tag
+    * came off a card in a collection, so a tag this tool cannot read is a finding about that
+    * collection, and it deserves an answer rather than a synopsis.
+    */
+  private val tagArg: Opts[String] =
+    Opts.argument[String]("src-tag")
+
+  /** The vault's name as Obsidian's URI scheme addresses it.
+    *
+    * OMITTING IT DERIVES ONE FROM THE VAULT DIRECTORY, which is what Obsidian itself displays.
+    * It is a flag rather than always-derived because the derivation is OURS: `VaultRegistry`
+    * carries no name field, on the stated grounds that the registry has none and inventing one
+    * would dress our guess as Obsidian's data. Anyone whose vault is registered under a
+    * different display name needs to be able to say so.
+    */
+  private val vaultNameOpt: Opts[Option[VaultName]] =
+    Opts
+      .option[String](
+        "vault-name",
+        "What Obsidian calls this vault in a URI. Omit to use the vault directory's name.",
+      )
+      .mapValidated { raw =>
+        if raw.isBlank then
+          Validated.invalidNel(
+            "--vault-name is blank. Obsidian addresses a vault by a name, and a blank one " +
+              "addresses nothing — omit the flag to use the vault directory's name instead."
+          )
+        else Validated.valid(VaultName(raw))
+      }
+      .orNone
+
+  private val locate: Opts[Command] =
+    Opts.subcommand(
+      "locate",
+      "Say where in the vault a card came from, and print a URI that opens it there.",
+    ) {
+      (vaultSelectionOpt, vaultNameOpt, tagArg).mapN(Command.Locate.apply)
+    }
+
+  val command: Opts[Command] = inspect orElse sync orElse installNoteTypes orElse locate
