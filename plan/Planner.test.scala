@@ -593,6 +593,75 @@ class PlannerTest extends munit.FunSuite:
     assert(present.contains(good2), "an action beside the one set aside was abandoned")
   }
 
+  /** THE OTHER HALF, RESTORED 2026-08-28 — `IN-FLIGHT.md` item 30.
+    *
+    * The test above is about an action SET ASIDE. This one is about an action that genuinely
+    * RAISES, which is what the pair's name has always claimed and what stopped being covered on
+    * 2026-08-27, when narrowing began to be priced and partitioned out before execution instead
+    * of failing. The invariant is worth more than the pair: one bad note must not leave the rest
+    * of a vault unsynced until somebody fixes it.
+    *
+    * THE FAILURE IS A REAL ONE RATHER THAN AN INJECTED FAULT, which is why no test double
+    * appears here. Anki refuses a note whose first field duplicates an existing one, and this
+    * collection is built with that refusal switched on — so the middle action fails through
+    * exactly the path a real duplicate would take. The item named fault injection as the
+    * untried route; a real error turned out to be available and is worth more, since an
+    * injected fault can only prove the executor survives errors it was handed, not errors the
+    * collection actually produces.
+    *
+    * THE POSITION OF THE FAILURE IS ASSERTED, NOT ASSUMED. If the failing action were planned
+    * last, everything below would pass while proving nothing at all — the actions "after" it
+    * would be an empty set. That guard is the difference between this test and a vacuous one.
+    */
+  test("a failing action does not abort the remainder of the plan") {
+    val anki = InMemoryAnki(allowDuplicate = false)
+
+    // A note already in the collection whose FRONT is the text the middle action will re-use.
+    val seeded = key("n0", "A", "Seeded")
+    runPlan(planOf(scanOf(sourced(twoFieldSpec(seeded, "Clash", "b"))), observe(anki)), anki)
+
+    val before = key("n1", "A", "Before")
+    val clash  = key("n1", "A", "Clash")
+    val after  = key("n1", "A", "After")
+
+    val scan = scanOf(
+      sourced(twoFieldSpec(before, "one", "b")),
+      sourced(twoFieldSpec(clash, "Clash", "b")),
+      sourced(twoFieldSpec(after, "two", "b")),
+    )
+    val plan = planOf(scan, observe(anki))
+
+    // THE KEY EACH ACTION NAMES. Every case carries one, but the enum does not expose a common
+    // accessor, so this match does it — exhaustively, on purpose: an action added later has to
+    // say which card it is about rather than falling into a wildcard and being skipped here.
+    def keyOf(a: SyncAction): CardKey = a match
+      case SyncAction.Create(k, _)    => k
+      case SyncAction.Update(k, _, _) => k
+      case r: SyncAction.Retype       => r.key
+      case SyncAction.Flag(k, _)      => k
+      case SyncAction.Unflag(k, _)    => k
+
+    val failingAt = plan.actions.indexWhere(a => keyOf(a) == clash)
+    assert(failingAt >= 0, s"the clashing action was not planned: ${plan.actions.map(keyOf)}")
+    assert(
+      failingAt < plan.actions.size - 1,
+      "the failing action is planned LAST, so nothing follows it and this test proves nothing",
+    )
+
+    val report = runReport(plan, anki, RetypePolicy.Apply)
+
+    assertEquals(report.failures.size, 1, s"expected exactly the duplicate to fail: $report")
+    assertEquals(keyOf(report.failures.head.action), clash, "the wrong action failed")
+
+    val present = observe(anki).notes.map(_.key).toSet
+    assert(present.contains(before), "an action BEFORE the failure was lost")
+    assert(
+      present.contains(after),
+      "an action AFTER the failure never ran — one bad note abandoned the rest of the plan",
+    )
+    assert(!present.contains(clash), "the duplicate was written after all, so nothing failed")
+  }
+
   /** The executor's analogue of the law. Without this, "idempotent" covers only the happy
     * path — and a half-applied plan is the case where a resumable design actually pays.
     */
