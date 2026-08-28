@@ -759,8 +759,21 @@ _All three were noticed while building `--approve` and recorded here rather than
 comment. Two of them were referred to as "filed" before they were, which is the reason for this
 section: a pointer to a document that does not mention the thing is worse than no pointer._
 
-30. **A LAW LOST ITS ONLY TEST: "a failing action does not abort the remainder of the plan".**
-    Found 2026-08-28. **Nothing is built.**
+30. ~~**A LAW LOST ITS ONLY TEST: "a failing action does not abort the remainder of the plan".**~~
+    **FIXED 2026-08-28**, the day it was found. The test now sits beside the one that replaced
+    it, so the pair reads as the two halves of one concern: an action set ASIDE, and an action
+    that genuinely RAISES.
+
+    **THE FAILURE IS REAL RATHER THAN INJECTED, which is better than the route this item named.**
+    Anki refuses a note whose first field duplicates an existing one, and the collection in the
+    test is built with that refusal on — so the middle action fails through exactly the path a
+    real duplicate takes. An injected fault could only have shown that the executor survives
+    errors it was handed, not errors the collection itself produces. It also avoided writing a
+    twenty-five-method delegating double, the in-memory collection being final.
+
+    **THE POSITION OF THE FAILING ACTION IS ASSERTED.** Planned last, it would have nothing after
+    it, every remaining assertion would hold, and the test would prove nothing. _Original entry
+    follows._
 
     **The invariant.** `Executor.applyEach` runs a plan's actions in sequence against a live
     collection. One action raising must not abandon the ones after it — otherwise a single bad
@@ -784,8 +797,22 @@ section: a pointer to a document that does not mention the thing is worse than n
     **CHECKED 2026-08-28: no other test covers it.** `ExecutorInterruption.test.scala` tests
     convergence after an interruption, which is a different property.
 
-31. **THE IN-MEMORY COLLECTION DECIDES A NOTE'S CARD COUNT FROM THE NOTE TYPE'S NAME.**
-    Found 2026-08-28 by a test failing for the wrong reason. **Nothing is built.**
+31. ~~**THE IN-MEMORY COLLECTION DECIDES A NOTE'S CARD COUNT FROM THE NOTE TYPE'S NAME.**~~
+    **FIXED 2026-08-28.** The count now comes from the note type's SPEC, through a new
+    `anki/CardGeneration.scala` that models Anki's own rule: a template makes a card when at
+    least one real field on its front is non-empty once conditional sections are resolved.
+
+    **THE OBVIOUS FIX WAS AVOIDED, as this item warned.** Counting templates would have been
+    wrong: two fronts in this repository are wrapped in conditionals that open in OPPOSITE
+    directions, so a rule treating every section as "present means render" passes a test about
+    one gate while failing the other. Fifteen tests, most against the real template files rather
+    than imitations of them, including one asserting every ungated front renders for an ordinary
+    note — the more dangerous direction, since a rule that was too strict would make the tool
+    price a change as destroying cards that never existed.
+
+    **CLOZE IS COUNTED AS ANKI COUNTS IT**, one card per distinct ordinal, where the fake used to
+    answer one for every cloze note — so ordinal drift, the failure the cloze redesign is
+    organised around, could not be reproduced against it at all. _Original entry follows._
 
     `InMemoryAnki.cardCountOf` matches on the note type's NAME — `Basic (and reversed)` gives 2,
     `Concept-Descriptor` gives 2 or 3 depending on a gate field, cloze gives 1, **and anything
@@ -954,8 +981,24 @@ section: a pointer to a document that does not mention the thing is worse than n
     runtime, so indexing the type by what it reads would produce an existential that has to be
     unpacked by a match anyway, at which point the match IS the mechanism.
 
-37. **A NEAR-MISS TAG PRODUCES TOTAL SILENCE.** Found by Marc 2026-08-28. **Nothing is built.**
-    **Belongs with the parked hygiene tooling — see item 34 — not in the sync path.**
+37. ~~**A NEAR-MISS TAG PRODUCES TOTAL SILENCE.**~~ **FIXED 2026-08-28**, the day it was found.
+
+    **IT LANDED IN THE SYNC PATH AFTER ALL, and this item's own guess that it belonged with the
+    parked hygiene tooling was wrong.** That guess was made about a FUZZY check. The rule built
+    is exact — everything after a tag's first segment matched against the tails this tool
+    documents — so it has no threshold to tune, cannot fire on an ordinary tag, and belongs
+    exactly where the mistake is made. The standing rule that fuzzy matching may rank but never
+    decide is untouched: an exact match on the tool's own published vocabulary is not fuzzy.
+
+    **ONE TYPE, NOT TWO CHECKS.** Reading a tag now answers with a case — a marker, a recognised
+    prefix with an unknown token, a near miss, or none of our business — so neither of the two
+    silent holes can return by being left out of a predicate. Both were the same shape and both
+    are closed.
+
+    **A THIRD DEFECT WAS FOUND BY RUNNING THE TOOL rather than reading it.** A tag with the right
+    prefix and a wrong token tripped the new check AND the old one, so the author got the
+    accurate message followed by advice to move a marker whose only problem was its spelling. The
+    precise message now suppresses the general one. _Original entry follows._
 
     Marc's frontmatter read `flashard/sequence/headers` — one character short of `flashcard`.
     Nothing was reported. Two separate checks both miss it, and both for the same reason:
