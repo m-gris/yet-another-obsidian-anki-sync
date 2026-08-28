@@ -22,7 +22,10 @@ class MarkerTest extends munit.FunSuite:
     )
     assertEquals(parsed("Bones #flashcard/cloze"), Some(Marker.Cloze))
     assertEquals(parsed("Cost / benefit #flashcard/table"), Some(Marker.Table(ThreeFieldDirections.Default, TableScope.Both)))
-    assertEquals(parsed("Path of blood #flashcard/sequence"), Some(Marker.Sequence))
+    assertEquals(
+      parsed("Path of blood #flashcard/sequence"),
+      Some(Marker.Sequence(SequenceSource.BodyList)),
+    )
   }
 
   /** THE TABLE FAMILY, and the property that matters most is the DEFAULT.
@@ -142,7 +145,7 @@ class MarkerTest extends munit.FunSuite:
       Some(NoteTypes.ConceptDescriptor),
     )
     assertEquals(Marker.Cloze.noteTypeName, Some(NoteTypes.Cloze))
-    assertEquals(Marker.Sequence.noteTypeName, Some(NoteTypes.ClozeSequence))
+    assertEquals(Marker.Sequence(SequenceSource.BodyList).noteTypeName, Some(NoteTypes.ClozeSequence))
   }
 
   test("a table marker has no single note type") {

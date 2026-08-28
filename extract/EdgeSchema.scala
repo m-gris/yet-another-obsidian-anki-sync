@@ -1,7 +1,7 @@
 package obsidiananki.extract
 
 import cats.data.NonEmptyVector
-import obsidiananki.model.{KeyError, Marker, MarkerError, PropertyName, ThreeFieldDirections}
+import obsidiananki.model.{KeyError, Marker, MarkerError, PropertyName, SequenceSource, ThreeFieldDirections}
 
 /** THE VAULT'S DECLARED VOCABULARY OF TYPED EDGES — which frontmatter properties make cards, and
   * how many ways each is asked.
@@ -231,7 +231,10 @@ object EdgeSchema:
     case Marker.TwoField(_)      => "a two-field card, and a relation needs three"
     case Marker.ThreeField(_)    => "a concept-descriptor card"
     case Marker.Cloze            => "a cloze card, which fills gaps in prose rather than relating two things"
-    case Marker.Sequence         => "a sequence card, which reveals a list in order"
+    case Marker.Sequence(SequenceSource.BodyList) =>
+      "a sequence card, which reveals a list in order"
+    case Marker.Sequence(SequenceSource.ChildHeadings(_)) =>
+      "a sequence card, which reveals this heading's subheadings in order"
     case Marker.Table(_, _)      => "a table card, which needs a table in the body"
 
   private[extract] def shapeOf(

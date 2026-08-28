@@ -92,6 +92,45 @@ enum TableScope:
     case Both | RowsOnly => true
     case CellsOnly       => false
 
+/** WHERE A SEQUENCE CARD'S ITEMS COME FROM.
+  *
+  * A sequence card reveals an ordered list one item at a time. Until 2026-08-28 those items
+  * could only be the LIST ITEMS IN THE HEADING'S BODY. This type names the alternative Marc
+  * asked for: the heading's OWN SUBHEADINGS, so that the structure of a document becomes the
+  * thing recalled rather than only the scaffolding cards hang off.
+  *
+  * IT IS A SOURCE, NOT A NEW KIND OF CARD, and that is why it is modelled here rather than as a
+  * sibling of [[Marker.Sequence]]. Both produce the same Anki note type, the same fields, the
+  * same one-note-one-schedule reveal. What differs is only which blocks the `Text` field is
+  * rendered from. A separate marker case would duplicate the family and let the two drift.
+  */
+enum SequenceSource:
+
+  /** `#flashcard/sequence` — the list items written in the heading's body. */
+  case BodyList
+
+  /** `#flashcard/sequence/headers` — the heading's subheadings, in document order. */
+  case ChildHeadings(reach: HeadingReach)
+
+/** How far down a heading-sourced sequence reaches.
+  *
+  * AN ENUM RATHER THAN `recursive: Boolean`, deliberately. `ChildHeadings(true)` says nothing at
+  * a call site and reads backwards as often as forwards; `ChildHeadings(WholeSubtree)` cannot be
+  * misread. The cost is one type declaration and the benefit is every future reader's.
+  *
+  * IT NESTS INSIDE [[SequenceSource.ChildHeadings]] SO THE ILLEGAL COMBINATION CANNOT BE
+  * WRITTEN. A reach means nothing for a body list, and a flat field beside the source would let
+  * somebody construct `BodyList` carrying `WholeSubtree` — a state with no meaning that some
+  * later `match` would have to decide what to do about.
+  */
+enum HeadingReach:
+
+  /** Only the headings one level down. Deeper ones are not items and are not shown. */
+  case DirectChildren
+
+  /** `#flashcard/sequence/headers/recursive` — the whole subtree, nested. */
+  case WholeSubtree
+
 /** The marker on a heading, parsed. */
 enum Marker:
   case TwoField(directions: TwoFieldDirections)
@@ -137,7 +176,7 @@ enum Marker:
     * different layer from this one, which orders items INSIDE a single card. Both are unbuilt
     * as far as that document is concerned; this one is being built here.
     */
-  case Sequence
+  case Sequence(source: SequenceSource)
 
 /** Why a heading's marker could not be understood.
   *
@@ -425,6 +464,8 @@ object Marker:
     "#flashcard/3way/all"         -> "an older spelling of cdd/3way",
     "#flashcard/cloze"            -> "==highlights== blanked out, one card per group",
     "#flashcard/sequence"         -> "a list revealed one item at a time, on one schedule",
+    "#flashcard/sequence/headers" -> "this heading's subheadings, revealed one at a time",
+    "#flashcard/sequence/headers/recursive" -> "the whole subtree of subheadings, nested",
     "#flashcard/table"            -> "a card per table cell, plus one per whole row",
     "#flashcard/table/1way"       -> "cells and rows, each cell asked one way",
     "#flashcard/table/2way"       -> "cells and rows, each cell asked two ways (the default)",
@@ -497,7 +538,19 @@ object Marker:
     // would name a choice that changes nothing. Falling through to the catch-all makes it a
     // loud refusal instead of a silent no-op.
     case "#flashcard/table/rows"       => Some(Table(ThreeFieldDirections.Default, TableScope.RowsOnly))
-    case "#flashcard/sequence" => Some(Sequence)
+    case "#flashcard/sequence" => Some(Sequence(SequenceSource.BodyList))
+
+    // ── A HEADING'S SUBHEADINGS AS THE SEQUENCE ──────────────────────────────────────────
+    //
+    // ONE SPELLING OF THE WORD, NOT TWO. Marc's request of 2026-08-27 wrote `sequenced/headers`
+    // while the marker above has always been `sequence`. An unrecognised marker fails loudly
+    // here by design, so two spellings of one word in this namespace would be a typo generator
+    // that the author meets only at sync time. `sequence` wins because it is the one already
+    // written in vaults.
+    case "#flashcard/sequence/headers" =>
+      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.DirectChildren)))
+    case "#flashcard/sequence/headers/recursive" =>
+      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree)))
     case _                     => None
 
   /** Parse the marker out of a heading's extracted text.
@@ -523,5 +576,9 @@ object Marker:
       case TwoField(TwoFieldDirections.Both)    => Some(NoteTypes.BasicAndReversed)
       case ThreeField(_)                        => Some(NoteTypes.ConceptDescriptor)
       case Cloze                                => Some(NoteTypes.Cloze)
-      case Sequence                             => Some(NoteTypes.ClozeSequence)
+      // BOTH SOURCES, ONE NOTE TYPE — the wildcard is the design rather than a shortcut.
+      // A heading-sourced sequence is the SAME card with its items read from somewhere else,
+      // so if this ever needs to distinguish them, the claim in `SequenceSource`'s docstring
+      // has stopped being true and that is what should be revisited.
+      case Sequence(_)                          => Some(NoteTypes.ClozeSequence)
       case Table(_, _)                              => None

@@ -1280,7 +1280,7 @@ class ExtractorTest extends munit.FunSuite:
   }
 
   test("a sequence card asks for a list order, which no location names") {
-    assertEquals(recalls(Marker.Sequence, "Path of blood", Vector("Heart"), "Anatomy"), Vector.empty)
+    assertEquals(recalls(Marker.Sequence(SequenceSource.BodyList), "Path of blood", Vector("Heart"), "Anatomy"), Vector.empty)
   }
 
   /** A table card's concept is a table CELL and its descriptor a COLUMN HEADER. Neither is a

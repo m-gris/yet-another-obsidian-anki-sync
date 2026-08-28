@@ -82,7 +82,7 @@ object Extractor:
       // invisible if a heading token ever did.
       case Marker.ThreeField(ThreeFieldDirections.ValueOnly) => RecallText.none
       case Marker.TwoField(TwoFieldDirections.Forward)       => RecallText.none
-      case Marker.Cloze | Marker.Sequence                    => RecallText.none
+      case Marker.Cloze | Marker.Sequence(_)                 => RecallText.none
       case Marker.Table(_, _)                                => RecallText.none
 
   /** THE WHOLE NOTE AS ONE CARD, for a note that carries a marker in its frontmatter and has no
@@ -563,7 +563,26 @@ object Extractor:
         case Marker.Table(directions, scope) =>
           Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, directions, scope)
 
-        case Marker.Sequence =>
+        // ── A HEADING'S SUBHEADINGS AS THE SEQUENCE — NOT BUILT ─────────────────────────
+        //
+        // THE HOLE IS DELIBERATE, AND THIS ARM EXISTS SO THE COMPILER HOLDS THE PLACE. Filed
+        // as `IN-FLIGHT.md` item 28. What it must do is understood: synthesise the same
+        // `Block.Bullets` a hand-written list would have lowered to, from this section's child
+        // headings, so `AsHtml` emits the `<li>` elements the note type's `#text li` selector
+        // already hides. No new rendering code, exactly as the arm below added none.
+        //
+        // WHY IT IS NOT A ONE-LINE SUBSTITUTION, which is the finding worth leaving here:
+        // `body` is bound ABOVE this match by rendering `lowered`, and its `sys.error` fallback
+        // is justified by an argument that ASSUMES the B6 gate above already refused an empty
+        // body. A heading whose content is entirely subheadings HAS an empty own-body — that is
+        // the ordinary shape of this marker, not an edge case — so reaching this arm with the
+        // current bindings would crash rather than refuse. The blocks a card renders from must
+        // therefore be chosen BEFORE that gate, which is a change to the shared pipeline rather
+        // than to any one arm.
+        case Marker.Sequence(SequenceSource.ChildHeadings(reach)) =>
+          ???
+
+        case Marker.Sequence(SequenceSource.BodyList) =>
           // ── THE REFUSAL, AND THE ONE PLACE IN THIS PROJECT THAT GATES ON A RENDERER ──────
           //
           // TWO PARTS TO THE PREDICATE, and the second is an EXTENSION of the ruling rather
