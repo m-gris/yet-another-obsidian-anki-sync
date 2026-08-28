@@ -1335,7 +1335,10 @@ class ExtractorTest extends munit.FunSuite:
       val fields = specFor(note, "b / path of blood").spec.fields.toMap
       (fields("Text"), fields("Reveal"))
 
-    val (dfsText, dfsReveal) = textAndReveal("#flashcard/sequence/headers/recursive")
+    // BOTH SPELLED OUT, so this test says nothing about which one the short token means.
+    // That is asserted once, in `Marker.test.scala`, and flipping the default should not make
+    // a test about the FIELD fail — which it did when the default moved on 2026-08-28.
+    val (dfsText, dfsReveal) = textAndReveal("#flashcard/sequence/headers/recursive/dfs")
     val (bfsText, bfsReveal) = textAndReveal("#flashcard/sequence/headers/recursive/bfs")
 
     assertEquals(dfsText, bfsText, "the two orders rendered different lists; only the reveal differs")

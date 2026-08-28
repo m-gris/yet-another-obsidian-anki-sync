@@ -9,29 +9,30 @@ class MarkerTest extends munit.FunSuite:
 
   // ---------------------------------------------------------------- parsing ----
 
-  /** THE REVEAL ORDER, AND THE DEFAULT THAT KEEPS A VAULT WORKING.
+  /** THE REVEAL ORDER, AND WHICH ONE THE SHORT TOKEN BUYS.
     *
     * Requested by Marc 2026-08-28. Both orders show the same nested list and differ only in
     * which item the reveal key uncovers next: depth-first walks each heading then its own
     * children, breadth-first shows every heading of one level before any beneath it.
     *
-    * THE UNSUFFIXED TOKEN IS DEPTH-FIRST, which is what every card built before the order
-    * existed does — so a vault written earlier reads identically afterwards.
+    * THE UNSUFFIXED TOKEN IS BREADTH-FIRST, ruled by Marc the same day after both orders
+    * existed to compare — meeting a whole level as a level is the better way to learn a
+    * structure.
     */
-  test("the recursive marker defaults to depth-first, and says so when asked explicitly") {
+  test("the recursive marker defaults to breadth-first, and says so when asked explicitly") {
     val default  = parsed("H #flashcard/sequence/headers/recursive")
-    val explicit = parsed("H #flashcard/sequence/headers/recursive/dfs")
+    val explicit = parsed("H #flashcard/sequence/headers/recursive/bfs")
     assertEquals(
       default,
-      Some(Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst)))),
+      Some(Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.BreadthFirst)))),
     )
     assertEquals(explicit, default, "spelling the default out loud changed what it means")
   }
 
-  test("the breadth-first token asks for a level-at-a-time reveal") {
+  test("the depth-first token asks for each heading followed by its own children") {
     assertEquals(
-      parsed("H #flashcard/sequence/headers/recursive/bfs"),
-      Some(Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.BreadthFirst)))),
+      parsed("H #flashcard/sequence/headers/recursive/dfs"),
+      Some(Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst)))),
     )
   }
 

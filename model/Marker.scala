@@ -134,12 +134,19 @@ enum SequenceSource:
   */
 enum RevealOrder:
 
-  /** Document order — each heading followed by its own children. The DEFAULT, and what every
-    * card built before 2026-08-28 does.
+  /** Document order — each heading followed by its own children.
+    *
+    * NOT THE DEFAULT SINCE 2026-08-28, but still what an EMPTY `Reveal` field means, which is
+    * not a contradiction: empty is this value, so every card written before the field existed
+    * goes on behaving as it always did. Reached now by writing `/dfs`.
     */
   case DepthFirst
 
-  /** Level by level — every heading at one depth before any heading below it. */
+  /** Level by level — every heading at one depth before any heading below it.
+    *
+    * THE DEFAULT, ruled by Marc 2026-08-28: meeting a whole level as a level before dropping
+    * into any of it is the better way to learn a structure, so the short token buys it.
+    */
   case BreadthFirst
 
 /** How far down a heading-sourced sequence reaches.
@@ -550,9 +557,9 @@ object Marker:
     "#flashcard/cloze"            -> "==highlights== blanked out, one card per group",
     "#flashcard/sequence"         -> "a list revealed one item at a time, on one schedule",
     "#flashcard/sequence/headers" -> "this heading's subheadings, revealed one at a time",
-    "#flashcard/sequence/headers/recursive" -> "the whole subtree of subheadings, nested",
-    "#flashcard/sequence/headers/recursive/dfs" -> "the same, said explicitly: each heading then its own children",
-    "#flashcard/sequence/headers/recursive/bfs" -> "the same subtree, revealed a whole level at a time",
+    "#flashcard/sequence/headers/recursive" -> "the whole subtree, revealed a level at a time",
+    "#flashcard/sequence/headers/recursive/bfs" -> "the same, said explicitly",
+    "#flashcard/sequence/headers/recursive/dfs" -> "instead: each heading then its own children, before the next",
     "#flashcard/table"            -> "a card per table cell, plus one per whole row",
     "#flashcard/table/1way"       -> "cells and rows, each cell asked one way",
     "#flashcard/table/2way"       -> "cells and rows, each cell asked two ways (the default)",
@@ -636,11 +643,24 @@ object Marker:
     // written in vaults.
     case "#flashcard/sequence/headers" =>
       Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.DirectChildren)))
-    // DEPTH-FIRST IS WHAT THE UNSUFFIXED TOKEN MEANS, ruled by Marc 2026-08-28. It is what
-    // every card built before the order existed does, so a vault that predates this reads the
-    // same afterwards and no note has to be edited to keep its behaviour.
+    // BREADTH-FIRST IS WHAT THE UNSUFFIXED TOKEN MEANS, ruled by Marc 2026-08-28 — reversing
+    // his own ruling of the same morning, once both orders existed to compare. Meeting a whole
+    // level as a level before dropping into any of it is the better way to learn a structure,
+    // so it is what the short token should buy.
+    //
+    // FLIPPING A DEFAULT CHANGES CARDS, AND THIS ONE DOES SO VISIBLY. A note already carrying
+    // the unsuffixed token gets its `Reveal` field rewritten from empty to `bfs` on the next
+    // run, which is an ordinary field update reported like any other: the card's IDENTITY is
+    // untouched, so no review history is at stake. One note in Marc's vault was affected,
+    // measured the same day.
+    //
+    // WHAT DID NOT CHANGE IS WHAT EMPTY MEANS, and that is the part worth protecting. Empty is
+    // the VALUE depth-first, not the absence of a value — so a card written before this field
+    // existed keeps doing exactly what it did, and moving the default again later can never
+    // silently change what an existing card does. A default that meant "whatever is current"
+    // would rewrite the meaning of every old card each time somebody changed their mind.
     case "#flashcard/sequence/headers/recursive" =>
-      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst))))
+      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.BreadthFirst))))
     case "#flashcard/sequence/headers/recursive/dfs" =>
       Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst))))
     case "#flashcard/sequence/headers/recursive/bfs" =>
