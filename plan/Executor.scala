@@ -267,18 +267,36 @@ object Executor:
         // executor. A change nobody has answered for is not attempted, so it cannot fail, so it
         // has no business in the failure count.
         for
-          shapes <- Retyping.shapesOf(anki, Retyping.noteTypesIn(plan))
-          retypes = plan.actions.collect { case retype: SyncAction.Retype => retype }
-          verdicts = retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, shapes))
-          pending <- Retyping.pendingOf(anki, verdicts)
+          // ASKED, NOT RE-DERIVED. A dry run and a real run must not each work out what is
+          // waiting and what it costs: two derivations of one answer is how the preview came
+          // to contradict the run in the first place, and adding a second copy while fixing
+          // that would be the same defect wearing a different hat.
+          decisions <- decide(plan, anki, policy)
           // WIDENED TO `SyncAction` SO THE COMPARISON IS THE ONE INTENDED. `waiting` is a set
           // of `Retype`, and asking it about a `SyncAction` compiles only once the element type
           // matches — the alternative would have been a cast, which would silently answer false
           // for every action and quietly execute the very changes being withheld.
-          waiting: Set[SyncAction] = pending.map(_.retype: SyncAction).toSet
+          waiting: Set[SyncAction] = decisions.pending.map(_.retype: SyncAction).toSet
           rest = plan.actions.filterNot(waiting.contains)
-          outcome <- applyEach(rest, anki, shapes, policy)
-        yield ExecutionReport(outcome._1, Vector.empty, outcome._2, pending)
+          outcome <- applyEach(rest, anki, decisions.shapes, policy)
+        yield ExecutionReport(outcome._1, Vector.empty, outcome._2, decisions.pending)
+
+  /** WHAT A RUN DECIDES ABOUT EVERY RETYPE IN A PLAN, AND WHAT THE WITHHELD ONES WOULD COST.
+    *
+    * ONE ANSWER FOR BOTH CALLERS, WHICH IS THE WHOLE REASON IT IS A TYPE. A dry run renders it
+    * and a real run acts on it; neither derives it. Two derivations of one answer is exactly
+    * how the preview came to announce migrations the run then refused.
+    *
+    * IT CARRIES THE SHAPES IT READ so that the real run does not fetch them a second time. That
+    * is a saving, but the reason is correctness rather than cost: a second read could return
+    * something different, and the run would then execute against shapes the decision was not
+    * made from.
+    */
+  final case class RetypeDecisions(
+      verdicts: Vector[(SyncAction.Retype, RetypeVerdict)],
+      pending: Vector[PendingRetype],
+      shapes: Map[String, NoteTypeShape],
+  )
 
   /** WHAT A REAL RUN WOULD DECIDE ABOUT EVERY RETYPE, WITHOUT WRITING ANYTHING.
     *
@@ -298,9 +316,9 @@ object Executor:
     * has a connection problem, and saying so is more useful than reporting every retype as
     * unmeasurable.
     */
-  def preview[F[_]](plan: Plan, anki: Anki[F], policy: RetypePolicy)(using
+  def decide[F[_]](plan: Plan, anki: Anki[F], policy: RetypePolicy)(using
       F: MonadError[F, AnkiError]
-  ): F[Vector[(SyncAction.Retype, RetypeVerdict)]] =
+  ): F[RetypeDecisions] =
     val retypes = plan.actions.collect { case retype: SyncAction.Retype => retype }
 
     // THE POLICY BRANCH DECIDES WHETHER TO READ, NOT WHAT TO ANSWER. Both arms hand the same
@@ -309,12 +327,22 @@ object Executor:
     // which is the exact defect this function exists to remove.
     policy match
       case RetypePolicy.Defer =>
-        F.pure(retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, Map.empty)))
+        F.pure(
+          RetypeDecisions(
+            retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, Map.empty)),
+            // NOTHING IS WAITING, AND NOTHING WAS READ TO ESTABLISH IT. Under `Defer` no retype
+            // is attempted at all, so none reaches the point where a price would be quoted.
+            Vector.empty,
+            Map.empty,
+          )
+        )
 
       case RetypePolicy.Apply =>
-        Retyping
-          .shapesOf(anki, Retyping.noteTypesIn(plan))
-          .map(shapes => retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, shapes)))
+        for
+          shapes <- Retyping.shapesOf(anki, Retyping.noteTypesIn(plan))
+          verdicts = retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, shapes))
+          pending <- Retyping.pendingOf(anki, verdicts)
+        yield RetypeDecisions(verdicts, pending, shapes)
 
   private def applyEach[F[_]](
       actions: Vector[SyncAction],

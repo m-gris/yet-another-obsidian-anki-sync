@@ -714,13 +714,13 @@ class CliTest extends munit.FunSuite:
     val screen = previewOf(
       retypeOf("Definition", "Obsidian Basic", Marker.NoteTypes.ConceptDescriptor) -> RetypeVerdict.WillApply,
       retypeOf("Cost", Marker.NoteTypes.ConceptDescriptor, "Obsidian Basic") ->
-        // A NARROWING, WHICH STOPPED BEING A REFUSAL ON 2026-08-27 AND BECAME A PRICE. The
-        // preview still prints it under "WILL NOT HAPPEN", because that is still what the run
-        // does with it until the per-note decision exists — so this test's assertions are
-        // unchanged and it keeps testing what it was written to test: that a preview showing
-        // one move and withholding another says both, in that order.
-        RetypeVerdict.DestroysCards(
-          RetypeDestroysCards(Marker.NoteTypes.ConceptDescriptor, 3, "Obsidian Basic", 1)
+        // A CLOZE-KIND MISMATCH, WHICH IS WHAT "WILL NOT HAPPEN" NOW MEANS. This used a
+        // narrowing until 2026-08-28; a narrowing is no longer refused but priced, and it is
+        // reported under "waiting on you" by a different block. Swapped rather than deleted,
+        // because what this test is about — a preview showing one move and withholding another
+        // must say both, in that order — is unchanged and still worth pinning.
+        RetypeVerdict.RefusedByShapes(
+          RetypeRefusal.ClozeKindDiffers(Marker.NoteTypes.Cloze, true, "Obsidian Basic", false)
         ),
     )
 

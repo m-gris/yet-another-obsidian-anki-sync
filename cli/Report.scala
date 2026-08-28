@@ -365,7 +365,7 @@ object Report:
     * answering from this tool is unbuilt and names what to do instead — see `IN-FLIGHT.md`
     * item 29, where the handle joins these lines once the command lands.
     */
-  def waitingOnYou(pending: Vector[PendingRetype]): Vector[String] =
+  def waitingOnYou(pending: Vector[PendingRetype], wouldBe: Boolean = false): Vector[String] =
     if pending.isEmpty then Vector.empty
     else
       val entries = pending.flatMap { p =>
@@ -385,14 +385,33 @@ object Report:
         )
       }
 
-      Vector("", s"WAITING ON YOU: ${quantify(pending.size, "note")} nobody has answered for.") ++
+      // ONE RENDERER, TENSE AS A PARAMETER. A dry run and a real run describe the same
+      // decision, and the only honest difference is that one has already happened. Writing a
+      // second block for the preview is what made the two disagree in the first place.
+      val heading =
+        if wouldBe then
+          s"WOULD BE WAITING ON YOU: ${quantify(pending.size, "note")} would need an answer."
+        else s"WAITING ON YOU: ${quantify(pending.size, "note")} nobody has answered for."
+
+      Vector("", heading) ++
         entries ++
         Vector(
           "",
-          "Nothing was changed for these, and nothing about them failed — this tool will not",
-          "destroy a card without being asked. Answering from this tool is NOT BUILT YET",
-          "(IN-FLIGHT.md item 29). To go ahead now, do it in Anki: Browse, select the note,",
-          "Notes > Change Note Type, which maps templates and fields explicitly.",
+          if wouldBe then "Nothing would be changed for these, and nothing about them is broken —"
+          else "Nothing was changed for these, and nothing about them failed —",
+          "this tool will not destroy a card without being asked.",
+          "",
+          // NO INTERNAL REFERENCES, AND THAT IS A RULE RATHER THAN A PREFERENCE. This block said
+          // "see IN-FLIGHT.md item 29" until 2026-08-28. Somebody who installed this binary has
+          // no such file — it is this repository's own working notes. Output has to be
+          // actionable by a reader who has only the terminal in front of them.
+          "There is no way to approve one of these from this tool yet. To go ahead with one",
+          "now, do it in Anki, which shows you the mapping before it acts:",
+          "",
+          "    Browse  ->  select the note  ->  Notes > Change Note Type",
+          "",
+          "Afterwards, run this tool again: it will see the note already on the note type the",
+          "vault asks for and leave it alone.",
         )
 
   /** WHAT A DRY RUN SAYS ABOUT THE RETYPES IT IS PREVIEWING.
@@ -429,11 +448,14 @@ object Report:
       verdict match
         case RetypeVerdict.RefusedByShapes(refusal) =>
           PreviewRow.Blocked(retype, refusal.describe, refusal.remedy)
-        // Printed as blocked because that is what the run currently does with it. When the
-        // per-note decision lands this becomes a row of its own, since "you have not been asked
-        // yet" is a different thing to tell a reader than "this will not happen".
-        case RetypeVerdict.DestroysCards(loss) =>
-          PreviewRow.Blocked(retype, loss.describe, loss.remedy)
+        // SILENT HERE, AND REPORTED BY [[waitingOnYou]] INSTEAD — which is where a real run
+        // reports it too. It was printed here as "will not happen" until 2026-08-28, so a dry
+        // run and the run it previewed described the same change in different words, and the
+        // dry run quoted no price. Both blocks now come from one decision through one renderer.
+        //
+        // NOT PRINTED IN BOTH PLACES. A reader seeing the same note under "will not happen" and
+        // again under "waiting on you" would reasonably conclude they were two different notes.
+        case RetypeVerdict.DestroysCards(_) => PreviewRow.Unremarkable
         case RetypeVerdict.ShapesUnavailable(from, to) =>
           PreviewRow.Blocked(
             retype,

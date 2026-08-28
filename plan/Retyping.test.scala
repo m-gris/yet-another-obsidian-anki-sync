@@ -837,11 +837,11 @@ class RetypingTest extends munit.FunSuite:
     * admissible move must be previewed as one. Only checking the refusing direction would be
     * satisfied by a preview that refused everything.
     */
+  def decisionsOf(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): Executor.RetypeDecisions =
+    Executor.decide(p, anki, policy).fold(e => fail(s"deciding aborted: $e"), identity)
+
   def previewOf(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): Vector[RetypeVerdict] =
-    Executor
-      .preview(p, anki, policy)
-      .fold(e => fail(s"preview aborted: $e"), identity)
-      .map(_._2)
+    decisionsOf(p, anki, policy).verdicts.map(_._2)
 
   test("LAW: a move the run refuses is previewed as refused, not as work") {
     val anki = collectionWith(stockWide)
@@ -886,6 +886,39 @@ class RetypingTest extends munit.FunSuite:
       report.pending.size,
       1,
       s"the run did not withhold what the preview withheld: $report",
+    )
+  }
+
+  /** THE LAW THAT CLOSES THE SECOND DIVERGENCE, and it is the same law as the one above with a
+    * different quantity in it.
+    *
+    * The first divergence was about the VERDICT: a dry run announced migrations the run refused.
+    * Fixing that left a second one open for a day — a dry run described a withheld change under
+    * "will not happen" while the run called it "waiting on you", and the dry run quoted no price
+    * at all, because only the run priced anything.
+    *
+    * SO THE PRICE IS PART OF THE AGREEMENT, NOT A DETAIL OF THE RENDERING. If a dry run can show
+    * a different cost from the run it previews — or no cost — then the number somebody reads and
+    * the number they act on are two different numbers, which is the whole thing this feature
+    * exists to prevent.
+    *
+    * ASSERTED AGAINST THE UNTOUCHED COLLECTION FIRST, in the order a person experiences it:
+    * preview, then run.
+    */
+  test("LAW: a dry run and the run it previews agree on what is waiting AND on what it costs") {
+    val anki = collectionWith(stockWide)
+    seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
+    val plan = planOf(scanOf(basicSpec), anki)
+
+    val previewed = decisionsOf(plan, anki, RetypePolicy.Apply).pending
+    val ran       = runReport(plan, anki, RetypePolicy.Apply).pending
+
+    assertEquals(previewed.size, 1, s"the preview did not see a change waiting: $previewed")
+    assertEquals(
+      previewed.map(p => (p.handle.value, p.price.cards, p.price.reviews)),
+      ran.map(p => (p.handle.value, p.price.cards, p.price.reviews)),
+      "the dry run and the run disagree about which change is waiting or what it costs — which " +
+        "means the number read and the number acted on are two different numbers",
     )
   }
 

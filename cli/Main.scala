@@ -1022,12 +1022,16 @@ object Main
                  // preview. Nothing has been written — a dry run writes nothing by
                  // construction — so ending here costs the person only the answer they came
                  // for, which is better than a preview that quietly stopped checking.
-                 Executor.preview[Refused](plan, anki, retypePolicy).value.flatMap {
+                 Executor.decide[Refused](plan, anki, retypePolicy).value.flatMap {
                    case Left(error) => IO.pure(SyncOutcome.AbortedDuringExecution(error))
-                   case Right(verdicts) =>
-                     Report.retypePreview(verdicts).traverse_(IO.println).as(
-                       SyncOutcome.PlannedOnly(plan)
-                     )
+                   case Right(decisions) =>
+                     // THE SAME TWO BLOCKS A REAL RUN PRINTS, from the same decision and
+                     // through the same renderer — only the tense differs. Printing a
+                     // separately-worded preview is how the two came to disagree before.
+                     (Report.retypePreview(decisions.verdicts) ++
+                       Report.waitingOnYou(decisions.pending, wouldBe = true))
+                       .traverse_(IO.println)
+                       .as(SyncOutcome.PlannedOnly(plan))
                  }
                else
                  Executor.run[Refused](plan, anki, retypePolicy).value.map {
