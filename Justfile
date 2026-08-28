@@ -36,8 +36,21 @@ lint:
 
 # Run the test suite. DEPENDS ON `lint` ON PURPOSE: a green test run must not be reachable
 # while a default parameter is sitting unjustified, or the gate is advice rather than a gate.
-test: lint
+test: lint addon-test
     scala-cli test "{{justfile_directory()}}"
+
+# The Anki add-on's own tests — the Python half of "press e in Anki to edit in Obsidian".
+#
+# WIRED INTO `test` ON 2026-08-28, AFTER MARC ASKED WHETHER THE WORKFLOW WAS COVERED. It had
+# thirty-seven tests and nothing ran them: `just test` ran `scala-cli test` alone and there is no
+# CI. They were decoration rather than a gate, which is worse than having none — the file's
+# existence reads as coverage.
+#
+# `core_test.py` IS RUN DIRECTLY, not through unittest discovery, and that is deliberate:
+# discovery imports the package, whose `__init__.py` imports `aqt`, which exists only inside
+# Anki. `core.py` is the half with no Anki in it, which is why the split exists at all.
+addon-test:
+    @python3 "{{justfile_directory()}}/addon/obsidian_edit/core_test.py"
 
 # Symlink the built tool into ~/.local/bin, which is on PATH
 install: build
