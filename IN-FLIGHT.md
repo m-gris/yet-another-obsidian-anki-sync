@@ -645,13 +645,33 @@ document because a finding nobody can find is a finding nobody acts on._
     so two spellings of one word in this namespace is a typo generator. Use
     `#flashcard/sequence/headers`.
 
-    **RULED by Marc 2026-08-27: heading levels must not skip, and a skip is a lint error.**
-    MEASURED the same day across the live vault: **23 notes, ZERO skipped levels**, so adopting the
-    lint refuses nothing that currently exists. Worth knowing why it is harmless today — `# foo`
-    followed by `### bar` nests exactly as `## bar` would, so the card's anchor path is identical
-    either way. **A skip only becomes load-bearing under THIS marker**, where "direct child" stops
-    being well-defined. NOT DECIDED: whether the lint is global or scoped to this marker. Claude
-    argued global, on the grounds that it is free now and the cost only grows.
+    ~~**A skip only becomes load-bearing under THIS marker**, where "direct child" stops being
+    well-defined.~~ **WITHDRAWN 2026-08-28 — that was wrong, and it was Claude's claim.** Writing
+    the reader disproved it: Laika nests every heading inside the nearest SHALLOWER one, so under
+    `## bar` a `#### deep` that skipped a level is unambiguously a direct child, and Obsidian's
+    own outline pane agrees. The card and the editor show the same tree. **A skipped level causes
+    no divergence this feature can hit.** The heading-level lint Marc ruled for is still wanted
+    and is now its own item — see 34 — parked because it fixes no defect this feature can reach.
+
+    **RULED by Marc 2026-08-28: the marked heading's PROSE IS NOT THIS CARD'S MATERIAL.** The
+    marker asks for structure and prose is not structure, so the blocks this card renders are the
+    OUTLINE ALONE — replacing the body rather than extending it. This DIFFERS from
+    `#flashcard/sequence`, where the body is the card's material because the author wrote that
+    list to be a card, and where non-list prose therefore becomes the question side.
+
+    _Why that is not the silent omission it first looks like, in Marc's words: prose and its
+    parent heading may perfectly well be a card of their own — that is exactly what the
+    two-field markers make. The prose is not orphaned by this design; it simply belongs to a
+    different card than this one._
+
+    **A CONSEQUENCE NOBODY HAS RULED ON.** A heading carries at most one marker, so a heading with
+    both prose and subheadings cannot ask for a two-field card AND a structure card. Whether that
+    is a limitation worth lifting is open and is NOT part of this item.
+
+    **IT ALSO MAKES THE BUILD SIMPLER, which is why it is recorded here rather than only in a
+    commit.** If the card's blocks are the outline alone, they are non-empty whenever there are
+    subheadings, so the empty-body gate passes honestly and the existing sequence arm operates on
+    them unchanged.
 
     **NOT DECIDED: what happens when the marker is present and there are NO child headings at all.**
     A one-item sequence card is useless, so this presumably refuses — but which error, and whether
@@ -660,6 +680,11 @@ document because a finding nobody can find is a finding nobody acts on._
     **Build method, stated by Marc when the item was filed:** functional core / DDD, a
     parser-writer's mindset, **types first and hole-driven wherever the compiler allows it**, then
     tests, then implementation — in that order, per concept rather than per phase.
+
+    **PROGRESS.** Slice 1 (the marker vocabulary) and slice 2 (the outline transformation and its
+    laws) are built and green. Nothing calls the transformation yet — the extractor arm that will
+    is still `???`. What remains is choosing the blocks before rendering, and the refusal when the
+    marker is present and there are no subheadings.
 
 ---
 
@@ -785,3 +810,33 @@ section: a pointer to a document that does not mention the thing is worse than n
     notes failing for the same reason printed the same four hundred characters twice. Narrowings
     no longer take this path at all, so the remaining case is a cloze-kind mismatch across
     several notes — rarer, and not measured.
+---
+
+## PARKED — wanted, but fixing no defect yet, 2026-08-28
+
+34. **A HYGIENE LINTER FOR SKIPPED HEADING LEVELS.** Ruled desirable by Marc 2026-08-27, parked
+    by him 2026-08-28 after the justification originally offered for it turned out to be wrong.
+    **Nothing is built.**
+
+    **What it would report.** A heading that jumps more than one level below its parent — `##`
+    followed directly by `####` — anywhere in the vault.
+
+    **WHY IT IS NOT URGENT, AND THIS IS THE CORRECTION.** It was filed under item 28 on the claim
+    that a skipped level makes "direct child" ambiguous for `#flashcard/sequence/headers`. That
+    claim was Claude's and it was wrong. **Laika nests every heading inside the nearest SHALLOWER
+    one**, so a `####` under a `##` is a direct child of that `##`, with no ambiguity to resolve —
+    and **Obsidian's own outline pane nests it identically**, so the card and the editor agree.
+    Nothing this feature does is affected.
+
+    **WHY IT IS STILL WANTED — Marc, 2026-08-28.** Laika's behaviour is helpful and probably what
+    anyone would want; the concern is not that it is wrong but that it is *forgiving*. A document
+    whose levels drift stays readable while quietly diverging from what its author believes it
+    says, and an occasional lint-and-tidy pass is cheap insurance against that surfacing later as
+    something surprising.
+
+    **IT IS AN OPTION, NOT A GATE — ruled by Marc.** It must not refuse a sync. A rule that
+    refuses notes needs a defect to point at, and this one has none to offer.
+
+    **MEASURED 2026-08-27:** 23 notes in the live vault, **zero** skipped levels. So it would
+    report nothing today, and building it later costs no more than building it now — which is
+    what makes parking it safe rather than merely convenient.
