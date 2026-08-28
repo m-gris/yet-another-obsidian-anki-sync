@@ -147,6 +147,8 @@ file. The marker is stripped before the heading is shown on a card.
 | `#flashcard/cdd/3way` | the same, plus "which aspect is this?" | 3 |
 | `#flashcard/cloze` | `==highlights==` blanked out | 1 per group |
 | `#flashcard/sequence` | a list revealed one item at a time | 1 |
+| `#flashcard/sequence/headers` | this heading's subheadings, one at a time | 1 |
+| `#flashcard/sequence/headers/recursive` | the whole subtree beneath it | 1 |
 | `#flashcard/table` | see *Tables* below | many |
 
 **`cdd` is concept–descriptor–description** — the three-field shape. `1way`, `2way`, `3way`
@@ -278,6 +280,71 @@ never that its order is what you are learning.
 **Write nothing after the list.** Everything in the body that is not a list item is printed on
 the question side, so a sentence following the list gives the answer away before the first
 reveal.
+
+### Structure
+
+For when **the shape of a document is the knowledge**. The subheadings become the items, so you
+are tested on the outline itself rather than on anything written under it.
+
+```markdown
+## Request lifecycle #flashcard/sequence/headers
+
+### Parse
+### Route
+### Respond
+```
+
+One card, titled *Request lifecycle*, revealing `Parse`, `Route` and `Respond` one at a time.
+
+**Prose under the marked heading does not reach the card.** The marker asks for structure, and
+prose is not structure — so write as much as you like there. It belongs to the note, and to any
+card *its own* heading makes, but not to this one. That is the opposite of `#flashcard/sequence`
+above, where the body is the card's material because you wrote that list in order to be a card.
+
+Add **`/recursive`** and the whole subtree comes with it, nested:
+
+```markdown
+## Request lifecycle #flashcard/sequence/headers/recursive
+
+### Parse
+#### Tokenise
+#### Build tree
+### Route
+```
+
+Two orders are available, and they show the *same* nested list — only the order the reveal key
+walks it in differs:
+
+| token | reveals |
+|---|---|
+| `…/recursive` or `…/recursive/bfs` | a level at a time — `Parse`, `Route`, then `Tokenise`, `Build tree` |
+| `…/recursive/dfs` | each heading then its own children — `Parse`, `Tokenise`, `Build tree`, `Route` |
+
+A level at a time is the default because it lets you learn the top level *as a level* before
+dropping into any of it. An order written on the non-recursive marker is refused: a flat list has
+no levels, so the two would name the same thing.
+
+### A marker on the note itself
+
+A marker written in the frontmatter `tags:` instead of on a heading applies to **the whole note**,
+and the file name becomes the card's front.
+
+```yaml
+---
+id: 2ac356b7-c1b2-4e2a-9c6f-a7b89c590f35
+tags:
+  - flashcard/sequence/headers/recursive
+---
+```
+
+For the structure markers this is often the most natural form — *learn the outline of this note* —
+and its items are the note's top-level headings.
+
+**For every other marker the note must have no headings**, and a marker in frontmatter on a note
+that has them is reported as a mistake. That is not pedantry: typing a marker into the body is
+exactly what makes Obsidian's editor lift it up into `tags:`, leaving a note that looks marked and
+produces nothing. The structure markers are the exception, because headings are what they are made
+of rather than where they went missing from.
 
 ### Tables
 

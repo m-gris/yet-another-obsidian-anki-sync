@@ -598,8 +598,27 @@ document because a finding nobody can find is a finding nobody acts on._
 
 ## OPEN — requested by Marc, 2026-08-27
 
-28. **A HEADING'S SUBHEADINGS BECOME ONE SEQUENCE CARD — `#flashcard/sequence/headers`.**
-    Requested by Marc 2026-08-27. **Nothing is built.**
+28. ~~**A HEADING'S SUBHEADINGS BECOME ONE SEQUENCE CARD.**~~ **BUILT 2026-08-28.** Requested by
+    Marc 2026-08-27, shipped the next day in four slices: the marker vocabulary; the outline
+    transformation with its laws; the wiring; and a reveal order that was not part of the
+    original request. Documented in `README.md` under *Structure* and *A marker on the note
+    itself*. _The original entry follows, because its reasoning is still the reasoning._
+
+    **WHAT SHIPPED BEYOND WHAT WAS ASKED FOR.** A nested outline can be revealed either a level
+    at a time or branch by branch — `…/recursive/bfs` and `…/recursive/dfs`, with a level at a
+    time the default. Both show the SAME list; only the order the reveal key walks it in
+    differs, and that is decided by the note type's template at review time rather than by this
+    tool reordering anything. It is carried in a new `Reveal` field whose EMPTY value means
+    depth-first, which is what made adding it a non-migration: the golden record of every
+    fixture card gained exactly one line, an empty field, with no identity and no existing value
+    changed.
+
+    **THE TWO OPEN SUB-QUESTIONS BELOW ARE BOTH ANSWERED.** The heading-level lint is item 34,
+    parked with its justification corrected. The refusal for a marker with no subheadings reuses
+    the existing sequence refusal, on the principle that the failure belongs to the sequence
+    card's own precondition rather than to the source of its items.
+
+    **AND TWO DEFECTS CAME OUT OF THE FIRST REAL USE** — items 35 and 36, both since fixed.
 
     **What it is.** The child headings of a marked heading become the ordered items of a sequence
     card, so the STRUCTURE of a document becomes the thing recalled — a table of contents you can
@@ -845,9 +864,15 @@ section: a pointer to a document that does not mention the thing is worse than n
 
 ## OPEN — found by using the feature, 2026-08-28
 
-35. **A WHOLE-NOTE STRUCTURE MARKER IS REFUSED ON EXACTLY THE NOTES IT IS FOR.** Found by Marc
-    on 2026-08-28, the day `#flashcard/sequence/headers` was built, by writing it into a note
-    and syncing. **Nothing is built. This blocks the feature's most natural use.**
+35. ~~**A WHOLE-NOTE STRUCTURE MARKER IS REFUSED ON EXACTLY THE NOTES IT IS FOR.**~~
+    **FIXED 2026-08-28**, the day it was found. A marker now answers what a whole-note card made
+    from it would consume — the note's prose or its structure — and the walker matches on that
+    answer instead of asking whether there is some marker and no headings. Both branches carry a
+    symmetric requirement: a prose marker needs no headings, a structure marker needs some.
+    Because the match is exhaustive and this project treats an inexhaustive match as an error, a
+    marker added later cannot avoid deciding. Three tests: the note Marc actually wrote, its
+    mirror, and the Obsidian accident the old guard existed to catch, which must still be caught.
+    _The original entry follows; its account of the cause is the whole lesson._
 
     **What happens.** A marker may be written in a note's frontmatter `tags:` instead of on a
     heading, in which case it applies to the WHOLE NOTE and the file name becomes the card's
@@ -898,8 +923,11 @@ section: a pointer to a document that does not mention the thing is worse than n
     author**, the same defect class as the default-parameter gate in `rules/`, one level up.
     There the missing author was at a call site; here it is at the type.
 
-36. **`MarkedHeadings` IS MISSING A CONSTRUCTOR, AND ITS OWN DOCSTRING SAYS SO.** Independent of
-    item 35, which it would also help fix. **Nothing is built.**
+36. ~~**`MarkedHeadings` IS MISSING A CONSTRUCTOR, AND ITS OWN DOCSTRING SAYS SO.**~~
+    **FIXED 2026-08-28**, alongside item 35. The two situations its comment described in prose
+    are now separate cases, and each carries the parsed document — which removed the
+    `parsed.toOption.get` a few lines further down, since the branch can be handed the value it
+    had arrived through a guard to inspect. _The original entry follows._
 
     `extract/VaultWalker.scala:324` declares three cases — `Present`, `Absent`, `CouldNotLook` —
     and the comment above the guard that uses it reads:
