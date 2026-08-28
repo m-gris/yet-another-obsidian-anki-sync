@@ -22,6 +22,9 @@ class InMemoryAnkiTest extends munit.FunSuite:
       )),
     )
 
+  // A fixture default. These tests assert on tags and identity, never on the card's text, so a
+  // wrong front or back would fail nothing quietly — it would not be looked at at all.
+  // ast-grep-ignore: default-parameter
   def basicNote(tag: OwnedTag, front: String = "F", back: String = "B"): NewNote =
     NewNote(
       noteType = Marker.NoteTypes.Basic,

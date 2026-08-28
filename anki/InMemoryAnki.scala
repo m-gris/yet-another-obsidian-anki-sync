@@ -462,6 +462,15 @@ object InMemoryAnki:
         )
 
   def apply(
+      // A FIXTURE DEFAULT, KEPT DELIBERATELY, AND THE FIRST OF THESE IS BORDERLINE.
+      // `allowDuplicate` is plainly the loud kind: a test about duplicate refusal that got the
+      // wrong value fails. `noteTypes` is less clear — a test meaning to start from an EMPTY
+      // profile and forgetting would silently receive this tool's five note types, and an
+      // installation test could then pass for the wrong reason. Kept because the class docstring
+      // names the default as a decision ('a test wanting a FRESH profile sets this to Map.empty'),
+      // which is what having an author means. Revisit if an installation test is ever puzzling.
+      // ast-grep-ignore: default-parameter
       noteTypes: Map[String, NoteTypeSpec] = defaultNoteTypes,
+      // ast-grep-ignore: default-parameter
       allowDuplicate: Boolean = true,
   ): InMemoryAnki = new InMemoryAnki(noteTypes, allowDuplicate)

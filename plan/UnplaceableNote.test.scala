@@ -76,6 +76,9 @@ class UnplaceableNoteTest extends munit.FunSuite:
   /** The finished message for the first unplaceable note, composed the way a run composes it:
     * observation reports the FACT, the planner turns it into ADVICE by consulting the vault.
     */
+  // A fixture default meaning 'no candidates offered'. The tests that check a suggestion pass
+  // specs and assert the suggestion names one; the rest assert that none is offered.
+  // ast-grep-ignore: default-parameter
   def messageFor(anki: InMemoryAnki, specs: Vector[SourcedSpec] = Vector.empty): String =
     Planner.identityErrorFor(observe(anki).unresolved.head, specs).describe
 

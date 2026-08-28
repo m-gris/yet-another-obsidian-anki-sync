@@ -119,6 +119,9 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
     )
 
+  // A fixture default. The law tests place every card in one deck on purpose — the property
+  // under test is about identity and convergence, not about deck placement.
+  // ast-grep-ignore: default-parameter
   def planOf(scan: VaultScan, anki: InMemoryAnki, deck: DeckPath = defaultDeck): Plan =
     val observed = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     Planner

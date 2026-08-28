@@ -280,6 +280,9 @@ class CliTest extends munit.FunSuite:
       CardPath.Headings(HeadingPath(NonEmptyVector.one(HeadingSegment.fromExtractedText(heading).toOption.get))),
     )
 
+  // A fixture default. Every test that cares which inference produced a parked orphan passes it;
+  // the rest are about the counting line, which does not vary with it.
+  // ast-grep-ignore: default-parameter
   private def parkedLines(parked: Vector[CardKey], inference: OrphanInference = OrphanInference.Computed) =
     Report.plan(Plan(Vector.empty, inference, Vector.empty, parked), RetypePolicy.Defer).mkString("\n")
 

@@ -6,6 +6,10 @@ import obsidiananki.plan.{BuildFailure, SourcedSpec}
 
 class ExtractorTest extends munit.FunSuite:
 
+  // Fixture defaults, and removing them was measured: it breaks 259 call sites across the suite.
+  // These tests are about MARKDOWN, and the note's id and file name appear in every key they
+  // assert on — so a wrong value here fails loudly and immediately, in the assertion itself.
+  // ast-grep-ignore: default-parameter
   def extract(markdown: String, id: String = "n1", fileName: String = "Note"): ExtractedNote =
     val (_, split) = Frontmatter.read(markdown).fold(e => fail(s"frontmatter: $e"), identity)
     val body = split.body

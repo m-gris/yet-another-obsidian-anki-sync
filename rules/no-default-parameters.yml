@@ -1,0 +1,46 @@
+# A DEFAULT PARAMETER IS A DECISION WITH NO AUTHOR.
+#
+# Somebody had to decide the value. A default means nobody at the call site did — and no reader
+# can tell, from the call, whether that was considered or overlooked. The type stops being the
+# contract: `def f(a: Int, b: Boolean = false)` genuinely has two parameters and reads as having
+# one at half its call sites, and the default evaporates entirely the moment the method is lifted
+# to a value.
+#
+# THE RULE OF THUMB THIS GATE ENFORCES, from Marc, 2026-08-28: a default is fine when getting it
+# wrong is LOUD, and harmful when getting it wrong is SILENT. `spaces2` versus `spaces4` hurts
+# nobody. A flag deciding whether output parses at all hurts every consumer, quietly.
+#
+# WHY IT IS A GATE RATHER THAN A HABIT. On 2026-08-28 a parameter was added with `= false` so
+# that existing call sites would keep compiling; one of them then dropped it silently, and a run
+# asked for JSON put a line of prose above the JSON so that every consumer failed on the first
+# character. The compiler had been satisfied. Removing that default made it name sixteen call
+# sites, one of which was the bug. The same audit found `bodyFirstLine: Int = 1` in the
+# extractor — a default that was WRONG FOR EVERY NOTE this tool has ever processed, because `1`
+# is right only for a note with no frontmatter and a note without frontmatter yields no cards at
+# all. Nothing failed. Cards built, runs succeeded, and following a card back to its source
+# landed in the wrong place.
+#
+# THIS RULE HAS NO BLANKET EXCEPTIONS — tests included. Where a default genuinely is the loud
+# kind, suppress it AT THE SITE and say why:
+#
+#     // ast-grep-ignore: default-parameter
+#
+# That comment is the point rather than a loophole: it gives the decision an author. A new
+# default now costs somebody a written justification, which is the speed bump that was missing.
+#
+# Run by `just lint`, which `just test` depends on.
+
+id: default-parameter
+language: scala
+severity: error
+message: "a decision with no author: parameter carrying a default value"
+note: |
+  Remove the default and let the compiler name every call site, so each one says what it means.
+  If getting this wrong would be LOUD — a failing test, an obvious crash — keep it and suppress
+  here with `// ast-grep-ignore: default-parameter` plus a line saying why.
+rule:
+  all:
+    - kind: parameter
+    - has:
+        field: default_value
+        pattern: $DEFAULT

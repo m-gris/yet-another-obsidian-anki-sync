@@ -31,6 +31,9 @@ import java.nio.file.{Files, Path, Paths}
   */
 class MainTest extends munit.FunSuite:
 
+  // A fixture default. The profile-mismatch tests pass this explicitly and would fail loudly if
+  // they got the matching one instead — which is the whole subject of those tests.
+  // ast-grep-ignore: default-parameter
   def fixture(profile: String = "claude-POC-test"): (FakeAnkiConnect.State, AnkiConnectClient[IO]) =
     val state = FakeAnkiConnect.State()
     state.profile = profile
@@ -380,7 +383,11 @@ class MainTest extends munit.FunSuite:
   def registryEntry(
       id: String,
       path: String,
+      // Fixture defaults. A registered vault's open state and last-opened stamp; the tests that turn
+      // on either pass it, and the rest assert on the vault's name and path.
+      // ast-grep-ignore: default-parameter
       open: Boolean = false,
+      // ast-grep-ignore: default-parameter
       ts: Long = 1786621931297L,
   ): RegisteredVault =
     RegisteredVault(id, Paths.get(path), RegistryStamp(ts), open)

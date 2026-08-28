@@ -152,6 +152,9 @@ class VaultWalkerTest extends munit.FunSuite:
       headings = Vector("Replication", "Read-your-writes consistency"),
     )
 
+  // A fixture default. The deck-shape tests each name the source they are about; this one is the
+  // shared example, and a wrong one changes the composed deck path the test asserts on.
+  // ast-grep-ignore: default-parameter
   def composed(shape: DeckShape, source: DeckSource = replication): String =
     Decks.compose(root, shape, source, RecallText.none).fold(e => fail(s"compose: $e"), _.path.render)
 

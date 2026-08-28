@@ -42,6 +42,9 @@ class PlannerTest extends munit.FunSuite:
   def twoFieldSpec(k: CardKey, front: String, back: String): CardSpec =
     CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, testContext)
 
+  // Fixture defaults for a source reference. These tests are about planning rather than about
+  // where a card came from; a wrong file or line would show up in the key being asserted.
+  // ast-grep-ignore: default-parameter
   def sourced(spec: CardSpec, file: String = "Note.md", line: Int = 1): SourcedSpec =
     SourcedSpec(spec, SourceRef(file, line, SourceKind.Heading), NoSectionChain, NoRecall)
 

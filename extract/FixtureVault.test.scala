@@ -31,6 +31,9 @@ class FixtureVaultTest extends munit.FunSuite:
     // was EXTRACTED FROM. It passed only because the two copies were still identical.
     Some(obsidiananki.TestSources.dir(getClass, "dummy-vault"))
 
+  // A fixture default meaning 'exclude nothing'. A test that meant to exclude something and got
+  // this would see the excluded file in its results, which is what it is asserting about.
+  // ast-grep-ignore: default-parameter
   def loadVault(exclude: String => Boolean = _ => false): Vector[VaultFile] =
     val root = vaultRoot.getOrElse(fail("dummy-vault not found from " + sys.props("user.dir")))
     Files

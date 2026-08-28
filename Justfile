@@ -26,8 +26,17 @@ build:
         -o "{{tool_bin}}" --force
     @echo "built: {{tool_bin}}"
 
-# Run the test suite
-test:
+# Refuse any default parameter value. See rules/no-default-parameters.yml for why, and for
+# how to keep one deliberately: suppress at the site with a comment saying why, which is what
+# gives the decision an author. There is no blanket exception, tests included.
+lint:
+    ast-grep scan --rule "{{justfile_directory()}}/rules/no-default-parameters.yml" \
+        "{{justfile_directory()}}"
+    @echo "lint: no default parameters"
+
+# Run the test suite. DEPENDS ON `lint` ON PURPOSE: a green test run must not be reachable
+# while a default parameter is sitting unjustified, or the gate is advice rather than a gate.
+test: lint
     scala-cli test "{{justfile_directory()}}"
 
 # Symlink the built tool into ~/.local/bin, which is on PATH

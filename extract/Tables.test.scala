@@ -144,7 +144,11 @@ class TablesTest extends munit.FunSuite:
   private def cardsOf(
       section: Section,
       display: CellDisplay,
+      // Fixture defaults naming the ordinary table card. Every test that varies the directions or the
+      // scope passes them, and asserts on the cards those choices produce.
+      // ast-grep-ignore: default-parameter
       directions: ThreeFieldDirections = ThreeFieldDirections.Default,
+      // ast-grep-ignore: default-parameter
       scope: TableScope = TableScope.Both,
   ): Vector[(CardSpec, RowSource)] =
     Tables
@@ -160,8 +164,13 @@ class TablesTest extends munit.FunSuite:
     */
   private def refusalOf(
       section: Section,
+      // Fixture defaults, as above: this builder exists to assert on the REFUSAL, so a wrong shape
+      // produces a different refusal or none, and the assertion says so.
+      // ast-grep-ignore: default-parameter
       display: CellDisplay = CellDisplay.Default,
+      // ast-grep-ignore: default-parameter
       directions: ThreeFieldDirections = ThreeFieldDirections.Default,
+      // ast-grep-ignore: default-parameter
       scope: TableScope = TableScope.Both,
   ): SpecError =
     Tables
