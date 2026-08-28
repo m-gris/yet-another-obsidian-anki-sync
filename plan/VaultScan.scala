@@ -106,6 +106,29 @@ enum BuildFailure:
     */
   case MarkerNotOnHeading(file: String, reason: String)
 
+  /** A frontmatter tag that ALMOST names a marker — `IN-FLIGHT.md` item 37.
+    *
+    * ITS OWN CASE RATHER THAN A VARIANT OF THE ONE ABOVE, because the fix is different. That one
+    * says "move your marker onto a heading"; this one says "you have spelled it wrong". Telling
+    * an author to move a marker that is misspelled sends them to the wrong place, which is what
+    * happened to Marc on 2026-08-28 for the half of this that was reported at all.
+    *
+    * THE HALF THAT WAS NOT REPORTED IS THE REASON THIS EXISTS. A tag reading `flashard/...` —
+    * one character short — was dropped by a `startsWith` filter, and the separate check meant to
+    * catch a note that declared intent and made nothing searches the frontmatter for the
+    * substring `flashcard`, so it missed it for the same reason. The one check written for this
+    * class of mistake was defeated by a misspelling of the very string it searches for, and the
+    * author was told nothing at all.
+    *
+    * NOTHING IS GUESSED. `Marker.readTag` matches everything after a tag's first segment against
+    * the tails this tool documents, exactly — no spelling distance and no threshold. This
+    * project's rule that fuzzy matching may RANK but never DECIDE is not bent here; an exact
+    * match on the tool's own published vocabulary is not fuzzy.
+    *
+    * Non-degrading, like its neighbours: it says nothing about which notes the file owns.
+    */
+  case MarkerMisspelled(file: String, reason: String)
+
   /** The file has MARKED HEADINGS but no `id` in its frontmatter, so its cards cannot be keyed.
     *
     * The author asked for cards and will get none, so this is loud. But it does NOT degrade the
@@ -208,6 +231,12 @@ enum BuildFailure:
     // produces: no cards. If it once had marked headings and they were removed, the notes they
     // made ARE deleted and SHOULD be flagged — sheltering them would hide a real orphan.
     case MarkerNotOnHeading(_, _) => OrphanShelter.Nothing
+
+    // KNOWN TO OWN NOTHING NOW, for the same reason as its neighbour above. A misspelled tag is
+    // not a marker, so the file's cards are exactly the ones its HEADINGS produce, and the tool
+    // can see those. Sheltering on the strength of a tag that names nothing would hide a real
+    // orphan behind a typo.
+    case MarkerMisspelled(_, _) => OrphanShelter.Nothing
 
     // NEVER OWNED ANYTHING. A card's identity begins with the frontmatter id, so a file without
     // one has never produced an Anki note and cannot own an observed key.

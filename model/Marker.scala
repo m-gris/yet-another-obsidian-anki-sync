@@ -259,6 +259,55 @@ enum MarkerError:
   case Unrecognised(raw: String)
   case Multiple(raws: List[String])
 
+/** WHAT ONE FRONTMATTER TAG TURNED OUT TO BE.
+  *
+  * IT REPLACES A FILTER FOLLOWED BY A SWALLOWED ERROR — `IN-FLIGHT.md` item 37, found by Marc
+  * on 2026-08-28 after a note of his produced nothing and said nothing. The old code kept tags
+  * beginning with `flashcard` and then parsed them with the failure discarded:
+  *
+  * {{{
+  * .filter(_.toLowerCase.startsWith("flashcard"))
+  * .flatMap(t => Marker.parse(s"#$t").toOption.flatten)
+  * }}}
+  *
+  * TWO DIFFERENT MISTAKES FELL THROUGH THAT, both silently. A tag spelled `flashard/...` — one
+  * character short — failed the filter and vanished; and because the separate did-you-mean
+  * check searches the frontmatter for the substring `flashcard`, it missed it too. **So the one
+  * check written to catch this class of mistake was defeated by a misspelling of the very string
+  * it searches for.** A tag spelled `flashcard/sequence/hedars` passed the filter, failed to
+  * parse, and had its error dropped by `.toOption` — reported, but as the wrong thing.
+  *
+  * SO THE READING IS A TYPE RATHER THAN A CHAIN OF FILTERS. Each outcome is a case, the match on
+  * it is exhaustive, and a situation cannot be dropped by being left out of a predicate. This is
+  * the same correction as `MarkedHeadings` in `extract/VaultWalker.scala`: a distinction that
+  * matters belongs in a type, where nothing can forget it.
+  */
+enum TagReading:
+
+  /** It is a marker, and here it is. */
+  case AMarker(marker: Marker)
+
+  /** It says `flashcard`, and then something this tool does not recognise.
+    *
+    * The author is in the right place with the wrong token — `flashcard/sequence/hedars`.
+    */
+  case Unrecognised(raw: String)
+
+  /** It is not spelled `flashcard`, but everything AFTER its first segment exactly matches a
+    * marker this tool documents.
+    *
+    * EXACT MATCHING, NOT SPELLING DISTANCE, WHICH IS WHY THIS CAN BE ACTED ON. Nothing here
+    * guesses what the author meant: `sequence/headers/recursive` either is a documented marker
+    * tail or it is not. So `flashard/sequence/headers`, `flashcards/2way` and `flash/cloze` are
+    * all caught, while an ordinary tag like `maths/topology` is untouched however it is spelled.
+    * This project's standing rule is that fuzzy matching may RANK but never DECIDE; an exact
+    * match on the tool's own published vocabulary is not fuzzy at all.
+    */
+  case Misspelled(raw: String, probably: String)
+
+  /** An ordinary tag. Most tags in most vaults, and none of this tool's business. */
+  case NotOurs
+
 object Marker:
 
   /** Anki note type names.
@@ -570,6 +619,44 @@ object Marker:
     "#flashcard/table/3way/cells" -> "cell cards only, asked three ways",
     "#flashcard/table/rows"       -> "whole-row cards only, no cell cards",
   )
+
+  /** Read one frontmatter tag: is it a marker, a near miss, or none of our business?
+    *
+    * THE TAG ARRIVES WITHOUT ITS HASH, because Obsidian's frontmatter `tags:` list holds bare
+    * strings. A leading `#` is tolerated anyway, since a person writing the list by hand may
+    * include one and being strict about it would refuse a tag that is plainly correct.
+    */
+  def readTag(rawTag: String): TagReading =
+    val bare  = rawTag.stripPrefix("#")
+    val token = s"#$bare"
+
+    fromToken(token) match
+      case Some(marker) => TagReading.AMarker(marker)
+
+      // IT NAMED THE FAMILY AND THEN SOMETHING UNKNOWN. The author is in the right place with
+      // the wrong token, which is a different message from "your marker is not on a heading" —
+      // and the wrong one is what they used to get, because this case was reached through
+      // `.toOption` and its error thrown away.
+      case None if bare == FamilyPrefix || bare.startsWith(s"$FamilyPrefix/") =>
+        TagReading.Unrecognised(rawTag)
+
+      case None =>
+        // EVERYTHING AFTER THE FIRST SEGMENT, COMPARED EXACTLY. `flashard/sequence/headers` has
+        // the tail `sequence/headers`, which is a tail this tool publishes, so the first segment
+        // is the only thing wrong with it. A tag with no second segment has no tail and is never
+        // a near miss: somebody tagging a note `2way` was not reaching for a marker.
+        tailOf(bare)
+          .flatMap(tail => Documented.map(_._1).find(t => tailOf(t.stripPrefix("#")).contains(tail)))
+          .fold(TagReading.NotOurs)(TagReading.Misspelled(rawTag, _))
+
+  /** The part of a slash-separated tag after its first segment, if it has one. */
+  private def tailOf(bare: String): Option[String] =
+    bare.indexOf('/') match
+      case -1 => None
+      case i  => Some(bare.substring(i + 1))
+
+  /** The first segment of every marker this tool reads. */
+  private val FamilyPrefix: String = "flashcard"
 
   private def fromToken(token: String): Option[Marker] = token match
     // ═══ FRONT-BACK: the shape is implicit, so the token is only a direction count ═══

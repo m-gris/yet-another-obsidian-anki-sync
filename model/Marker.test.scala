@@ -7,6 +7,88 @@ class MarkerTest extends munit.FunSuite:
   def parsed(heading: String): Option[Marker] =
     Marker.parse(heading).fold(e => fail(s"unexpected marker error for '$heading': $e"), identity)
 
+  // ------------------------------------------------------ reading a frontmatter tag ----
+
+  /** THE NOTE THAT STARTED THIS — `IN-FLIGHT.md` item 37, 2026-08-28.
+    *
+    * Marc wrote `flashard/sequence/headers` into a note's frontmatter, one character short of
+    * `flashcard`, synced, and was told nothing at all. The tag failed a `startsWith("flashcard")`
+    * filter and vanished; the separate did-you-mean check searches the frontmatter for the
+    * substring `flashcard` and missed it for the same reason. **The one check written to catch
+    * this class of mistake was defeated by a misspelling of the very string it searches for.**
+    */
+  test("a tag one character short of the marker prefix is recognised as a near miss") {
+    assertEquals(
+      Marker.readTag("flashard/sequence/headers"),
+      TagReading.Misspelled("flashard/sequence/headers", "#flashcard/sequence/headers"),
+    )
+  }
+
+  /** EXACT MATCHING ON THE TOOL'S OWN VOCABULARY, NOT SPELLING DISTANCE. Everything after the
+    * first segment either is a documented marker's tail or is not, so there is no threshold to
+    * tune and nothing is guessed about the author's intent.
+    */
+  test("other ways of misspelling the prefix are caught by the same rule") {
+    assertEquals(
+      Marker.readTag("flashcards/2way"),
+      TagReading.Misspelled("flashcards/2way", "#flashcard/2way"),
+    )
+    assertEquals(Marker.readTag("flash/cloze"), TagReading.Misspelled("flash/cloze", "#flashcard/cloze"))
+    // Case is part of the spelling: a heading marker is read case-sensitively, so this reports
+    // rather than quietly accepting a second spelling the heading path would refuse.
+    assertEquals(
+      Marker.readTag("Flashcard/2way"),
+      TagReading.Misspelled("Flashcard/2way", "#flashcard/2way"),
+    )
+  }
+
+  /** THE OTHER SILENT HOLE, AND IT IS A DIFFERENT ONE. This tag passed the old filter, failed to
+    * parse, and had its error dropped by `.toOption` — so the author was told their marker was
+    * not on a heading, when in truth it was in the right place with the wrong token.
+    */
+  test("a correctly prefixed tag with an unknown token is unrecognised, not silently dropped") {
+    assertEquals(
+      Marker.readTag("flashcard/sequence/hedars"),
+      TagReading.Unrecognised("flashcard/sequence/hedars"),
+    )
+    assertEquals(Marker.readTag("flashcard/2-way"), TagReading.Unrecognised("flashcard/2-way"))
+  }
+
+  test("a real marker reads as itself, with or without a leading hash") {
+    val expected = TagReading.AMarker(Marker.TwoField(TwoFieldDirections.Both))
+    assertEquals(Marker.readTag("flashcard/2way"), expected)
+    assertEquals(Marker.readTag("#flashcard/2way"), expected, "a hand-written hash was refused")
+  }
+
+  /** MOST TAGS IN MOST VAULTS, AND NONE OF THIS TOOL'S BUSINESS. A rule that flagged ordinary
+    * tags would fill the report with noise, which is the failure that stops anyone reading the
+    * parts that matter.
+    */
+  test("an ordinary tag is left alone, however many segments it has") {
+    assertEquals(Marker.readTag("maths/topology"), TagReading.NotOurs)
+    assertEquals(Marker.readTag("todo"), TagReading.NotOurs)
+    assertEquals(Marker.readTag("reading/2026/august"), TagReading.NotOurs)
+  }
+
+  /** A BARE TAIL IS NOT A NEAR MISS. `2way` on its own has nothing after its first segment, so
+    * there is no tail to match — somebody tagging a note `2way` was almost certainly not
+    * reaching for a flashcard marker.
+    */
+  test("a single-segment tag that happens to name a marker's tail is left alone") {
+    assertEquals(Marker.readTag("2way"), TagReading.NotOurs)
+    assertEquals(Marker.readTag("cloze"), TagReading.NotOurs)
+  }
+
+  /** EVERY DOCUMENTED MARKER IS REACHABLE THROUGH THIS ROUTE, so the frontmatter path and the
+    * heading path cannot drift into accepting different vocabularies.
+    */
+  test("every documented marker reads as a marker when written as a tag") {
+    Marker.Documented.foreach: (token, _) =>
+      Marker.readTag(token.stripPrefix("#")) match
+        case TagReading.AMarker(_) => ()
+        case other                 => fail(s"'$token' did not read as a marker: $other")
+  }
+
   // ---------------------------------------------------------------- parsing ----
 
   /** THE REVEAL ORDER, AND WHICH ONE THE SHORT TOKEN BUYS.

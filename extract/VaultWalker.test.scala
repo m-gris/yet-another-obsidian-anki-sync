@@ -987,6 +987,82 @@ class VaultWalkerTest extends munit.FunSuite:
     )
   }
 
+  /** THE SILENCE MARC HIT ON 2026-08-28 — `IN-FLIGHT.md` item 37.
+    *
+    * He wrote `flashard/sequence/headers` into a note's frontmatter, one character short of
+    * `flashcard`, synced, and was told NOTHING. Two checks missed it for the same reason: the
+    * filter that read a marker kept tags beginning with `flashcard`, and the separate check whose
+    * whole job is to say "this note declared intent and made no cards" searches the frontmatter
+    * for that same string as a SUBSTRING. The one check written to catch this class of mistake
+    * was defeated by a misspelling of the very string it searches for.
+    *
+    * THE MESSAGE MUST NAME THE CORRECTION, not merely announce a problem. The whole cost of this
+    * defect was the time between "no card appeared" and "oh, a typo", and only the suggestion
+    * closes that gap.
+    */
+  test("a frontmatter tag one character short of the marker is reported, with the correction") {
+    val index = scan(
+      "Outline.md" -> "---\nid: n1\ntags:\n  - flashard/sequence/headers\n---\n\n# A\n## A.1\n"
+    )
+    val reasons = index.scan.failures.collect { case BuildFailure.MarkerMisspelled(_, r) => r }
+    assertEquals(reasons.size, 1, s"the near miss went unreported: ${index.scan.failures}")
+    assert(reasons.head.contains("flashard/sequence/headers"), s"the tag is not quoted: ${reasons.head}")
+    assert(
+      reasons.head.contains("#flashcard/sequence/headers"),
+      s"the correction is not offered, which is the only part that saves any time: ${reasons.head}",
+    )
+  }
+
+  /** THE OTHER HALF, AND IT WAS REPORTED AS THE WRONG THING RATHER THAN NOT AT ALL. This tag
+    * passed the old filter, failed to parse, and had its error dropped — so the author was told
+    * to move a marker onto a heading, when it was already in a place the tool reads and only its
+    * token was wrong.
+    */
+  test("a correctly prefixed frontmatter tag with an unknown token says so, not 'not on a heading'") {
+    val index = scan(
+      "Outline.md" -> "---\nid: n1\ntags:\n  - flashcard/sequence/hedars\n---\n\n# A\n## A.1\n"
+    )
+    val reasons = index.scan.failures.collect { case BuildFailure.MarkerMisspelled(_, r) => r }
+    assertEquals(reasons.size, 1, s"the unknown token went unreported: ${index.scan.failures}")
+    assert(reasons.head.contains("does not recognise"), s"not named as an unknown token: ${reasons.head}")
+  }
+
+  /** ONE MESSAGE, AND THE ACCURATE ONE — found by running the built tool against a throwaway
+    * vault on 2026-08-28 rather than by reading the code.
+    *
+    * A tag reading `flashcard/…` with an unknown token trips BOTH checks: the new one, which
+    * names the token, and the older one, which says the frontmatter mentions `flashcard` and no
+    * heading carries a marker. The second is not merely redundant, it is WRONG ADVICE — it sends
+    * the author to move a marker that is already somewhere this tool reads and whose only fault
+    * is its spelling. So the precise message suppresses the general one.
+    */
+  test("a near miss is reported once, and not also as a marker in the wrong place") {
+    val index = scan(
+      "Outline.md" -> "---\nid: n1\ntags:\n  - flashcard/sequence/hedars\n---\n\n# A\n## A.1\n"
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "the author was also told to move a marker whose only problem is how it is spelled",
+    )
+    assertEquals(index.scan.failures.size, 1, s"more than one message: ${index.scan.failures}")
+  }
+
+  /** NO NOISE, WHICH IS WHAT KEEPS THE REPORT WORTH READING. An ordinary tag must produce
+    * nothing at all, however many segments it has — a check that flagged real tags would be
+    * abandoned within a week, and the abandonment would take the useful half with it.
+    */
+  test("ordinary frontmatter tags are not reported as near misses") {
+    val index = scan(
+      "Note.md" -> "---\nid: n1\ntags:\n  - maths/topology\n  - reading/2026\n---\n\n# A\n\nProse.\n"
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerMisspelled(f, _) => f },
+      Vector.empty,
+      "an ordinary tag was reported as a misspelled marker",
+    )
+  }
+
   test("a marked heading still silences the frontmatter check and makes no note card") {
     val index = scan(
       "Good.md" ->

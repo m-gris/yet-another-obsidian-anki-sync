@@ -322,6 +322,8 @@ class GoldenTest extends munit.FunSuite:
         FailRecord(escape("KeyUnderivableInFile"), escape(noteId.value))
       case BuildFailure.MarkerNotOnHeading(file, _) =>
         FailRecord(escape("MarkerNotOnHeading"), escape(file))
+      case BuildFailure.MarkerMisspelled(file, _) =>
+        FailRecord(escape("MarkerMisspelled"), escape(file))
       case BuildFailure.MarkedWithoutNoteId(file, _) =>
         FailRecord(escape("MarkedWithoutNoteId"), escape(file))
       case BuildFailure.MarkerUnknowable(file, _) =>

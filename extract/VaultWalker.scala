@@ -479,15 +479,63 @@ object VaultWalker:
                   )
           failures ++= declarationFailures
 
+          // ── EVERY FRONTMATTER TAG, READ RATHER THAN FILTERED ────────────────────────────
+          //
+          // THIS USED TO BE A FILTER FOLLOWED BY A SWALLOWED ERROR — `IN-FLIGHT.md` item 37 —
+          // and two different mistakes fell through it, both without a word:
+          //
+          //   .filter(_.toLowerCase.startsWith("flashcard"))
+          //   .flatMap(t => Marker.parse(s"#$t").toOption.flatten)
+          //
+          // A tag spelled `flashard/…`, one character short, failed the filter and vanished —
+          // and the separate did-you-mean check below searches the frontmatter for the SUBSTRING
+          // `flashcard`, so it missed the same tag for the same reason. A tag spelled
+          // `flashcard/sequence/hedars` passed the filter, failed to parse, and had its error
+          // dropped by `.toOption`: reported, but as "your marker is not on a heading", which
+          // sends the author off to move something whose only problem is its spelling.
+          //
+          // `Marker.readTag` answers with a CASE rather than an Option, so neither situation can
+          // be lost by being left out of a predicate, and both matches below are exhaustive.
+          val tagReadings: Vector[TagReading] =
+            keys
+              .get("tags")
+              .toVector
+              .flatMap {
+                case PropertyValue.One(t)        => Vector(t)
+                case PropertyValue.Many(ts)      => ts
+                case PropertyValue.Unreadable(_) => Vector.empty
+              }
+              .map(Marker.readTag)
+
+          tagReadings.foreach:
+            case TagReading.AMarker(_) => ()
+            case TagReading.NotOurs    => ()
+
+            case TagReading.Misspelled(raw, probably) =>
+              failures += BuildFailure.MarkerMisspelled(
+                file.relativePath,
+                s"its frontmatter tag '$raw' is not a marker this tool reads, but everything " +
+                  s"after its first segment matches '$probably' — so it makes no cards. Correct " +
+                  s"the spelling, or remove the tag if it was never meant to be a marker",
+              )
+
+            case TagReading.Unrecognised(raw) =>
+              failures += BuildFailure.MarkerMisspelled(
+                file.relativePath,
+                s"its frontmatter tag '$raw' names 'flashcard' and then a token this tool does " +
+                  s"not recognise, so it makes no cards. Run --help for every marker it reads",
+              )
+
           val frontmatterMarker: Option[Marker] =
-            keys.get("tags").toVector.flatMap {
-              case PropertyValue.One(t)    => Vector(t)
-              case PropertyValue.Many(ts)  => ts
-              case PropertyValue.Unreadable(_) => Vector.empty
-            }
-              .filter(_.toLowerCase.startsWith("flashcard"))
-              .flatMap(t => Marker.parse(s"#$t").toOption.flatten)
-              .headOption
+            // MATCHED EXHAUSTIVELY RATHER THAN COLLECTED, so a reading added later has to say
+            // whether it yields a marker instead of being skipped by a partial function — which
+            // is the shape of the bug this block replaces.
+            tagReadings.flatMap {
+              case TagReading.AMarker(m)       => Some(m)
+              case TagReading.Unrecognised(_)  => None
+              case TagReading.Misspelled(_, _) => None
+              case TagReading.NotOurs          => None
+            }.headOption
 
           val identity = keys.get("id").map(noteIdFrom)
 
@@ -525,15 +573,30 @@ object VaultWalker:
               // which says exactly that; a second message here would be the same news twice.
               case _ => ()
 
+          /** Whether a tag on this file has already been reported as a near miss. */
+          val nearMissReported: Boolean = tagReadings.exists:
+            case TagReading.Misspelled(_, _) => true
+            case TagReading.Unrecognised(_)  => true
+            case TagReading.AMarker(_)       => false
+            case TagReading.NotOurs          => false
+
           def markerNotOnHeading(): Unit =
-            failures += BuildFailure.MarkerNotOnHeading(
-              file.relativePath,
-              "its frontmatter names 'flashcard' but no HEADING carries a marker, so it " +
-                "makes no cards — a marker goes on the heading itself, as in " +
-                "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian " +
-                "editor files it under the 'tags' property instead, where this tool " +
-                "cannot see it",
-            )
+            // SILENT WHEN A NEAR MISS WAS ALREADY NAMED, and that suppression is the point rather
+            // than tidiness. This message tells the author to move their marker onto a heading.
+            // For a tag reading `flashcard/sequence/hedars` that is the WRONG ADVICE — the marker
+            // is already somewhere this tool reads and only its token is wrong — and following it
+            // would not help. Measured against a throwaway vault on 2026-08-28: before this
+            // guard, such a file drew both messages, the accurate one and then the misleading
+            // one, in that order.
+            if !nearMissReported then
+              failures += BuildFailure.MarkerNotOnHeading(
+                file.relativePath,
+                  "its frontmatter names 'flashcard' but no HEADING carries a marker, so it " +
+                    "makes no cards — a marker goes on the heading itself, as in " +
+                    "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian " +
+                    "editor files it under the 'tags' property instead, where this tool " +
+                    "cannot see it",
+              )
 
           if frontmatterNamesFlashcard then
             marked match
