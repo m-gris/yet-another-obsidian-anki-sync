@@ -1032,6 +1032,64 @@ class VaultWalkerTest extends munit.FunSuite:
     )
   }
 
+  /** THE DEFECT MARC HIT ON THE DAY THE MARKER SHIPPED — `IN-FLIGHT.md` item 35.
+    *
+    * He wrote `flashcard/sequence/headers` into a note's frontmatter, synced, and got a refusal
+    * telling him to move the marker onto a heading. That advice was impossible to follow: a
+    * whole-note structure card is made OF the note's headings, so the headings whose presence
+    * triggered the refusal are the very thing the card needs.
+    *
+    * THE CAUSE WAS A BOOLEAN GUARD ASKING THE WRONG QUESTION. It tested whether there was SOME
+    * frontmatter marker and whether the note had no headings — never WHICH marker — so every
+    * marker got the answer that is correct for one that reads the note's PROSE. The marker now
+    * answers what it reads and the walker matches on that answer.
+    */
+  test("a whole-note structure marker builds its card from the note's headings") {
+    val index = scan(
+      "Outline Learning.md" ->
+        "---\nid: n1\ntags:\n  - flashcard/sequence/headers\n---\n\n# A\n## A.1\n## A.2\n# B\n## B.1\n"
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, m) => m },
+      Vector.empty,
+      "still told to move the marker onto a heading, which is advice this marker cannot take",
+    )
+    assertEquals(index.scan.specs.size, 1, s"${index.scan.failures}")
+    val fields = index.scan.specs.head.spec.fields.toMap
+    assertEquals(fields("Title"), "Outline Learning")
+    assertEquals(fields("Text"), "<ul><li>A</li><li>B</li></ul>")
+  }
+
+  /** THE MIRROR, AND IT IS WHAT KEEPS THE FIX FROM BEING A HOLE. A structure marker needs
+    * headings, so a note without any cannot satisfy it — and must be told the actionable thing,
+    * which is the opposite of what a prose marker is told in the same position.
+    */
+  test("a whole-note structure marker on a note with NO headings is refused, and says why") {
+    val index = scan("N.md" -> "---\nid: n1\ntags:\n  - flashcard/sequence/headers\n---\n\nJust prose.\n")
+    assertEquals(index.scan.specs, Vector.empty)
+    val messages = index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(_, m) => m }
+    assertEquals(messages.size, 1, s"${index.scan.failures}")
+    assert(
+      messages.head.contains("has none"),
+      s"the refusal does not say the note has no headings, which is the only fix: ${messages.head}",
+    )
+  }
+
+  /** THE ACCIDENT THE OLD GUARD EXISTED TO CATCH, STILL CAUGHT. Typing a marker into Obsidian's
+    * editor files it under `tags`, leaving a note that looks marked and makes nothing. For a
+    * marker reading PROSE that is still a mistake, and the fix above must not have quietly
+    * turned every such note into a whole-note card.
+    */
+  test("a prose marker in frontmatter on a note WITH headings is still the Obsidian accident") {
+    val index = scan("N.md" -> "---\nid: n1\ntags:\n  - flashcard/2way\n---\n\n# A\n\nSome prose.\n")
+    assertEquals(index.scan.specs, Vector.empty, s"a card was built: ${index.scan.specs}")
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector("N.md"),
+      "the marker-in-the-wrong-place report was lost",
+    )
+  }
+
   test("a headingless note with an empty body is refused, like an empty section") {
     val index = scan("N.md" -> "---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n")
     assertEquals(index.scan.specs, Vector.empty)

@@ -131,6 +131,31 @@ enum HeadingReach:
   /** `#flashcard/sequence/headers/recursive` — the whole subtree, nested. */
   case WholeSubtree
 
+/** WHAT A CARD MADE FROM A WHOLE NOTE IS BUILT OUT OF.
+  *
+  * IT EXISTS BECAUSE A BOOLEAN GUARD WAS ANSWERING THIS QUESTION WITHOUT ASKING IT. A marker
+  * may be written in a note's frontmatter rather than on a heading, in which case it applies to
+  * the whole note. Until 2026-08-28 the walker decided whether that was legitimate by testing
+  * whether the note had headings — a rule that is right for markers reading the note's PROSE
+  * (headings present suggests the marker fell off one of them, the accident Obsidian's editor
+  * causes) and exactly backwards for one reading its STRUCTURE, which needs headings because
+  * they are its items. The condition asked whether there was SOME marker and never WHICH, so
+  * nothing forced a marker added later to answer. See `IN-FLIGHT.md` item 35.
+  *
+  * A MATCH RATHER THAN A PREDICATE, so the compiler demands an answer from every marker. That
+  * is the whole mechanism: an inexhaustive match is an error in this project, and a boolean
+  * guard is invisible to it.
+  */
+enum NoteMaterial:
+
+  /** The note's body. Headings mean the body is fragmented, so a marker in frontmatter is
+    * probably one that fell off a heading.
+    */
+  case Prose
+
+  /** The note's headings. Their presence is REQUIRED, not suspicious. */
+  case Structure
+
 /** The marker on a heading, parsed. */
 enum Marker:
   case TwoField(directions: TwoFieldDirections)
@@ -571,6 +596,15 @@ object Marker:
       * cards use the concept-descriptor type, the row card uses Basic — so the note type is
       * a property of the emitted spec, not of the marker.
       */
+    /** What a card built from the WHOLE note would be made of. See [[NoteMaterial]]. */
+    def wholeNoteReads: NoteMaterial = m match
+      case TwoField(_)                             => NoteMaterial.Prose
+      case ThreeField(_)                           => NoteMaterial.Prose
+      case Cloze                                   => NoteMaterial.Prose
+      case Table(_, _)                             => NoteMaterial.Prose
+      case Sequence(SequenceSource.BodyList)       => NoteMaterial.Prose
+      case Sequence(SequenceSource.ChildHeadings(_)) => NoteMaterial.Structure
+
     def noteTypeName: Option[String] = m match
       case TwoField(TwoFieldDirections.Forward) => Some(NoteTypes.Basic)
       case TwoField(TwoFieldDirections.Both)    => Some(NoteTypes.BasicAndReversed)

@@ -322,8 +322,25 @@ private[extract] def hasNoHeadings(root: laika.ast.RootElement): Boolean =
   * in either direction — neither "it has one" nor "it has none".
   */
 enum MarkedHeadings:
+
+  /** Some heading carries a marker. */
   case Present
-  case Absent
+
+  /** The note HAS headings and none of them carries a marker.
+    *
+    * SPLIT FROM `Headingless` ON 2026-08-28. These were one case, `Absent`, told apart by a
+    * boolean in a pattern guard — while the comment above that guard described the difference
+    * in prose and called only the first a mistake. A distinction that load-bearing belongs in
+    * the type, where a new branch cannot fail to notice it. See `IN-FLIGHT.md` item 36.
+    */
+  case NoneMarked(document: laika.ast.RootElement)
+
+  /** The note has NO headings at all, so frontmatter is the only place a marker could live. */
+  case Headingless(document: laika.ast.RootElement)
+
+  /** The markdown could not be parsed, so NO claim about its markers may be made in either
+    * direction.
+    */
   case CouldNotLook
 
 /** Turning a whole vault into a scan. */
@@ -409,7 +426,13 @@ object VaultWalker:
             _ => MarkedHeadings.CouldNotLook,
             doc =>
               if Extractor.hasMarkedHeading(doc.content) then MarkedHeadings.Present
-              else MarkedHeadings.Absent,
+              // THE DOCUMENT TRAVELS WITH THE ANSWER, which is what removes the
+              // `parsed.toOption.get` further down. Scala's sums are sums of PRODUCTS: a case
+              // may carry exactly the evidence its branch needs, so a branch reached only when
+              // the parse succeeded can be handed the parsed value instead of re-extracting it
+              // with a partial function.
+              else if hasNoHeadings(doc.content) then MarkedHeadings.Headingless(doc.content)
+              else MarkedHeadings.NoneMarked(doc.content),
           )
 
           // INTENT DECLARED IN THE FRONTMATTER AND NOWHERE ELSE. Read off the RAW block rather
@@ -472,57 +495,98 @@ object VaultWalker:
           // whether the tool actually LOOKED at its headings. Asked as a match rather than as
           // `&& !marked`, because the negation silently lumped "did not look" in with "looked
           // and found nothing" and then reported the second.
+          // THE WHOLE-NOTE CARD, shared by the two shapes that legitimately reach it.
+          //
+          // IT IS HANDED THE PARSED DOCUMENT RATHER THAN REACHING FOR ONE, and that is the
+          // whole reason `MarkedHeadings` now carries it. The previous version called
+          // `parsed.toOption.get` at this point: the branch KNEW the parse had succeeded,
+          // having arrived through a guard that inspected the parsed value, but the type did
+          // not carry that knowledge, so it was re-extracted with a partial function.
+          def wholeNoteCard(marker: Marker, document: laika.ast.RootElement): Unit =
+            identity match
+              case Some(Right(noteId)) =>
+                val note = Extractor.fromWholeNote(
+                  noteId,
+                  fileName,
+                  file.relativePath,
+                  marker,
+                  document,
+                  split.bodyFirstLine,
+                )
+                specs ++= note.specs
+                failures ++= note.failures
+                note.specs.foreach { s =>
+                  Decks
+                    .compose(deckRoot, shape, Decks.sourceFor(file.relativePath, Vector.empty), s.recall)
+                    .foreach(composed => decks += s.key -> composed.path)
+                }
+
+              // No usable id, so the card cannot be keyed. Reported below by the id branch,
+              // which says exactly that; a second message here would be the same news twice.
+              case _ => ()
+
+          def markerNotOnHeading(): Unit =
+            failures += BuildFailure.MarkerNotOnHeading(
+              file.relativePath,
+              "its frontmatter names 'flashcard' but no HEADING carries a marker, so it " +
+                "makes no cards — a marker goes on the heading itself, as in " +
+                "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian " +
+                "editor files it under the 'tags' property instead, where this tool " +
+                "cannot see it",
+            )
+
           if frontmatterNamesFlashcard then
             marked match
               // It has a marker where a marker belongs. Nothing to say.
               case MarkedHeadings.Present => ()
 
-              // THE MARKER WENT TO THE WRONG PLACE. Typing `#flashcard/3way` into a note in
-              // the Obsidian desktop app lifts it out of the text and files it under the
-              // frontmatter `tags` property, leaving a note that LOOKS marked and produces
-              // nothing. Reported wherever it happens — with an id or without one — because
-              // the note has said what it was for and the gap between that and its headings is
-              // the whole message.
-              // THE NOTE ITSELF IS THE CARD, when there is no heading the marker could have
-              // fallen off. `MarkedHeadings.Absent` covers two situations that look alike and are
-              // not: a note WITH headings none of which is marked — the Obsidian accident, where
-              // the editor lifted a typed marker out of the body into `tags` — and a note with NO
-              // headings at all, where the frontmatter is the only place a marker could live and
-              // the note is a leaf. Only the first is a mistake.
-              case MarkedHeadings.Absent
-                  if frontmatterMarker.isDefined &&
-                    parsed.fold(_ => false, doc => hasNoHeadings(doc.content)) =>
-                identity match
-                  case Some(Right(noteId)) =>
-                    val note = Extractor.fromWholeNote(
-                      noteId,
-                      fileName,
-                      file.relativePath,
-                      frontmatterMarker.get,
-                      parsed.toOption.get.content,
-                      split.bodyFirstLine,
-                    )
-                    specs ++= note.specs
-                    failures ++= note.failures
-                    note.specs.foreach { s =>
-                      Decks
-                        .compose(deckRoot, shape, Decks.sourceFor(file.relativePath, Vector.empty), s.recall)
-                        .foreach(composed => decks += s.key -> composed.path)
-                    }
+              // ── HEADINGS, NONE OF THEM MARKED ────────────────────────────────────────────
+              //
+              // WHAT THIS MEANS DEPENDS ON WHAT THE MARKER READS, and until 2026-08-28 it did
+              // not: the condition here asked whether there was SOME frontmatter marker and
+              // never which one, so every marker was given the prose answer.
+              //
+              // A MARKER THAT READS PROSE makes this the Obsidian accident. Typing
+              // `#flashcard/3way` into the desktop editor lifts it out of the text and files it
+              // under the frontmatter `tags` property, leaving a note that LOOKS marked and
+              // produces nothing. The headings are where the marker should have gone, and
+              // saying so is the whole message.
+              //
+              // A MARKER THAT READS STRUCTURE makes this its INTENDED use, and refusing it was
+              // a defect — `IN-FLIGHT.md` item 35, found by Marc on the day the marker shipped.
+              // A whole-note `#flashcard/sequence/headers` card is made OF the headings, since
+              // they are its items, so it cannot work on a note without them; the old advice to
+              // move the marker onto a heading was advice the author had to ignore.
+              case MarkedHeadings.NoneMarked(document) =>
+                frontmatterMarker match
+                  case Some(marker) =>
+                    marker.wholeNoteReads match
+                      case NoteMaterial.Structure => wholeNoteCard(marker, document)
+                      case NoteMaterial.Prose     => markerNotOnHeading()
 
-                  // No usable id, so the card cannot be keyed. Reported below by the id branch,
-                  // which says exactly that; a second message here would be the same news twice.
-                  case _ => ()
+                  // The frontmatter names `flashcard` and no tag in it parses as a marker — a
+                  // misspelling, most often. Nothing here makes a card either way.
+                  case None => markerNotOnHeading()
 
-              case MarkedHeadings.Absent =>
-                failures += BuildFailure.MarkerNotOnHeading(
-                  file.relativePath,
-                  "its frontmatter names 'flashcard' but no HEADING carries a marker, so it " +
-                    "makes no cards — a marker goes on the heading itself, as in " +
-                    "'## Some descriptor #flashcard/cdd/2way'. Typing one into the Obsidian " +
-                    "editor files it under the 'tags' property instead, where this tool " +
-                    "cannot see it",
-                )
+              // ── NO HEADINGS AT ALL ───────────────────────────────────────────────────────
+              //
+              // Frontmatter is the only place a marker could live, so THE NOTE ITSELF IS THE
+              // CARD and nothing has gone wrong. The exact mirror of the case above: a prose
+              // marker is satisfied here and a structure marker cannot be, because it has
+              // nothing to reveal.
+              case MarkedHeadings.Headingless(document) =>
+                frontmatterMarker match
+                  case Some(marker) =>
+                    marker.wholeNoteReads match
+                      case NoteMaterial.Prose => wholeNoteCard(marker, document)
+                      case NoteMaterial.Structure =>
+                        failures += BuildFailure.MarkerNotOnHeading(
+                          file.relativePath,
+                          "its frontmatter asks for a card made from this note's HEADINGS, " +
+                            "and the note has none — so there is nothing to reveal. Write the " +
+                            "headings you meant to learn, or remove the marker",
+                        )
+                  case None => markerNotOnHeading()
 
               // NOTHING READ THE DOCUMENT, so no claim about its headings may be made in
               // either direction — and this file may well carry a perfectly good marker.
@@ -562,7 +626,10 @@ object VaultWalker:
                   )
 
                 // Asked for nothing we can see, and owns nothing, having no id. Stays quiet.
-                case MarkedHeadings.Absent => ()
+                // BOTH UNMARKED SHAPES ALIKE HERE, and unlike above: with no id there is no
+                // card to build whichever it is, so the distinction the type now draws buys
+                // nothing at this branch and pretending otherwise would be noise.
+                case MarkedHeadings.NoneMarked(_) | MarkedHeadings.Headingless(_) => ()
 
                 // Already reported as `MarkerUnknowable` above IF the frontmatter declared
                 // intent. If it did not, this is ordinary prose that happens not to parse and
