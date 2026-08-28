@@ -108,6 +108,20 @@ object ObsidianSyntax:
     def withContent(newContent: Seq[Span]): Highlighted = copy(content = newContent)
     def withOptions(newOptions: Options): Highlighted   = copy(options = newOptions)
 
+  /** A `==highlight==` THAT IS NOT A CLOZE — no `<<`, so no card.
+    *
+    * SEPARATE FROM [[Highlighted]] AT THE PARSER rather than downstream, because the decision
+    * is made by looking at characters and nothing later has them. By the time spans exist, the
+    * `<<` has either been consumed as a marker or kept as text, and no consumer can tell which
+    * without re-parsing.
+    */
+  case class PlainHighlight(content: Seq[Span], options: Options = Options.empty)
+      extends Span
+      with SpanContainer:
+    type Self = PlainHighlight
+    def withContent(newContent: Seq[Span]): PlainHighlight = copy(content = newContent)
+    def withOptions(newOptions: Options): PlainHighlight   = copy(options = newOptions)
+
   /** The display text of a wikilink's inner content.
     *
     * Priority — alias, then target, then fragment:
@@ -199,10 +213,57 @@ object ObsidianSyntax:
     SpanParserBuilder.recursive { recParsers =>
       ("==" ~> recParsers.recursiveSpans(delimitedBy("==").failOn('\n')))
         .map { spans =>
-          val (group, rest) = splitGroupLabel(spans)
-          Highlighted(group, rest)
+          // ── WHICH KIND OF HIGHLIGHT THIS IS ─────────────────────────────────────────────
+          //
+          // RULED BY MARC 2026-08-28: a cloze is `==<<text>>==`. The brackets declare the
+          // intent, which leaves a bare `==text==` meaning what Obsidian says it means — a
+          // highlight, drawn as a `<mark>`, making no card.
+          //
+          // WHY THE BRACKETS RATHER THAN RESERVING `==` OUTRIGHT. Both were on the table.
+          // Reserving `==` is less to type, but then NOTHING DISTINGUISHES A CARD FROM
+          // EMPHASIS BY LOOKING — every highlight in the vault would be a card and the only
+          // way to know would be to remember. The brackets cost four characters and buy the
+          // author the ability to see, at a glance, which of their highlights are cards.
+          //
+          // WHY IT DEGRADES WELL, which is the argument against a bare custom delimiter like
+          // `<<text>>` with no `==` around it: without the Obsidian plugin that hides the
+          // brackets, this still renders as a REAL HIGHLIGHT — on mobile, in a preview, on
+          // somebody else's machine — merely with visible brackets inside it. A bare delimiter
+          // renders as literal text and no highlight at all.
+          stripClozeBrackets(spans) match
+            case Some(inner) =>
+              val (group, rest) = splitGroupLabel(inner)
+              Highlighted(group, rest)
+            case None => PlainHighlight(spans)
         }
     }
+
+  /** Peel `<<` and `>>` off a highlight's content, or say it is not a cloze.
+    *
+    * ON THE FIRST AND LAST SPANS' TEXT, not on a re-rendered string. The content is already
+    * parsed spans — `==<<*a* b>>==` holds an `Emphasis` between the brackets — so the opening
+    * `<<` lives at the head of the first span and the closing `>>` at the tail of the last,
+    * and everything between them is left untouched whatever it is.
+    *
+    * BOTH OR NEITHER. A lone `==<<text==` is NOT a cloze and is not an error either: it is a
+    * highlight whose text begins with two less-than signs, which is what the author typed and
+    * what Obsidian will show them. Guessing at a missing bracket is the fuzzy matching this
+    * project rules may rank but never apply.
+    */
+  private def stripClozeBrackets(spans: Seq[Span]): Option[Seq[Span]] =
+    (spans.headOption, spans.lastOption) match
+      case (Some(Text(first, fo)), Some(Text(last, lo))) if spans.sizeIs == 1 =>
+        // ONE SPAN IS ITS OWN CASE because the head and the last are the SAME span: stripping
+        // both ends of it separately would drop `>>` from a value that no longer holds it.
+        val t = first
+        Option.when(t.startsWith("<<") && t.endsWith(">>") && t.length >= 4)(
+          Seq(Text(t.drop(2).dropRight(2), fo))
+        )
+      case (Some(Text(first, fo)), Some(Text(last, lo))) =>
+        Option.when(first.startsWith("<<") && last.endsWith(">>"))(
+          Text(first.drop(2), fo) +: spans.slice(1, spans.size - 1) :+ Text(last.dropRight(2), lo)
+        )
+      case _ => None
 
   /** Peel a leading `N|` off a highlight's content.
     *

@@ -194,6 +194,12 @@ object AsText:
   private def inlineText(i: Inline, deletion: (Option[Int], String) => String): String = i match
     case Inline.Text(text) => text
 
+    // A HIGHLIGHT CONTRIBUTES ITS TEXT AND NOTHING ELSE. `AsText` is the oracle for ruled
+    // refusal B6 — "does this section have a body at all" — and a highlight is ordinary prose
+    // for that purpose. Emitting the `==` delimiters would make a one-word highlight look like
+    // five characters of content when it is one.
+    case Inline.Highlight(content) => content.map(inlineText(_, deletion)).mkString
+
     // RENDERS WITHOUT BACKTICKS, and the name is what makes that surprising. Verified:
     // `laika.ast.Literal` is a `TextContainer`, and `SpanContainer.extractText` matches
     // `TextContainer` BEFORE `SpanContainer`, so `` `foo` `` is `foo` today with no backticks

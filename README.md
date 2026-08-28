@@ -145,7 +145,7 @@ file. The marker is stripped before the heading is shown on a card.
 | `#flashcard/cdd/1way` | concept–descriptor–description | 1 |
 | `#flashcard/cdd/2way` | the same, plus "which thing has this?" | 2 |
 | `#flashcard/cdd/3way` | the same, plus "which aspect is this?" | 3 |
-| `#flashcard/cloze` | `==highlights==` blanked out | 1 per group |
+| `#flashcard/cloze` | `==<<highlights>>==` blanked out | 1 per group |
 | `#flashcard/sequence` | a list revealed one item at a time | 1 |
 | `#flashcard/sequence/headers` | this heading's subheadings, one at a time | 1 |
 | `#flashcard/sequence/headers/recursive` | the whole subtree beneath it | 1 |
@@ -241,7 +241,17 @@ title is the thing and the heading is an aspect of it.
 
 ### Cloze
 
-`==highlighted==` text is blanked out. Each highlight is its own deletion, keyed by its text —
+**The `<<…>>` is what makes it a card.** A bare `==highlight==` is an ordinary Obsidian
+highlight — it renders as one, and it makes nothing. That costs four characters and buys the one
+thing reserving `==` outright could not: you can see, by looking at a note, which of its
+highlights are cards and which are emphasis.
+
+> An Obsidian plugin can hide the brackets and give clozes their own colour. Without one you
+> still get a real highlight, just with the brackets showing — which is why the syntax is
+> `==<<x>>==` and not a bare `<<x>>`, since that would render as literal text and no highlight
+> at all.
+
+`==<<highlighted>>==` text is blanked out. Each one is its own deletion, keyed by its text —
 so rewording the highlight starts a new card.
 
 Prefix a digit to key the deletion by a **group** instead. Then the text may change freely and
@@ -250,9 +260,9 @@ the card keeps its history, and repeats of the same group are blanked together:
 ```markdown
 ## Bones of the forearm #flashcard/cloze
 
-Two bones run between elbow and wrist. On the thumb side is the ==1|radius==; on the
-little-finger side, the ==2|ulna==. In supination the ==1|radius== lies parallel to the
-==2|ulna==.
+Two bones run between elbow and wrist. On the thumb side is the ==<<1|radius>>==; on the
+little-finger side, the ==<<2|ulna>>==. In supination the ==<<1|radius>>== lies parallel to the
+==<<2|ulna>>==.
 ```
 
 Two *unlabelled* highlights with identical text are refused, because nothing but position could

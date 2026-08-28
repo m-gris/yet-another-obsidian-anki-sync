@@ -532,7 +532,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("B11: a marked heading carrying inline markup still resolves to its line") {
     val note = extract(
-      """|# ==3== Components #flashcard/cdd/1way
+      """|# ==<<3>>== Components #flashcard/cdd/1way
          |
          |- A Problem
          |- A Solution
@@ -562,6 +562,38 @@ class ExtractorTest extends munit.FunSuite:
 
   // ================================================ cloze ====
 
+  /** THE RULING THAT SPLIT `==` IN TWO, 2026-08-28.
+    *
+    * Before it, every `==text==` in a cloze section was a deletion, and nothing in a note told
+    * you which highlights were cards. Marc's ruling: a cloze is `==<<text>>==`. A bare
+    * `==text==` is what Obsidian says it is — a highlight, rendering as one, making no card.
+    *
+    * THE COST OF THE BRACKETS IS FOUR CHARACTERS; what they buy is that an author can see which
+    * of their highlights are cards. Reserving `==` outright was the alternative and was cheaper
+    * to type, but nothing would have distinguished a card from emphasis by looking.
+    */
+  test("a bare highlight is NOT a deletion, and a section holding only bare ones is refused") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==diaphysis== and the ==epiphysis==.\n")
+    assertEquals(note.specs, Vector.empty, s"a bare highlight made a card: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
+    assert(reason.contains("emphasis now"), s"the author is not told why they got nothing: $reason")
+  }
+
+  /** THE MIXED CASE, WHICH IS THE ONE THAT COULD GO WRONG QUIETLY. A section holding both kinds
+    * must build cards from the bracketed ones ONLY — a bare highlight that slipped into a
+    * deletion would blank a word the author meant to emphasise.
+    */
+  test("a section mixing both kinds makes cards from the bracketed highlights alone") {
+    val note = extract(
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==<<diaphysis>>== and the merely ==important== bit.\n"
+    )
+    assertEquals(note.failures, Vector.empty, s"${note.failures}")
+    val text = specFor(note, "b / l").spec.fields.toMap.apply("Text")
+    assert(text.contains("{{c1::diaphysis}}"), s"the bracketed highlight is not a deletion: $text")
+    assert(!text.contains("{{c2::"), s"a bare highlight became a second deletion: $text")
+    assert(text.contains("<mark>important</mark>"), s"the bare highlight lost its highlighting: $text")
+  }
+
   def clozeOf(n: ExtractedNote, path: String): CardSpec.Cloze =
     specFor(n, path).spec match
       case c: CardSpec.Cloze => c
@@ -569,7 +601,7 @@ class ExtractorTest extends munit.FunSuite:
 
   test("one cloze SECTION becomes one note holding all its deletions") {
     val note = extract(
-      "# Bones\n\nx\n\n## Long bone #flashcard/cloze\n\nThe ==diaphysis== and the ==epiphysis==.\n"
+      "# Bones\n\nx\n\n## Long bone #flashcard/cloze\n\nThe ==<<diaphysis>>== and the ==<<epiphysis>>==.\n"
     )
     assertEquals(note.specs.size, 1, "a cloze section must yield ONE note, not one per highlight")
     assertEquals(clozeOf(note, "bones / long bone").deletions.length, 2)
@@ -577,7 +609,7 @@ class ExtractorTest extends munit.FunSuite:
 
   /** UNLABELLED: its own group of one, numbered in order of first appearance. */
   test("unlabelled highlights each form their own group") {
-    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==a== and the ==b==.\n")
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==<<a>>== and the ==<<b>>==.\n")
     val ds   = clozeOf(note, "b / l").deletions.toVector
     assertEquals(ds.map(_.ordinal), Vector(1, 2))
     assertEquals(ds.map(_.group), Vector(ClozeGroup.Unlabelled("a"), ClozeGroup.Unlabelled("b")))
@@ -586,7 +618,7 @@ class ExtractorTest extends munit.FunSuite:
   /** LABELLED: several highlights sharing a label are ONE group and blank together. */
   test("highlights sharing a label form ONE group with one card") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\n==1|alpha== then ==2|beta== then ==1|gamma==.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\n==<<1|alpha>>== then ==<<2|beta>>== then ==<<1|gamma>>==.\n"
     )
     val ds = clozeOf(note, "b / l").deletions.toVector
     assertEquals(ds.size, 2, s"expected two groups, got ${ds.map(_.group)}")
@@ -604,13 +636,13 @@ class ExtractorTest extends munit.FunSuite:
         .map(_.group)
 
     // Labelled: fixing a typo leaves the group untouched.
-    assertEquals(groupsOf("The ==1|Mercurey== orbits."), groupsOf("The ==1|Mercury== orbits."))
+    assertEquals(groupsOf("The ==<<1|Mercurey>>== orbits."), groupsOf("The ==<<1|Mercury>>== orbits."))
     // Unlabelled: the same fix retires the key. Accepted, and visible.
-    assertNotEquals(groupsOf("The ==Mercurey== orbits."), groupsOf("The ==Mercury== orbits."))
+    assertNotEquals(groupsOf("The ==<<Mercurey>>== orbits."), groupsOf("The ==<<Mercury>>== orbits."))
   }
 
   test("an unlabelled group never takes a number a label has claimed") {
-    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\n==1|a== and ==b== and ==2|c==.\n")
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\n==<<1|a>>== and ==<<b>>== and ==<<2|c>>==.\n")
     val ds   = clozeOf(note, "b / l").deletions.toVector
     assertEquals(ds.map(_.ordinal).sorted, Vector(1, 2, 3), s"numbers collided: ${ds.map(_.ordinal)}")
   }
@@ -620,7 +652,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("two IDENTICAL unlabelled highlights are refused, with the remedy named") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==quorum== is a majority. Any two ==quorum== sets meet.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==<<quorum>>== is a majority. Any two ==<<quorum>>== sets meet.\n"
     )
     assertEquals(note.specs, Vector.empty)
     val reason = note.failures.collectFirst { case BuildFailure.KeyKnown(_, _, r) => r }
@@ -629,7 +661,7 @@ class ExtractorTest extends munit.FunSuite:
 
   test("identical text is fine when the duplicates are LABELLED into one group") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==1|quorum== is a majority. Two ==1|quorum== sets meet.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==<<1|quorum>>== is a majority. Two ==<<1|quorum>>== sets meet.\n"
     )
     assertEquals(note.specs.size, 1)
     assertEquals(clozeOf(note, "b / l").deletions.length, 1)
@@ -643,7 +675,7 @@ class ExtractorTest extends munit.FunSuite:
 
   test("a literal ==highlight== inside a code span is NOT a deletion") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nWrite `==x==` to mark one. The ==real== one counts.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nWrite `==x==` to mark one. The ==<<real>>== one counts.\n"
     )
     val ds = clozeOf(note, "b / l").deletions.toVector
     assertEquals(ds.map(_.group), Vector(ClozeGroup.Unlabelled("real")))
@@ -658,7 +690,7 @@ class ExtractorTest extends munit.FunSuite:
     * AnkiConnect server both accept such a note happily.
     */
   test("a cloze note carries the whole section text, WITH its deletions marked in place") {
-    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==femur== is a bone.\n")
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==<<femur>>== is a bone.\n")
     // The `<p>` arrived in S11. `{{c1::…}}` is unchanged and UNESCAPED: those braces are the
     // tool's own, put there by `content.Html.clozeDeletion` after the inner text was escaped.
     assertEquals(clozeOf(note, "b / l").text.value, "<p>The {{c1::femur}} is a bone.</p>")
@@ -773,7 +805,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("a highlight inside a table is found, not reported as missing") {
     val note = extract(
-      "# B\n\nx\n\n## C #flashcard/cloze\n\n| A | B |\n| - | - |\n| ==one== | two |\n"
+      "# B\n\nx\n\n## C #flashcard/cloze\n\n| A | B |\n| - | - |\n| ==<<one>>== | two |\n"
     )
     assert(
       !note.failures.map(_.toString).mkString.contains("no ==highlight=="),
@@ -837,7 +869,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("highlights inside a bullet list become deletions, list and all") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nThe three layers:\n\n- the ==epidermis==\n- the ==dermis==\n- the ==hypodermis==\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nThe three layers:\n\n- the ==<<epidermis>>==\n- the ==<<dermis>>==\n- the ==<<hypodermis>>==\n"
     )
     val spec = clozeOf(note, "b / l")
     assertEquals(spec.deletions.toVector.size, 3, s"lost a deletion inside the list: ${spec.text.value}")
@@ -853,7 +885,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("highlights inside a numbered list are deletions like any other") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\n1. first the ==ureter==\n2. then the ==bladder==\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\n1. first the ==<<ureter>>==\n2. then the ==<<bladder>>==\n"
     )
     val rendered = clozeOf(note, "b / l").text.value
     assert(rendered.contains("{{c1::ureter}}") && rendered.contains("{{c2::bladder}}"), rendered)
@@ -862,7 +894,7 @@ class ExtractorTest extends munit.FunSuite:
   /** A label IS the cloze number, so two highlights sharing one blank together as one card. */
   test("a labelled group renders its own number, and a shared label renders the same number") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==2|quorum== is a majority; two ==2|quorum== sets meet.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==<<2|quorum>>== is a majority; two ==<<2|quorum>>== sets meet.\n"
     )
     assertEquals(
       clozeOf(note, "b / l").text.value,
@@ -874,7 +906,7 @@ class ExtractorTest extends munit.FunSuite:
     * with a label the author chose — which would silently merge two cards into one.
     */
   test("an unlabelled group skips a number a label already claims") {
-    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==1|shaft== and each ==end==.\n")
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==<<1|shaft>>== and each ==<<end>>==.\n")
     assertEquals(
       clozeOf(note, "b / l").text.value,
       "<p>The {{c1::shaft}} and each {{c2::end}}.</p>",
@@ -886,7 +918,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("a literal highlight inside code is rendered as text, not turned into a deletion") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nWrite `==x==` to mark one. The ==real== one counts.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nWrite `==x==` to mark one. The ==<<real>>== one counts.\n"
     )
     val rendered = clozeOf(note, "b / l").text.value
     assert(rendered.contains("{{c1::real}}"), rendered)
@@ -914,7 +946,7 @@ class ExtractorTest extends munit.FunSuite:
     */
   test("two unlabelled highlights with identical text are refused, with the remedy named") {
     val note = extract(
-      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==quorum== is a majority; two ==quorum== sets meet.\n"
+      "# B\n\nx\n\n## L #flashcard/cloze\n\nA ==<<quorum>>== is a majority; two ==<<quorum>>== sets meet.\n"
     )
     assert(note.specs.isEmpty, s"an ambiguous cloze section produced a card: ${note.specs}")
     val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
@@ -927,7 +959,14 @@ class ExtractorTest extends munit.FunSuite:
     val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nOrdinary prose, nothing marked.\n")
     assert(note.specs.isEmpty, s"a cloze section without a deletion produced a card: ${note.specs}")
     val reason = note.failures.collect { case BuildFailure.KeyKnown(_, _, r) => r }.mkString(" ")
-    assert(reason.contains("no ==highlight=="), s"the refusal does not say what is missing: $reason")
+    assert(
+      reason.contains("no ==<<highlight>>=="),
+      s"the refusal does not name the syntax that actually makes a card: $reason",
+    )
+    assert(
+      reason.contains("emphasis now"),
+      s"the refusal does not tell an author who wrote plain highlights why they made nothing: $reason",
+    )
   }
 
   /** T3 — CHARACTERIZATION, AND VACUOUS BEFORE S9. A multi-item task list is refused ONCE.

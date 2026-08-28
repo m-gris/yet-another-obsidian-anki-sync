@@ -37,27 +37,27 @@ The suite is the only thing that proves a refactor kept its promises.
 
 ## The three layers, blanked #flashcard/cloze
 
-The outermost layer is the ==epidermis==, beneath it lies the ==dermis==, and
-under both sits the ==hypodermis==, which is mostly fat.
+The outermost layer is the ==<<epidermis>>==, beneath it lies the ==<<dermis>>==, and
+under both sits the ==<<hypodermis>>==, which is mostly fat.
 
 ## Bones of the forearm #flashcard/cloze
 
-Two bones run between elbow and wrist. On the thumb side is the ==1|radius==;
-on the little-finger side, the ==2|ulna==. In supination the ==1|radius== lies
-parallel to the ==2|ulna==, and in pronation it crosses over it — which is why
+Two bones run between elbow and wrist. On the thumb side is the ==<<1|radius>>==;
+on the little-finger side, the ==<<2|ulna>>==. In supination the ==<<1|radius>>== lies
+parallel to the ==<<2|ulna>>==, and in pronation it crosses over it — which is why
 both are labelled: their text may be rewritten without either card losing its
 review history.
 
 ## Bones of the hand, in two parts #flashcard/cloze
 
-The wrist itself is the ==carpus==, eight small bones in two rows. Beyond it the
-palm is built from the ==metacarpals==, one per digit.
+The wrist itself is the ==<<carpus>>==, eight small bones in two rows. Beyond it the
+palm is built from the ==<<metacarpals>>==, one per digit.
 
 The fingers themselves are the phalanges, and they come in three kinds:
 
-- the ==proximal== phalanges, nearest the palm
-- the ==middle== phalanges, absent from the thumb
-- the ==distal== phalanges, carrying the nails
+- the ==<<proximal>>== phalanges, nearest the palm
+- the ==<<middle>>== phalanges, absent from the thumb
+- the ==<<distal>>== phalanges, carrying the nails
 
 A cloze section whose body is SEVERAL BLOCKS. Every other cloze in this vault is one
 paragraph, so the separator that joins one block to the next was never reached, and a

@@ -413,6 +413,9 @@ object Lower:
     case ObsidianSyntax.Highlighted(group, content, _) =>
       spansV(content.toVector).map(is => Vector(Inline.Deletion(group, is)))
 
+    case ObsidianSyntax.PlainHighlight(content, _) =>
+      spansV(content.toVector).map(is => Vector(Inline.Highlight(is)))
+
     // ── flattens in SPAN position ───────────────────────────────────────────────────
     //
     // Safe without enumerating their children, because `Inline` is closed over exactly what a

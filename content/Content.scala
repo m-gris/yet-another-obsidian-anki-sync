@@ -379,7 +379,26 @@ enum Inline:
   /** Bold. */
   case Strong(content: Vector[Inline])
 
-  /** A cloze deletion — what the author wrote as `==text==` or `==N|text==`.
+  /** A HIGHLIGHT THAT IS NOT A CLOZE — what the author wrote as `==text==`.
+    *
+    * IT EXISTS BECAUSE `==` STOPPED MEANING ONE THING. Until 2026-08-28 every `==text==` in a
+    * marked section was a cloze deletion and this algebra had nowhere to put a highlight that
+    * was merely a highlight. Marc's ruling: a cloze is written `==<<text>>==`, so the brackets
+    * declare the intent and a bare `==text==` stays what Obsidian says it is — emphasis, shown
+    * as a `<mark>`, making no card.
+    *
+    * WHY THAT WAS WORTH A CONSTRUCTOR RATHER THAN A FLAG ON [[Deletion]]. A `Deletion` carries
+    * a group and an ordinal is computed for it; a highlight carries neither and can never be
+    * asked for one. Modelling the two as one type with a boolean would put every consumer in
+    * the position of asking, and one of them would eventually forget.
+    *
+    * IT IS DELIBERATELY NOT `Emphasis` OR `Strong`. Those render as `<em>` and `<strong>`; this
+    * renders as `<mark>`, which is a third level the author can reach for and Obsidian already
+    * draws. Folding it into one of the others would silently change how existing notes look.
+    */
+  case Highlight(content: Vector[Inline])
+
+  /** A cloze deletion — what the author wrote as `==<<text>>==` or `==<<N|text>>==`.
     *
     * `group` MATCHES `ObsidianSyntax.Highlighted(group: Option[Int], content)` EXACTLY
     * (parser/ObsidianSyntax.scala:104), so the vocabulary does not fork across the boundary:

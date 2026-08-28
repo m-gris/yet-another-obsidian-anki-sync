@@ -222,6 +222,10 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     val root = parse("Write `==highlight==` to mark a deletion.")
     val hs   = root.collect { case h: Highlighted => h.extractText }
     assertEquals(hs.toList, Nil, "a code span was lexed as a cloze deletion")
+    // THE OLD SPELLING ON PURPOSE. A code span holds exactly what the author typed, and the
+    // point of this test is that nothing lexes it. It is also the more searching case since
+    // 2026-08-28: a bare `==highlight==` is no longer a cloze anywhere, so a code span holding
+    // one must come out as those characters and nothing else.
     assertEquals(root.collect { case l: Literal => l.content }.toList, List("==highlight=="))
   }
 
@@ -233,13 +237,17 @@ class ObsidianSyntaxTest extends munit.FunSuite:
   }
 
   test("highlights still parse alongside the wikilink parser") {
-    val root = parse("The ==Sun== is a star and ==Jupiter== is a gas giant.")
+    val root = parse("The ==<<Sun>>== is a star and ==<<Jupiter>>== is a gas giant.")
     val hs   = root.collect { case h: Highlighted => h.extractText }
     assertEquals(hs.toList, List("Sun", "Jupiter"))
   }
 
   test("a wikilink inside a highlight keeps its display text") {
-    val root = parse("A ==[[Quorum|majority]]== is required.")
+    // BRACKETED BY HAND. The migration of 2026-08-28 skipped this fixture deliberately: its
+    // content holds a pipe, and a script cannot tell a wikilink's alias separator from a cloze
+    // group label. Getting that wrong would have turned `[[Quorum|majority]]` into group 
+    // "Quorum" silently.
+    val root = parse("A ==<<[[Quorum|majority]]>>== is required.")
     val hs   = root.collect { case h: Highlighted => h.extractText }
     assertEquals(hs.toList, List("majority"))
   }

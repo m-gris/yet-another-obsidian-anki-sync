@@ -1085,7 +1085,7 @@ class VaultWalkerTest extends munit.FunSuite:
                  Marker.NoteTypes.Basic)
     assertEquals(one("flashcard/2way", "Just prose.\n").scan.specs.head.spec.noteTypeName,
                  Marker.NoteTypes.BasicAndReversed)
-    assertEquals(one("flashcard/cloze", "A ==highlighted== fact.\n").scan.specs.head.spec.noteTypeName,
+    assertEquals(one("flashcard/cloze", "A ==<<highlighted>>== fact.\n").scan.specs.head.spec.noteTypeName,
                  Marker.NoteTypes.Cloze)
   }
 

@@ -307,9 +307,14 @@ object Extractor:
       s"'$file' asks in its frontmatter to be a whole-note '$marker' card, but a " +
         "concept-descriptor card needs three parts and a note has two — its name and its body. " +
         "Put the marker on a heading, which supplies the third, or ask for a shape that needs two"
-    case SpecError.ClozeWithoutDeletions(p)  => s"cloze section with no ==highlight== at '$p'"
+    // THE MESSAGE NAMES `==<<…>>==`, NOT `==…==`, SINCE 2026-08-28. A plain highlight is no
+    // longer a cloze, so telling an author their section has "no ==highlight==" would send
+    // somebody who wrote plenty of them looking for the ones they can see.
+    case SpecError.ClozeWithoutDeletions(p) =>
+      s"cloze section with no ==<<highlight>>== at '$p' — a bare ==highlight== is emphasis now"
     case SpecError.AmbiguousClozeDeletion(p, t) =>
-      s"two unlabelled '==$t==' highlights at '$p' cannot be told apart — label them, e.g. ==1|$t=="
+      s"two unlabelled '==<<$t>>==' highlights at '$p' cannot be told apart — label them, " +
+        s"e.g. ==<<1|$t>>=="
     case SpecError.TableWithoutTable(p)      => s"table marker with no table at '$p'"
     case SpecError.TableWithoutDescriptors(p, what) =>
       s"table at '$p' yields no cards: $what"

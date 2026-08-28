@@ -284,7 +284,7 @@ object Html:
     * string.
     */
   enum Tag:
-    case P, Ul, Ol, Li, Table, Thead, Tbody, Tr, Th, Td, Pre, Code, Em, Strong
+    case P, Ul, Ol, Li, Table, Thead, Tbody, Tr, Th, Td, Pre, Code, Em, Strong, Mark
 
   /** THE ONLY PLACE A TAG NAME IS A STRING IN THIS PROJECT. */
   private def name(t: Tag): String = t match
@@ -302,6 +302,7 @@ object Html:
     case Tag.Code   => "code"
     case Tag.Em     => "em"
     case Tag.Strong => "strong"
+    case Tag.Mark   => "mark"
 
   val empty: Fragment = ""
 
@@ -596,6 +597,17 @@ object AsHtml:
     case Inline.Emphasis(content) =>
       val inner = inlines(content, deletion)
       if inner.isEmpty then Html.empty else Html.element(Html.Tag.Em, inner)
+
+    // A HIGHLIGHT THAT IS NOT A CLOZE — `==text==` since 2026-08-28, when `==<<text>>==`
+    // became the cloze. `<mark>` is what Obsidian itself renders a highlight as, so a note
+    // reads on a card the way it reads in the editor.
+    //
+    // RULE 1 APPLIES HERE TOO, and for the reason given above rather than by imitation: an
+    // empty `<mark></mark>` is non-empty output built from empty content, which is exactly
+    // what ruled refusal B6 is decided against.
+    case Inline.Highlight(content) =>
+      val inner = inlines(content, deletion)
+      if inner.isEmpty then Html.empty else Html.element(Html.Tag.Mark, inner)
 
     case Inline.Strong(content) =>
       val inner = inlines(content, deletion)
