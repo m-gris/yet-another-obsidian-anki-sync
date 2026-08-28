@@ -392,6 +392,37 @@ object Extractor:
     for
       lowered <- bodyBlocks(where, ownBody(section))
 
+      // ── WHICH BLOCKS THIS CARD IS MADE OF, CHOSEN BEFORE ANYTHING RENDERS THEM ──────
+      //
+      // FOR EVERY MARKER BUT ONE THIS IS THE HEADING'S OWN BODY, and `blocks` is `lowered`.
+      // `#flashcard/sequence/headers` is the exception: it asks for STRUCTURE, and RULED BY
+      // MARC 2026-08-28 prose is not structure, so its card is the OUTLINE ALONE rather than
+      // the outline added to the body. A lead-in sentence under such a heading is note
+      // content that belongs to a different card — the two-field markers already make cards
+      // out of a heading and its prose — not material for this one.
+      //
+      // IT HAPPENS HERE, ABOVE THE B6 GATE, AND THAT POSITION IS THE WHOLE POINT. A heading
+      // whose content is entirely subheadings has an EMPTY own-body, which is the ORDINARY
+      // shape of this marker rather than an edge case. Had the choice been made in the marker
+      // match below, two things would already have gone wrong: B6 would have refused the card
+      // as an empty body, and — worse — `body` is bound between here and there with a
+      // `sys.error` fallback whose argument for being unreachable ASSUMES B6 refused first.
+      // Reaching that arm with an empty body would have CRASHED rather than refused. Choosing
+      // the blocks first means no gate is weakened and no fallback is undermined: the card
+      // genuinely has content, and every rule below judges it on the content it has.
+      //
+      // THE REFUSAL FOR "NO SUBHEADINGS" IS A PARSE, NOT A CHECK. `Outline.read` is total and
+      // an empty result is a legitimate answer from it; turning that into a `NonEmptyVector`
+      // here is the single place emptiness is decided, and `Outline.render` cannot be asked
+      // the question afterwards because it does not accept the empty case.
+      blocks <- marker match
+        case Marker.Sequence(SequenceSource.ChildHeadings(reach)) =>
+          NonEmptyVector
+            .fromVector(Outline.read(section, reach))
+            .toRight(SpecError.SequenceWithoutItems(where, "the heading has no subheadings"))
+            .map(nodes => Vector(Outline.render(nodes)))
+        case _ => Right(lowered)
+
       // ── THE RULE, AND THEN THE INVARIANT. TWO BINDINGS, IN THIS ORDER. ────────────────
       //
       // BOTH RENDERINGS ARE COMPUTED AHEAD OF THE MARKER MATCH, AND BOTH ARE DISCARDED ON THE
@@ -399,7 +430,7 @@ object Extractor:
       // of the cloze branch, so a cloze section whose body renders to nothing is reported as
       // an empty body rather than as a cloze section with no highlight. Moving either below
       // the marker match changes which error an author reads.
-      text = C.AsText.plain(lowered)
+      text = C.AsText.plain(blocks)
 
       // B6 GATES ON THE PLAIN TEXT, NEVER ON THE HTML — and the reason is this codebase's own,
       // written at `CellDisplay` above `Tables.scala`'s object: A RENDERER CAN NEITHER MINT NOR
@@ -416,7 +447,7 @@ object Extractor:
       // text" is what pins this; no `dummy-vault` note contains that body.
       _ <- Body.fromExtracted(text).toRight(SpecError.EmptyBody(where))
 
-      html = C.AsHtml.plain(lowered).render
+      html = C.AsHtml.plain(blocks).render
 
       // AN ASSERTION, NOT A SECOND REFUSAL, AND NOT CLAIMED UNREACHABLE.
       //
@@ -545,6 +576,11 @@ object Extractor:
           Cloze
             // NOTHING EXCLUDED. A cloze note's fields are its text and its extra — the marked
             // heading is not among them, so the whole location survives, this heading included.
+            // `lowered` AND NOT `blocks`, ON PURPOSE. They are equal for every marker
+            // except the heading-sourced sequence, so this reads as an arbitrary choice and
+            // is not: a cloze card is about the author's PROSE. Pinning it to the body means
+            // a marker added later that redefines `blocks` cannot silently change what a
+            // cloze card is made of.
             .fromLowered(key, lowered, CardContext.compose(location, Vector.empty))
             .map(c => Vector(c -> RowSource.heading))
 
@@ -579,10 +615,7 @@ object Extractor:
         // current bindings would crash rather than refuse. The blocks a card renders from must
         // therefore be chosen BEFORE that gate, which is a change to the shared pipeline rather
         // than to any one arm.
-        case Marker.Sequence(SequenceSource.ChildHeadings(reach)) =>
-          ???
-
-        case Marker.Sequence(SequenceSource.BodyList) =>
+        case Marker.Sequence(source) =>
           // ── THE REFUSAL, AND THE ONE PLACE IN THIS PROJECT THAT GATES ON A RENDERER ──────
           //
           // TWO PARTS TO THE PREDICATE, and the second is an EXTENSION of the ruling rather
@@ -635,12 +668,30 @@ object Extractor:
           // per-item cards at deeper keys, and "one card per list item" is the obvious thing a
           // future reader proposes, that hazard reappears verbatim on the marker whose refusal
           // fires most often.
-          val items     = sequenceItems(lowered)
+          // ONE ARM FOR BOTH SOURCES, WHICH IS THE CLAIM THIS FEATURE WAS BUILT ON. By the
+          // time control reaches here the difference between them has already been spent:
+          // `blocks` holds either the body's list or the outline, and everything from this
+          // point — the refusal, the rendering, the note type, the fields — is the same code
+          // it always was. If this ever needs to branch on `source` for anything but a
+          // sentence, "a new source, not a new card" has stopped being true.
+          val items     = sequenceItems(blocks)
           val surviving = items.filter(item => !C.AsHtml.plain(item.blocks).isEmpty)
           if surviving.isEmpty then
             val what =
-              if items.isEmpty then s"the body holds no list — it holds ${describeBlocks(lowered)}"
-              else s"the body's list has ${items.size} items and every one of them renders empty"
+              // NAMED FOR THE SOURCE THE AUTHOR ACTUALLY WROTE. A reader who marked a
+              // heading for its subheadings is not helped by a sentence about "the body's
+              // list", and the fix each one needs is different.
+              source match
+                case SequenceSource.BodyList =>
+                  if items.isEmpty then s"the body holds no list — it holds ${describeBlocks(blocks)}"
+                  else s"the body's list has ${items.size} items and every one of them renders empty"
+                // The no-subheadings case never reaches here — it is refused above, where the
+                // blocks are chosen. What DOES reach here is subtler and real: every subheading
+                // was marker-only, so each title is empty once the marker is stripped and the
+                // renderer drops every item.
+                case SequenceSource.ChildHeadings(_) =>
+                  s"the heading has ${items.size} subheadings and every one of them is empty " +
+                    "once its marker is removed"
             Left(SpecError.SequenceWithoutItems(where, what))
           else
             // THE TITLE IS ESCAPED IN THE ARGUMENT POSITION AND NOWHERE UPSTREAM — see the

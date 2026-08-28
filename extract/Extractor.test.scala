@@ -1212,6 +1212,180 @@ class ExtractorTest extends munit.FunSuite:
     assert(!reason.contains("no list"), s"the sequence check ran ahead of B6: $reason")
   }
 
+  // ============================== S12b: a sequence sourced from SUBHEADINGS ====
+  //
+  // `#flashcard/sequence/headers` makes the STRUCTURE of a document the thing recalled. The
+  // expected HTML below is a PREDICTION read off `content/AsHtml.scala:558-561` rather than a
+  // transcription of what the code produced: an item holding exactly one paragraph renders as
+  // `<li>text</li>` with no `<p>`, and an item holding a paragraph AND a nested list takes the
+  // general arm, so its own text keeps its `<p>` wrapper.
+
+  /** THE PROSE IS ABSENT, AND THAT IS THE ASSERTION THAT MATTERS.
+    *
+    * RULED BY MARC 2026-08-28: this marker asks for structure, and prose is not structure, so
+    * the card is the outline ALONE. This is the opposite of `#flashcard/sequence`, two tests
+    * above, where a lead-in paragraph becomes the question side — there the author wrote the
+    * list in order to be a card, so the body IS the card's material.
+    */
+  test("a heading's subheadings become one Cloze Sequence note, and its prose is not on the card") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence/headers
+         |
+         |From the body to the lungs:
+         |
+         |### superior vena cava
+         |
+         |### right atrium
+         |""".stripMargin
+    )
+    assertEquals(note.failures, Vector.empty)
+    assertEquals(paths(note), Vector("b / path of blood"))
+    val spec = specFor(note, "b / path of blood").spec
+    assertEquals(spec.noteTypeName, Marker.NoteTypes.ClozeSequence)
+    assertEquals(
+      spec.fields,
+      Vector(
+        "Title"   -> "Path of blood",
+        "Text"    -> "<ul><li>superior vena cava</li><li>right atrium</li></ul>",
+        "Context" -> "Note › B",
+      ),
+    )
+  }
+
+  /** THE MARKED HEADING'S OWN BODY IS NOT MERELY DEPRIORITISED, IT IS ABSENT. Asserted
+    * separately from the field comparison above because a future change that appended the
+    * outline to the body would still produce a card, and only this says it must not.
+    */
+  test("prose under a subheading-sourced heading reaches no field of the card") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence/headers
+         |
+         |A sentence that must not appear anywhere.
+         |
+         |### superior vena cava
+         |""".stripMargin
+    )
+    val spec = specFor(note, "b / path of blood").spec
+    assert(
+      !spec.fields.exists((_, v) => v.contains("must not appear")),
+      s"the heading's prose reached the card: ${spec.fields}",
+    )
+  }
+
+  test("the recursive form nests the whole subtree") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence/headers/recursive
+         |
+         |### Heart
+         |
+         |#### Left
+         |
+         |#### Right
+         |
+         |### Lungs
+         |""".stripMargin
+    )
+    assertEquals(note.failures, Vector.empty)
+    assertEquals(
+      specFor(note, "b / path of blood").spec.fields.toMap.apply("Text"),
+      "<ul><li><p>Heart</p><ul><li>Left</li><li>Right</li></ul></li><li>Lungs</li></ul>",
+    )
+  }
+
+  /** DIRECT MEANS DIRECT — the same document, without `/recursive`, keeps only one level. The
+    * two are asserted over IDENTICAL markdown so the difference can only be the marker.
+    */
+  test("without /recursive the same document yields only the direct children") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence/headers
+         |
+         |### Heart
+         |
+         |#### Left
+         |
+         |#### Right
+         |
+         |### Lungs
+         |""".stripMargin
+    )
+    assertEquals(note.failures, Vector.empty)
+    assertEquals(
+      specFor(note, "b / path of blood").spec.fields.toMap.apply("Text"),
+      "<ul><li>Heart</li><li>Lungs</li></ul>",
+    )
+  }
+
+  /** THE REFUSAL, AND WHY IT IS THIS ERROR RATHER THAN A NEW ONE.
+    *
+    * RULED BY MARC 2026-08-28, on the principle that the failure belongs to the SEQUENCE CARD'S
+    * OWN PRECONDITION — a card that reveals items needs at least one — and not to the place the
+    * items were supposed to come from. The source contributes only the diagnosis. That is the
+    * shape `SequenceWithoutItems` already had: a heading path plus a phrase naming what is
+    * there instead, documented as covering two situations. This is the third.
+    *
+    * IT MUST NOT REPORT AN EMPTY BODY. B6 refuses a heading with no prose of its own, and this
+    * heading HAS none — that is the ordinary shape of this marker. The blocks are chosen above
+    * that gate precisely so the author reads the actionable sentence instead.
+    */
+  test("a subheading-sourced marker with NO subheadings is refused, and not as an empty body") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence/headers
+         |
+         |Prose, but not a single subheading.
+         |""".stripMargin
+    )
+    assertEquals(note.specs, Vector.empty, s"a card was built with no subheadings: ${note.specs}")
+    val reason = refusalReasons(note)
+    assert(reason.contains("no subheadings"), s"the refusal does not say what is missing: $reason")
+    assert(
+      !reason.contains("empty body"),
+      s"reported as an empty body, which is this marker's NORMAL shape and sends the author " +
+        s"off to write prose that would not help: $reason",
+    )
+  }
+
+  /** THE CASE THAT SURVIVES THE PARSE AND STILL HAS NOTHING TO SHOW. Every subheading here is
+    * marker-only, so each title is empty once the marker is stripped and the renderer drops
+    * every item — the same silent-success shape the body-list form already guards against.
+    */
+  test("subheadings that are all marker-only are refused rather than shipped as an empty list") {
+    val note = extract(
+      """|# B
+         |
+         |x
+         |
+         |## Path of blood #flashcard/sequence/headers
+         |
+         |### #flashcard/2way
+         |""".stripMargin
+    )
+    assertEquals(
+      note.specs.filter(_.spec.noteTypeName == Marker.NoteTypes.ClozeSequence),
+      Vector.empty,
+      s"a sequence card whose Text holds no list item was emitted: ${note.specs}",
+    )
+  }
+
   // ================== what a card asks for, insofar as its location could name it ====
 
   /** ==Why only two shapes appear below==
