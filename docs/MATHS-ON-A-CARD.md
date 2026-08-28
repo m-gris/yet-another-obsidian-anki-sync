@@ -147,6 +147,29 @@ is the fragile spelling and `aligned` the robust one. If that distinction holds 
 MathJax, the tool would have to rewrite the environment name and not merely swap delimiters —
 which is precisely what the paragraph above claims is unnecessary. One card settles it.
 
+**BRACES ARE ALREADY ESCAPED, AND MATHS WOULD BE THE FIRST CONTENT THAT IS FULL OF THEM.**
+`Html.escape` maps `{` to `&#123;` and `}` to `&#125;` across all author text, so that a brace
+somebody typed can never be read as Anki's cloze syntax. `content/AsHtml.scala` argues that
+choice at length, and two of the facts it rests on are measurements maths would invalidate: that
+the `dummy-vault` notes contain ZERO braces, and that the golden file's only brace-bearing lines
+are the tool's own `{{cN::` wrappers. TeX is brace-dense — `\text{Id}`, `\frac{a}{b}`,
+`\begin{align}` — so the day maths ships, a brace-bearing field stops being the exception.
+
+That does not make escaping wrong. It makes it load-bearing somewhere new, and it settles
+something the placement table above leaves open: **the TeX must be emitted through `Html.escape`
+like any other text, never raw.** The same file names a hazard that is live at HEAD, where the
+cloze wrapper is interpolated around its inner text without inspecting it, so an inner text
+containing `}}` produces a field holding two `}}` sequences where the tool means one — an
+ambiguous field with no error raised anywhere. `\frac{\text{a}}{b}` contains `}}`. Escaping is
+what keeps that unreachable, and a raw-emitting maths node would walk straight into it.
+
+**Raw in, escaped out, delimiters last** — and the apparent contradiction with the placement
+table is not one, because the two demands sit at opposite ends of the pipeline. CAPTURE must be
+raw so the inline parsers never run on the TeX; that is what saves `\\` and the subscripts.
+EMISSION must be escaped so the cloze scanner never meets a brace the author wrote. The
+delimiters go on last, after escaping, which is the order `Html.clozeDeletion` already uses and
+the reason a `<` inside a deletion cannot break it.
+
 ---
 
 ## What is decided, and what is not
@@ -197,6 +220,14 @@ which is precisely what the paragraph above claims is unnecessary. One card sett
   required.** This is the only candidate found so far for a translation of the TeX BODY rather than
   of its delimiters, and it decides whether "delimiters only" survives as the shape of the feature.
   One hand-made card.
+- **Whether MathJax typesets TeX whose braces arrived as `&#123;` and `&#125;`.** It should: a
+  browser decodes character references while parsing the field's HTML, so MathJax reads the
+  decoded text and `content/AsHtml.scala` already argues that post-decoding the emitted field is
+  character-for-character what pass-through would have produced. But that argument was made about
+  DISPLAY of ordinary prose, where a stray brace is a glyph, and here a brace is grammar — a
+  wrong one silently changes what the TeX means rather than how it looks. It sits beside the
+  question that file leaves open for the same reason, that neither can be settled without
+  contacting a live collection. The same hand-made card answers both.
 
 ---
 
