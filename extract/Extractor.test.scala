@@ -1368,6 +1368,77 @@ class ExtractorTest extends munit.FunSuite:
     * marker-only, so each title is empty once the marker is stripped and the renderer drops
     * every item — the same silent-success shape the body-list form already guards against.
     */
+  /** THE WHOLE-NOTE ROUTE, WHICH IS THE ONE MARC REACHED FOR FIRST.
+    *
+    * A marker may be written in the note's frontmatter `tags:` instead of on a heading, and it
+    * then applies to the WHOLE NOTE — the file name becomes the title. For this marker that is
+    * arguably the most natural use of all: *learn the structure of this note*, whose items are
+    * its top-level headings.
+    *
+    * IT WORKS FOR A REASON WORTH PINNING RATHER THAN REDISCOVERING. `fromWholeNote` builds a
+    * SYNTHETIC section whose content is the whole document, precisely so that every marker is
+    * built by the same code that builds it for a heading. So the outline reads that synthetic
+    * section's children, which are the note's top-level headings. Nothing was added for this;
+    * the test exists because "it follows from the design" is exactly the claim that quietly
+    * stops being true.
+    *
+    * FOUND BY USE, 2026-08-28. Marc wrote the marker into frontmatter, synced, and no note
+    * appeared — for two reasons that were NOT this one: the tag read `flashard`, a typo that
+    * both the marker filter and the did-you-mean check miss because both look for the string
+    * `flashcard`; and the installed executable predated the feature.
+    */
+  test("a whole-note marker in frontmatter makes a card from the note's top-level headings") {
+    val root = ObsidianSyntax.markupParser
+      .parse("""|# A
+                |## A.1
+                |## A.2
+                |# B
+                |## B.1
+                |""".stripMargin)
+      .fold(e => fail(s"parse: $e"), _.content)
+
+    val note = Extractor.fromWholeNote(
+      NoteId.fromFrontmatter("2ac356b7").fold(e => fail(s"note id: $e"), identity),
+      "Outline Learning",
+      "Outline Learning.md",
+      Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.DirectChildren)),
+      root,
+      7,
+    )
+
+    assertEquals(note.failures, Vector.empty)
+    assertEquals(note.specs.size, 1)
+    val fields = note.specs.head.spec.fields.toMap
+    assertEquals(fields("Title"), "Outline Learning")
+    assertEquals(fields("Text"), "<ul><li>A</li><li>B</li></ul>")
+  }
+
+  test("a whole-note recursive marker reaches every level of the note") {
+    val root = ObsidianSyntax.markupParser
+      .parse("""|# A
+                |## A.1
+                |## A.2
+                |# B
+                |## B.1
+                |""".stripMargin)
+      .fold(e => fail(s"parse: $e"), _.content)
+
+    val note = Extractor.fromWholeNote(
+      NoteId.fromFrontmatter("2ac356b7").fold(e => fail(s"note id: $e"), identity),
+      "Outline Learning",
+      "Outline Learning.md",
+      Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree)),
+      root,
+      7,
+    )
+
+    assertEquals(note.failures, Vector.empty)
+    assertEquals(
+      note.specs.head.spec.fields.toMap.apply("Text"),
+      "<ul><li><p>A</p><ul><li>A.1</li><li>A.2</li></ul></li><li><p>B</p><ul><li>B.1</li></ul></li></ul>",
+    )
+  }
+
   test("subheadings that are all marker-only are refused rather than shipped as an empty list") {
     val note = extract(
       """|# B
