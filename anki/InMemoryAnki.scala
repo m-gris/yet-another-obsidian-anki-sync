@@ -78,27 +78,34 @@ final class InMemoryAnki private (
 
   /** How many cards a note of this type generates.
     *
-    * Enough fidelity to make the card/note impedance real: a reversed note has two cards, a
-    * three-field note two or three depending on whether the conditional switch is set.
+    * ANSWERED FROM THE NOTE TYPE'S SPEC, NEVER FROM ITS NAME, since 2026-08-28 — `IN-FLIGHT.md`
+    * item 31. The rule itself lives in [[CardGeneration]], where it is tested against this
+    * repository's real templates rather than only through this fake.
     *
-    * MATCHED THROUGH `Marker` RATHER THAN AGAINST STRING LITERALS, since 2026-08-21, and the
-    * change is not cosmetic. This function used to name `"Basic (and reversed card)"` and
-    * `"3 way Concept-Descriptor"` as literals — a third, undeclared copy of a contract
-    * `model/Marker.scala` already states. When the tool's note types were renamed to its own
-    * `Obsidian *` names, those two arms would have stopped matching and fallen through to
-    * `case _ => 1`, so the fake would have claimed SILENTLY, with every test still green, that
-    * a reversed note has one card. `defaultNoteTypes` below would at least have failed loudly.
-    * A `match` on `String` cannot be made exhaustive, so the protection is the reference
-    * itself, not the shape of the match.
+    * WHAT IT USED TO DO, kept visible because the failure shape is the lesson. It matched on the
+    * note type's NAME: reversed gave two, concept-descriptor gave two or three by its gate
+    * field, and **everything else gave one**. So a note type a test had just defined with three
+    * templates produced a note with ONE card, silently, and any assertion about that note's
+    * cards measured something other than what it appeared to. Not hypothetical: a test on
+    * 2026-08-28 was quietly re-pointed at a named note type to work around exactly this.
+    *
+    * WHY IT MATTERED MORE THAN TIDINESS. The feature that prices a note-type change — "this
+    * destroys N cards holding M reviews, approve it by name" — is ABOUT card counts, and it is
+    * verified against this fake. A double that is wrong about card counts cannot validate the
+    * one feature whose job is counting cards before review history is spent.
+    *
+    * AN UNKNOWN NOTE TYPE IS AN ERROR HERE, NOT A ONE. `addNote` has already refused an unknown
+    * note type before reaching this point, so arriving without a spec would mean the fake had
+    * contradicted itself. Returning a plausible number instead is precisely how the previous
+    * version stayed wrong for a week.
     */
   private def cardCountOf(noteType: String, fields: Vector[(String, String)]): Int =
-    val byName = fields.toMap
-    noteType match
-      case Marker.NoteTypes.BasicAndReversed => 2
-      case Marker.NoteTypes.ConceptDescriptor =>
-        if byName.get(Marker.ThreeWayField).exists(_.nonEmpty) then 3 else 2
-      case Marker.NoteTypes.Cloze => 1
-      case _                      => 1
+    noteTypes
+      .get(noteType)
+      .map(spec => CardGeneration.cardCount(spec, fields))
+      .getOrElse(
+        sys.error(s"the fake was asked for the card count of an unknown note type '$noteType'")
+      )
 
   // ------------------------------------------------------------------ queries ----
 

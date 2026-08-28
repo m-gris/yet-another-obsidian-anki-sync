@@ -325,11 +325,12 @@ class RetypingTest extends munit.FunSuite:
     // THE CONCEPT-DESCRIPTOR TYPE WITH ITS GATE FIELD SET, which is Marc's own case from
     // 2026-08-27 — three cards, then the marker turned down to a two-card shape.
     //
-    // NOT `stockWide`, THOUGH IT DECLARES THREE TEMPLATES. `InMemoryAnki.cardCountOf` decides a
-    // note's card count from the note type's NAME rather than from the spec it was given, so a
-    // locally-defined three-template type yields ONE card here. That is a fidelity gap in the
-    // fake rather than something this test should work around, and it is why the note type is
-    // named rather than constructed.
+    // THE NAMED TYPE IS NOW A CHOICE RATHER THAN A WORKAROUND. Until 2026-08-28 it was forced:
+    // the fake decided a note's card count from the note type's NAME, so `stockWide` — three
+    // templates, defined right here in this file — yielded ONE card and this test could not be
+    // written against it. That gap is closed (`IN-FLIGHT.md` item 31), and the test directly
+    // below proves it. This one keeps the named type deliberately, because it is Marc's own
+    // case from 2026-08-27 and reads as such.
     val anki = collectionWith()
     val note = seedOnOldType(
       anki,
@@ -360,6 +361,38 @@ class RetypingTest extends munit.FunSuite:
       Vector(1, 2),
       "the surviving card is the one at ordinal 0, so the doomed ones are 1 and 2",
     )
+  }
+
+  /** THE SAME PRICE, OVER A NOTE TYPE DEFINED IN THIS FILE — which could not be written before
+    * 2026-08-28 and is the reason `IN-FLIGHT.md` item 31 mattered.
+    *
+    * `stockWide` declares three templates, all ungated. The fake used to answer ONE for it,
+    * because it read the note type's NAME and fell through to a default for anything it did not
+    * recognise. So a test constructing its own multi-template note type and asserting about its
+    * cards was quietly measuring a one-card note, and the test above had to be pointed at a
+    * named type to say anything true.
+    *
+    * IT IS THE PRICING PATH THAT MAKES THIS WORTH A TEST OF ITS OWN. The feature that tells an
+    * author "this destroys N cards holding M reviews" is verified against this fake; a fake that
+    * undercounted cards would have agreed with an undercounted price, and the disagreement would
+    * have shown up only against a real collection, spending real review history.
+    */
+  test("a note type defined in this file is priced from its templates, not from its name") {
+    val anki = collectionWith(stockWide)
+    val note = seedOnOldType(anki, stockWide.name, k, Vector("Front" -> "q", "Back" -> "a"))
+
+    val cards = anki.cardsOf(Vector(note)).fold(e => fail(s"cardsOf: $e"), identity)
+    assertEquals(cards.size, 3, "three ungated templates should give three cards")
+
+    anki.recordReviews(cards(1), 7)
+    anki.recordReviews(cards(2), 2)
+
+    val price = Retyping
+      .priceOf(anki, note, RetypeDestroysCards(stockWide.name, 3, "Obsidian Basic", 1))
+      .fold(e => fail(s"priceOf: $e"), identity)
+
+    assertEquals(price.cards, 2)
+    assertEquals(price.reviews, 9, "the reviews of the two doomed cards, and not of the survivor")
   }
 
   // -------------------------------------- what the run is waiting on ----
