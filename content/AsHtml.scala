@@ -45,10 +45,15 @@ package obsidiananki.content
  * and does not claim to. Recovering it costs a `Content` constructor plus a `Lower` case — a
  * different slice.
  *
- * Nothing outside `content/` calls this yet, which is why `extract/golden/fixture-cards.txt`
- * cannot move in this slice: not because anyone was careful, but because no production call
- * site reaches this code. The golden moves when a later slice wires it in, deliberately and as
- * a diff a human reads.
+ * `extract/Extractor.scala` and `extract/Cloze.scala` both reach this file, so what it renders
+ * is what an Anki field holds. `extract/Tables.scala` reaches its `Html` type as well, for cell
+ * escaping.
+ *
+ * THIS HEADER USED TO SAY that nothing outside `content/` called it, and that
+ * `extract/golden/fixture-cards.txt` therefore could not move. The wiring landed and the golden
+ * moved with it. The golden is now this file's regression net rather than evidence that it is
+ * safely inert — which is the opposite standing, and worth reading carefully before changing
+ * anything below.
  *
  * THE SHAPE MIRRORS `AsText` ON PURPOSE — `Plain`, `html`/`text`, `plain`, and the same private
  * `block`/`item`/`inline` spine. A reader is expected to put the two files side by side, and

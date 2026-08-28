@@ -6,14 +6,19 @@ import laika.ast
 import obsidiananki.parser.ObsidianSyntax
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════
- * S8 ADDS. S9 REPLACES.
+ * THE SWAP HAPPENED. THIS IS THE ONE LOWERING, AND IT IS WIRED.
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
- * NOTHING IN THIS FILE IS WIRED TO PRODUCTION. `extract/Extractor.scala`, `extract/Cloze.scala`
- * and `extract/Tables.scala` still run their own hand-written walks and are untouched. The one
- * lowering below exists BESIDE them, proved equivalent by a differential test, and the swap is
- * S9's work. That is why `extract/golden/fixture-cards.txt` cannot move in this slice: not
- * because anyone was careful, but because no production call site reaches this code.
+ * `extract/Extractor.scala` calls `Lower.blocks` — search for `C.Lower.blocks` — so every card
+ * this tool produces passes through here. The renderers over its output are called from there
+ * and from `extract/Cloze.scala`; `extract/Tables.scala` reaches this package for its `Html`
+ * type rather than for the lowering.
+ *
+ * THIS HEADER USED TO SAY THE OPPOSITE — that nothing in the file was wired, that the
+ * hand-written walks still ran beside it, and that `extract/golden/fixture-cards.txt` therefore
+ * could not move. That was true when it was written and stopped being true when the swap
+ * landed. A comment asserting that its own code is dead is the most expensive kind to leave
+ * stale, because it invites a reader to change something they believe nothing depends on.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  * NAMING INSIDE THIS PACKAGE — §(J) OF `Content.scala` IS NOT VIOLATED HERE, IT IS INVERTED

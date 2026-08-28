@@ -14,13 +14,17 @@ package obsidiananki.content
  * WHAT THIS IS
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
- * The renderer from the closed algebra back to the string this tool produces TODAY, byte for
- * byte. `plain` reproduces `Extractor.bodyText`'s `Right` branch; `text` with a `{{cN::…}}` hook
- * reproduces `Cloze.renderWithDeletions`. It changes nothing about what Anki receives — that is
- * the whole point of doing it first, so that when HTML, escaping and list markers do land, they
- * land as a VISIBLE diff to `extract/golden/fixture-cards.txt` rather than as a surprise.
+ * The renderer from the closed algebra to this tool's PLAIN-TEXT rendering of a card. `plain`
+ * produces the string a body is gated on; `text`, given a `{{cN::…}}` hook, produces the cloze
+ * rendering. Both are reached from outside this package — `extract/Extractor.scala` calls
+ * `plain`, `extract/Cloze.scala` calls `text`.
  *
- * Nothing outside `content/` calls this yet. S8 ADDS; S9 REPLACES.
+ * THIS HEADER USED TO SAY that nothing outside `content/` called the file yet, and that `plain`
+ * and `text` REPRODUCED `Extractor.bodyText` and `Cloze.renderWithDeletions` byte for byte.
+ * Both statements have expired, and in the way the second one anticipated: the two functions it
+ * named no longer exist as separate walks, having been replaced by calls to this file. So
+ * `extract/golden/fixture-cards.txt` is now this file's regression net rather than evidence
+ * that it is safely inert.
  *
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  * `-Wconf:msg=exhaustive:e` CHECKS THE DOMAIN, NEVER THE CODOMAIN
