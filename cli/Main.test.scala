@@ -738,7 +738,9 @@ class MainTest extends munit.FunSuite:
           Vector(
             NoteTypeProblem.FieldsMissing(
               Marker.NoteTypes.Basic,
-              NonEmptyVector.of(Marker.ContextField, Marker.SameShapeField),
+              // EVERY missing field, not the first two. `Identity` joined the note types on
+              // 2026-08-28, when a card's identity moved out of a tag.
+              NonEmptyVector.of(Marker.ContextField, Marker.SameShapeField, Marker.IdentityField),
             )
           ),
         )

@@ -9,7 +9,8 @@
     "ThreeWay",
     "Context",
     "ConceptLabel",
-    "ValueOnly"
+    "ValueOnly",
+    "Identity"
   ],
   "styling": "styling.css",
   "templates": [

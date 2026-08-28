@@ -252,7 +252,7 @@ object ObsidianSyntax:
     */
   private def stripClozeBrackets(spans: Seq[Span]): Option[Seq[Span]] =
     (spans.headOption, spans.lastOption) match
-      case (Some(Text(first, fo)), Some(Text(last, lo))) if spans.sizeIs == 1 =>
+      case (Some(Text(first, fo)), Some(Text(_, _))) if spans.sizeIs == 1 =>
         // ONE SPAN IS ITS OWN CASE because the head and the last are the SAME span: stripping
         // both ends of it separately would drop `>>` from a value that no longer holds it.
         val t = first

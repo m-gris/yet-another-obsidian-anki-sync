@@ -431,6 +431,32 @@ object Marker:
     * `{{#ThreeWay}}…{{/ThreeWay}}` therefore makes the third direction opt-in without
     * needing a second note type. Setting this field is what `#flashcard/3way/all` does.
     */
+  /** WHERE A CARD'S IDENTITY LIVES — a field on the note, not a tag.
+    *
+    * WHY IT MOVED, RULED BY MARC 2026-08-28. The identity is machine bookkeeping: the string
+    * this tool writes so that the next run can recognise a card it already made. Kept in a tag
+    * it appeared in the author's own Anki sidebar as a branch they never created, with a
+    * subtree under it for every note they own. Tags are a person's organising tool; filling
+    * them with a machine's ledger is squatting.
+    *
+    * IT WAS NOT AN OPTION WHEN THE TOOL STARTED, which is why no earlier decision records it.
+    * The tool wrote to Anki's STOCK note types then and could not add a field to them. Since
+    * the ruling of 2026-08-21 it writes only to note types it owns, so a field costs nothing —
+    * the installer already adds a missing one.
+    *
+    * THE VALUE IS UNCHANGED — BYTE FOR BYTE THE SAME STRING the tag held, `src::…` prefix and
+    * all. That prefix is vestigial in a field and keeping it is deliberate: `TagCodec`'s encode
+    * and decode are a matched, tested pair, and `DecisionHandle` hashes the encoded form, so
+    * changing the string as well would be a second migration riding on the first. This changes
+    * WHERE the identity is stored and nothing about WHAT it is, which is why no card re-keys
+    * and no review history is at risk.
+    *
+    * `orphaned::` STAYS A TAG, and that is not an oversight. It marks a note whose source has
+    * disappeared, which is something an author wants to click in Anki's sidebar. It is a
+    * signal to a person, not a ledger for a machine — the opposite of this field.
+    */
+  val IdentityField: String = "Identity"
+
   val ThreeWayField: String = "ThreeWay"
 
   /** What KIND of thing the Concept is — the first column's header, for a card built from a
@@ -533,7 +559,7 @@ object Marker:
     */
   object FieldOrder:
     val Basic: Vector[String] =
-      Vector(BasicFields.Front, BasicFields.Back, ContextField, SameShapeField)
+      Vector(BasicFields.Front, BasicFields.Back, ContextField, SameShapeField, IdentityField)
 
     /** The same three names as [[Basic]] — see the note at [[BasicFields]] for why the two
       * types deliberately share a field list.
@@ -541,19 +567,21 @@ object Marker:
     val BasicAndReversed: Vector[String] = Basic
 
     val Cloze: Vector[String] =
-      Vector(ClozeFields.Text, ClozeFields.BackExtra, ContextField)
+      Vector(ClozeFields.Text, ClozeFields.BackExtra, ContextField, IdentityField)
 
     // APPENDED AFTER `Context`, WHICH IS FORCED RATHER THAN CHOSEN. Anki's `modelFieldAdd`
     // appends, so a field declared anywhere but last would leave every repaired collection
     // permanently reporting a field-order difference it can never fix. The same reasoning is
     // written at the concept-descriptor arm of `CardSpec.fields`.
-    val ClozeSequence: Vector[String] = ClozeSequenceFields :+ ContextField :+ RevealField
+    val ClozeSequence: Vector[String] =
+      ClozeSequenceFields :+ ContextField :+ RevealField :+ IdentityField
 
     val ConceptDescriptor: Vector[String] =
       // NEW FIELDS GO LAST, in the order they were introduced: Anki's `modelFieldAdd` appends,
       // so any other position leaves a repaired collection permanently reporting a field-order
       // difference this tool declines to fix.
-      ConceptDescriptorFields :+ ThreeWayField :+ ContextField :+ ConceptLabelField :+ ValueOnlyField
+      ConceptDescriptorFields :+ ThreeWayField :+ ContextField :+ ConceptLabelField :+
+        ValueOnlyField :+ IdentityField
 
     /** Keyed by note type name, so a consumer holding a `CardSpec` can ask
       * `FieldOrder.byNoteType(spec.noteTypeName)`.

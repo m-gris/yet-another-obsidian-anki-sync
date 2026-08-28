@@ -233,7 +233,21 @@ class NoteTypeAssetsTest extends munit.FunSuite:
       val referenced = asset.spec.templates.toVector.flatMap { (_, template) =>
         referencesIn(template.front) ++ referencesIn(template.back)
       }.toSet
-      val unused = asset.spec.fields.toVector.toSet -- referenced
+      // ONE FIELD IS EXEMPT, AND IT IS EXEMPT ON PURPOSE RATHER THAN BY OVERSIGHT.
+      //
+      // `Identity` is the string this tool writes so a later run can recognise a card it
+      // already made. It moved out of a tag and into a field on 2026-08-28 so that the
+      // author's own tag tree stops carrying a machine's ledger. It is not meant to be seen,
+      // so the failure this law exists to catch — a field somebody meant to SHOW and forgot to
+      // wire up — cannot apply to it.
+      //
+      // AND PUTTING IT IN A TEMPLATE WOULD BE ACTIVELY UNSAFE, which is the stronger half of
+      // the argument. Anki generates a card when a template's FRONT renders non-empty, and two
+      // of this tool's templates are wrapped in conditionals on field values precisely to
+      // suppress cards — `{{^ValueOnly}}` and `{{#ThreeWay}}`. A field present on every note
+      // would make an otherwise-empty front non-empty, minting cards nobody asked for.
+      val exempt = Set(obsidiananki.model.Marker.IdentityField)
+      val unused = asset.spec.fields.toVector.toSet -- referenced -- exempt
       assertEquals(
         unused,
         Set.empty[String],

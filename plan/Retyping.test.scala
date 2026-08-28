@@ -1116,6 +1116,11 @@ class RetypingTest extends munit.FunSuite:
         Marker.BasicFields.Back  -> "",
         Marker.ContextField      -> "",
         Marker.SameShapeField    -> "",
+        // BLANKED LIKE THE REST. A move names only the fields it carries, and every field the
+        // destination declares but the move does not name is left EMPTY — including the
+        // identity, which the caller must therefore always name. That is the trap this test
+        // exists to keep visible.
+        Marker.IdentityField     -> "",
       ),
       "the fake did not reproduce the blank-then-fill behaviour, so nothing here would catch it",
     )

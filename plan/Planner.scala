@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath, NewNote, ObservedNote}
-import obsidiananki.model.{CardKey, CardPath, CardSpec, OwnedTag, TagCodec}
+import obsidiananki.model.{CardKey, CardPath, CardSpec, Marker, OwnedTag, TagCodec}
 
 /** Why ONE note could not be placed. A fact about the note, carrying no advice.
   *
@@ -142,12 +142,23 @@ object Planner:
     * modification stamp even when the text is identical, so "a second run changes nothing"
     * cannot be delegated to Anki. Hashes the note type together with the fields IN ORDER,
     * so a field reordering or a note-type change is visible as a difference.
+    *
+    * THE IDENTITY FIELD IS EXCLUDED, AND THAT IS LOAD-BEARING RATHER THAN TIDY. Since
+    * 2026-08-28 a card's identity is a field, so it would otherwise be hashed along with the
+    * content — and every card's identity is different by construction, so no two cards could
+    * ever hash alike. That would silently destroy the recovery this hash exists to enable:
+    * `byRecordedHash` below finds the vault card matching a note WHOSE IDENTITY IS UNREADABLE,
+    * which is precisely the case where the identity cannot contribute to the comparison.
+    *
+    * A CONTENT HASH HASHES CONTENT. Anything that identifies a card rather than describing it
+    * belongs outside.
     */
   def contentHash(spec: CardSpec): String =
     // Fields are joined with a unit-separator control character, which cannot occur in
     // field content. Plain concatenation would let ("ab","c") and ("a","bc") hash alike.
     val sep = "\u001f"
-    val parts = spec.noteTypeName +: spec.fields.flatMap { case (n, v) => Vector(n, v) }
+    val content = spec.fields.filterNot((name, _) => name == Marker.IdentityField)
+    val parts   = spec.noteTypeName +: content.flatMap { case (n, v) => Vector(n, v) }
     val canonical = parts.mkString(sep)
     val digest = java.security.MessageDigest
       .getInstance("SHA-256")
@@ -364,7 +375,20 @@ object Planner:
                   )
                 )
               else
-                val fieldsDiffer = !existing.recordedSha.contains(sha)
+                // AN UNCHANGED HASH IS NOT ENOUGH ON ITS OWN, since 2026-08-28. The identity
+                // moved from a tag into a field and is deliberately NOT hashed (see
+                // [[contentHash]]), so a note written before the move has identical content and
+                // an identical hash while its identity field is still empty. Judging on the
+                // hash alone would skip it forever and the field would never arrive.
+                //
+                // THIS IS THE WHOLE MIGRATION, and it needs no command and no separate pass: a
+                // note lacking the field is written once, on whatever run next reaches it, and
+                // the condition is false ever after. Notes that already carry it are untouched,
+                // so a collection converges and then stays quiet.
+                val identityMissing = !existing.note.fields.exists((name, value) =>
+                  name == Marker.IdentityField && value.nonEmpty
+                )
+                val fieldsDiffer = identityMissing || !existing.recordedSha.contains(sha)
 
                 val changes = Vector(
                   Option.when(fieldsDiffer)(Change.FieldsChanged(sourced.spec.fields, sha)),

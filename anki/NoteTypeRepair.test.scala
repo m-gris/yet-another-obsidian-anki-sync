@@ -43,11 +43,18 @@ class NoteTypeRepairTest extends munit.FunSuite:
   def asInheritedByRename(name: String): NoteTypeSpec =
     val ours = assetNamed(name).spec
     ours.copy(
-      // Both fields this tool derives are stripped, which is what a note type inherited by
+      // EVERY field this tool derives is stripped, which is what a note type inherited by
       // hand-rename actually looks like: it predates them.
+      //
+      // `Identity` JOINED THAT LIST ON 2026-08-28 and had to, not merely for accuracy. Repair
+      // APPENDS a missing field, because Anki's `modelFieldAdd` appends. Leaving `Identity` in
+      // place while stripping the three around it would put the repaired fields AFTER it, in an
+      // order the declaration does not have — so the repair would close every membership
+      // difference and still, correctly, report itself unclean on order.
       fields = NonEmptyVector.fromVectorUnsafe(
         ours.fields.toVector.filterNot(f =>
-          f == Marker.ContextField || f == Marker.ConceptLabelField || f == Marker.ValueOnlyField
+          f == Marker.ContextField || f == Marker.ConceptLabelField ||
+            f == Marker.ValueOnlyField || f == Marker.IdentityField
         )
       ),
       templates = ours.templates.map { (templateName, template) =>
@@ -130,10 +137,16 @@ class NoteTypeRepairTest extends munit.FunSuite:
     val plan = NoteTypeInstaller.planRepair(surveyOf(anki))
 
     val added = plan.actions.collect { case RepairAction.AddField(n, f) if n == ConceptDescriptor => f }
-    // Both derived fields, in DECLARED order — which is also the order Anki will append them.
+    // EVERY derived field, in DECLARED order — which is also the order Anki appends them, and
+    // is why the order matters rather than only the membership.
     assertEquals(
       added,
-      Vector(Marker.ContextField, Marker.ConceptLabelField, Marker.ValueOnlyField),
+      Vector(
+        Marker.ContextField,
+        Marker.ConceptLabelField,
+        Marker.ValueOnlyField,
+        Marker.IdentityField,
+      ),
       s"plan was ${plan.actions.map(_.describe)}",
     )
     assertEquals(plan.refusals, Vector.empty)

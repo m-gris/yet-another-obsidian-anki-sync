@@ -6,7 +6,8 @@
     "Title",
     "Text",
     "Context",
-    "Reveal"
+    "Reveal",
+    "Identity"
   ],
   "styling": "styling.css",
   "templates": [

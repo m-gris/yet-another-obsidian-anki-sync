@@ -1142,6 +1142,8 @@ class ExtractorTest extends munit.FunSuite:
         // above it kept. This read "B" while the breadcrumb was heading-ancestors only.
         "Context" -> "Note › B",
         "Reveal"  -> "",
+        // The card's identity, a field rather than a tag since 2026-08-28.
+        "Identity" -> "src::n1::b/path%20of%20blood",
       ),
     )
   }
@@ -1293,6 +1295,8 @@ class ExtractorTest extends munit.FunSuite:
         "Text"    -> "<ul><li>superior vena cava</li><li>right atrium</li></ul>",
         "Context" -> "Note › B",
         "Reveal"  -> "",
+        // The card's identity, a field rather than a tag since 2026-08-28.
+        "Identity" -> "src::n1::b/path%20of%20blood",
       ),
     )
   }

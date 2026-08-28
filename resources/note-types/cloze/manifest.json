@@ -4,7 +4,8 @@
   "fields": [
     "Text",
     "Back Extra",
-    "Context"
+    "Context",
+    "Identity"
   ],
   "styling": "styling.css",
   "templates": [

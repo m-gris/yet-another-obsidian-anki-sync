@@ -5,7 +5,8 @@
     "Front",
     "Back",
     "Context",
-    "SameShape"
+    "SameShape",
+    "Identity"
   ],
   "styling": "styling.css",
   "templates": [

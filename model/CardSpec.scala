@@ -310,7 +310,21 @@ object CardSpec:
       * field in `{{#Context}}…{{/Context}}`, so an empty value emits no markup at all rather
       * than an empty rule and a margin.
       */
-    def fields: Vector[(String, String)] = spec match
+    /** EVERY FIELD THIS CARD WRITES, INCLUDING ITS IDENTITY.
+      *
+      * THE IDENTITY IS APPENDED ONCE HERE RATHER THAN IN EVERY ARM, and that is the point of
+      * doing it at this level: it cannot be forgotten by a card kind added later, and it cannot
+      * disagree between kinds. It is LAST for the reason every other appended field is last —
+      * Anki's `modelFieldAdd` appends, so a field declared anywhere else leaves a repaired
+      * collection permanently reporting a field-order difference it can never fix.
+      *
+      * IT IS THE SAME STRING THE `src::` TAG HELD. See [[Marker.IdentityField]]: this moved
+      * where the identity is stored, not what it is.
+      */
+    def fields: Vector[(String, String)] =
+      perKindFields :+ (Marker.IdentityField -> TagCodec.encode(spec.key).value)
+
+    private def perKindFields: Vector[(String, String)] = spec match
       case TwoField(_, front, back, _, context) =>
         Vector(
           Marker.BasicFields.Front -> front,
