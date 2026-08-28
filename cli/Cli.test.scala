@@ -662,6 +662,37 @@ class CliTest extends munit.FunSuite:
     assert(screen.contains("note '"), s"the note is not named, so two headings could collide:\n$screen")
   }
 
+  /** A BLOCK THAT REPORTS A DECISION MUST CARRY THE MEANS OF MAKING IT.
+    *
+    * THIS IS A REGRESSION TEST FOR A REAL GAP. Between 2026-08-27 and 2026-08-28 this block
+    * printed neither the name nor the command — correctly at first, because `--approve` did not
+    * exist and advertising a command that does not work is worse than silence. The command then
+    * landed and this block was not revisited. For a few hours the tool reported changes waiting
+    * on an answer, told the reader answering was impossible, and withheld the one string needed
+    * to answer: a dead end wearing the shape of a question.
+    */
+  test("what the run is waiting on carries the name and the command needed to answer it") {
+    val screen = waitingScreen(
+      RetypePrice(Vector(CardStanding(AnkiCardId(11L), 1, 4))),
+      RetypeDestroysCards(Marker.NoteTypes.ConceptDescriptor, 3, "Obsidian Basic", 2),
+    )
+    val expected = DecisionHandle.of(retypeOf("Reads", "A", "B").key).value
+
+    assert(
+      screen.contains(expected),
+      s"the name to type is missing, so nothing here can be acted on:\n$screen",
+    )
+    assert(screen.contains("--approve"), s"the command that takes the name is missing:\n$screen")
+    assert(
+      screen.contains(s"--approve $expected"),
+      s"the example must be copyable, with a real name rather than a placeholder:\n$screen",
+    )
+    assert(
+      !screen.contains("no way to approve") && !screen.contains("NOT BUILT"),
+      s"the block still claims answering is impossible, which it no longer is:\n$screen",
+    )
+  }
+
   test("a run with nothing waiting says nothing at all") {
     assertEquals(Report.waitingOnYou(Vector.empty), Vector.empty)
   }

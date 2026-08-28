@@ -413,11 +413,13 @@ object Report:
     * could do; what nobody can see without asking the collection is how much review history
     * sits on the cards that would go, and when they actually go. Both are printed.
     *
-    * NO HANDLE AND NO COMMAND YET, DELIBERATELY. The name to answer with exists
-    * ([[obsidiananki.plan.DecisionHandle]]) and the command that would take it does not, so
-    * printing either would be an instruction that does not work. The block says plainly that
-    * answering from this tool is unbuilt and names what to do instead — see `IN-FLIGHT.md`
-    * item 29, where the handle joins these lines once the command lands.
+    * IT PRINTS THE NAME TO ANSWER WITH, AND THE COMMAND THAT TAKES IT. Between 2026-08-27 and
+    * 2026-08-28 it printed neither, because `--approve` did not exist and advertising a command
+    * that does not work is worse than saying nothing. The command then landed and this block was
+    * not revisited — so for a few hours the tool reported changes waiting on an answer, told the
+    * reader that answering was impossible, and withheld the one string needed to answer. **A
+    * block that reports a decision MUST carry the means of making it; otherwise it is a dead
+    * end wearing the shape of a question.**
     */
   def waitingOnYou(pending: Vector[PendingRetype], wouldBe: Boolean = false): Vector[String] =
     if pending.isEmpty then Vector.empty
@@ -427,15 +429,20 @@ object Report:
         val reviews = quantify(p.price.reviews, "review")
         Vector(
           "",
-          // BOTH HALVES OF THE IDENTITY, as the failure block already prints. `path.render`
-          // joins heading segments only and is file-independent, so two notes sharing a heading
-          // would otherwise produce two identical lines — and Marc's vault holds exactly that:
-          // two notes whose card path is `definition`, measured 2026-08-27.
-          s"  '${p.retype.key.path.render}' (note '${p.retype.key.noteId.value}')",
-          s"      the vault asks for '${p.loss.to}', which makes ${p.loss.toCount} card(s);",
+          // THE NAME FIRST, because it is the part that gets typed. Then both halves of the
+          // identity, as the failure block already prints: `path.render` joins heading segments
+          // only and is file-independent, so two notes sharing a heading would otherwise produce
+          // two identical lines — and Marc's vault holds exactly that, two notes whose card path
+          // is `definition`, measured 2026-08-27.
+          s"  [${p.handle.value}]  '${p.retype.key.path.render}' (note '${p.retype.key.noteId.value}')",
+          s"      the vault asks for '${p.loss.to}', which makes ${quantify(p.loss.toCount, "card")};",
           s"      Anki holds ${p.loss.fromCount} for this note on '${p.loss.from}'.",
-          s"      going ahead destroys $cards, holding $reviews between them.",
-          "      they go the next time you run Anki's Tools > Check Database, not at once.",
+          // "between them" ONLY WHEN THERE ARE SEVERAL. One card holding reviews does not hold
+          // them between anything, and this line is read by a person rather than parsed.
+          s"      going ahead destroys $cards, holding $reviews" +
+            (if p.price.cards > 1 then " between them." else "."),
+          s"      ${if p.price.cards > 1 then "they go" else "it goes"} the next time you run " +
+            "Anki's Tools > Check Database, not at once.",
         )
       }
 
@@ -455,17 +462,22 @@ object Report:
           else "Nothing was changed for these, and nothing about them failed —",
           "this tool will not destroy a card without being asked.",
           "",
-          // NO INTERNAL REFERENCES, AND THAT IS A RULE RATHER THAN A PREFERENCE. This block said
-          // "see IN-FLIGHT.md item 29" until 2026-08-28. Somebody who installed this binary has
-          // no such file — it is this repository's own working notes. Output has to be
+          "To go ahead with one, run this again and name it:",
+          "",
+          // A REAL NAME FROM THE LIST ABOVE, not a placeholder. The reader copies this line; a
+          // `<name>` to substitute is one more step at which the wrong thing gets typed, and the
+          // names are deliberately not memorable.
+          s"    --approve ${pending.head.handle.value}",
+          "",
+          "That approves THAT ONE change and nothing else. Repeat the flag to name several.",
+          "There is deliberately no flag approving them all: it would cover changes you have",
+          "not read about, including ones you did not know were affected.",
+          "",
+          // NO INTERNAL REFERENCES. This block cited this repository's own working notes until
+          // 2026-08-28; somebody who installed the binary has no such file. Output has to be
           // actionable by a reader who has only the terminal in front of them.
-          "There is no way to approve one of these from this tool yet. To go ahead with one",
-          "now, do it in Anki, which shows you the mapping before it acts:",
-          "",
-          "    Browse  ->  select the note  ->  Notes > Change Note Type",
-          "",
-          "Afterwards, run this tool again: it will see the note already on the note type the",
-          "vault asks for and leave it alone.",
+          "Anki's own dialogue is the alternative, and it shows the template mapping before it",
+          "acts: Browse -> select the note -> Notes > Change Note Type.",
         )
 
   /** WHAT A DRY RUN SAYS ABOUT THE RETYPES IT IS PREVIEWING.
