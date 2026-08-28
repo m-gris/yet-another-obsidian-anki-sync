@@ -120,7 +120,13 @@ object Extractor:
       filePath: String,
       marker: Marker,
       root: RootElement,
-      bodyFirstLine: Int = 1,
+      // NO DEFAULT, AND `1` WOULD BE THE WRONG ONE. This is the file line the body starts at,
+      // and every card's source reference is computed from it. `1` is correct only for a note
+      // with NO frontmatter — and a note without frontmatter yields no cards at all, because
+      // the `id:` is what makes a file eligible. So the default was wrong for every note this
+      // tool has ever processed, and being wrong is SILENT: cards build, the run succeeds, and
+      // "open this note at line N" simply lands in the wrong place. Removed 2026-08-28.
+      bodyFirstLine: Int,
   ): ExtractedNote =
     val key = CardKey(noteId, CardPath.Note)
     val ref = SourceRef(filePath, bodyFirstLine, SourceKind.Heading)
@@ -166,8 +172,14 @@ object Extractor:
       fileName: String,
       filePath: String,
       root: RootElement,
-      body: String = "",
-      bodyFirstLine: Int = 1,
+      // NO DEFAULT ON EITHER, AND THE EMPTY BODY WAS THE MORE DANGEROUS OF THE TWO. `body` is
+      // the RAW SOURCE, and it feeds `ListIndent.scan` — the guard that reports when this
+      // parser reads a list differently from Obsidian. A caller that omitted it would disable
+      // that check and report no disagreements, which is indistinguishable from there being
+      // none. `bodyFirstLine` is the file line the body starts at; see `fromWholeNote` above
+      // for why `1` was the wrong default rather than merely an unstated one.
+      body: String,
+      bodyFirstLine: Int,
   ): ExtractedNote =
     val specs    = Vector.newBuilder[SourcedSpec]
     val failures = Vector.newBuilder[BuildFailure]
