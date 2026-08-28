@@ -128,6 +128,7 @@ card ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%
   field ⟦Title⟧ ⟦Path of blood through the right heart⟧
   field ⟦Text⟧ ⟦<p>From the body back towards the lungs:</p><ul><li>superior vena cava</li><li>right atrium</li><li>tricuspid valve</li><li>right ventricle</li><li>pulmonary valve</li><li>pulmonary artery</li></ul>⟧
   field ⟦Context⟧ ⟦Anatomy › Sequences⟧
+  field ⟦Reveal⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧

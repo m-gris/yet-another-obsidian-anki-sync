@@ -5,7 +5,8 @@
   "fields": [
     "Title",
     "Text",
-    "Context"
+    "Context",
+    "Reveal"
   ],
   "styling": "styling.css",
   "templates": [

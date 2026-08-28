@@ -112,6 +112,36 @@ enum SequenceSource:
   /** `#flashcard/sequence/headers` — the heading's subheadings, in document order. */
   case ChildHeadings(reach: HeadingReach)
 
+/** IN WHAT ORDER A NESTED OUTLINE'S ITEMS ARE REVEALED.
+  *
+  * Requested by Marc 2026-08-28. Both orders show the SAME nested list; they differ only in
+  * which item the reveal key uncovers next.
+  *
+  * {{{
+  * # A          depth-first        breadth-first
+  * ## A.1         A                  A
+  * ## A.2         A.1                B
+  * # B            A.2                A.1
+  * ## B.1         B                  A.2
+  *                B.1                B.1
+  * }}}
+  *
+  * BREADTH-FIRST IS A DIFFERENT WAY TO LEARN, not a cosmetic preference: it puts every heading
+  * of one level in front of you as a LEVEL before dropping into any of them.
+  *
+  * THE NAMES ARE THE GRAPH-TRAVERSAL ONES, chosen by Marc over gentler alternatives. They are
+  * exact, and this vocabulary is small enough that exactness beats approachability.
+  */
+enum RevealOrder:
+
+  /** Document order — each heading followed by its own children. The DEFAULT, and what every
+    * card built before 2026-08-28 does.
+    */
+  case DepthFirst
+
+  /** Level by level — every heading at one depth before any heading below it. */
+  case BreadthFirst
+
 /** How far down a heading-sourced sequence reaches.
   *
   * AN ENUM RATHER THAN `recursive: Boolean`, deliberately. `ChildHeadings(true)` says nothing at
@@ -128,8 +158,16 @@ enum HeadingReach:
   /** Only the headings one level down. Deeper ones are not items and are not shown. */
   case DirectChildren
 
-  /** `#flashcard/sequence/headers/recursive` — the whole subtree, nested. */
-  case WholeSubtree
+  /** `#flashcard/sequence/headers/recursive` — the whole subtree, nested.
+    *
+    * IT CARRIES THE REVEAL ORDER AND `DirectChildren` DOES NOT, which is a guarantee rather
+    * than an omission. A flat list has no levels, so depth-first and breadth-first name the
+    * same order over it — the distinction only exists once there is nesting. Putting the order
+    * beside the reach instead of inside this case would let `DirectChildren` carry one, a state
+    * with no meaning that some later match would have to invent an answer for. It also means
+    * `#flashcard/sequence/headers/bfs` does not parse, which is the correct outcome.
+    */
+  case WholeSubtree(order: RevealOrder)
 
 /** WHAT A CARD MADE FROM A WHOLE NOTE IS BUILT OUT OF.
   *
@@ -312,6 +350,24 @@ object Marker:
     */
   val ClozeSequenceFields: Vector[String] = Vector("Title", "Text")
 
+  /** WHICH ORDER A NESTED SEQUENCE IS REVEALED IN — read by the note type's template, not by
+    * this tool.
+    *
+    * EMPTY MEANS DEPTH-FIRST, ruled by Marc 2026-08-28, and that is what makes adding this a
+    * NON-MIGRATION. Every note written before the field existed gets it empty when the
+    * installer repairs the note type, and empty is exactly the behaviour those notes already
+    * had. Nothing is rewritten and no card is touched.
+    *
+    * ITS ONE NON-EMPTY VALUE IS [[BreadthFirstMarker]]. The template tests the field for
+    * emptiness with Anki's own `{{#Reveal}}` conditional, so any non-empty value would select
+    * breadth-first; the constant exists so that the string is written once rather than agreed
+    * on twice.
+    */
+  val RevealField: String = "Reveal"
+
+  /** The value written into [[RevealField]] for a breadth-first card. */
+  val BreadthFirstMarker: String = "bfs"
+
   /** The conditional field that switches on the third retrieval direction.
     *
     * Anki generates a card only when its front renders non-empty, which is how the stock
@@ -431,7 +487,11 @@ object Marker:
     val Cloze: Vector[String] =
       Vector(ClozeFields.Text, ClozeFields.BackExtra, ContextField)
 
-    val ClozeSequence: Vector[String] = ClozeSequenceFields :+ ContextField
+    // APPENDED AFTER `Context`, WHICH IS FORCED RATHER THAN CHOSEN. Anki's `modelFieldAdd`
+    // appends, so a field declared anywhere but last would leave every repaired collection
+    // permanently reporting a field-order difference it can never fix. The same reasoning is
+    // written at the concept-descriptor arm of `CardSpec.fields`.
+    val ClozeSequence: Vector[String] = ClozeSequenceFields :+ ContextField :+ RevealField
 
     val ConceptDescriptor: Vector[String] =
       // NEW FIELDS GO LAST, in the order they were introduced: Anki's `modelFieldAdd` appends,
@@ -491,6 +551,8 @@ object Marker:
     "#flashcard/sequence"         -> "a list revealed one item at a time, on one schedule",
     "#flashcard/sequence/headers" -> "this heading's subheadings, revealed one at a time",
     "#flashcard/sequence/headers/recursive" -> "the whole subtree of subheadings, nested",
+    "#flashcard/sequence/headers/recursive/dfs" -> "the same, said explicitly: each heading then its own children",
+    "#flashcard/sequence/headers/recursive/bfs" -> "the same subtree, revealed a whole level at a time",
     "#flashcard/table"            -> "a card per table cell, plus one per whole row",
     "#flashcard/table/1way"       -> "cells and rows, each cell asked one way",
     "#flashcard/table/2way"       -> "cells and rows, each cell asked two ways (the default)",
@@ -574,8 +636,15 @@ object Marker:
     // written in vaults.
     case "#flashcard/sequence/headers" =>
       Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.DirectChildren)))
+    // DEPTH-FIRST IS WHAT THE UNSUFFIXED TOKEN MEANS, ruled by Marc 2026-08-28. It is what
+    // every card built before the order existed does, so a vault that predates this reads the
+    // same afterwards and no note has to be edited to keep its behaviour.
     case "#flashcard/sequence/headers/recursive" =>
-      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree)))
+      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst))))
+    case "#flashcard/sequence/headers/recursive/dfs" =>
+      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst))))
+    case "#flashcard/sequence/headers/recursive/bfs" =>
+      Some(Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.BreadthFirst))))
     case _                     => None
 
   /** Parse the marker out of a heading's extracted text.

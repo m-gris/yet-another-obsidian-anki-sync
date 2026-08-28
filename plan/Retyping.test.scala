@@ -789,7 +789,7 @@ class RetypingTest extends munit.FunSuite:
     )
 
     // The vault now asks for a sequence card at that key, whose note type is NOT cloze.
-    val sequence = CardSpec.Sequence(k, "Layers", body("<ul><li>one</li><li>two</li></ul>"), testContext)
+    val sequence = CardSpec.Sequence(k, "Layers", body("<ul><li>one</li><li>two</li></ul>"), testContext, RevealOrder.DepthFirst)
     val report   = runReport(planOf(scanOf(sequence), anki), anki, RetypePolicy.Apply)
 
     assertEquals(report.failures.size, 1, s"the move was not refused: $report")

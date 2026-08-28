@@ -72,7 +72,12 @@ object Outline:
     // about two pieces of code rather than a restatement of one.
     reach match
       case HeadingReach.DirectChildren => childrenOf(section).map(s => HeadingNode(titleOf(s), Vector.empty))
-      case HeadingReach.WholeSubtree   => childrenOf(section).map(deep)
+      // THE ORDER IS NOT THIS FUNCTION'S BUSINESS, and the wildcard says so deliberately.
+      // Both reveal orders show the SAME nested list; they differ only in which item the
+      // reveal key uncovers next, which is decided at review time by the note type's template.
+      // Reordering the tree here would change what the card LOOKS like, which is not what was
+      // asked for.
+      case HeadingReach.WholeSubtree(_) => childrenOf(section).map(deep)
 
   /** The nested form: a heading, and the same treatment applied to each heading below it.
     *

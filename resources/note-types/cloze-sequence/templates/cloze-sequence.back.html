@@ -14,6 +14,38 @@
 (function () {
   var items = Array.prototype.slice.call(document.querySelectorAll("#text li"));
 
+  // REVEAL ORDER. `querySelectorAll` returns DOCUMENT order, and for a nested list document
+  // order IS depth-first: each heading, then its own children, then the next heading. That is
+  // what every card built before 2026-08-28 does and remains the default.
+  //
+  // BREADTH-FIRST IS THE SAME LIST SORTED BY NESTING DEPTH — every heading of one level before
+  // any heading below it. Nothing about the DISPLAY changes: the list stays nested and looks
+  // identical. Only the sequence the reveal key walks is different.
+  //
+  // THE DEPTH IS COUNTED FROM THE DOM, so no extra data has to be written into the card. A
+  // stable sort keeps document order WITHIN each level, which is what makes the result
+  // deterministic rather than merely breadth-first: `Array.prototype.sort` is required to be
+  // stable in every engine Anki ships on.
+  //
+  // SELECTED BY THE `Reveal` FIELD BEING NON-EMPTY, via Anki's own conditional below. An empty
+  // field means depth-first, which is why adding this field changed no existing card: every
+  // note written before it existed has it empty.
+  {{#Reveal}}
+  var depthOf = function (li) {
+    var d = 0;
+    for (var n = li.parentNode; n && n.id !== "text"; n = n.parentNode)
+      if (n.tagName === "UL" || n.tagName === "OL") d++;
+    return d;
+  };
+  var order = {};
+  items.forEach(function (li, i) { order[i] = i; li.setAttribute("data-doc", i); });
+  items.sort(function (a, b) {
+    var da = depthOf(a), db = depthOf(b);
+    if (da !== db) return da - db;
+    return Number(a.getAttribute("data-doc")) - Number(b.getAttribute("data-doc"));
+  });
+  {{/Reveal}}
+
   function firstHidden() {
     for (var i = 0; i < items.length; i++)
       if (items[i].classList.contains("hidden-cloze")) return items[i];

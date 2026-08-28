@@ -9,6 +9,49 @@ class MarkerTest extends munit.FunSuite:
 
   // ---------------------------------------------------------------- parsing ----
 
+  /** THE REVEAL ORDER, AND THE DEFAULT THAT KEEPS A VAULT WORKING.
+    *
+    * Requested by Marc 2026-08-28. Both orders show the same nested list and differ only in
+    * which item the reveal key uncovers next: depth-first walks each heading then its own
+    * children, breadth-first shows every heading of one level before any beneath it.
+    *
+    * THE UNSUFFIXED TOKEN IS DEPTH-FIRST, which is what every card built before the order
+    * existed does — so a vault written earlier reads identically afterwards.
+    */
+  test("the recursive marker defaults to depth-first, and says so when asked explicitly") {
+    val default  = parsed("H #flashcard/sequence/headers/recursive")
+    val explicit = parsed("H #flashcard/sequence/headers/recursive/dfs")
+    assertEquals(
+      default,
+      Some(Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst)))),
+    )
+    assertEquals(explicit, default, "spelling the default out loud changed what it means")
+  }
+
+  test("the breadth-first token asks for a level-at-a-time reveal") {
+    assertEquals(
+      parsed("H #flashcard/sequence/headers/recursive/bfs"),
+      Some(Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.BreadthFirst)))),
+    )
+  }
+
+  /** A REVEAL ORDER WITHOUT NESTING IS REFUSED, AND THAT IS THE TYPE SPEAKING.
+    *
+    * `HeadingReach.WholeSubtree` carries the order; `DirectChildren` cannot. A flat list has no
+    * levels, so depth-first and breadth-first name the same order over it — the distinction
+    * only exists once there is nesting. The token therefore has nothing to parse into, and the
+    * author is told rather than quietly given one of the two.
+    *
+    * THIS TEST IS WHAT MAKES THE TYPE-LEVEL GUARANTEE OBSERVABLE. Without it the guarantee
+    * holds silently and a later reader could "helpfully" add the token, discovering only then
+    * that there is no value for it to produce.
+    */
+  test("a reveal order on the non-recursive marker does not parse") {
+    Marker.parse("H #flashcard/sequence/headers/bfs") match
+      case Left(MarkerError.Unrecognised(raw)) => assertEquals(raw, "#flashcard/sequence/headers/bfs")
+      case other => fail(s"a reveal order over a flat list was accepted: $other")
+  }
+
   test("each of the seven markers parses to its own variant") {
     assertEquals(parsed("Term #flashcard/1way"), Some(Marker.TwoField(TwoFieldDirections.Forward)))
     assertEquals(parsed("Term #flashcard/2way"), Some(Marker.TwoField(TwoFieldDirections.Both)))
@@ -234,7 +277,7 @@ class MarkerTest extends munit.FunSuite:
       NoteTypes.Basic,
     )
     assertEquals(
-      CardSpec.Sequence(k, "Path of blood", body("<ul><li>a</li></ul>"), "ctx").noteTypeName,
+      CardSpec.Sequence(k, "Path of blood", body("<ul><li>a</li></ul>"), "ctx", RevealOrder.DepthFirst).noteTypeName,
       NoteTypes.ClozeSequence,
     )
   }
@@ -246,15 +289,19 @@ class MarkerTest extends munit.FunSuite:
     * holds a list. `CardSpec.Sequence` guarantees nothing of the kind — that is established by
     * a refusal in `extract/`, and the value below is hand-built.
     */
-  test("a sequence spec emits Title, Text and Context, in that order") {
+  test("a sequence spec emits Title, Text, Context and Reveal, in that order") {
     val spec =
-      CardSpec.Sequence(aKey("Anatomy", "Path"), "Path of blood", body("<ul><li>a</li></ul>"), "Anatomy")
+      CardSpec.Sequence(aKey("Anatomy", "Path"), "Path of blood", body("<ul><li>a</li></ul>"), "Anatomy", RevealOrder.DepthFirst)
     assertEquals(
       spec.fields,
       Vector(
         "Title"   -> "Path of blood",
         "Text"    -> "<ul><li>a</li></ul>",
         "Context" -> "Anatomy",
+        // EMPTY, AND THAT IS THE WHOLE DESIGN OF THIS FIELD. Depth-first is what every card
+        // built before the field existed does, so writing it as the empty string means the
+        // field's arrival changed no card's content — see `Marker.RevealField`.
+        "Reveal"  -> "",
       ),
     )
     assertEquals(spec.fields.map(_._1), Marker.FieldOrder.ClozeSequence)
@@ -355,7 +402,7 @@ class MarkerTest extends munit.FunSuite:
         "ctx",
       ),
       CardSpec.TableRow(k, "<table></table>", "<table></table>", "ctx"),
-      CardSpec.Sequence(k, "Title", body("<ul><li>a</li></ul>"), "ctx"),
+      CardSpec.Sequence(k, "Title", body("<ul><li>a</li></ul>"), "ctx", RevealOrder.DepthFirst),
     )
 
     representatives.foreach { spec =>

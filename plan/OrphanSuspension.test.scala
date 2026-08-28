@@ -208,7 +208,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
 
     // It comes back as a SEQUENCE — same key, same one-template shape, different note type.
     val sequence = SourcedSpec(
-      CardSpec.Sequence(k, "front", body("first item"), "Coupling"),
+      CardSpec.Sequence(k, "front", body("first item"), "Coupling", RevealOrder.DepthFirst),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,
@@ -263,7 +263,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     anki.suspend(byHand).fold(e => fail(s"$e"), identity)
 
     val sequence = SourcedSpec(
-      CardSpec.Sequence(k, "front", body("first item"), "Coupling"),
+      CardSpec.Sequence(k, "front", body("first item"), "Coupling", RevealOrder.DepthFirst),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,

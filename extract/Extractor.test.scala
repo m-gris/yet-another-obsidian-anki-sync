@@ -1102,6 +1102,7 @@ class ExtractorTest extends munit.FunSuite:
         // field — the marked heading is the `Title` here, so it is excluded and everything
         // above it kept. This read "B" while the breadcrumb was heading-ancestors only.
         "Context" -> "Note › B",
+        "Reveal"  -> "",
       ),
     )
   }
@@ -1252,6 +1253,7 @@ class ExtractorTest extends munit.FunSuite:
         "Title"   -> "Path of blood",
         "Text"    -> "<ul><li>superior vena cava</li><li>right atrium</li></ul>",
         "Context" -> "Note › B",
+        "Reveal"  -> "",
       ),
     )
   }
@@ -1307,6 +1309,40 @@ class ExtractorTest extends munit.FunSuite:
   /** DIRECT MEANS DIRECT — the same document, without `/recursive`, keeps only one level. The
     * two are asserted over IDENTICAL markdown so the difference can only be the marker.
     */
+  /** THE ORDER TRAVELS AS A FIELD AND NOTHING IN THIS TOOL ACTS ON IT.
+    *
+    * Both orders produce the SAME nested list — asserted here by comparing the `Text` of the
+    * two cards — because which item the reveal key uncovers next is decided at review time by
+    * the note type's template, reading this field. A tool that reordered the list would change
+    * what the card LOOKS like, which is not what was asked for.
+    */
+  test("the breadth-first marker changes only the Reveal field, not the list") {
+    def textAndReveal(token: String) =
+      val note = extract(
+        s"""|# B
+            |
+            |x
+            |
+            |## Path of blood $token
+            |
+            |### Heart
+            |
+            |#### Left
+            |
+            |### Lungs
+            |""".stripMargin
+      )
+      val fields = specFor(note, "b / path of blood").spec.fields.toMap
+      (fields("Text"), fields("Reveal"))
+
+    val (dfsText, dfsReveal) = textAndReveal("#flashcard/sequence/headers/recursive")
+    val (bfsText, bfsReveal) = textAndReveal("#flashcard/sequence/headers/recursive/bfs")
+
+    assertEquals(dfsText, bfsText, "the two orders rendered different lists; only the reveal differs")
+    assertEquals(dfsReveal, "", "depth-first must write an EMPTY field, or every existing card changes")
+    assertEquals(bfsReveal, Marker.BreadthFirstMarker)
+  }
+
   test("without /recursive the same document yields only the direct children") {
     val note = extract(
       """|# B
@@ -1427,7 +1463,7 @@ class ExtractorTest extends munit.FunSuite:
       NoteId.fromFrontmatter("2ac356b7").fold(e => fail(s"note id: $e"), identity),
       "Outline Learning",
       "Outline Learning.md",
-      Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree)),
+      Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst))),
       root,
       7,
     )

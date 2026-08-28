@@ -207,7 +207,7 @@ class PlannerTest extends munit.FunSuite:
     // Any other pair is refused, the run fails loudly, and the test would prove nothing about
     // decks because nothing would have moved.
     val moved   = deck("Obsidian", "Patterns")
-    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext)
+    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext, RevealOrder.DepthFirst)
     val plan = Planner
       .plan(scanOf(sourced(retyped)), observe(anki), _ => moved, newNoteOf)
       .fold(e => fail(s"$e"), identity)
@@ -233,7 +233,7 @@ class PlannerTest extends munit.FunSuite:
     val k    = key("n1", "A", "B")
     runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "f", "body"))), observe(anki)), anki)
 
-    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext)
+    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext, RevealOrder.DepthFirst)
     planOf(scanOf(sourced(retyped)), observe(anki)).actions match
       case Vector(r: SyncAction.Retype) =>
         assertEquals(r.deck, None, "a deck move was planned for a note that never moved")

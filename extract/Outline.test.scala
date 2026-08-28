@@ -78,6 +78,21 @@ class OutlineTest extends munit.FunSuite:
   private def tree(nodes: HeadingNode*): NonEmptyVector[HeadingNode] =
     NonEmptyVector.fromVectorUnsafe(nodes.toVector)
 
+  /** BOTH REACHES, LISTED BY HAND.
+    *
+    * `HeadingReach.values` stopped existing on 2026-08-28 when `WholeSubtree` gained a reveal
+    * order — an enum with a non-singleton case has no `values` array. Listing them is the
+    * honest replacement, and its cost is explicit: a reach added later must be added here too,
+    * which is a small price for the state the parameter makes unrepresentable.
+    *
+    * THE REVEAL ORDER IS IRRELEVANT TO EVERY ASSERTION BELOW that uses this, and deliberately
+    * so: both orders produce the same tree, differing only in what the card's template reveals
+    * next. If a test here ever starts caring which order is named, the outline has begun doing
+    * a job that belongs to the template.
+    */
+  private val bothReaches: Vector[HeadingReach] =
+    Vector(HeadingReach.DirectChildren, HeadingReach.WholeSubtree(RevealOrder.DepthFirst))
+
   // ══════════════════════════════════════════ reading laika's tree ══════════════════════════
 
   test("the direct children are the items, in document order") {
@@ -97,7 +112,7 @@ class OutlineTest extends munit.FunSuite:
 
   test("the whole subtree nests, and keeps document order at every level") {
     assertEquals(
-      Outline.read(marked(fixture), HeadingReach.WholeSubtree),
+      Outline.read(marked(fixture), HeadingReach.WholeSubtree(RevealOrder.DepthFirst)),
       Vector(
         node("Parse", node("Tokenise"), node("Build tree")),
         node("Route"),
@@ -110,7 +125,7 @@ class OutlineTest extends munit.FunSuite:
     * template. An outline containing it would print it twice.
     */
   test("the marked heading never appears inside its own outline") {
-    HeadingReach.values.foreach: reach =>
+    bothReaches.foreach: reach =>
       assert(
         !Outline.read(marked(fixture), reach).flatMap(_.titles).contains("Request lifecycle"),
         s"the marked heading appeared as one of its own items, at $reach",
@@ -121,7 +136,7 @@ class OutlineTest extends munit.FunSuite:
     * governs this. `Elsewhere` is a SIBLING of the marked heading, not a child of it.
     */
   test("a sibling of the marked heading, and its children, are not items") {
-    val titles = Outline.read(marked(fixture), HeadingReach.WholeSubtree).flatMap(_.titles)
+    val titles = Outline.read(marked(fixture), HeadingReach.WholeSubtree(RevealOrder.DepthFirst)).flatMap(_.titles)
     assert(!titles.contains("Elsewhere"), s"a sibling heading became an item: $titles")
     assert(!titles.contains("Not mine"), s"a sibling's child became an item: $titles")
   }
@@ -136,7 +151,7 @@ class OutlineTest extends munit.FunSuite:
   test("the whole subtree conserves headings exactly — none lost, none invented, none doubled") {
     val section = marked(fixture)
     assertEquals(
-      Outline.read(section, HeadingReach.WholeSubtree).flatMap(_.titles).sorted,
+      Outline.read(section, HeadingReach.WholeSubtree(RevealOrder.DepthFirst)).flatMap(_.titles).sorted,
       headingsBeneath(section).sorted,
     )
   }
@@ -148,7 +163,7 @@ class OutlineTest extends munit.FunSuite:
     val section = marked(fixture)
     assertEquals(
       Outline.read(section, HeadingReach.DirectChildren),
-      Outline.read(section, HeadingReach.WholeSubtree).map(_.copy(children = Vector.empty)),
+      Outline.read(section, HeadingReach.WholeSubtree(RevealOrder.DepthFirst)).map(_.copy(children = Vector.empty)),
     )
   }
 
@@ -157,7 +172,7 @@ class OutlineTest extends munit.FunSuite:
     * the marker.
     */
   test("a child's own marker is stripped from the item text") {
-    val titles = Outline.read(marked(fixture), HeadingReach.WholeSubtree).map(_.title)
+    val titles = Outline.read(marked(fixture), HeadingReach.WholeSubtree(RevealOrder.DepthFirst)).map(_.title)
     assert(titles.contains("Parse"), s"expected the stripped heading among $titles")
     assert(!titles.exists(_.contains("#flashcard")), s"a marker reached the card face: $titles")
   }
@@ -169,7 +184,7 @@ class OutlineTest extends munit.FunSuite:
                          |
                          |Just prose.
                          |""".stripMargin)
-    HeadingReach.values.foreach(r => assertEquals(Outline.read(none, r), Vector.empty, s"at $r"))
+    bothReaches.foreach(r => assertEquals(Outline.read(none, r), Vector.empty, s"at $r"))
   }
 
   // ══════════════════════════════════════════ building the blocks ═══════════════════════════

@@ -674,6 +674,20 @@ object Extractor:
           // point — the refusal, the rendering, the note type, the fields — is the same code
           // it always was. If this ever needs to branch on `source` for anything but a
           // sentence, "a new source, not a new card" has stopped being true.
+          // WHICH ORDER THE CARD REVEALS IN, decided here and CARRIED as a field rather than
+          // acted on. Nothing in this tool reorders anything: both orders produce the same
+          // nested list, and which item the reveal key uncovers next is the note type's
+          // template's decision at review time.
+          //
+          // A FLAT LIST IS DEPTH-FIRST BY DEFINITION, not by default — with no levels the two
+          // orders name the same sequence, so this is a statement of fact rather than a choice
+          // standing in for a missing one. `HeadingReach.DirectChildren` cannot carry an order
+          // for exactly that reason.
+          val reveal = source match
+            case SequenceSource.BodyList                                    => RevealOrder.DepthFirst
+            case SequenceSource.ChildHeadings(HeadingReach.DirectChildren)  => RevealOrder.DepthFirst
+            case SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(o)) => o
+
           val items     = sequenceItems(blocks)
           val surviving = items.filter(item => !C.AsHtml.plain(item.blocks).isEmpty)
           if surviving.isEmpty then
@@ -727,6 +741,7 @@ object Extractor:
                   // The marked heading IS a field here — the template renders `{{Title}}` above
                   // the list — so it is excluded and everything above it kept.
                   CardContext.compose(location, Vector(title)),
+                  reveal,
                 ) -> RowSource.heading
               )
             )

@@ -267,7 +267,7 @@ enum CardSpec:
     *     `content/` bypasses the opaque `Fragment` and reopens the hole that type was
     *     introduced to shut.
     */
-  case Sequence(key: CardKey, title: String, text: Body, context: String)
+  case Sequence(key: CardKey, title: String, text: Body, context: String, reveal: RevealOrder)
 
 object CardSpec:
 
@@ -278,7 +278,7 @@ object CardSpec:
       case ThreeField(k, _, _, _, _, _, _) => k
       case Cloze(k, _, _, _)            => k
       case TableRow(k, _, _, _)         => k
-      case Sequence(k, _, _, _)         => k
+      case Sequence(k, _, _, _, _)      => k
 
     /** The Anki note type this spec creates. Behaviour on the sum type: the consumer asks,
       * the variant answers, rather than the consumer branching on which variant it holds.
@@ -290,7 +290,7 @@ object CardSpec:
       case Cloze(_, _, _, _)                                => Marker.NoteTypes.Cloze
       // The row card is a plain Basic: concept on the front, all descriptors on the back.
       case TableRow(_, _, _, _)                             => Marker.NoteTypes.Basic
-      case Sequence(_, _, _, _)                             => Marker.NoteTypes.ClozeSequence
+      case Sequence(_, _, _, _, _)                          => Marker.NoteTypes.ClozeSequence
 
     /** Field name to value, in the note type's field order.
       *
@@ -373,10 +373,17 @@ object CardSpec:
           Marker.SameShapeField -> "1",
         )
 
-      case Sequence(_, title, text, context) =>
+      case Sequence(_, title, text, context, reveal) =>
         // The zip form, exactly as the three-field arm above: the constant is the single
         // source of field ORDER for the two fields it names, so a reordering of THOSE happens
         // in one place rather than two. Context is appended, never zipped — see the note on
         // this function.
         Marker.ClozeSequenceFields.zip(Vector(title, text.value)) :+
-          (Marker.ContextField -> context)
+          (Marker.ContextField -> context) :+
+          // EMPTY FOR DEPTH-FIRST, so a note written before this field existed and a note
+          // explicitly asking for depth-first are byte-identical — which is what makes the
+          // field's arrival invisible to every existing card.
+          (Marker.RevealField -> (reveal match
+            case RevealOrder.DepthFirst   => ""
+            case RevealOrder.BreadthFirst => Marker.BreadthFirstMarker
+          ))

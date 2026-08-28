@@ -292,7 +292,10 @@ class NoteTypeInstallTest extends munit.FunSuite:
       readinessOf(anki).contains(
         NoteTypeProblem.FieldsMissing(
           Marker.NoteTypes.ClozeSequence,
-          NonEmptyVector.one(Marker.ContextField),
+          // BOTH FIELDS THE FIXTURE OMITS. `Reveal` joined the note type on 2026-08-28; this
+          // asserts the readiness check names EVERY missing field rather than the first, which
+          // is what makes the run's message actionable in one pass.
+          NonEmptyVector.of(Marker.ContextField, Marker.RevealField),
         )
       ),
       s"a missing Context field did not stop the run: ${readinessOf(anki)}",
