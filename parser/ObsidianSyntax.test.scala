@@ -294,3 +294,75 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     val result = ObsidianSyntax.markupParser.parse("See [some undefined reference][nope].")
     assert(result.isLeft, "an unresolved reference was swallowed instead of reported")
   }
+
+  // ------------------------------------------------- maths: pinned, not supported ----
+
+  /** MATHS IS NOT PARSED, AND THIS SECTION PINS WHAT HAPPENS INSTEAD. `$` is a delimiter in
+    * none of this dialect's span parsers, nor in Laika's `Markdown.spanParsers`, nor in
+    * `GitHubFlavor`, so `$…$` and `$$…$$` are read as ORDINARY PROSE and reach a card as
+    * literal text. That is row 5 of `docs/PARSER-DISAGREEMENTS.md`; `docs/MATHS-ON-A-CARD.md`
+    * is the long form, and these are the measurements it cites.
+    *
+    * THESE ARE CHARACTERISATION TESTS. They assert what the parser DOES today, two of them
+    * asserting a corruption rather than a behaviour anyone wants. They exist so that the
+    * claims in that document stay falsifiable instead of becoming folklore — the document
+    * says the parser eats a TeX row separator, and this is where that stops being a sentence
+    * somebody wrote down and starts being something the build re-checks.
+    *
+    * THEY ARE EXPECTED TO GO RED THE DAY MATHS IS PARSED, and that is their second job.
+    */
+  test("maths: TeX that is not markdown survives verbatim — this is the common case") {
+    val src  = """$$ \forall f \quad \text{Id} \circ f = f \circ \text{Id} = f $$"""
+    val text = parse(src).content.collect { case p: Paragraph => p.extractText }.mkString
+    assertEquals(text, src)
+  }
+
+  /** `\` IS ASCII PUNCTUATION, SO MARKDOWN OWNS IT. `\\` is markdown's escape for a literal
+    * backslash and arrives as one — but `\\` is also TeX's ROW SEPARATOR inside `align`,
+    * `gather`, `array` and `cases`. Every multi-line maths block is therefore already corrupt
+    * before any of this tool's own code runs, and nothing downstream can recover it: the
+    * second backslash is not in the parse tree to recover.
+    */
+  test("maths: a TeX row separator is eaten by the markdown escape rule") {
+    val src  = """$$\begin{align} a &= b \\ c &= d \end{align}$$"""
+    val text = parse(src).content.collect { case p: Paragraph => p.extractText }.mkString
+    assertEquals(text, """$$\begin{align} a &= b \ c &= d \end{align}$$""")
+  }
+
+  /** SUBSCRIPT SURVIVAL DEPENDS ON HOW MANY OTHER SUBSCRIPTS SHARE THE PARAGRAPH, which is
+    * what makes this worse than it first reads. Two underscores pair, so the span between
+    * them becomes `Emphasized` and BOTH delimiters are consumed; the third has no partner and
+    * keeps its underscore. Note that CommonMark would not pair these at all — it forbids
+    * intraword `_` emphasis — so this is a divergence from what Obsidian renders, not merely
+    * an inconvenience.
+    */
+  test("maths: paired subscripts are consumed as emphasis, and an odd one out survives") {
+    val text = parse("""$$x_1 + y_1 = z_1$$""")
+      .content.collect { case p: Paragraph => p.extractText }.mkString
+    assertEquals(text, """$$x1 + y1 = z_1$$""")
+  }
+
+  /** THE TRIPWIRE. A card's key is derived from `section.header.extractText`, so this string
+    * is not cosmetic — it is identity. Changing what this test expects is a MIGRATION
+    * DECISION, not a test fix: a changed key is an orphaned card holding its review history
+    * and claimed by nothing, plus a replacement starting from zero.
+    */
+  test("maths in a heading reaches the card key WITH its dollars intact") {
+    val root = parse("## Notation (given 2 sets, $A$ and $B$)\n\nbody\n")
+    assertEquals(headingPath(root), List(List("Notation (given 2 sets, $A$ and $B$)")))
+  }
+
+  /** WHY THE TRIPWIRE IS ARMED, pinned on a construct that already exists so the mechanism is
+    * demonstrable today rather than hypothetical. `ObsidianComment` declares `text: String`
+    * rather than `content: Seq[Span]` — deliberately, since that is what keeps its innards
+    * away from the inline parsers — and is therefore not a `SpanContainer`. Laika's
+    * `extractText` is a trait match with a silent `case _ => ""`, so such a node contributes
+    * NOTHING to a heading.
+    *
+    * A maths node would want exactly that shape, for exactly that reason. This test is the
+    * evidence that adopting it re-keys every heading containing maths.
+    */
+  test("a node that is not a SpanContainer vanishes from a heading's extractText") {
+    val root = parse("## Notation %%hidden%% here\n\nbody\n")
+    assertEquals(headingPath(root), List(List("Notation  here")))
+  }
