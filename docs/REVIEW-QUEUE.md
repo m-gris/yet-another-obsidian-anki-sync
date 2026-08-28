@@ -126,11 +126,19 @@ figures in `docs/EVOLVABILITY.md` § M4. What it changes here:
   the retype. The cards die whenever the person next runs `Check Database`, days later, for
   unrelated reasons. A message saying only "2 cards will be lost" would be wrong in a way the
   author would discover by being surprised; it must say WHEN.
-- **A shrink leaves the note unreadable by this tool until then.** `cardsInfo` throws
-  `missing template` for the whole note, not merely the stranded ordinals. **So "apply anyway"
-  cannot simply perform the retype and stop** — it must reap the orphans itself, or the next run
-  over that note fails. NOT DECIDED, and it is the one genuinely new design question the
-  measurement raised.
+- ~~**A shrink leaves the note unreadable by this tool until then.**~~ **CORRECTED 2026-08-28.**
+  `cardsInfo` does fail for the whole note rather than for the stranded ordinals alone, but this
+  tool calls it in exactly one place — the pricing of a narrowing. Ordinary sync uses `notesInfo`
+  and `getDecks` and is unaffected, and pricing only runs for a note that still needs narrowing.
+  **The stranded cards sit invisible until `Check Database`, and nothing else breaks.**
+- **THE TOOL CANNOT REAP THE ORPHANS, so "apply anyway" does not have to.** VERIFIED against the
+  add-on's own action list: AnkiConnect offers `deleteNotes`, `removeEmptyNotes` and
+  `forgetCards`, and nothing that deletes a chosen card — cards are generated from a note and its
+  templates rather than being independently deletable. `guiCheckDatabase` exists but would reap
+  every empty card in the collection, including ones from notes nobody has decided about, which
+  is the collection-wide sweep this document's ruling exists to avoid. **So approving a change
+  performs the move and SAYS the cards are stranded; the person runs `Check Database` when they
+  choose.** This replaces the open design question the measurement was thought to have raised.
 
 
 ### It is not hypothetical, and the numbers say so
