@@ -1060,6 +1060,28 @@ class VaultWalkerTest extends munit.FunSuite:
     assertEquals(fields("Text"), "<ul><li>A</li><li>B</li></ul>")
   }
 
+  /** THE RECURSIVE FORM THROUGH THE ROUTE AN AUTHOR ACTUALLY TAKES.
+    *
+    * The nesting itself is pinned at two lower levels — over hand-written trees in
+    * `Outline.test.scala`, and over a marked heading in `Extractor.test.scala`. What THIS covers
+    * is the whole path: a tag in frontmatter, parsed as a marker, applied to the whole note, and
+    * rendered. The two-level marker token has to survive the frontmatter reader, which filters
+    * tags by prefix and re-parses them with a `#` prepended, and nothing else asserts that.
+    */
+  test("a whole-note RECURSIVE structure marker nests every level of the note") {
+    val index = scan(
+      "Outline Learning.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/sequence/headers/recursive\n---\n\n" +
+          "# A\n## A.1\n## A.2\n# B\n## B.1\n")
+    )
+    assertEquals(index.scan.failures, Vector.empty, s"${index.scan.failures}")
+    assertEquals(index.scan.specs.size, 1)
+    assertEquals(
+      index.scan.specs.head.spec.fields.toMap.apply("Text"),
+      "<ul><li><p>A</p><ul><li>A.1</li><li>A.2</li></ul></li><li><p>B</p><ul><li>B.1</li></ul></li></ul>",
+    )
+  }
+
   /** THE MIRROR, AND IT IS WHAT KEEPS THE FIX FROM BEING A HOLE. A structure marker needs
     * headings, so a note without any cannot satisfy it — and must be told the actionable thing,
     * which is the opposite of what a prose marker is told in the same position.
