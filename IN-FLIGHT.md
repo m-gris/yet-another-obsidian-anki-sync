@@ -840,3 +840,114 @@ section: a pointer to a document that does not mention the thing is worse than n
     **MEASURED 2026-08-27:** 23 notes in the live vault, **zero** skipped levels. So it would
     report nothing today, and building it later costs no more than building it now — which is
     what makes parking it safe rather than merely convenient.
+
+---
+
+## OPEN — found by using the feature, 2026-08-28
+
+35. **A WHOLE-NOTE STRUCTURE MARKER IS REFUSED ON EXACTLY THE NOTES IT IS FOR.** Found by Marc
+    on 2026-08-28, the day `#flashcard/sequence/headers` was built, by writing it into a note
+    and syncing. **Nothing is built. This blocks the feature's most natural use.**
+
+    **What happens.** A marker may be written in a note's frontmatter `tags:` instead of on a
+    heading, in which case it applies to the WHOLE NOTE and the file name becomes the card's
+    title. `extract/VaultWalker.scala:492` gates that on:
+
+    ```scala
+    case MarkedHeadings.Absent
+        if frontmatterMarker.isDefined && hasNoHeadings(doc.content) =>
+    ```
+
+    So a whole-note card is built only when the note has **no headings at all**. A note with
+    headings gets `BuildFailure.MarkerNotOnHeading` instead, advising the author to move the
+    marker onto a heading.
+
+    **WHY THAT GATE IS RIGHT FOR EVERY MARKER THAT EXISTED BEFORE THIS ONE.** Typing
+    `#flashcard/3way` into the Obsidian editor makes it lift the tag out of the body and file it
+    under `tags:`, leaving a note that LOOKS marked and produces nothing. Those markers build a
+    card from the note's PROSE, so headings being present means the prose is fragmented and the
+    marker probably fell off one of them. The refusal is the tool catching a real accident.
+
+    **WHY IT IS BACKWARDS FOR THIS ONE.** A whole-note `sequence/headers` card is made OF the
+    headings — they are its items. It cannot work on a note without them. So its correct use is
+    indistinguishable, under this gate, from the accident the gate exists to catch, and the
+    advice it prints is advice the author must not follow.
+
+    **THE FUNCTION ALREADY WORKS; ONLY THE PATH TO IT IS CLOSED.** `Extractor.fromWholeNote`
+    wraps the document in a synthetic section so every marker runs through the heading code, and
+    two tests added 2026-08-28 assert it produces the right card from Marc's actual note. The
+    walker simply never calls it for a note with headings.
+
+    **THE TYPE-LEVEL CAUSE, WHICH IS THE PART WORTH FIXING RATHER THAN PATCHING.** The guard
+    asks `frontmatterMarker.isDefined` — *is there SOME marker* — never *which*. The rule it
+    encodes is marker-DEPENDENT and the code cannot see that:
+
+    | marker | a whole-note card consumes | headings present means |
+    |---|---|---|
+    | `2way`, `cloze`, `sequence` | the note's PROSE | fragmented — suspicious |
+    | `sequence/headers` | the note's HEADINGS | required |
+
+    So the marker should answer what it reads, and the guard should be an exhaustive match over
+    that answer rather than a boolean conjunction — at which point both branches carry a
+    symmetric requirement (prose markers need NO headings, structure markers need SOME) and a
+    marker added later cannot avoid deciding.
+
+    **AND THAT IS HOW THIS WAS POSSIBLE AT ALL**, which Marc asked and which is the general
+    lesson: the compiler can only force a decision where there is a match to be exhaustive over.
+    A boolean guard folding two questions together is invisible to it — **a decision with no
+    author**, the same defect class as the default-parameter gate in `rules/`, one level up.
+    There the missing author was at a call site; here it is at the type.
+
+36. **`MarkedHeadings` IS MISSING A CONSTRUCTOR, AND ITS OWN DOCSTRING SAYS SO.** Independent of
+    item 35, which it would also help fix. **Nothing is built.**
+
+    `extract/VaultWalker.scala:324` declares three cases — `Present`, `Absent`, `CouldNotLook` —
+    and the comment above the guard that uses it reads:
+
+    > `MarkedHeadings.Absent` covers two situations that look alike and are not: a note WITH
+    > headings none of which is marked — the Obsidian accident — and a note with NO headings at
+    > all, where the frontmatter is the only place a marker could live and the note is a leaf.
+    > Only the first is a mistake.
+
+    **That is a prose description of a missing constructor.** The distinction is real, it is
+    load-bearing, and it is drawn by a boolean in a pattern guard rather than by the type — so
+    nothing forces a reader to notice it and nothing forces a new branch to handle both.
+
+    **A SECOND SYMPTOM OF THE SAME GAP, and evidence it is not merely tidiness.**
+    `VaultWalker.scala:502` calls `parsed.toOption.get`. That branch KNOWS the parse succeeded —
+    it got there through a guard that inspected the parsed document — but the type does not
+    carry that knowledge, so the value is re-extracted with a partial function. A case that
+    CARRIED its parsed document would make the `.get` impossible rather than merely unnecessary.
+
+    **RICHER THAN AN ENUM, per Marc 2026-08-28.** Scala's sums are sums of PRODUCTS: each case
+    may carry exactly the evidence that case has. So the fix is not four bare cases but cases
+    holding what their branch needs. That is where the real gain is here — not in phantom or
+    refined types, which would be cargo-culted in this spot: a marker is parsed from a string at
+    runtime, so indexing the type by what it reads would produce an existential that has to be
+    unpacked by a match anyway, at which point the match IS the mechanism.
+
+37. **A NEAR-MISS TAG PRODUCES TOTAL SILENCE.** Found by Marc 2026-08-28. **Nothing is built.**
+    **Belongs with the parked hygiene tooling — see item 34 — not in the sync path.**
+
+    Marc's frontmatter read `flashard/sequence/headers` — one character short of `flashcard`.
+    Nothing was reported. Two separate checks both miss it, and both for the same reason:
+
+    - the marker filter keeps tags where `_.toLowerCase.startsWith("flashcard")`;
+    - the did-you-mean check, whose entire job is to say *"this note declared intent and made no
+      cards"*, tests `frontmatter.toLowerCase.contains("flashcard")`.
+
+    **So the one check written to catch this class of mistake is defeated by a misspelling of
+    the very string it searches for.**
+
+    **WHAT COULD BE REPORTED WITHOUT GUESSING.** A tag whose TRAILING segments exactly match a
+    marker this tool documents, while its leading segment is not `flashcard`. That is an exact
+    match against the tool's own published vocabulary — no edit distance, no threshold, no claim
+    about intent. `math` never trips it; `flashard/sequence/headers`, `flashcards/2way` and
+    `flash/cloze` all trip it immediately.
+
+    **AND WHERE FUZZY MATCHING IS LEGITIMATE HERE, which is worth stating because this project
+    rules against it elsewhere.** The standing rule is that fuzzy matching may RANK but never
+    APPLY — it must not silently decide which card is which. A tool whose only output is *"did
+    you mean `flashcard/sequence/headers`?"* ranks and hands the author the choice, so edit
+    distance and thresholds are fine here, ruled acceptable by Marc 2026-08-28. It stays OUT of
+    the sync path and beside the heading-level linter as an opt-in pass.
