@@ -1,8 +1,8 @@
 # What it would take for maths to reach a card
 
 _Written 2026-08-28, from a design conversation between Marc and Claude. **Nothing here is
-built.** Claims marked VERIFIED were established by running something in this session; everything
-else is reasoning, and says so. It opens with the answer rather than the three-layer TLDR /
+built.** Claims marked VERIFIED were established by running something in this session or by
+reading the file cited; everything else is reasoning, and says so. It opens with the answer rather than the three-layer TLDR /
 Summary / Full form, following its siblings — `PARSER-DISAGREEMENTS.md`, `CLOZE-REDESIGN.md`,
 `EDIT-IN-OBSIDIAN.md`, `REVIEW-QUEUE.md`._
 
@@ -119,10 +119,33 @@ Named as placement rather than as a plan, because the shape is not decided.
 **Nothing in `model/`, `plan/`, `anki/` or `cli/`.** Maths is body content, not a card shape: no
 new `CardSpec` case, no new marker, no new note type. The same reason a typed edge needed none.
 
-**Nothing in Anki, either.** Anki 25.09 renders `\(…\)` and `\[…\]` with MathJax 3 without
-configuration, and Obsidian renders `$…$` with MathJax 3 as well — so the TeX body needs no
-translation in either direction. The whole of the transport problem is which characters mark
-where the maths starts and stops.
+**Nothing in Anki, either — with one caveat that is new here.** VERIFIED BY READING 2026-08-28,
+from the config Anki actually ships: `_aqt/data/web/js/mathjax.js` in aqt 25.9.5, which is the
+version this machine runs (pinned `aqt==25.9.5` in the launcher's `uv.lock`), against MathJax
+3.2.2 bundled alongside it at `_aqt/data/web/js/vendor/mathjax`.
+
+| setting | shipped value | consequence |
+|---|---|---|
+| `displayMath` | `[["\\[","\\]"]]` | `\[…\]` is the only display delimiter. `$$` is not one, and no config makes it one |
+| `inlineMath` | not set | MathJax's own default stands, so `\(…\)` works — by default rather than by Anki's choice |
+| `processEnvironments` | `false` | **a bare `\begin{align}…\end{align}` is NOT typeset** — an environment is only seen inside `\[…\]` |
+| `processEscapes` | `false` | `$` carries no meaning to Anki at all, escaped or not |
+| `packages` | `+noerrors`, `+mathtools`, **`−textmacros`** | AMS arrives in MathJax's default set. `mhchem` and `physics` are NOT loaded |
+
+Obsidian renders `$…$` with MathJax 3 as well, so the TeX body still needs no translation between
+the two and the bulk of the transport problem is still which characters mark where the maths
+starts and stops.
+
+**`processEnvironments: false` is the caveat, and it kills an idea.** It was raised early in the
+conversation that produced this document that `\begin…\end` might serve on its own as the marker
+Anki recognises. It cannot: Anki will not look at an environment that is not already wrapped in
+`\[…\]`. Wrapping is therefore mandatory, not optional.
+
+Whether wrapping is SUFFICIENT is NOT MEASURED, and it is the one place a TeX-level translation
+might still be owed. `align` is itself a display environment, so `\[\begin{align}…\end{align}\]`
+is the fragile spelling and `aligned` the robust one. If that distinction holds under Anki's
+MathJax, the tool would have to rewrite the environment name and not merely swap delimiters —
+which is precisely what the paragraph above claims is unnecessary. One card settles it.
 
 ---
 
@@ -166,8 +189,14 @@ where the maths starts and stops.
 - **How much maths is in the vault, and where.** In prose only, or in headings too? The heading
   count is the size of the re-keying cost, and it is the number decision 1 turns on. Read-only —
   a grep, and an `inspect` run.
-- **Whether Anki's MathJax loads the packages this vault uses.** AMS environments are certain;
-  `mhchem` and `physics` are not. Only matters if they occur.
+- **Whether the vault uses maths packages Anki does not load.** The Anki half is now settled by
+  reading the shipped config, above: no `mhchem`, no `physics`, and `textmacros` explicitly
+  removed, so `\text{}` takes a narrower grammar than Obsidian allows. The open half is the vault
+  half — whether any note reaches for them. A grep.
+- **Whether `\[\begin{align}…\end{align}\]` typesets under Anki's MathJax, or whether `aligned` is
+  required.** This is the only candidate found so far for a translation of the TeX BODY rather than
+  of its delimiters, and it decides whether "delimiters only" survives as the shape of the feature.
+  One hand-made card.
 
 ---
 
