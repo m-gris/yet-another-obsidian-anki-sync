@@ -577,8 +577,10 @@ class PlannerTest extends munit.FunSuite:
     // one action aside must not drop the actions around it, which is a genuine risk of the way
     // that partition rebuilds the action list, and which nothing else covers.
     //
-    // THE ORIGINAL INVARIANT IS NOW UNCOVERED. Only a cloze-kind mismatch still raises, and
-    // building that fixture here is more than a rename — see `IN-FLIGHT.md`.
+    // THE ORIGINAL INVARIANT IS NOW UNCOVERED, and nothing else covers it — checked. Only a
+    // cloze-kind mismatch still raises from a retype, and building that fixture here is more
+    // than a rename. Recorded as item 30 of `IN-FLIGHT.md`, which also names the fault-injecting
+    // doubles in two other test files as the route nobody tried.
     val report = runReport(planOf(scan, observe(anki)), anki, RetypePolicy.Apply)
 
     assertEquals(report.failures, Vector.empty, s"nothing here should fail any more: $report")

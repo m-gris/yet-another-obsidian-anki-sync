@@ -706,3 +706,82 @@ document because a finding nobody can find is a finding nobody acts on._
     if this one is not taken whole: a principled refusal announced as `SOME ACTIONS FAILED` /
     `PROBLEMS`; the raw case-class `UnsupportedOperation(what,why)` toString reaching the terminal;
     and the same 400-character reason printed once per affected note, burying the remedy._
+
+---
+
+## OPEN — left behind by the priced-decision work, 2026-08-28
+
+_All three were noticed while building `--approve` and recorded here rather than left in a
+comment. Two of them were referred to as "filed" before they were, which is the reason for this
+section: a pointer to a document that does not mention the thing is worse than no pointer._
+
+30. **A LAW LOST ITS ONLY TEST: "a failing action does not abort the remainder of the plan".**
+    Found 2026-08-28. **Nothing is built.**
+
+    **The invariant.** `Executor.applyEach` runs a plan's actions in sequence against a live
+    collection. One action raising must not abandon the ones after it — otherwise a single bad
+    note leaves the rest of a vault unsynced until that note is fixed.
+
+    **How the coverage was lost.** The test in `plan/Planner.test.scala` built three actions and
+    rigged the middle one to fail. The rigged failure was a NARROWING, and since 2026-08-27 a
+    narrowing does not fail: `Executor.run` prices it and partitions it out BEFORE execution, so
+    it never reaches the code that could abort. The test still passes and no longer contains a
+    failure at all. It was retargeted to cover the partition instead — that setting one action
+    aside must not drop its neighbours, which is a real risk of how the action list is rebuilt
+    and is otherwise untested — and its docstring says so.
+
+    **Why it was not simply restored.** After the split of 2026-08-27, the only thing that still
+    RAISES from a retype is a cloze-kind mismatch, and `Planner.test.scala` has no cloze
+    fixtures: seeding a note onto a cloze note type there is new setup rather than a rename.
+    Injecting a fault is the other route — `NoteTypeRepair.test.scala` and
+    `ExecutorInterruption.test.scala` both already have doubles that do it — and neither was
+    tried.
+
+    **CHECKED 2026-08-28: no other test covers it.** `ExecutorInterruption.test.scala` tests
+    convergence after an interruption, which is a different property.
+
+31. **THE IN-MEMORY COLLECTION DECIDES A NOTE'S CARD COUNT FROM THE NOTE TYPE'S NAME.**
+    Found 2026-08-28 by a test failing for the wrong reason. **Nothing is built.**
+
+    `InMemoryAnki.cardCountOf` matches on the note type's NAME — `Basic (and reversed)` gives 2,
+    `Concept-Descriptor` gives 2 or 3 depending on a gate field, cloze gives 1, **and anything
+    else gives 1** — rather than reading the `NoteTypeSpec` it was handed. So a note type defined
+    in a test with three templates yields a note with ONE card.
+
+    **WHY IT MATTERS BEYOND TIDINESS.** A test seeding a locally-defined multi-template type and
+    asserting about its cards is testing something other than what it appears to. That happened
+    on 2026-08-28: a test seeded `stockWide`, which declares three templates, expected three
+    cards and got one. The test was pointed at a named note type instead and a comment left
+    explaining why, which is a workaround rather than a fix.
+
+    **The obvious change is not obviously right.** Deriving the count from the spec's template
+    list would be wrong too: real Anki generates a card per template whose FRONT renders
+    non-empty, which is why the concept-descriptor gate field exists at all. Modelling that
+    properly means the fake evaluating templates, which is a bigger thing than it sounds.
+
+32. **TOOL ARTEFACTS ARE SITTING UNTRACKED IN THE REPOSITORY, and one would be committed.**
+    Found 2026-08-27. **Not mine to fix** — flagged for whoever owns them.
+
+    `.serena/` is a language-server cache; it wants to be in `.gitignore` rather than committed.
+    `addon/obsidian_edit/__pycache__/` holds compiled Python bytecode, and `addon/` IS now
+    tracked, so a later `git add` of that directory would put `.pyc` files into the history. The
+    `.gitignore` work done on 2026-08-27 covered `meta.json` — which Anki writes into the
+    repository through the installed add-on's symlink — but not either of these.
+
+33. **~~A PRINCIPLED REFUSAL IS ANNOUNCED AS A FAILURE.~~ FIXED 2026-08-27**, superseding the
+    first of the three presentation defects listed at the end of item 29 above. **The other two
+    stand, and item 29's closing paragraph is therefore stale.**
+
+    **STILL OPEN: the raw case-class `toString` reaches the terminal.**
+    `cli/Main.scala:1131` prints `${f.error.toString}` for a failed action, and five other sites
+    print `${error.toString}` under `Anki's answer:`. For `AnkiError.UnsupportedOperation(what,
+    why)` that renders Scala's derived form — both constructor arguments joined by a comma, with
+    the type name wrapped round them — which is why Marc's report on 2026-08-27 contained
+    `UnsupportedOperation(move 'reads' from ...,'Obsidian Concept-Descriptor' has 3 card
+    template(s)...)`. **The fix is a `describe` on `AnkiError` rather than a change at each call
+    site**, so that a sixth site cannot reintroduce it.
+
+    **STILL OPEN, though much reduced: one long reason printed once per affected note.** Two
+    notes failing for the same reason printed the same four hundred characters twice. Narrowings
+    no longer take this path at all, so the remaining case is a cloze-kind mismatch across
+    several notes — rarer, and not measured.
