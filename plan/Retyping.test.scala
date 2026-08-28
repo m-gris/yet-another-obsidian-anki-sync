@@ -823,6 +823,95 @@ class RetypingTest extends munit.FunSuite:
     assert(report.deferred.isEmpty, s"a decision was reported as a deferral: $report")
   }
 
+  // ------------------------------------------ answering by name ----
+
+  def runApproving(p: Plan, anki: InMemoryAnki, approved: Set[DecisionHandle]): ExecutionReport =
+    Executor
+      .run(p, anki, RetypePolicy.Apply, approved)
+      .fold(e => fail(s"execution aborted entirely: $e"), identity)
+
+  /** THE POINT OF THE WHOLE FEATURE: the author was shown a price and asked for that change by
+    * name, so it happens. Nothing about it was refused and nothing about it failed.
+    */
+  test("a change approved by name is carried out") {
+    val anki = collectionWith(stockWide)
+    val id   = seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
+    val plan = planOf(scanOf(basicSpec), anki)
+
+    val report = runApproving(plan, anki, Set(DecisionHandle.of(k)))
+
+    assertEquals(report.failures, Vector.empty, s"an approved change failed: $report")
+    assertEquals(report.pending, Vector.empty, "an approved change was still reported as waiting")
+    assertEquals(report.authorised.size, 1, s"the run did not record what it spent: $report")
+    assertEquals(
+      noteAt(anki, id).noteType,
+      Marker.NoteTypes.Basic,
+      "the change was approved by name and the note did not move",
+    )
+  }
+
+  /** THE PRICE REPORTED IS THE PRICE THAT WAS QUOTED. Telling the author afterwards that it cost
+    * something other than what they agreed to — even something more accurate — means the figure
+    * they weighed and the figure they were charged are two different figures.
+    */
+  test("an approved change reports the price it was quoted at") {
+    val anki  = collectionWith(stockWide)
+    val note  = seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
+    val cards = anki.cardsOf(Vector(note)).fold(e => fail(s"cardsOf: $e"), identity)
+    cards.foreach(c => anki.recordReviews(c, 3))
+    val plan = planOf(scanOf(basicSpec), anki)
+
+    val quoted = decisionsOf(plan, anki, RetypePolicy.Apply).pending.head.price
+    val spent  = runApproving(plan, anki, Set(DecisionHandle.of(k))).authorised.head.price
+
+    assertEquals(spent.cards, quoted.cards, "the number of cards spent differs from the quote")
+    assertEquals(spent.reviews, quoted.reviews, "the review history spent differs from the quote")
+  }
+
+  /** APPROVING ONE THING APPROVES ONE THING. The ruling of 2026-08-27 turns on this: a name
+    * covers the change it names and nothing else, which is what a blanket flag could not promise.
+    */
+  test("approving one change leaves another waiting") {
+    val anki  = collectionWith(stockWide)
+    val other = key("second-note", "elsewhere")
+    seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
+    seedOnOldType(anki, "Wide", other, Vector("Front" -> "g", "Back" -> "c"))
+
+    val plan = planOf(
+      scanOf(
+        basicSpec,
+        CardSpec.TwoField(other, "elsewhere", body("c"), TwoFieldDirections.Forward, testContext),
+      ),
+      anki,
+    )
+    val report = runApproving(plan, anki, Set(DecisionHandle.of(k)))
+
+    assertEquals(report.authorised.size, 1, s"the named change was not carried out: $report")
+    assertEquals(report.pending.size, 1, s"the unnamed change was not left waiting: $report")
+    assertEquals(
+      report.pending.head.handle.value,
+      DecisionHandle.of(other).value,
+      "the wrong change was left waiting",
+    )
+  }
+
+  /** A NAME THAT MEANS NOTHING CHANGES NOTHING, and is said rather than swallowed. A typo must
+    * not silently become "approved nothing, carry on" — the author asked for something.
+    */
+  test("a name matching nothing is reported, and nothing is moved on account of it") {
+    val anki = collectionWith(stockWide)
+    val id   = seedOnOldType(anki, "Wide", k, Vector("Front" -> "f", "Back" -> "b"))
+    val plan = planOf(scanOf(basicSpec), anki)
+
+    val ghost  = DecisionHandle.of(key("no-such-note", "nowhere"))
+    val report = runApproving(plan, anki, Set(ghost))
+
+    assertEquals(report.unknownApprovals, Vector(ghost), s"the unknown name was not reported: $report")
+    assertEquals(report.pending.size, 1, "the real change stopped waiting because of a typo")
+    assertEquals(report.authorised, Vector.empty, "something was approved by a name that matched nothing")
+    assertEquals(noteAt(anki, id).noteType, "Wide", "a note moved on account of an unknown name")
+  }
+
   // ------------------------------- the preview must agree with the run it previews ----
 
   /** THE LAW THE DRY-RUN DEFECT BROKE, stated as a law rather than as a case.

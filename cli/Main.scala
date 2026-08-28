@@ -20,6 +20,7 @@ import obsidiananki.extract.{DeckShape, VaultFile, VaultIndex, VaultWalker}
 import obsidiananki.locate.{Locate, Located, VaultName}
 import obsidiananki.model.CardKey
 import obsidiananki.plan.{
+  DecisionHandle,
   ExecutionReport,
   Executor,
   Observer,
@@ -76,9 +77,9 @@ object Main
   def main: Opts[IO[ExitCode]] = Cli.command.map {
     case Command.Inspect(selection, deckRoot, deckShape, verbose) =>
       withChosenVault(selection)(inspect(_, deckRoot, deckShape, verbose))
-    case Command.Sync(selection, profile, deckRoot, deckShape, dryRun, retypePolicy) =>
+    case Command.Sync(selection, profile, deckRoot, deckShape, dryRun, retypePolicy, approved) =>
       withVerifiedProfile(profile)(anki =>
-        withChosenVault(selection)(sync(_, deckRoot, deckShape, dryRun, retypePolicy, anki))
+        withChosenVault(selection)(sync(_, deckRoot, deckShape, dryRun, retypePolicy, approved, anki))
       )
     case Command.InstallNoteTypes(profile, repair) =>
       withVerifiedProfile(profile)(installNoteTypes(_, repair))
@@ -929,6 +930,7 @@ object Main
       deckShape: DeckShape,
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
+      approved: Set[DecisionHandle],
       anki: AnkiConnectClient[IO],
   ): IO[ExitCode] =
     for
@@ -938,7 +940,7 @@ object Main
       _ <- IO.println(s"vault:    $vault")
       _ <- IO.println(s"files:    ${files.size}")
       _ <- IO.println(s"notes:    ${index.scan.specs.size}")
-      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, anki)
+      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, approved, anki)
       result = verdict(outcome)
       _ <- (describeSyncOutcome(outcome) ++ describeVerdict(result)).traverse_(IO.println)
     yield exitCodeFor(result)
@@ -969,6 +971,7 @@ object Main
       deckRoot: DeckPath,
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
+      approved: Set[DecisionHandle],
       anki: AnkiConnectClient[IO],
   ): IO[SyncOutcome] =
     NoteTypeAssets.all match
@@ -988,7 +991,7 @@ object Main
           case Left(error)                    => IO.pure(SyncOutcome.CouldNotObserve(error))
           case Right(problems) if problems.nonEmpty =>
             IO.pure(SyncOutcome.NoteTypesNotReady(problems))
-          case Right(_) => reconcile(index, deckRoot, dryRun, retypePolicy, anki)
+          case Right(_) => reconcile(index, deckRoot, dryRun, retypePolicy, approved, anki)
         }
 
   /** Observe, plan, and — unless this is a dry run — apply. The note types have already been
@@ -999,6 +1002,7 @@ object Main
       deckRoot: DeckPath,
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
+      approved: Set[DecisionHandle],
       anki: AnkiConnectClient[IO],
   ): IO[SyncOutcome] =
     Observer.observe[Refused](anki).value.flatMap {
@@ -1022,7 +1026,7 @@ object Main
                  // preview. Nothing has been written — a dry run writes nothing by
                  // construction — so ending here costs the person only the answer they came
                  // for, which is better than a preview that quietly stopped checking.
-                 Executor.decide[Refused](plan, anki, retypePolicy).value.flatMap {
+                 Executor.decide[Refused](plan, anki, retypePolicy, approved).value.flatMap {
                    case Left(error) => IO.pure(SyncOutcome.AbortedDuringExecution(error))
                    case Right(decisions) =>
                      // THE SAME TWO BLOCKS A REAL RUN PRINTS, from the same decision and
@@ -1034,7 +1038,7 @@ object Main
                        .as(SyncOutcome.PlannedOnly(plan))
                  }
                else
-                 Executor.run[Refused](plan, anki, retypePolicy).value.map {
+                 Executor.run[Refused](plan, anki, retypePolicy, approved).value.map {
                    case Left(error)   => SyncOutcome.AbortedDuringExecution(error)
                    case Right(report) => SyncOutcome.Applied(plan, report)
                  })
@@ -1094,7 +1098,10 @@ object Main
       case SyncOutcome.PlannedOnly(_) =>
         Vector("", "DRY RUN — nothing was written.")
 
-      case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, applied, pending)) =>
+      case SyncOutcome.Applied(
+            plan,
+            ExecutionReport(failures, deferred, applied, pending, authorised, unknown),
+          ) =>
         // `attempted:` and `failed:`, never "applied N of M". `Executor.runOne` traverses an
         // Update's changes, so a failure on the first change abandons the rest of THAT action
         // while recording one failure — "applied" would assert more than the code guarantees.
@@ -1129,8 +1136,14 @@ object Main
                 "and the collection and attempts them again. Whether that succeeds depends on why each one",
                 "failed — an action this tool cannot yet carry out will fail again.",
               )
+        // ORDER IS WHAT A PERSON NEEDS FIRST. What was done, then what was left alone, then a
+        // name that meant nothing, then what is still waiting — so the block answering "what did
+        // you mean, then?" sits directly above the list that answers it.
         counts ++ failureLines ++ Report.appliedRetypes(applied) ++
-          Report.deferredRetypes(deferred) ++ Report.waitingOnYou(pending)
+          Report.approvalsCarriedOut(authorised) ++
+          Report.deferredRetypes(deferred) ++
+          Report.unknownApprovals(unknown) ++
+          Report.waitingOnYou(pending)
 
       case SyncOutcome.AbortedDuringExecution(error) =>
         Vector(
@@ -1243,7 +1256,7 @@ object Main
           else s"dry run; ${plan.actions.size} actions are outstanding"
         )
 
-    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, _, pending)) =>
+    case SyncOutcome.Applied(plan, ExecutionReport(failures, deferred, _, pending, _, unknown)) =>
       // DEFERRED WORK MAKES A RUN NON-CLEAN, deliberately, even though nothing went wrong.
       // The precedent this departs from is the dry run, which is clean with actions
       // outstanding — but a dry run's work is outstanding until the NEXT ordinary run, whereas
@@ -1266,6 +1279,12 @@ object Main
              Option.when(pending.nonEmpty)(
                s"${pending.size} note(s) would destroy cards that have nowhere to go, and " +
                  "nothing has answered for them — see WAITING ON YOU above"
+             ) ++
+             // A NAME THAT MEANT NOTHING MAKES THE RUN NOT CLEAN. The author asked for something
+             // that did not happen, and a run that finished "OK" would be answering a question
+             // they did not ask.
+             Option.when(unknown.nonEmpty)(
+               s"${unknown.size} name(s) given to --approve matched nothing that is waiting"
              ) ++ problemsIn(plan)
       if reasons.nonEmpty then Verdict.Problems(reasons)
       else

@@ -348,6 +348,60 @@ object Report:
       */
     case Unremarkable
 
+  /** WHAT AN APPROVAL ACTUALLY SPENT, in the numbers it was offered at.
+    *
+    * REPORTED IN THE PRICE THAT WAS QUOTED rather than in a fresh reading. The author agreed to
+    * a specific number; telling them a different one afterwards — even a more accurate one —
+    * would mean the figure they weighed and the figure they were charged are two figures.
+    *
+    * IT SAYS THE CARDS ARE STILL THERE, because they are. VERIFIED 2026-08-28 against the
+    * add-on's own action list: nothing in AnkiConnect deletes a chosen card, so this tool
+    * cannot tidy up after itself. Anki removes them at the next `Check Database`, and a report
+    * claiming the cards were destroyed now would be describing something that has not happened.
+    */
+  def approvalsCarriedOut(authorised: Vector[PendingRetype]): Vector[String] =
+    if authorised.isEmpty then Vector.empty
+    else
+      val entries = authorised.map { p =>
+        val cards   = quantify(p.price.cards, "card")
+        val reviews = quantify(p.price.reviews, "review")
+        s"  '${p.retype.key.path.render}' (note '${p.retype.key.noteId.value}') " +
+          s"-> '${p.loss.to}': $cards stranded, holding $reviews"
+      }
+      Vector("", s"APPROVED AND DONE: ${quantify(authorised.size, "note")} you named.", "") ++
+        entries ++
+        Vector(
+          "",
+          "The stranded cards are still in your collection and still hold their history. Anki",
+          "removes them, and their history with them, the next time you run:",
+          "",
+          "    Tools > Check Database",
+          "",
+          "This tool cannot remove them for you: AnkiConnect has no way to delete one chosen",
+          "card, and running Check Database on your behalf would also sweep up stranded cards",
+          "from notes you have not decided about.",
+        )
+
+  /** A NAME THE AUTHOR GAVE THAT MATCHES NOTHING WAITING.
+    *
+    * PRINTED BEFORE THE LIST OF WHAT IS WAITING, which follows it, so the answer to "then what
+    * did you mean?" is on the screen already rather than requiring a second run.
+    */
+  def unknownApprovals(handles: Vector[DecisionHandle]): Vector[String] =
+    if handles.isEmpty then Vector.empty
+    else
+      Vector(
+        "",
+        s"NOT RECOGNISED: ${quantify(handles.size, "name")} you asked to approve " +
+          s"${if handles.sizeIs == 1 then "matches" else "match"} nothing that is waiting.",
+        "",
+      ) ++ handles.map(h => s"  ${h.value}") ++
+        Vector(
+          "",
+          "Nothing was approved for these. Either the name was mistyped, or that change is no",
+          "longer waiting — it may have been dealt with already, or the note edited since.",
+        )
+
   /** WHAT THE RUN IS WAITING ON, WITH WHAT EACH WOULD COST.
     *
     * NOT UNDER `SOME ACTIONS FAILED`, which is where these appeared until 2026-08-27. Nothing

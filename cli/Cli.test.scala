@@ -52,7 +52,7 @@ class CliTest extends munit.FunSuite:
 
   test("sync WITH a profile parses") {
     parse("sync", "--vault-path", existingDir, "--profile", "POC-test") match
-      case Right(Command.Sync(_, profile, _, _, dryRun, retypePolicy)) =>
+      case Right(Command.Sync(_, profile, _, _, dryRun, retypePolicy, _)) =>
         assertEquals(profile, "POC-test")
         assertEquals(dryRun, false)
         // THE DEFAULT IS TO MOVE, asserted rather than assumed. _Inverted 2026-08-27; this
@@ -127,7 +127,7 @@ class CliTest extends munit.FunSuite:
       case Right(Command.Inspect(selection, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
       case other                                   => fail(s"got $other")
     parse("sync", "--profile", "POC-test") match
-      case Right(Command.Sync(selection, _, _, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
+      case Right(Command.Sync(selection, _, _, _, _, _, _)) => assertEquals(selection, VaultSelection.Ask)
       case other                                     => fail(s"got $other")
   }
 
@@ -504,7 +504,7 @@ class CliTest extends munit.FunSuite:
       "--deck-from",
       "headings",
     ) match
-      case Right(Command.Sync(_, _, _, shape, _, _)) =>
+      case Right(Command.Sync(_, _, _, shape, _, _, _)) =>
         assertEquals(shape, DeckShape.of(Set(DeckLevel.Headings)))
       case other => fail(s"got $other")
   }

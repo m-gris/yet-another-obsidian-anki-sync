@@ -199,7 +199,9 @@ class MainTest extends munit.FunSuite:
   def runSync(dryRun: Boolean, files: (String, String)*): (FakeAnkiConnect.State, Main.SyncOutcome) =
     val (state, anki) = fixture()
     val outcome = Main
-      .observeAndApply(vaultOf(files*), deckRoot, dryRun, RetypePolicy.Defer, anki)
+      // NOTHING APPROVED. These tests are about the shape of an ordinary run; approving a
+      // change is exercised where the price and the name are, not here.
+      .observeAndApply(vaultOf(files*), deckRoot, dryRun, RetypePolicy.Defer, Set.empty, anki)
       .unsafeRunSync()
     (state, outcome)
 
@@ -229,9 +231,9 @@ class MainTest extends munit.FunSuite:
   test("running twice changes nothing the second time") {
     val (state, anki) = fixture()
     val index         = vaultOf("A.md" -> oneCard)
-    Main.observeAndApply(index, deckRoot, dryRun = false, RetypePolicy.Defer, anki).unsafeRunSync()
+    Main.observeAndApply(index, deckRoot, dryRun = false, RetypePolicy.Defer, Set.empty, anki).unsafeRunSync()
     val before  = state.notes.size
-    val outcome = Main.observeAndApply(index, deckRoot, dryRun = false, RetypePolicy.Defer, anki).unsafeRunSync()
+    val outcome = Main.observeAndApply(index, deckRoot, dryRun = false, RetypePolicy.Defer, Set.empty, anki).unsafeRunSync()
     assertEquals(state.notes.size, before, "a second run created another note")
     outcome match
       case Main.SyncOutcome.Applied(plan, _) => assertEquals(plan.actions, Vector.empty)
@@ -282,9 +284,9 @@ class MainTest extends munit.FunSuite:
 
     def code(o: Main.SyncOutcome) = Main.exitCodeFor(Main.verdict(o))
 
-    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty, Vector.empty, Vector.empty))), ExitCode.Success)
+    assertEquals(code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty))), ExitCode.Success)
     assertNotEquals(
-      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty, Vector.empty))),
+      code(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty))),
       ExitCode.Success,
       "a run whose actions failed reported success",
     )
@@ -337,7 +339,7 @@ class MainTest extends munit.FunSuite:
       ),
       AnkiError.Remote("addTags", "refused"),
     )
-    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty, Vector.empty)))
+    val partlyFailed = lines(Main.SyncOutcome.Applied(empty, ExecutionReport(Vector(failure), Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty)))
     assert(
       partlyFailed.toUpperCase.contains("FAIL"),
       s"a run whose actions failed does not say so on screen:\n$partlyFailed",
@@ -354,7 +356,7 @@ class MainTest extends munit.FunSuite:
       Vector.empty,
       Vector.empty,
     )
-    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty, Vector.empty, Vector.empty))) match
+    Main.verdict(Main.SyncOutcome.Applied(partial, ExecutionReport(Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty))) match
       case Main.Verdict.Clean(_) => fail("a run with orphan inference suppressed reported clean")
       case _                     => ()
   }
@@ -689,7 +691,7 @@ class MainTest extends munit.FunSuite:
     val (state, anki) = fixture()
     state.models = Map.empty
 
-    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
+    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, Set.empty, anki)
       .unsafeRunSync()
 
     outcome match
@@ -717,7 +719,7 @@ class MainTest extends munit.FunSuite:
       fields = NonEmptyVector.of(Marker.BasicFields.Front, Marker.BasicFields.Back)
     )
 
-    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
+    val outcome = Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, Set.empty, anki)
       .unsafeRunSync()
 
     outcome match
@@ -744,14 +746,14 @@ class MainTest extends munit.FunSuite:
     val (state2, anki2) = fixture()
     state2.models = Map.empty
     assert(
-      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Defer, anki2)
+      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Defer, Set.empty, anki2)
         .unsafeRunSync()
         .isInstanceOf[Main.SyncOutcome.NoteTypesNotReady],
       "a dry run planned against a collection it could not write to",
     )
     // Control: the same dry run against a collection that IS ready still plans.
     assert(
-      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Defer, anki)
+      Main.observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Defer, Set.empty, anki)
         .unsafeRunSync()
         .isInstanceOf[Main.SyncOutcome.PlannedOnly],
       "the preflight refused a collection that was ready",
@@ -862,7 +864,7 @@ class MainTest extends munit.FunSuite:
   def collectionWithANoteOnTheStockType(): (FakeAnkiConnect.State, AnkiConnectClient[IO], Long) =
     val (state, anki) = fixture()
     Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, Set.empty, anki)
       .unsafeRunSync()
     assertEquals(state.notes.size, 1, "the fixture sync did not create the note")
 
@@ -890,7 +892,7 @@ class MainTest extends munit.FunSuite:
     val (state, anki, id) = collectionWithANoteOnTheStockType()
 
     val outcome = Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Defer, Set.empty, anki)
       .unsafeRunSync()
 
     assertEquals(state.notes(id).model, "Basic", "the note was moved without being asked")
@@ -927,7 +929,7 @@ class MainTest extends munit.FunSuite:
     val (state, anki, id) = collectionWithANoteOnTheStockType()
 
     val outcome = Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, Set.empty, anki)
       .unsafeRunSync()
 
     outcome match
@@ -948,7 +950,7 @@ class MainTest extends munit.FunSuite:
     // THE LAW, through the shell: the hash written by the move describes what the move wrote,
     // so the next run has nothing to do.
     Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, Set.empty, anki)
       .unsafeRunSync() match
       case Main.SyncOutcome.Applied(plan, _) =>
         assertEquals(plan.actions, Vector.empty, "the moved note was planned again")
@@ -961,7 +963,7 @@ class MainTest extends munit.FunSuite:
   test("a dry run with --migrate-note-types moves nothing") {
     val (state, anki, id) = collectionWithANoteOnTheStockType()
     Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Apply, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = true, RetypePolicy.Apply, Set.empty, anki)
       .unsafeRunSync()
     assertEquals(state.notes(id).model, "Basic", "a dry run moved a note")
   }
@@ -977,7 +979,7 @@ class MainTest extends munit.FunSuite:
     val (_, anki, _) = collectionWithANoteOnTheStockType()
 
     val outcome = Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, Set.empty, anki)
       .unsafeRunSync()
 
     val screen = Main.describeSyncOutcome(outcome).mkString("\n")
@@ -1006,7 +1008,7 @@ class MainTest extends munit.FunSuite:
     // An ordinary first sync into an empty collection: it CREATES a note and moves none.
     val (_, anki) = fixture()
     val outcome = Main
-      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, anki)
+      .observeAndApply(vaultOf("A.md" -> oneCard), deckRoot, dryRun = false, RetypePolicy.Apply, Set.empty, anki)
       .unsafeRunSync()
 
     val screen = Main.describeSyncOutcome(outcome).mkString("\n")

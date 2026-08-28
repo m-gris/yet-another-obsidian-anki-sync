@@ -6,7 +6,7 @@ import com.monovore.decline.Opts
 import obsidiananki.anki.DeckPath
 import obsidiananki.extract.{DeckLevel, DeckShape}
 import obsidiananki.locate.VaultName
-import obsidiananki.plan.RetypePolicy
+import obsidiananki.plan.{DecisionHandle, RetypePolicy}
 import java.nio.file.Paths
 
 /** How the person named the vault to read.
@@ -57,6 +57,21 @@ enum Command:
       deckShape: DeckShape,
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
+
+      /** Changes the author has answered for, each named by the short code the run printed.
+        *
+        * A SET OF NAMES RATHER THAN A SWITCH, and that is the ruling of 2026-08-27 expressed in
+        * the type. A flag meaning "go ahead with whatever needs it" would approve changes the
+        * author never read about, including ones they did not know were affected. Every element
+        * here was read off a line that said what it would cost.
+        *
+        * REPEATABLE, because approving five changes should not mean five full runs — each of
+        * which rescans the vault and re-reads the collection. Naming five is still naming them.
+        *
+        * MALFORMED NAMES ARE REFUSED BY THE PARSER; a well-formed name matching nothing waiting
+        * is answered by the run, which has the list of what IS waiting to show instead.
+        */
+      approved: Set[DecisionHandle],
   )
 
   /** Put this tool's five note types into a collection, and report what is already there.
@@ -277,6 +292,34 @@ object Cli:
       .orFalse
       .map(if _ then RetypePolicy.Defer else RetypePolicy.Apply)
 
+  /** THE NAMES THE AUTHOR IS ANSWERING FOR, VALIDATED FOR SHAPE HERE AND FOR MEANING LATER.
+    *
+    * Refusing a malformed name at the parser is worth doing because it costs nothing and the
+    * message can be precise. Whether a well-formed name matches anything is a different
+    * question, and one this layer cannot answer: it needs the vault and the collection. The run
+    * answers that one, where it can also print what IS waiting.
+    */
+  private val approvedOpt: Opts[Set[DecisionHandle]] =
+    Opts
+      .options[String](
+        "approve",
+        "Go ahead with one change that would destroy cards, named by the short code the run " +
+          "printed beside it. Repeatable. Each code names ONE change; there is deliberately no " +
+          "flag that approves them all.",
+      )
+      .orEmpty
+      .mapValidated { raw =>
+        raw.traverse(r =>
+          DecisionHandle
+            .parse(r)
+            .toValidNel(
+              s"'$r' is not one of the short codes this tool prints: expected " +
+                s"${DecisionHandle.Length} characters, digits and a-f only"
+            )
+        )
+      }
+      .map(_.toSet)
+
   private val sync: Opts[Command] =
     Opts.subcommand("sync", "Reconcile the vault against an Anki collection.") {
       (
@@ -286,6 +329,7 @@ object Cli:
         deckShapeOpt,
         Opts.flag("dry-run", "Compute and print the plan without applying it.").orFalse,
         retypePolicyOpt,
+        approvedOpt,
       ).mapN(Command.Sync.apply)
     }
 

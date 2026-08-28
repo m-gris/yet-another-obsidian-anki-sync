@@ -4,7 +4,7 @@ import cats.MonadError
 import cats.syntax.all.*
 import obsidiananki.anki.*
 import cats.data.NonEmptyVector
-import obsidiananki.model.{KeyError, OwnedTag, TagCodec}
+import obsidiananki.model.{CardKey, KeyError, OwnedTag, TagCodec}
 
 // Reading Anki's current state, and carrying out a plan. Both are written against the
 // algebra rather than a concrete client, so the same code runs against the in-memory
@@ -58,6 +58,20 @@ final case class ExecutionReport(
       * question nobody has been asked yet, and it stays until somebody answers it.
       */
     pending: Vector[PendingRetype],
+
+    /** Changes the author APPROVED BY NAME and that were carried out, with the price each was
+      * quoted at. Reported so a run can say what it spent, in the same numbers it offered.
+      */
+    authorised: Vector[PendingRetype],
+
+    /** Names the author gave that matched nothing waiting.
+      *
+      * REPORTED RATHER THAN RAISED, and the run still does everything else. A name that
+      * resolves to nothing does not invalidate the rest of the plan — it usually means a typo
+      * or a change already dealt with — so stopping the run would punish the other notes for
+      * it. It makes the run not clean, and the block listing what IS waiting follows it.
+      */
+    unknownApprovals: Vector[DecisionHandle],
 )
 
 object Observer:
@@ -231,7 +245,12 @@ object Executor:
     * The reads cost nothing when there is nothing to retype: `Retyping.noteTypesIn` is empty,
     * so no request is made.
     */
-  def run[F[_]](plan: Plan, anki: Anki[F], policy: RetypePolicy)(using
+  def run[F[_]](
+      plan: Plan,
+      anki: Anki[F],
+      policy: RetypePolicy,
+      approved: Set[DecisionHandle] = Set.empty,
+  )(using
       F: MonadError[F, AnkiError]
   ): F[ExecutionReport] =
     policy match
@@ -253,8 +272,8 @@ object Executor:
         val deferred = setAside.collect { case retype: SyncAction.Retype => retype }
         // NOTHING IS WAITING UNDER `Defer`: no retype is attempted at all, so none of them
         // reaches the point where a price would be quoted.
-        applyEach(rest, anki, Map.empty, policy).map((failures, applied) =>
-          ExecutionReport(failures, deferred, applied, Vector.empty)
+        applyEach(rest, anki, Map.empty, policy, Set.empty).map((failures, applied) =>
+          ExecutionReport(failures, deferred, applied, Vector.empty, Vector.empty, approved.toVector)
         )
 
       case RetypePolicy.Apply =>
@@ -271,15 +290,25 @@ object Executor:
           // waiting and what it costs: two derivations of one answer is how the preview came
           // to contradict the run in the first place, and adding a second copy while fixing
           // that would be the same defect wearing a different hat.
-          decisions <- decide(plan, anki, policy)
+          decisions <- decide(plan, anki, policy, approved)
           // WIDENED TO `SyncAction` SO THE COMPARISON IS THE ONE INTENDED. `waiting` is a set
           // of `Retype`, and asking it about a `SyncAction` compiles only once the element type
           // matches — the alternative would have been a cast, which would silently answer false
           // for every action and quietly execute the very changes being withheld.
           waiting: Set[SyncAction] = decisions.pending.map(_.retype: SyncAction).toSet
           rest = plan.actions.filterNot(waiting.contains)
-          outcome <- applyEach(rest, anki, decisions.shapes, policy)
-        yield ExecutionReport(outcome._1, Vector.empty, outcome._2, decisions.pending)
+          // BY IDENTITY, NOT BY ACTION. `runOne` receives one action and has to decide whether
+          // THAT change was approved; the key is what both sides can name it by.
+          authorisedKeys = decisions.authorised.map(_.retype.key).toSet
+          outcome <- applyEach(rest, anki, decisions.shapes, policy, authorisedKeys)
+        yield ExecutionReport(
+          outcome._1,
+          Vector.empty,
+          outcome._2,
+          decisions.pending,
+          decisions.authorised,
+          decisions.unknownApprovals,
+        )
 
   /** WHAT A RUN DECIDES ABOUT EVERY RETYPE IN A PLAN, AND WHAT THE WITHHELD ONES WOULD COST.
     *
@@ -294,7 +323,25 @@ object Executor:
     */
   final case class RetypeDecisions(
       verdicts: Vector[(SyncAction.Retype, RetypeVerdict)],
+
+      /** Changes that would destroy cards and that NOBODY HAS ANSWERED FOR. */
       pending: Vector[PendingRetype],
+
+      /** Changes that would destroy cards and that the author HAS answered for, by name.
+        *
+        * CARRIES THE PRICE THAT WAS QUOTED, not a way to recompute one. What is reported as
+        * spent must be what was offered; recomputing invites the two to disagree across an edit.
+        */
+      authorised: Vector[PendingRetype],
+
+      /** Names the author gave that match nothing waiting.
+        *
+        * DATA RATHER THAN AN EXCEPTION, on purpose. A name that resolves to nothing is an
+        * ordinary mistake — a typo, or a note already dealt with — and the useful answer is
+        * "that names nothing, and here is what IS waiting", which needs the pending list to
+        * hand. Raising here would reach the person as a bare error with the list thrown away.
+        */
+      unknownApprovals: Vector[DecisionHandle],
       shapes: Map[String, NoteTypeShape],
   )
 
@@ -316,7 +363,12 @@ object Executor:
     * has a connection problem, and saying so is more useful than reporting every retype as
     * unmeasurable.
     */
-  def decide[F[_]](plan: Plan, anki: Anki[F], policy: RetypePolicy)(using
+  def decide[F[_]](
+      plan: Plan,
+      anki: Anki[F],
+      policy: RetypePolicy,
+      approved: Set[DecisionHandle] = Set.empty,
+  )(using
       F: MonadError[F, AnkiError]
   ): F[RetypeDecisions] =
     val retypes = plan.actions.collect { case retype: SyncAction.Retype => retype }
@@ -332,8 +384,14 @@ object Executor:
             retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, Map.empty)),
             // NOTHING IS WAITING, AND NOTHING WAS READ TO ESTABLISH IT. Under `Defer` no retype
             // is attempted at all, so none reaches the point where a price would be quoted.
-            Vector.empty,
-            Map.empty,
+            pending = Vector.empty,
+            authorised = Vector.empty,
+            // EVERY APPROVAL IS UNKNOWN HERE, and saying so beats silence. A run told both to
+            // approve a change and not to migrate anything has been given two instructions that
+            // contradict each other; answering "that name matches nothing" is how the person
+            // finds out, rather than the approval vanishing without comment.
+            unknownApprovals = approved.toVector,
+            shapes = Map.empty,
           )
         )
 
@@ -341,21 +399,34 @@ object Executor:
         for
           shapes <- Retyping.shapesOf(anki, Retyping.noteTypesIn(plan))
           verdicts = retypes.map(r => r -> Retyping.verdictFor(r.from, r.to, policy, shapes))
-          pending <- Retyping.pendingOf(anki, verdicts)
-        yield RetypeDecisions(verdicts, pending, shapes)
+          priced <- Retyping.pendingOf(anki, verdicts)
+        yield
+          // SPLIT ON THE NAME THE AUTHOR GAVE, and report the names that matched nothing. The
+          // split happens HERE rather than in `run` so that a dry run previews an approval
+          // exactly as the run will carry it out — the two must not disagree about what an
+          // approval does, which is the divergence closed on 2026-08-28.
+          val (authorised, pending) = priced.partition(p => approved.contains(p.handle))
+          RetypeDecisions(
+            verdicts,
+            pending,
+            authorised,
+            unknownApprovals = (approved -- priced.map(_.handle).toSet).toVector,
+            shapes,
+          )
 
   private def applyEach[F[_]](
       actions: Vector[SyncAction],
       anki: Anki[F],
       shapes: Map[String, NoteTypeShape],
       policy: RetypePolicy,
+      authorised: Set[CardKey],
   )(using F: MonadError[F, AnkiError]): F[(Vector[ExecutionFailure], Vector[SyncAction])] =
     // EACH ACTION ANSWERS FOR ITSELF, as a Left or a Right, rather than as an `Option` whose
     // `None` means success. The old shape discarded which actions had succeeded, so the report
     // could say how many failed and never what was done.
     actions
       .traverse(action =>
-        runOne(action, anki, shapes, policy).attempt.map {
+        runOne(action, anki, shapes, policy, authorised).attempt.map {
           case Left(error) => Left(ExecutionFailure(action, error))
           case Right(_)    => Right(action)
         }
@@ -367,6 +438,7 @@ object Executor:
       anki: Anki[F],
       shapes: Map[String, NoteTypeShape],
       policy: RetypePolicy,
+      authorised: Set[CardKey],
   )(using F: MonadError[F, AnkiError]): F[Unit] =
     action match
       // The identity tag travels inside NewNote, so it is written by the call that creates
@@ -397,6 +469,27 @@ object Executor:
         // governs `Change.FieldsChanged` applies here.
         val what = s"move '${key.path.render}' from note type '$from' to '$to'"
 
+        // THE MOVE ITSELF, NAMED ONCE, because two branches now reach it: a move that costs
+        // nothing, and one the author approved by name. Writing it out twice would be two
+        // copies of the write ordering below, free to drift apart.
+        //
+        // NOTE TYPE FIRST, DECK SECOND, and the order follows this file's own rule: leave work
+        // to be REDONE rather than work believed done. Interrupted between the two, the note is
+        // on its new type and its deck is still wrong — which the next run can see and plan,
+        // because the note types now agree so the deck comparison is reached. The reverse order
+        // would move the deck of a note whose type never changed, and the run would look
+        // half-applied with no way to tell.
+        // A `def`, NOT A `val`, AND THE DIFFERENCE IS A WRITE TO SOMEBODY'S COLLECTION.
+        // `F` is not always lazy: `InMemoryAnki` interprets into `Either`, which is EAGER, so a
+        // `val` here PERFORMS THE MOVE at the point of definition — before the match below has
+        // decided whether it should happen at all. Written as a `val` first on 2026-08-28 and
+        // caught the same day by a test asserting that a refused move leaves the note alone; it
+        // had moved. The lazy `EitherT[IO, ...]` interpreter used against a real collection
+        // would have hidden it entirely.
+        def move =
+          anki.changeNoteType(noteId, to, fields, ownedTags, preservedTags) *>
+            deck.fold(F.unit)(d => anki.cardsOf(Vector(noteId)).flatMap(anki.changeDeck(_, d)))
+
         // ASKED, NOT RE-DECIDED. This branch used to read the two shapes and call
         // `refusalFor` itself, which is how the dry run came to disagree with the run: the
         // preview could reach the policy half of the decision and never this half. Both now
@@ -410,11 +503,19 @@ object Executor:
               AnkiError.UnsupportedOperation(what, s"${refusal.describe} — ${refusal.remedy}")
             )
 
+          // APPROVED BY NAME, SO CARRIED OUT. The author was shown what this costs and asked
+          // for it specifically — `--approve` names one change, never a category — so the same
+          // move runs as for any other. What is NOT done here is cleaning up afterwards: the
+          // cards left behind cannot be deleted through AnkiConnect at all (VERIFIED against
+          // the add-on's own action list, 2026-08-28), so they remain until the person runs
+          // Anki's `Check Database`. The report says so rather than the run pretending.
+          case RetypeVerdict.DestroysCards(_) if authorised.contains(key) => move
+
           // AN INVARIANT BREAK, NOT A CASE TO HANDLE. `Executor.run` prices every change that
-          // would destroy cards and partitions it out before `applyEach` is reached, exactly as
-          // it does a deferral — so arriving here means that partition and this branch disagree
-          // about which changes are withheld. Refusing politely would hide that disagreement and
-          // leave the person with a change reported as neither applied nor waiting.
+          // would destroy cards and partitions out the ones nobody approved, before `applyEach`
+          // is reached — so arriving here unapproved means that partition and this branch
+          // disagree about which changes are withheld. Refusing politely would hide the
+          // disagreement and leave a change reported as neither applied nor waiting.
           case RetypeVerdict.DestroysCards(_) =>
             F.raiseError(
               AnkiError.UnsupportedOperation(
@@ -439,15 +540,7 @@ object Executor:
               )
             )
 
-          case RetypeVerdict.WillApply =>
-                // NOTE TYPE FIRST, DECK SECOND, and the order follows this file's own rule:
-                // leave work to be REDONE rather than work believed done. Interrupted between
-                // the two, the note is on its new type and its deck is still wrong — which the
-                // next run can see and plan, because the note types now agree so the deck
-                // comparison is reached. The reverse order would move the deck of a note whose
-                // type never changed, and the run would look half-applied with no way to tell.
-                anki.changeNoteType(noteId, to, fields, ownedTags, preservedTags) *>
-                  deck.fold(F.unit)(d => anki.cardsOf(Vector(noteId)).flatMap(anki.changeDeck(_, d)))
+          case RetypeVerdict.WillApply => move
 
           // NOT REACHABLE from `run`, which reads the shape of every note type the plan names
           // before it applies anything. Raising rather than defaulting is still the right
