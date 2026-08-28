@@ -1,5 +1,6 @@
 package obsidiananki.extract
 
+import cats.data.NonEmptyVector
 import laika.ast.*
 import obsidiananki.content as C
 import obsidiananki.model.{HeadingReach, Marker}
@@ -105,12 +106,24 @@ object Outline:
 
   /** THE BULLET LIST A HEADING TREE BECOMES.
     *
-    * TOTAL, AND EMPTY IN GIVES EMPTY OUT. No refusal lives here: whether an empty outline is
-    * acceptable is the caller's question, and answering it here would mean this function needed
-    * a heading path to put in the error — which is exactly the coupling the split avoids.
+    * IT TAKES A NON-EMPTY VECTOR AND RETURNS ONE DEFINITE BLOCK, so "what if there is nothing to
+    * render?" is not a question anybody downstream can ask. The emptiness is decided ONCE, by the
+    * caller, as a PARSE — `NonEmptyVector.fromVector(read(...)).toRight(refusal)` — rather than by
+    * this function checking and then everyone after it checking again. Parse, do not validate.
+    *
+    * WHY THIS SHAPE AND NOT THE ONE `CardSpec.Sequence` WAS FORCED INTO. That type carries the
+    * same invariant and CANNOT express it: `model/` imports nothing from the rest of this project,
+    * so `Item` is not reachable there, and its docstring says outright that a value built by hand
+    * "can hold anything at all". That defeat is a LAYERING rule, and it does not reach here —
+    * `extract/` may see `content/`. Where the type system can hold the invariant, it holds it.
+    *
+    * AND WHERE IT STOPS, WHICH IS WORTH KNOWING. One step further on, these blocks are rendered
+    * into a card field that is a STRING. No type survives that, which is precisely why the
+    * existing sequence refusal gates on the RENDERER rather than on a type. Types up to the
+    * render boundary; a checked gate past it.
     */
-  def render(nodes: Vector[HeadingNode]): Vector[C.Block] =
-    if nodes.isEmpty then Vector.empty else Vector(C.Block.Bullets(nodes.map(bullet)))
+  def render(nodes: NonEmptyVector[HeadingNode]): C.Block.Bullets =
+    C.Block.Bullets(nodes.toVector.map(bullet))
 
   /** One heading as one bullet: its own text, then whatever list its children make.
     *
@@ -131,4 +144,9 @@ object Outline:
     * order they are revealed in.
     */
   private def bullet(node: HeadingNode): C.Item =
-    C.Item(C.Block.Paragraph(Vector(C.Inline.Text(node.title))) +: render(node.children))
+    // A LEAF HAS NO CHILDREN, AND THAT IS NOT THE SAME QUESTION `render` REFUSED TO ANSWER.
+    // "This heading has nothing under it" is ordinary; "an outline with no headings at all" is
+    // the state the caller already ruled out. Turning the first into an `Option` keeps them
+    // distinct instead of collapsing both into an empty vector.
+    val nested = NonEmptyVector.fromVector(node.children).fold(Vector.empty[C.Block])(kids => Vector(render(kids)))
+    C.Item(C.Block.Paragraph(Vector(C.Inline.Text(node.title))) +: nested)

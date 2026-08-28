@@ -1,5 +1,6 @@
 package obsidiananki.extract
 
+import cats.data.NonEmptyVector
 import laika.ast.*
 import obsidiananki.content as C
 import obsidiananki.model.*
@@ -73,6 +74,9 @@ class OutlineTest extends munit.FunSuite:
 
   private def node(title: String, children: HeadingNode*): HeadingNode =
     HeadingNode(title, children.toVector)
+
+  private def tree(nodes: HeadingNode*): NonEmptyVector[HeadingNode] =
+    NonEmptyVector.fromVectorUnsafe(nodes.toVector)
 
   // ══════════════════════════════════════════ reading laika's tree ══════════════════════════
 
@@ -183,24 +187,22 @@ class OutlineTest extends munit.FunSuite:
     */
   test("one heading becomes one bullet holding one paragraph") {
     assertEquals(
-      Outline.render(Vector(node("Parse"))),
-      Vector(C.Block.Bullets(Vector(C.Item(Vector(C.Block.Paragraph(Vector(C.Inline.Text("Parse")))))))),
+      Outline.render(tree(node("Parse"))),
+      C.Block.Bullets(Vector(C.Item(Vector(C.Block.Paragraph(Vector(C.Inline.Text("Parse"))))))),
     )
   }
 
   test("a heading with children becomes a bullet holding its own paragraph and a nested list") {
     assertEquals(
-      Outline.render(Vector(node("Parse", node("Tokenise")))),
-      Vector(
-        C.Block.Bullets(
-          Vector(
-            C.Item(
-              Vector(
-                C.Block.Paragraph(Vector(C.Inline.Text("Parse"))),
-                C.Block.Bullets(
-                  Vector(C.Item(Vector(C.Block.Paragraph(Vector(C.Inline.Text("Tokenise"))))))
-                ),
-              )
+      Outline.render(tree(node("Parse", node("Tokenise")))),
+      C.Block.Bullets(
+        Vector(
+          C.Item(
+            Vector(
+              C.Block.Paragraph(Vector(C.Inline.Text("Parse"))),
+              C.Block.Bullets(
+                Vector(C.Item(Vector(C.Block.Paragraph(Vector(C.Inline.Text("Tokenise"))))))
+              ),
             )
           )
         )
@@ -208,18 +210,26 @@ class OutlineTest extends munit.FunSuite:
     )
   }
 
-  /** TOTAL, WITH NO REFUSAL OF ITS OWN. Whether an empty outline is acceptable belongs to the
-    * caller, which has the heading path to name in the error.
-    */
-  test("no headings render as no blocks") {
-    assertEquals(Outline.render(Vector.empty), Vector.empty)
-  }
+  /* THE TEST THAT USED TO BE HERE IS GONE, AND ITS ABSENCE IS THE POINT.
+   *
+   * It asserted that rendering no headings produced no blocks. `render` now takes a
+   * `NonEmptyVector` and returns one definite `Bullets`, so that call no longer COMPILES — the
+   * state it guarded stopped being representable rather than stopped being wrong. Deciding
+   * emptiness is the caller's single parse step:
+   *
+   *     NonEmptyVector.fromVector(Outline.read(section, reach))
+   *       .toRight(SpecError.SequenceWithoutItems(where, "the heading has no subheadings"))
+   *       .map(Outline.render)
+   *
+   * `read` returning an empty vector is still tested above — that IS a legitimate answer, and a
+   * different question from "render nothing".
+   */
 
   /** CONSERVATION AGAIN, ON THE OTHER HALF. One heading anywhere in the tree becomes exactly one
     * bullet anywhere in the blocks — which is also the property the note type depends on, since
     * its front template hides one `li` per item and reveals them one at a time.
     */
   test("every heading in the tree becomes exactly one bullet, at any depth") {
-    val tree = Vector(node("Parse", node("Tokenise"), node("Build tree", node("Deeper"))), node("Route"))
-    assertEquals(itemsIn(Outline.render(tree)), tree.flatMap(_.titles).size)
+    val nodes = tree(node("Parse", node("Tokenise"), node("Build tree", node("Deeper"))), node("Route"))
+    assertEquals(itemsIn(Vector(Outline.render(nodes))), nodes.toVector.flatMap(_.titles).size)
   }
