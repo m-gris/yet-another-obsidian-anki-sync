@@ -69,7 +69,7 @@ class RetypingTest extends munit.FunSuite:
       .fold(errs => fail(s"unexpected plan errors: ${errs.map(_.describe)}"), identity)
 
   def runReport(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): ExecutionReport =
-    Executor.run(p, anki, policy).fold(e => fail(s"execution aborted entirely: $e"), identity)
+    Executor.run(p, anki, policy, Set.empty).fold(e => fail(s"execution aborted entirely: $e"), identity)
 
   /** A stand-in for Anki's stock `Basic`: one card template, not cloze, `Front` and `Back` and
     * no `Context`.
@@ -927,7 +927,7 @@ class RetypingTest extends munit.FunSuite:
     * satisfied by a preview that refused everything.
     */
   def decisionsOf(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): Executor.RetypeDecisions =
-    Executor.decide(p, anki, policy).fold(e => fail(s"deciding aborted: $e"), identity)
+    Executor.decide(p, anki, policy, Set.empty).fold(e => fail(s"deciding aborted: $e"), identity)
 
   def previewOf(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): Vector[RetypeVerdict] =
     decisionsOf(p, anki, policy).verdicts.map(_._2)

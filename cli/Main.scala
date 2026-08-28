@@ -77,12 +77,14 @@ object Main
   def main: Opts[IO[ExitCode]] = Cli.command.map {
     case Command.Inspect(selection, deckRoot, deckShape, verbose) =>
       withChosenVault(selection)(inspect(_, deckRoot, deckShape, verbose))
-    case Command.Sync(selection, profile, deckRoot, deckShape, dryRun, retypePolicy, approved) =>
-      withVerifiedProfile(profile)(anki =>
-        withChosenVault(selection)(sync(_, deckRoot, deckShape, dryRun, retypePolicy, approved, anki))
+    case Command.Sync(selection, profile, deckRoot, deckShape, dryRun, retypePolicy, approved, asJson) =>
+      withVerifiedProfile(profile, stdoutIsClaimed = asJson)(anki =>
+        withChosenVault(selection)(
+          sync(_, deckRoot, deckShape, dryRun, retypePolicy, approved, asJson, anki)
+        )
       )
     case Command.InstallNoteTypes(profile, repair) =>
-      withVerifiedProfile(profile)(installNoteTypes(_, repair))
+      withVerifiedProfile(profile, stdoutIsClaimed = false)(installNoteTypes(_, repair))
     case Command.Locate(selection, vaultName, tag, uriOnly) =>
       withChosenVault(selection)(locate(_, vaultName, tag, uriOnly))
   }
@@ -119,10 +121,15 @@ object Main
         yield exitCodeForLocate(result)
 
   /** Prose to the channel it belongs on: standard output for a person, standard error when a
-    * program has claimed standard output for the link.
+    * program has claimed standard output for something machine-readable.
+    *
+    * THE PARAMETER WAS NAMED `uriOnly` UNTIL 2026-08-28, when `sync --json` became a second
+    * caller. The condition was never about URIs — it is about whether standard output already
+    * belongs to a program — and a name taken from the first caller reads as an accident at the
+    * second.
     */
-  private def emit(lines: Vector[String], uriOnly: Boolean): IO[Unit] =
-    if uriOnly then lines.traverse_(l => IO(System.err.println(l)))
+  private def emit(lines: Vector[String], stdoutIsClaimed: Boolean): IO[Unit] =
+    if stdoutIsClaimed then lines.traverse_(l => IO(System.err.println(l)))
     else lines.traverse_(IO.println)
 
   /** The vault's name for a URI: the one given, or the vault directory's own name.
@@ -817,11 +824,22 @@ object Main
     * probe. Never wrap the run itself in one: a handler around the run would print "nothing
     * was written" after notes had already been written.
     */
-  private[cli] def withVerifiedProfile(expected: String)(
+  /** NO DEFAULT ON `stdoutIsClaimed`, DELIBERATELY. It had one for a few minutes on
+    * 2026-08-28 and the flag was immediately dropped on the way to [[verifyThen]] — the call
+    * compiled, the default supplied `false`, and `--json` put a line of prose above the JSON so
+    * that every consumer failed on the first character. A default answers a question on the
+    * caller's behalf and says nothing; making it explicit is what this codebase does elsewhere
+    * for the same reason it writes `dispositionUnder` longhand.
+    */
+  private[cli] def withVerifiedProfile(expected: String, stdoutIsClaimed: Boolean)(
       body: AnkiConnectClient[IO] => IO[ExitCode]
   ): IO[ExitCode] =
     EmberClientBuilder.default[IO].build.use(httpClient =>
-      verifyThen(AnkiConnectClient[IO](httpClient, AnkiConnectClient.DefaultUri), expected)(body)
+      verifyThen(
+        AnkiConnectClient[IO](httpClient, AnkiConnectClient.DefaultUri),
+        expected,
+        stdoutIsClaimed,
+      )(body)
     )
 
   /** The gate's actual behaviour, over an ALREADY-BUILT client.
@@ -837,13 +855,20 @@ object Main
     * claim rather than a guarantee: this is the one piece of code standing between the tool
     * and a real collection.
     */
-  private[cli] def verifyThen(anki: AnkiConnectClient[IO], expected: String)(
+  private[cli] def verifyThen(
+      anki: AnkiConnectClient[IO],
+      expected: String,
+      stdoutIsClaimed: Boolean,
+  )(
       body: AnkiConnectClient[IO] => IO[ExitCode]
   ): IO[ExitCode] =
     for
       answer <- anki.activeProfile.value.attempt
       check = classifyProfile(expected, answer)
-      _ <- describeProfileCheck(check).traverse_(IO.println)
+      // THE FIRST LINE A RUN PRINTS, AND THEREFORE THE ONE THAT BREAKS A PARSER FIRST. It is
+      // printed before `sync` is reached at all, so a `--json` run that did not divert it would
+      // put `profile: '...'` above the JSON and every consumer would fail on character one.
+      _ <- emit(describeProfileCheck(check), stdoutIsClaimed)
       code <- check match
         case ProfileCheck.Confirmed(_)      => body(anki)
         case ProfileCheck.Mismatch(_, _)    => IO.pure(ExitCode(2))
@@ -931,18 +956,24 @@ object Main
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
       approved: Set[DecisionHandle],
+      asJson: Boolean,
       anki: AnkiConnectClient[IO],
   ): IO[ExitCode] =
     for
       files <- readVault(vault)
       index = VaultWalker.scan(files, deckRoot, deckShape)
       // Aligned with inspect's value column. The gate has already printed `profile:` above.
-      _ <- IO.println(s"vault:    $vault")
-      _ <- IO.println(s"files:    ${files.size}")
-      _ <- IO.println(s"notes:    ${index.scan.specs.size}")
-      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, approved, anki)
+      _ <- emit(
+        Vector(
+          s"vault:    $vault",
+          s"files:    ${files.size}",
+          s"notes:    ${index.scan.specs.size}",
+        ),
+        asJson,
+      )
+      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, approved, asJson, anki)
       result = verdict(outcome)
-      _ <- (describeSyncOutcome(outcome) ++ describeVerdict(result)).traverse_(IO.println)
+      _ <- emit(describeSyncOutcome(outcome) ++ describeVerdict(result), asJson)
     yield exitCodeFor(result)
 
   /** Check the note types, then observe the collection, plan against it, and — unless this is a
@@ -972,6 +1003,7 @@ object Main
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
       approved: Set[DecisionHandle],
+      asJson: Boolean,
       anki: AnkiConnectClient[IO],
   ): IO[SyncOutcome] =
     NoteTypeAssets.all match
@@ -991,7 +1023,7 @@ object Main
           case Left(error)                    => IO.pure(SyncOutcome.CouldNotObserve(error))
           case Right(problems) if problems.nonEmpty =>
             IO.pure(SyncOutcome.NoteTypesNotReady(problems))
-          case Right(_) => reconcile(index, deckRoot, dryRun, retypePolicy, approved, anki)
+          case Right(_) => reconcile(index, deckRoot, dryRun, retypePolicy, approved, asJson, anki)
         }
 
   /** Observe, plan, and — unless this is a dry run — apply. The note types have already been
@@ -1003,6 +1035,7 @@ object Main
       dryRun: Boolean,
       retypePolicy: RetypePolicy,
       approved: Set[DecisionHandle],
+      asJson: Boolean,
       anki: AnkiConnectClient[IO],
   ): IO[SyncOutcome] =
     Observer.observe[Refused](anki).value.flatMap {
@@ -1011,9 +1044,11 @@ object Main
         Planner.plan(index.scan, observed, index.deckOf(deckRoot), Planner.newNoteFor) match
           case Left(errors) => IO.pure(SyncOutcome.RefusedInconsistent(errors))
           case Right(plan) =>
-            (if dryRun then IO.println("DRY RUN — the plan below will NOT be applied.")
-             else IO.unit) *>
-              Report.plan(plan, retypePolicy).traverse_(IO.println) *>
+            emit(
+              Option.when(dryRun)("DRY RUN — the plan below will NOT be applied.").toVector ++
+                Report.plan(plan, retypePolicy),
+              asJson,
+            ) *>
               (if dryRun then
                  // THE DRY RUN ASKS THE SAME QUESTION THE REAL RUN ASKS, and this is the whole
                  // reason `Executor.preview` exists. `Report.plan` above renders the POLICY
@@ -1032,13 +1067,43 @@ object Main
                      // THE SAME TWO BLOCKS A REAL RUN PRINTS, from the same decision and
                      // through the same renderer — only the tense differs. Printing a
                      // separately-worded preview is how the two came to disagree before.
-                     (Report.retypePreview(decisions.verdicts) ++
-                       Report.waitingOnYou(decisions.pending, wouldBe = true))
-                       .traverse_(IO.println)
-                       .as(SyncOutcome.PlannedOnly(plan))
+                     emit(
+                       Report.retypePreview(decisions.verdicts) ++
+                         Report.waitingOnYou(decisions.pending, wouldBe = true),
+                       asJson,
+                     ) *>
+                       // THE DRY RUN ANSWERS AS DATA TOO, and that is the point rather than a
+                       // convenience: a caller asking "what is waiting?" must not have to
+                       // perform a real run to find out. `--dry-run --json` is the read-only
+                       // question, and `--json --approve` is the answer to it.
+                       IO.whenA(asJson)(
+                         IO.println(
+                           AsJson
+                             .syncResult(
+                               decisions.pending,
+                               decisions.authorised,
+                               decisions.unknownApprovals,
+                             )
+                             .spaces2
+                         )
+                       ).as(SyncOutcome.PlannedOnly(plan))
                  }
                else
-                 Executor.run[Refused](plan, anki, retypePolicy, approved).value.map {
+                 Executor.run[Refused](plan, anki, retypePolicy, approved).value.flatTap {
+                   // THE REAL RUN ANSWERS AS DATA IN THE SAME SHAPE THE DRY RUN DOES, so a
+                   // caller reads one format whichever it asked for. A run that aborted prints
+                   // nothing here: there is no answer to give, and an empty document would say
+                   // "nothing is waiting" when the truth is "nobody managed to look".
+                   case Left(_) => IO.unit
+                   case Right(report) =>
+                     IO.whenA(asJson)(
+                       IO.println(
+                         AsJson
+                           .syncResult(report.pending, report.authorised, report.unknownApprovals)
+                           .spaces2
+                       )
+                     )
+                 }.map {
                    case Left(error)   => SyncOutcome.AbortedDuringExecution(error)
                    case Right(report) => SyncOutcome.Applied(plan, report)
                  })
@@ -1143,7 +1208,8 @@ object Main
           Report.approvalsCarriedOut(authorised) ++
           Report.deferredRetypes(deferred) ++
           Report.unknownApprovals(unknown) ++
-          Report.waitingOnYou(pending)
+          // PRESENT TENSE: this is the run that happened, not a preview of one.
+          Report.waitingOnYou(pending, wouldBe = false)
 
       case SyncOutcome.AbortedDuringExecution(error) =>
         Vector(

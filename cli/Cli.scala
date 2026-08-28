@@ -72,6 +72,22 @@ enum Command:
         * is answered by the run, which has the list of what IS waiting to show instead.
         */
       approved: Set[DecisionHandle],
+
+      /** Answer on standard output as data, and send every word of prose to standard error.
+        *
+        * FOR A CALLER THAT IS A PROGRAM, and the Obsidian plugin is the one that matters.
+        * `docs/REVIEW-QUEUE.md` rules that enumerating pending decisions must return structured
+        * data rather than prose, because the terminal is one consumer among several — and until
+        * 2026-08-28 the only way to act on a waiting change from anywhere else was to scrape the
+        * report, which is the coupling that ruling exists to prevent.
+        *
+        * IT SPLITS THE CHANNELS RATHER THAN SILENCING ONE, exactly as `locate --uri-only` does.
+        * The data goes to standard output alone, so a caller can pipe it without parsing
+        * anything; the explanation goes to standard error IN FULL, so the caller can still show
+        * it to a person. A flag that suppressed the prose would force a second run to find out
+        * why the answer was empty, and each run pays for a JVM.
+        */
+      asJson: Boolean,
   )
 
   /** Put this tool's five note types into a collection, and report what is already there.
@@ -330,6 +346,13 @@ object Cli:
         Opts.flag("dry-run", "Compute and print the plan without applying it.").orFalse,
         retypePolicyOpt,
         approvedOpt,
+        Opts
+          .flag(
+            "json",
+            "Print what the run decided as JSON on standard output, and every line of the " +
+              "ordinary report on standard error. For a caller that is a program.",
+          )
+          .orFalse,
       ).mapN(Command.Sync.apply)
     }
 

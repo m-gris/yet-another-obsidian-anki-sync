@@ -80,7 +80,7 @@ class PlannerTest extends munit.FunSuite:
     runReport(p, anki, RetypePolicy.Apply).failures
 
   def runReport(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): ExecutionReport =
-    Executor.run(p, anki, policy).fold(e => fail(s"execution aborted entirely: $e"), identity)
+    Executor.run(p, anki, policy, Set.empty).fold(e => fail(s"execution aborted entirely: $e"), identity)
 
   def scanOf(specs: SourcedSpec*): VaultScan = VaultScan.from(specs.toVector, Vector.empty)
 

@@ -249,7 +249,7 @@ object Executor:
       plan: Plan,
       anki: Anki[F],
       policy: RetypePolicy,
-      approved: Set[DecisionHandle] = Set.empty,
+      approved: Set[DecisionHandle],
   )(using
       F: MonadError[F, AnkiError]
   ): F[ExecutionReport] =
@@ -367,7 +367,7 @@ object Executor:
       plan: Plan,
       anki: Anki[F],
       policy: RetypePolicy,
-      approved: Set[DecisionHandle] = Set.empty,
+      approved: Set[DecisionHandle],
   )(using
       F: MonadError[F, AnkiError]
   ): F[RetypeDecisions] =

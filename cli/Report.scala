@@ -421,7 +421,7 @@ object Report:
     * block that reports a decision MUST carry the means of making it; otherwise it is a dead
     * end wearing the shape of a question.**
     */
-  def waitingOnYou(pending: Vector[PendingRetype], wouldBe: Boolean = false): Vector[String] =
+  def waitingOnYou(pending: Vector[PendingRetype], wouldBe: Boolean): Vector[String] =
     if pending.isEmpty then Vector.empty
     else
       val entries = pending.flatMap { p =>

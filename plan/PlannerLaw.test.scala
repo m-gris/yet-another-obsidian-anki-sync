@@ -132,7 +132,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
     */
   def runPlan(p: Plan, anki: InMemoryAnki): Vector[ExecutionFailure] =
     Executor
-      .run(p, anki, RetypePolicy.Apply)
+      .run(p, anki, RetypePolicy.Apply, Set.empty)
       .fold(e => fail(s"execution aborted: $e"), identity)
       .failures
 

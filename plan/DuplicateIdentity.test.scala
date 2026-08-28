@@ -66,7 +66,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
     val plan = Planner
       .plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf)
       .fold(e => fail(s"setup plan failed: $e"), identity)
-    Executor.run(plan, anki, RetypePolicy.Defer).fold(e => fail(s"setup failed: $e"), identity)
+    Executor.run(plan, anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"setup failed: $e"), identity)
 
     anki
       .addNote(
