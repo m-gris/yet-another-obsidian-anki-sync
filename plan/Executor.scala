@@ -4,7 +4,7 @@ import cats.MonadError
 import cats.syntax.all.*
 import obsidiananki.anki.*
 import cats.data.NonEmptyVector
-import obsidiananki.model.{CardKey, KeyError, Marker, OwnedTag, TagCodec}
+import obsidiananki.model.{CardKey, KeyError, Marker, OwnedTag, TagCodec, VaultTag}
 
 // Reading Anki's current state, and carrying out a plan. Both are written against the
 // algebra rather than a concrete client, so the same code runs against the in-memory
@@ -514,6 +514,19 @@ object Executor:
               _ <- replaceOwnedPrefix(anki, noteId, OwnedTag.ShaPrefix, OwnedTag.sha(newSha))
             yield ()
 
+          case Change.TagsChanged(desired) =>
+            // MAKE THE NOTE MATCH THE VAULT, UNDER ONE NAMESPACE AND NOWHERE ELSE. Marc's
+            // ruling, 2026-08-29: Obsidian is the source of truth and Anki follows. So a tag
+            // he deleted from a note is removed here, which is the half of the feature the
+            // namespace exists to make safe.
+            //
+            // WHAT IS DELIBERATELY OUT OF REACH. Anki writes `leech` when a card lapses too
+            // often and `marked` when a card is marked, both onto notes this tool generated.
+            // Neither is under the vault prefix, so neither is a candidate for removal — and
+            // that is not a filter applied here but a property of only ever looking under one
+            // prefix.
+            replaceOwnedPrefixWith(anki, noteId, VaultTag.Prefix, desired)
+
           case Change.DeckChanged(_, to) =>
             // Decks are per-card, so a note-level move must fan out to its cards.
             anki.cardsOf(Vector(noteId)).flatMap(anki.changeDeck(_, to))
@@ -655,6 +668,37 @@ object Executor:
     * hashes on one note would make "has this changed?" unanswerable. Reads all tags to find
     * the old one, but writes only within our own prefix.
     */
+  /** Make a note's tags under one prefix be exactly this set.
+    *
+    * THE SIBLING OF [[replaceOwnedPrefix]], WHICH REPLACES WITH EXACTLY ONE. The content hash is
+    * always a single tag; an author's own tags are a set that may be empty — and empty is a real
+    * answer here, reached by deleting the last tag from a note's frontmatter, so it must remove
+    * rather than do nothing.
+    *
+    * REMOVE FIRST, THEN ADD, WHICH IS THE OPPOSITE OF THE IDENTITY BACKFILL'S ORDER and for the
+    * opposite reason. There, an interruption between the two had to leave the identity in at
+    * least one home. Here an interruption must never leave a note carrying a tag the vault no
+    * longer names — a stale tag is a card appearing in a filtered deck it was removed from,
+    * which is silent, whereas a missing tag is repaired by the next run.
+    */
+  private def replaceOwnedPrefixWith[F[_]: cats.Monad](
+      anki: Anki[F],
+      noteId: AnkiNoteId,
+      prefix: String,
+      desired: Vector[OwnedTag],
+  ): F[Unit] =
+    val wanted = desired.map(_.value.toLowerCase(java.util.Locale.ROOT)).toSet
+    for
+      notes <- anki.notesInfo(Vector(noteId))
+      stale = notes
+        .flatMap(_.tags)
+        .filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"$prefix::"))
+        .filterNot(t => wanted.contains(t.toLowerCase(java.util.Locale.ROOT)))
+        .map(OwnedTag.unsafeFromString)
+      _ <- if stale.isEmpty then cats.Monad[F].unit else anki.removeTags(Vector(noteId), stale)
+      _ <- if desired.isEmpty then cats.Monad[F].unit else anki.addTags(Vector(noteId), desired)
+    yield ()
+
   private def replaceOwnedPrefix[F[_]: cats.Monad](
       anki: Anki[F],
       noteId: AnkiNoteId,

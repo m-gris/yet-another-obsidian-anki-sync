@@ -17,6 +17,26 @@ import obsidiananki.model.{CardKey, OwnedTag, TagCodec}
   * stored without losing what it would actually do.
   */
 enum Change:
+
+  /** The author's own tags, as the vault now states them.
+    *
+    * THE WHOLE DESIRED SET, NOT A DIFFERENCE, because a difference computed here would have to
+    * be recomputed against whatever the note holds by the time the write lands. The set is what
+    * the vault says; the executor makes the note match it.
+    *
+    * IT NAMES ONLY TAGS UNDER THE VAULT NAMESPACE, and the executor touches nothing else. Anki
+    * writes `leech` when a card lapses too often and `marked` when a card is marked, both onto
+    * notes this tool generated; deleting those would destroy a record that can only be earned
+    * back by failing reviews again. The namespace is what makes "make the note match" safe.
+    *
+    * SEPARATE FROM [[FieldsChanged]] RATHER THAN FOLDED INTO THE CONTENT HASH, and the reason is
+    * honesty in both directions. The hash exists to answer "is there anything to write", and it
+    * hashes CONTENT — putting tags in it would make a tag edit report itself as a field change
+    * and rewrite every field to say so. Tags are compared directly instead, which costs nothing:
+    * the note's current tags are already in hand when the comparison is made.
+    */
+  case TagsChanged(desired: Vector[OwnedTag])
+
   /** The rendered fields differ, together with the content hash of the new value.
     *
     * The hash travels with the fields because the two must be written together and IN THAT
@@ -46,6 +66,7 @@ enum Change:
   def kind: ChangeKind = this match
     case FieldsChanged(_, _) => ChangeKind.Fields
     case DeckChanged(_, _)   => ChangeKind.Deck
+    case TagsChanged(_)      => ChangeKind.Tags
 
 /** The kinds of change one update can carry, IN THE ORDER A REPORT NAMES THEM.
   *
@@ -56,6 +77,13 @@ enum Change:
   */
 enum ChangeKind:
   case Fields
+
+  /** Ordered AFTER `Fields` and BEFORE `Deck`, which the declaration order decides for the
+    * report: a run that rewrote a card and re-tagged it reads "update, and re-tag", never the
+    * reverse. Tags sit beside content because they describe the same note; a deck move is about
+    * where the card lives and reads last for that reason.
+    */
+  case Tags
   case Deck
 
   /** How a run report names this kind. Longhand, so a third kind cannot be added without
@@ -63,6 +91,7 @@ enum ChangeKind:
     */
   def describe: String = this match
     case Fields => "update"
+    case Tags   => "re-tag"
     case Deck   => "move to another deck"
 
 /** Whether a run carries an action out, or sets it aside for a human to ask for by name.

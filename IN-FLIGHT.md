@@ -150,12 +150,28 @@ The `if`-versus-pattern-match audit (a subagent, 2026-08-23) produced 11 finding
    weakens the hash-based repair hint, which fires only when exactly one card matches a hash.
    Refusing would be wrong — two tables legitimately defining one term is the author's business —
    so it would have to be a report.
-9. **Carry a note's Obsidian tags onto its Anki notes.** Requested 2026-08-22. The tool owns only
-   the `src::`, `sha::` and `orphaned::` prefixes and preserves foreign tags, but never reads a
-   note's frontmatter `tags` — so an Obsidian tag cannot drive an Anki filtered deck. Open
-   questions: verbatim or namespaced (an unprefixed vault tag is indistinguishable from one added
-   by hand in Anki, and this tool must never delete somebody's own tag believing it owned it),
-   and what a tag REMOVED in the vault should do to the note carrying it.
+9. ~~**Carry a note's Obsidian tags onto its Anki notes.**~~ **BUILT 2026-08-28/29.** Requested
+   2026-08-22. A frontmatter tag now reaches the Anki notes its note produces, nested under a
+   namespace this tool owns, and is removed when the vault stops naming it. Documented in
+   `README.md` under *Your own tags, in Anki*.
+
+   **BOTH OPEN QUESTIONS WERE ANSWERED BY ONE DECISION.** Namespaced, ruled by Marc — which makes
+   the set a pure function of the vault, so removal is safe and *what a removed tag should do* has
+   an answer: it goes, because Obsidian is the source of truth and Anki follows.
+
+   **THE ARGUMENT THAT SETTLED IT WAS NOT THE ONE THIS ITEM RECORDED.** The item worried about a
+   tag somebody added by hand in Anki, and Marc's answer was that his discipline is never to edit
+   generated cards there. The decisive hazard is Anki ITSELF: it writes `leech` when a card lapses
+   too often and `marked` when a card is marked, onto the very notes this tool generates. A
+   verbatim sync removing whatever the vault no longer named would delete a record that can only
+   be earned back by failing reviews again. No discipline prevents that, which is why the
+   namespace is load-bearing rather than tidy.
+
+   **ONE EXCLUSION FOUND BY READING MARC'S OWN NOTES**, not from the request: frontmatter holds
+   markers and subjects in the same list, so a `#flashcard/…` tag is not carried. It is an
+   instruction already obeyed by the time anything is written, and carrying it would file
+   `obsidian::flashcard::sequence::headers` beside `obsidian::backend` as though it were something
+   to study. _The original entry follows._
 10. **Row scope at `cdd/2way` / `cdd/3way`** — a row card that blanks the CONCEPT rather than the
     values ("which bone has these two borders?"). Needs a second template. Not designed.
 11. **The marker vocabulary is half-migrated.** `cdd/{1,2,3}way` is coherent, `table` always was,

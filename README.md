@@ -386,6 +386,38 @@ So `#flashcard/table/3way/cells` is three directions, cell cards only. Bare `#fl
 is `2way` over both scopes. A direction combined with `/rows` is refused, because a direction
 has nothing to apply to when there are no cell cards.
 
+## Your own tags, in Anki
+
+Tags written in a note's frontmatter are carried onto the Anki notes it produces, so you can
+study by them:
+
+```yaml
+---
+id: 7c5ab5c8-8780-4cac-83fc-f31833ccca85
+tags:
+  - backend/scala
+  - maths/topology
+---
+```
+
+becomes `obsidian::backend::scala` and `obsidian::maths::topology` in Anki. Obsidian nests with
+`/` and Anki with `::`, so your tag tree keeps its shape in Anki's sidebar. A filtered deck then
+studies a subject with `tag:obsidian::backend::*`.
+
+**The vault decides.** Add a tag and it appears; remove one and it goes. Anki follows.
+
+**Why they are namespaced rather than carried as-is.** Anki writes tags of its own — `leech` when
+a card lapses too often, `marked` when you mark one in the reviewer — onto the very notes this
+tool generates. If your `scala` were carried verbatim, this tool could not tell its own tags from
+Anki's or from yours, and "remove what the vault no longer names" would eventually delete a record
+of which cards are giving you trouble. Under a prefix it owns, it can only ever touch what it
+wrote. Everything else on the note is left exactly alone.
+
+**Two things are not carried.** A `#flashcard/…` marker is an instruction to this tool rather than
+a subject, so it stays out of your Anki tags. And a tag Anki cannot hold is refused by name rather
+than repaired — a space would make Anki read one tag as two, and `::` is its own nesting
+separator, so write `/` instead.
+
 ## Relations in the frontmatter
 
 A marker on a heading is not the only way to make a card. A **relation** written as a frontmatter

@@ -411,8 +411,30 @@ object Planner:
                 )
                 val fieldsDiffer = identityMissing || !existing.recordedSha.contains(sha)
 
+                // ── THE AUTHOR'S OWN TAGS, COMPARED DIRECTLY ────────────────────────
+                //
+                // NOT THROUGH THE CONTENT HASH, and that is a choice about honesty rather than
+                // about cost. The hash answers "is there anything to write" and it hashes
+                // CONTENT; putting tags into it would make re-tagging a note report itself as a
+                // field change and rewrite every field to say so. Comparing here costs nothing:
+                // the note's current tags are already in hand.
+                //
+                // CASE-FOLDED ON BOTH SIDES, because Anki folds tag case — so `Backend` and
+                // `backend` are ONE tag in the collection, and comparing them case-sensitively
+                // would report a difference on every run that no write could ever settle.
+                //
+                // ONLY UNDER THE VAULT PREFIX. `leech` and `marked`, which Anki writes by
+                // itself onto these notes, are not in either set and so can never be a
+                // difference to act on.
+                val fold        = (t: String) => t.toLowerCase(java.util.Locale.ROOT)
+                val desiredTags = carried(sourced.vaultTags)
+                val tagsDiffer =
+                  existing.note.tags.filter(t => fold(t).startsWith(s"${VaultTag.Prefix}::")).map(fold).toSet !=
+                    desiredTags.map(t => fold(t.value)).toSet
+
                 val changes = Vector(
                   Option.when(fieldsDiffer)(Change.FieldsChanged(sourced.spec.fields, sha)),
+                  Option.when(tagsDiffer)(Change.TagsChanged(desiredTags)),
                   Option.when(deckDiffers)(Change.DeckChanged(existing.deck, deck)),
                 ).flatten
 
