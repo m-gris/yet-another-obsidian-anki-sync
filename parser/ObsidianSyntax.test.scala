@@ -303,61 +303,36 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     assert(result.isLeft, "an unresolved reference was swallowed instead of reported")
   }
 
-  // ------------------------------------------------- maths: pinned, not supported ----
+  // ------------------- markdown's own rules, which are why maths is captured raw ----
 
-  /** MATHS IS NOT PARSED, AND THIS SECTION PINS WHAT HAPPENS INSTEAD. `$` is a delimiter in
-    * none of this dialect's span parsers, nor in Laika's `Markdown.spanParsers`, nor in
-    * `GitHubFlavor`, so `$…$` and `$$…$$` are read as ORDINARY PROSE and reach a card as
-    * literal text. That is row 5 of `docs/PARSER-DISAGREEMENTS.md`; `docs/MATHS-ON-A-CARD.md`
-    * is the long form, and these are the measurements it cites.
+  /** WHY THE MATHS PARSER REFUSES TO DESCEND, pinned on ORDINARY PROSE so the mechanism stays
+    * visible now that maths no longer travels through it.
     *
-    * THESE ARE CHARACTERISATION TESTS. They assert what the parser DOES today, two of them
-    * asserting a corruption rather than a behaviour anyone wants. They exist so that the
-    * claims in that document stay falsifiable instead of becoming folklore — the document
-    * says the parser eats a TeX row separator, and this is where that stops being a sentence
-    * somebody wrote down and starts being something the build re-checks.
+    * WHAT THIS SECTION USED TO SAY, AND WHY IT CHANGED. Until 2026-08-29 these were
+    * characterisation tests asserting these same two corruptions INSIDE `$$…$$`, because `$`
+    * was a delimiter nowhere and maths was read as prose — row 5 of
+    * `docs/PARSER-DISAGREEMENTS.md`, and the reason `docs/MATHS-ON-A-CARD.md` exists. They were
+    * written to go red the day a maths parser landed, and they did.
     *
-    * THEY ARE EXPECTED TO GO RED THE DAY MATHS IS PARSED, and that is their second job.
+    * THEY ARE REPOINTED RATHER THAN DELETED BECAUSE THE CORRUPTION HAS NOT GONE ANYWHERE. It is
+    * markdown behaving correctly, and all that changed is that maths is now lifted out before
+    * markdown sees it. So this section is the standing answer to anyone proposing a `recursive`
+    * maths parser: these two are what such a parser would have to survive, and it cannot.
     */
-  test("maths: TeX that is not markdown survives verbatim — this is the common case") {
-    val src  = """$$ \forall f \quad \text{Id} \circ f = f \circ \text{Id} = f $$"""
-    val text = parse(src).content.collect { case p: Paragraph => p.extractText }.mkString
-    assertEquals(text, src)
+  test("markdown eats a doubled backslash in prose — which is TeX's row separator") {
+    val text = parse("""a \\ b""").content.collect { case p: Paragraph => p.extractText }.mkString
+    assertEquals(text, """a \ b""")
   }
 
-  /** `\` IS ASCII PUNCTUATION, SO MARKDOWN OWNS IT. `\\` is markdown's escape for a literal
-    * backslash and arrives as one — but `\\` is also TeX's ROW SEPARATOR inside `align`,
-    * `gather`, `array` and `cases`. Every multi-line maths block is therefore already corrupt
-    * before any of this tool's own code runs, and nothing downstream can recover it: the
-    * second backslash is not in the parse tree to recover.
+  /** POSITION-DEPENDENT, which is what makes it worse than it first reads: the third subscript
+    * keeps its underscore because it has no partner left to pair with. Note also that
+    * CommonMark would not pair these at all, forbidding intraword `_` emphasis, so this is a
+    * divergence from what Obsidian renders rather than merely an inconvenience.
     */
-  test("maths: a TeX row separator is eaten by the markdown escape rule") {
-    val src  = """$$\begin{align} a &= b \\ c &= d \end{align}$$"""
-    val text = parse(src).content.collect { case p: Paragraph => p.extractText }.mkString
-    assertEquals(text, """$$\begin{align} a &= b \ c &= d \end{align}$$""")
-  }
-
-  /** SUBSCRIPT SURVIVAL DEPENDS ON HOW MANY OTHER SUBSCRIPTS SHARE THE PARAGRAPH, which is
-    * what makes this worse than it first reads. Two underscores pair, so the span between
-    * them becomes `Emphasized` and BOTH delimiters are consumed; the third has no partner and
-    * keeps its underscore. Note that CommonMark would not pair these at all — it forbids
-    * intraword `_` emphasis — so this is a divergence from what Obsidian renders, not merely
-    * an inconvenience.
-    */
-  test("maths: paired subscripts are consumed as emphasis, and an odd one out survives") {
-    val text = parse("""$$x_1 + y_1 = z_1$$""")
-      .content.collect { case p: Paragraph => p.extractText }.mkString
-    assertEquals(text, """$$x1 + y1 = z_1$$""")
-  }
-
-  /** THE TRIPWIRE. A card's key is derived from `section.header.extractText`, so this string
-    * is not cosmetic — it is identity. Changing what this test expects is a MIGRATION
-    * DECISION, not a test fix: a changed key is an orphaned card holding its review history
-    * and claimed by nothing, plus a replacement starting from zero.
-    */
-  test("maths in a heading reaches the card key WITH its dollars intact") {
-    val root = parse("## Notation (given 2 sets, $A$ and $B$)\n\nbody\n")
-    assertEquals(headingPath(root), List(List("Notation (given 2 sets, $A$ and $B$)")))
+  test("markdown pairs underscores in prose as emphasis — which are TeX's subscripts") {
+    val text =
+      parse("""x_1 + y_1 = z_1""").content.collect { case p: Paragraph => p.extractText }.mkString
+    assertEquals(text, """x1 + y1 = z_1""")
   }
 
   /** WHY THE TRIPWIRE IS ARMED, pinned on a construct that already exists so the mechanism is
@@ -373,4 +348,91 @@ class ObsidianSyntaxTest extends munit.FunSuite:
   test("a node that is not a SpanContainer vanishes from a heading's extractText") {
     val root = parse("## Notation %%hidden%% here\n\nbody\n")
     assertEquals(headingPath(root), List(List("Notation  here")))
+  }
+
+  // ------------------------------------------------- maths: recognised, captured raw ----
+
+  def displayTex(src: String): List[String] =
+    parse(src).collect { case m: ObsidianSyntax.MathDisplay => m.tex }.toList
+
+  def inlineTex(src: String): List[String] =
+    parse(src).collect { case m: ObsidianSyntax.MathInline => m.tex }.toList
+
+  def noMaths(src: String): Unit =
+    assertEquals(displayTex(src) ++ inlineTex(src), Nil, s"maths was found in: $src")
+
+  /** THE POINT OF THE WHOLE SLICE, IN ONE ASSERTION. The row separator survives. Above, under
+    * "maths: pinned, not supported", the same input loses one of its backslashes, because
+    * markdown owns that character and reads `\\` as an escape for it. Capturing the span
+    * without descending into it is what prevents that, and nothing downstream could have
+    * recovered what was already gone from the tree.
+    */
+  test("maths: a row separator survives capture, where prose parsing destroyed it") {
+    val tex = """\begin{align} a &= b \\ c &= d \end{align}"""
+    assertEquals(displayTex("$$" + tex + "$$"), List(tex))
+  }
+
+  test("maths: a subscript pair survives capture, where prose parsing ate it as emphasis") {
+    assertEquals(displayTex("""$$x_1 + y_1 = z_1$$"""), List("""x_1 + y_1 = z_1"""))
+  }
+
+  /** DOUBLE DOLLARS ARE TRIED FIRST, and getting this wrong is not a near miss: read
+    * single-first, `$$B^A$$` becomes an empty inline span, the text `B^A`, and another empty
+    * inline span.
+    */
+  test("maths: $$…$$ is one display span, not two empty inline ones") {
+    assertEquals(displayTex("""$$B^A$$"""), List("B^A"))
+    assertEquals(inlineTex("""$$B^A$$"""), Nil)
+  }
+
+  test("maths: single dollars give inline maths, and the delimiters are not in the payload") {
+    assertEquals(inlineTex("""The set $B^A$ of functions"""), List("B^A"))
+  }
+
+  test("maths: prose either side of an inline span is preserved") {
+    val text = parse("""The set $B^A$ of functions""")
+      .collect { case p: Paragraph => p.content.collect { case t: Text => t.content } }
+      .flatten
+      .toList
+    assertEquals(text, List("The set ", " of functions"))
+  }
+
+  // ── the false positives, which are the whole risk of making `$` a delimiter ──────────
+
+  /** A LONE DOLLAR IN PROSE ABOUT MONEY MUST NOT OPEN MATHS. This is the rule pandoc's
+    * `tex_math_dollars` settled, worth copying rather than re-deriving: an opening `$` needs a
+    * non-space immediately to its right, a closing `$` needs a non-space immediately to its
+    * left, and the closer must not be followed by a digit. Here the second dollar has a space
+    * before it so it cannot close, and there is no other candidate.
+    */
+  test("maths: prices do not become maths") {
+    noMaths("""It costs $5 to $10 today.""")
+  }
+
+  test("maths: an opening dollar followed by a space opens nothing") {
+    noMaths("""a $ x $ b""")
+  }
+
+  test("maths: an unclosed delimiter stays prose rather than swallowing the line") {
+    noMaths("""a $$ b""")
+    noMaths("""a $ b""")
+  }
+
+  /** WHAT AN AUTHOR TYPES TO MEAN A DOLLAR SIGN. Pinned rather than assumed, because which
+    * layer consumes the backslash decides whether this is even our problem.
+    */
+  test("maths: an escaped dollar does not open maths") {
+    noMaths("""costs \$5 and \$10""")
+  }
+
+  /** MATHS IN A HEADING IS THE CASE THAT MOVES A CARD KEY, so the mechanism is pinned rather
+    * than described. The node is not a `SpanContainer`, so `extractText` — a trait match with
+    * a silent fallthrough for anything else — contributes nothing for it. The heading above,
+    * under "maths: pinned, not supported", asserts what this same input keys as TODAY; this
+    * one asserts what it keys as once maths parses, and the pair IS the migration.
+    */
+  test("maths in a heading is recognised, and drops out of the extracted text") {
+    val src  = "# Notation (Given 2 sets, $A$ and $B$)\n\nbody\n"
+    assertEquals(inlineTex(src), List("A", "B"))
+    assertEquals(headingPath(parse(src)), List(List("Notation (Given 2 sets,  and )")))
   }

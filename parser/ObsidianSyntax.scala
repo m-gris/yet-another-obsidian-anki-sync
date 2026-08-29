@@ -227,6 +227,44 @@ object ObsidianSyntax:
       ("%%" ~> delimitedBy("%%")).map(t => ObsidianComment(t))
     }
 
+  /** `$…$` and `$$…$$`. ONE parser for both, and STANDALONE so the TeX is never descended into.
+    *
+    * WHY STANDALONE IS THE FEATURE AND NOT AN OPTIMISATION. `recursive` would run markdown's
+    * inline parsers over the payload, and markdown owns two characters TeX needs. Measured
+    * 2026-08-28 and pinned in this file's tests: `\\`, the row separator inside `align` and its
+    * relatives, is a markdown escape for `\` and arrives as one, destroying every multi-line
+    * environment; and a PAIR of `_` is read as emphasis, so `x_1 + y_1` becomes `x1 + y1` while
+    * a third subscript with no partner keeps its own. Neither is recoverable downstream. Refusing
+    * to descend is the only place the damage can be prevented.
+    *
+    * ONE PARSER RATHER THAN TWO, BECAUSE BOTH BEGIN WITH `$` AND ORDER DECIDES CORRECTNESS.
+    * Registering two would leave the order to Laika's start-character index; getting it wrong is
+    * not a near miss, because reading `$$B^A$$` single-first yields an empty span, the text
+    * `B^A`, and another empty span. Here `display` is simply first.
+    *
+    * THE INLINE RULES ARE PANDOC'S `tex_math_dollars`, COPIED RATHER THAN RE-DERIVED. An opening
+    * `$` must be followed by a non-space, a closing `$` must be preceded by a non-space, and the
+    * closer must not be followed by a digit. That is what keeps prose about money out: in
+    * `costs $5 to $10` the second dollar has a space before it and so cannot close, leaving no
+    * candidate and no maths. `$` is additionally barred from opening, so an unclosed `$$` falls
+    * through to prose instead of matching as empty inline maths.
+    *
+    * INLINE FAILS ON A NEWLINE AND DISPLAY DOES NOT, deliberately. A `$$…$$` block written
+    * across several lines is ordinary in a vault and is one paragraph to the block parser, so
+    * the span parser must be allowed to cross the newlines inside it. An unterminated one still
+    * fails and falls back to prose, because `delimitedBy` without `acceptEOF` requires its
+    * delimiter.
+    */
+  val mathParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      val display = ("$$" ~> delimitedBy("$$")).map(t => MathDisplay(t))
+      val inline =
+        ("$" ~> nextNot(c => c.isWhitespace || c == '$') ~> delimitedBy(
+          delimiter("$").prevNot(_.isWhitespace).nextNot(_.isDigit)
+        ).failOn('\n')).map(t => MathInline(t))
+      display | inline
+    }
+
   /** `<!-- HTML comment -->`, which Obsidian also hides.
     *
     * Registered as its own parser rather than folded into the one above because the delimiters
@@ -325,7 +363,7 @@ object ObsidianSyntax:
       // Embed before wikilink: "![[" must win over "[[".
       ParserBundle(spanParsers =
         Seq(embedParser, wikilinkParser, taskListParser, highlightParser,
-            obsidianCommentParser, htmlCommentParser))
+            obsidianCommentParser, htmlCommentParser, mathParser))
 
   /** THE canonical parser for this project. Build it here and nowhere else — every element
     * below is load-bearing and two of them are silent when omitted.
