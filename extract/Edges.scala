@@ -205,6 +205,24 @@ object Edges:
     *
     * Anything that is not a wikilink is returned untouched — a plain scalar edge such as
     * `status: draft` is as legitimate as a link.
+    *
+    * ==UNSPLIT — a second reader of one construct, and the two already disagree==
+    *
+    * Observation, not a prescription, and a different member of the family enumerated at
+    * `Extractor.headingFace`: not one construct with two readings, but one reading implemented
+    * twice. `ObsidianSyntax.displayText` answers the same question — what does a wikilink SAY —
+    * for wikilinks in prose. This answers it for wikilinks in frontmatter, where there is no
+    * markdown parse to reach for, which is why it exists at all.
+    *
+    * THEY DIVERGE TODAY, in two ways, VERIFIED BY READING both on 2026-08-29:
+    *
+    *   - THE PIPE. That one splits on the FIRST `|`; this one splits on the LAST, and the
+    *     comment below cites Obsidian as the reason. Both cannot be right about Obsidian.
+    *   - THE FRAGMENT. That one strips a trailing `#heading` or `^blockid`; this one does not.
+    *     So `[[Note#Section]]` reads as `Note` in a body and as `Note#Section` in a property.
+    *
+    * Neither divergence is measured against Obsidian itself, so which is correct is open. What
+    * is not open is that one construct has two answers and nothing holds them in step.
     */
   private[extract] def plainLink(raw: String): String =
     val trimmed = raw.trim

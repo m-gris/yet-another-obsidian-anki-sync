@@ -249,6 +249,16 @@ object Extractor:
             val title     = Marker.stripMarker(rawHeading)
             val nextTitles = ancestorTitles :+ title
 
+            // THE SECOND READING OF THIS HEADING. `title` above is the IDENTITY reading and
+            // stays exactly as it was, total and off the algebra, for the reason in the ruling
+            // beside `Tables.cellSource`. `face` is the DISPLAY reading, and it exists because
+            // one string cannot do both jobs: escaped text can carry no maths, so a heading's
+            // `$A$` reached a card either as literal dollars or, once maths parsed, as nothing.
+            //
+            // See `headingFace` for what it may and may not assume.
+            val face: Either[NonEmptyVector[C.Refusal], C.Html.Fragment] =
+              headingFace(section.header)
+
             Marker.parse(rawHeading) match
               case Left(err) =>
                 failures += BuildFailure.KeyKnown(
@@ -345,6 +355,41 @@ object Extractor:
       s"#flashcard/table/rows at '$p' asks only for whole-row cards, but $what — a row card " +
         "needs two or more descriptor columns, since with one it would merely duplicate that " +
         "row's single cell card. Drop '/rows' to get the cell cards instead"
+
+  /** THE DISPLAY READING OF A HEADING — what it looks like on a card, as opposed to what it
+    * contributes to a key.
+    *
+    * THE THIRD INSTANCE OF ONE PATTERN, and it is worth naming because the first two are
+    * already in this repository. A construct that has two readings needs two derivations over
+    * ONE lowering. Cloze had it and the two hand-written walks drifted, so a highlight inside a
+    * table was reported as no highlight (`extract/Cloze.scala:62`). Table cells had it and were
+    * split, half-way (`Tables.cellSource` against `CellDisplay`). A heading had it and was never
+    * split at all: `Marker.stripMarker(section.header.extractText)` served as key AND as face,
+    * so the face could only ever be escaped plain text. That is why maths in a heading cannot
+    * render and why an image in one vanishes without a word.
+    *
+    * WHAT IT MAY ASSUME. That the key was already derived, above, from the untouched text
+    * extraction. That is what makes a refusal here safe to report rather than fatal: there is a
+    * key to attach it to. INVERT THAT ORDER AND A REFUSAL BECOMES AN ABSENT KEY, which is
+    * precisely what the ruling beside `Tables.cellSource` forbids.
+    *
+    * WHAT IT MUST NOT BE USED FOR. `nextTitles`, `location`, or anything reaching
+    * `HeadingSegment`. Those are identity and are frozen on the text path.
+    *
+    * THE MARKER HAS TO COME OFF THE SPANS, NOT THE STRING, which is the one genuinely fiddly
+    * part and the reason this is its own function. `Marker.stripMarker` works on extracted text
+    * and cannot be reused: by the time text exists the spans are gone. The token sits at the end
+    * of the heading and is plain text, so it lands inside the final `Text` span, which may
+    * also carry the last words of the title.
+    */
+  private def headingFace(header: Header): Either[NonEmptyVector[C.Refusal], C.Html.Fragment] =
+    ???
+
+  /** The heading's spans with the trailing `#flashcard/…` token removed, and nothing else
+    * changed. Separate from [[headingFace]] because it is the part that can silently take a
+    * word of the author's title with it, so it is tested on its own.
+    */
+  private def spansWithoutMarker(spans: Vector[Span]): Vector[Span] = ???
 
   /** A marked heading yields ONE spec for most markers and MANY for a table — n pair cards
     * plus a row card per row. Each carries the source kind it should be reported as, so a

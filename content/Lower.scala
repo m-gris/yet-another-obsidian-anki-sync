@@ -267,6 +267,26 @@ object Lower:
   def cell(c: ast.Cell): Either[NonEmptyVector[Refusal], Cell] =
     cellV(c).toEither
 
+  /** A RUN OF SPANS, WHICH IS WHAT A HEADING IS. Laika keeps a `Section`'s header OUTSIDE its
+    * content (`laika/ast/blocks.scala:231`), so a heading is a `Seq[ast.Span]` and never reaches
+    * [[blocks]]. That is the mechanical reason headings were missed when bodies moved onto this
+    * algebra, and it is recorded at the call site in `extract/Extractor.scala`.
+    *
+    * WHY THIS EXISTS AT ALL, AND WHAT IT MAY NOT BE USED FOR. A heading has TWO readings — the
+    * key it contributes and the face it shows — and until now one string served both, so its
+    * maths and its images could only ever be shown raw or dropped. This entry point is for the
+    * DISPLAY reading only. IDENTITY MUST NOT ROUTE THROUGH HERE: the ruling recorded beside
+    * `Tables.cellSource` in `extract/Extractor.scala` holds that on the identity path a `Left`
+    * is not a loud error but an ABSENT KEY, and that reasoning covers a heading exactly as it
+    * covers a cell.
+    *
+    * A REFUSAL HERE IS AN IMPROVEMENT RATHER THAN A NEW FAILURE. An image in a marked heading is
+    * dropped in silence today, which is the open defect named at that same call site; routed
+    * through here it is refused by name, and the key it would have corrupted is derived
+    * separately and still exists to attach the refusal to.
+    */
+  def spans(ss: Vector[ast.Span]): Either[NonEmptyVector[Refusal], Vector[Inline]] = ???
+
   // ══════════════════════════════════════════════════════════════════ blocks ════
 
   private def blocksV(bs: Vector[ast.Block]): Refused[Vector[Block]] =

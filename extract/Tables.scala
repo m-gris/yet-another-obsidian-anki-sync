@@ -101,6 +101,13 @@ object CellDisplay:
     * shape inside it still flatten exactly as they did before S11. Rendering a cell's
     * STRUCTURE is a later slice, and it needs `extract/Tables.test.scala` in its file list,
     * because both honest routes to it cross that file.
+    *
+    * UNSPLIT, HALF. A cell is the SECOND member of the family enumerated at
+    * `Extractor.headingFace` — one construct, two readings — and the only one where the split
+    * was actually made: `Tables.cellSource` stayed on identity, this stayed on display. What is
+    * unfinished is that the display half never gained a RENDERER, only an escaper, so it can
+    * say what a cell's characters are but not what its markup means. Maths in a cell shows the
+    * author's dollars for that reason, and will keep doing so after headings are fixed.
     */
   val Escaped: CellDisplay =
     CellDisplay(

@@ -174,6 +174,21 @@ object CardContext:
     * heading sitting directly under its note's H1 has nothing above it that the card does not
     * already show. The note types wrap the field in `{{#Context}}…{{/Context}}`, so an empty
     * value emits no markup at all.
+    *
+    * ==UNSPLIT — one reading where the construct has two==
+    *
+    * Observation, not a prescription. These titles are HEADINGS, and a heading has an identity
+    * reading and a display reading. Only the identity one exists here, escaped. So a breadcrumb
+    * built from a heading holding maths shows the author's dollars, and one holding an image
+    * shows a gap where the image was — the same defect `Extractor.headingFace` exists to close
+    * for a heading's OWN face, one step further out.
+    *
+    * NOT AN OVERSIGHT, AND HARDER THAN THE CASE NEXT DOOR. These titles are also threaded down
+    * to descendant sections and into their keys, so splitting them means carrying an identity
+    * vector and a display vector in parallel, rather than deriving a second value at one site.
+    * Getting that wrong moves keys, and moving keys is silent.
+    *
+    * The family this belongs to is enumerated at `Extractor.headingFace`.
     */
   def render(titles: Vector[String]): String =
     C.Html.escape(titles.mkString(Separator)).render
