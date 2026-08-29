@@ -174,7 +174,7 @@ object OwnedTag:
   val ShaPrefix: String      = "sha"
   val OrphanedPrefix: String = "orphaned"
 
-  val ownedPrefixes: Set[String] = Set(SrcPrefix, ShaPrefix, OrphanedPrefix)
+  val ownedPrefixes: Set[String] = Set(SrcPrefix, ShaPrefix, OrphanedPrefix, VaultTag.Prefix)
 
   /** True when a tag read back from Anki is one of ours. Everything else is untouchable.
     *
@@ -205,6 +205,27 @@ object OwnedTag:
     */
   def orphaned(key: CardKey): OwnedTag =
     s"$OrphanedPrefix::${TagCodec.encode(key).value.stripPrefix(s"$SrcPrefix::")}"
+
+  /** An author's OWN tag, carried from a note's frontmatter into this tool's namespace.
+    *
+    * NAMESPACED RATHER THAN VERBATIM, AND THAT IS NOT TIDINESS. A verbatim `scala` in Anki is
+    * indistinguishable from a `scala` somebody added by hand, so removing a tag deleted in the
+    * vault would mean deleting a tag this tool never wrote. Under a prefix it owns, the set is a
+    * pure function of the vault: added when the author adds one, removed when they remove one,
+    * and it can never touch a tag it did not write.
+    *
+    * THE HAZARD IS ANKI ITSELF, NOT THE AUTHOR, which is why discipline could not have replaced
+    * this. Anki adds `leech` on its own when a card lapses too often, and `marked` when a card is
+    * marked in the reviewer. Both land on notes this tool generated. A verbatim sync that removed
+    * whatever the vault no longer named would delete Anki's own record of which cards are giving
+    * the author trouble — information that can only be earned back by failing reviews again.
+    *
+    * NESTING SURVIVES: Obsidian's `/` becomes Anki's `::`, so the author's tag tree appears in
+    * Anki's sidebar with its shape intact. See [[VaultTag.read]], which is the only caller and
+    * which decides what may be carried at all.
+    */
+  private[model] def vault(nested: String): OwnedTag =
+    s"${VaultTag.Prefix}::${nested.replace("/", "::").toLowerCase(java.util.Locale.ROOT)}"
 
   /** Escape hatch that bypasses every guarantee this type exists to provide.
     *
