@@ -566,6 +566,93 @@ class ExtractorTest extends munit.FunSuite:
 
   // ================================================ cloze ====
 
+  // ---------------------------------------- a cloze with no heading of its own ----
+  //
+  // *Highlight a phrase anywhere and get a card*, which is what Marc asked for at the start.
+  // The card is scoped to its BLOCK and keyed by the `^blockid` its author wrote, so several
+  // gaps in one paragraph are several cards of ONE Anki note and Anki can keep them off the
+  // same day.
+
+  test("a clozed block in an unmarked section becomes a card keyed by its anchor") {
+    val note = extract(
+      "# B\n\nx\n\n## Forearm\n\nThe ==<<radius>>== is a forearm bone. ^fa1\n"
+    )
+    assertEquals(note.failures, Vector.empty, s"${note.failures}")
+    assertEquals(paths(note), Vector("block '^fa1'"))
+  }
+
+  /** THE BUNDLING THIS ENDS. Under a marked heading the card's text is the whole section, so a
+    * section with three paragraphs shows all three whatever the highlight was in. Scoped to a
+    * block, a card shows its own paragraph and nothing else.
+    */
+  test("the card shows its own block, not the whole section") {
+    val note = extract(
+      "# B\n\nx\n\n## Forearm\n\nA paragraph that must not appear.\n\n" +
+        "The ==<<radius>>== is a forearm bone. ^fa1\n"
+    )
+    val text = specFor(note, "block '^fa1'").spec.fields.toMap.apply("Text")
+    assert(text.contains("{{c1::radius}}"), s"the deletion is missing: $text")
+    assert(!text.contains("must not appear"), s"the card carried a neighbouring paragraph: $text")
+  }
+
+  /** TWO BLOCKS UNDER ONE HEADING, WHICH IS THE CASE NOTHING ELSE COULD TELL APART. A heading
+    * path is the same for both; only the anchor distinguishes them, which is why it exists.
+    */
+  test("two clozed blocks under one heading are two cards") {
+    val note = extract(
+      "# B\n\nx\n\n## Bones\n\nThe ==<<radius>>== is one. ^b1\n\nThe ==<<femur>>== is another. ^b2\n"
+    )
+    assertEquals(note.failures, Vector.empty, s"${note.failures}")
+    assertEquals(paths(note).sorted, Vector("block '^b1'", "block '^b2'"))
+  }
+
+  /** SEVERAL GAPS IN ONE BLOCK ARE ONE NOTE, which is what buys sibling burying. */
+  test("several deletions in one block are one card with several cloze numbers") {
+    val note = extract(
+      "# B\n\nx\n\n## Bones\n\nThe ==<<1|radius>>== and the ==<<2|ulna>>== are bones. ^fa1\n"
+    )
+    assertEquals(paths(note), Vector("block '^fa1'"))
+    val text = specFor(note, "block '^fa1'").spec.fields.toMap.apply("Text")
+    assert(text.contains("{{c1::radius}}") && text.contains("{{c2::ulna}}"), text)
+  }
+
+  /** REFUSED AND NAMED. The author wrote a deletion, which is as explicit a statement of intent
+    * as a marker on a heading, so producing nothing silently is the failure this design exists
+    * to prevent. The message must name the fix, because the fix is one keystroke.
+    */
+  test("a clozed block with no anchor is refused, and told what to do about it") {
+    val note = extract("# B\n\nx\n\n## Forearm\n\nThe ==<<radius>>== is a forearm bone.\n")
+    assertEquals(note.specs, Vector.empty, s"a card was built with no identity: ${note.specs}")
+    val reason = note.failures.collect { case BuildFailure.ClozeBlockUnanchored(_, _, r) => r }.mkString
+    assert(reason.contains("^blockid"), s"the refusal does not name what is missing: $reason")
+    assert(reason.contains("Obsidian"), s"the refusal does not name the fix: $reason")
+  }
+
+  /** THE MOST LITERAL READING OF WHAT WAS ASKED FOR: a note with no headings at all. This is the
+    * note somebody writes when they did not want to think about structure, and it was producing
+    * nothing — the document walk descends through headings and ignores everything else, so a
+    * top-level paragraph never reached the code that reads it.
+    */
+  test("a clozed block in a note with no headings at all becomes a card") {
+    val note = extract("The ==<<radius>>== is a forearm bone. ^fa1\n")
+    assertEquals(note.failures, Vector.empty, s"${note.failures}")
+    assertEquals(paths(note), Vector("block '^fa1'"))
+  }
+
+  test("a clozed block before the first heading becomes a card") {
+    val note = extract("Prose with the ==<<ulna>>== in it. ^pre1\n\n# B\n\nx\n")
+    assertEquals(paths(note), Vector("block '^pre1'"), s"${note.failures}")
+  }
+
+  /** NOT DOUBLE-COUNTED. A `#flashcard/cloze` heading already turns its highlights into a card
+    * keyed by its path; reading them again as blocks would make two cards of every one.
+    */
+  test("a marked cloze section is not read a second time as blocks") {
+    val note = extract("# B\n\nx\n\n## L #flashcard/cloze\n\nThe ==<<femur>>== is a bone. ^ignored\n")
+    assertEquals(paths(note), Vector("b / l"), s"the section's highlights were counted twice")
+  }
+
+
   /** THE RULING THAT SPLIT `==` IN TWO, 2026-08-28.
     *
     * Before it, every `==text==` in a cloze section was a deletion, and nothing in a note told

@@ -328,6 +328,8 @@ class GoldenTest extends munit.FunSuite:
         FailRecord(escape("MarkedWithoutNoteId"), escape(file))
       case BuildFailure.MarkerUnknowable(file, _) =>
         FailRecord(escape("MarkerUnknowable"), escape(file))
+      case BuildFailure.ClozeBlockUnanchored(file, line, _) =>
+        FailRecord(escape("ClozeBlockUnanchored"), escape(s"$file:$line"))
       case BuildFailure.EdgeVocabularyUnusable(file, _) =>
         FailRecord(escape("EdgeVocabularyUnusable"), escape(file))
       case BuildFailure.FileUnreadable(file, _) =>

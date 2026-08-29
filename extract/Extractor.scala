@@ -233,6 +233,55 @@ object Extractor:
       *                  shown on a card, so it keeps its original casing rather than the
       *                  canonical lowercase form the key uses
       */
+    /** Cards from the blocks of an UNMARKED section, one per block holding cloze deletions.
+      *
+      * A BLOCK WITHOUT AN ANCHOR IS REFUSED AND NAMED. The author wrote `==<<…>>==`, which is a
+      * statement of intent as explicit as a marker on a heading, so producing nothing and saying
+      * nothing would be the silent omission this design exists to prevent. The fix is one
+      * keystroke in Obsidian and the message says so.
+      *
+      * THE REFUSAL DOES NOT PUNISH THE NOTE. `ClozeBlockUnanchored` shelters nothing, so every
+      * other card in the file is unaffected — one paragraph missing a keystroke must not
+      * suppress a whole note's worth of cards.
+      *
+      * THE CARD IS BUILT BY THE SAME FUNCTION A MARKED CLOZE SECTION USES, handed one block
+      * instead of a section's whole body. Grouping, ordinals, the refusal for a block whose
+      * deletions all render empty — all of it is the code that already exists, and none of it
+      * has been reimplemented here.
+      */
+    def clozeBlockCards(body: Seq[Block], titles: Vector[String]): Unit =
+      val location = folders ++ Vector(fileName) ++ titles
+      ClozeBlocks.in(body).foreach { found =>
+        // THE BLOCK'S OWN FIRST LINE, so a diagnostic points at the paragraph rather than at
+        // the heading above it. Only a span container has text to offer; anything else falls
+        // back to the file, which is still better than a line number that is wrong.
+        val firstLine = found.block match
+          case sc: laika.ast.SpanContainer => sc.extractText.linesIterator.nextOption.getOrElse("").trim
+          case _                           => ""
+        val ref       = SourceRef(filePath, lines.lineOf(firstLine), SourceKind.Block)
+
+        found.anchor match
+          case None =>
+            failures += BuildFailure.ClozeBlockUnanchored(
+              filePath,
+              ref.line,
+              "this block has ==<<cloze>>== deletions and no ^blockid, so its card would have " +
+                "no identity that survives an edit — add one (in Obsidian: copy the block link), " +
+                "or put the deletions under a #flashcard/cloze heading",
+            )
+
+          case Some(anchor) =>
+            val key = CardKey(noteId, CardPath.Block(anchor))
+            val built =
+              for
+                lowered <- bodyBlocks(key.path.render, Vector(found.block))
+                spec    <- Cloze.fromLowered(key, lowered, CardContext.compose(location, Vector.empty))
+              yield spec
+            built match
+              case Left(err)   => failures += BuildFailure.KeyKnown(key, ref, describe(err))
+              case Right(spec) => specs += SourcedSpec(spec, ref, titles, RecallText.none, vaultTags)
+      }
+
     def walk(
         element: Element,
         ancestors: Vector[HeadingSegment],
@@ -280,7 +329,18 @@ object Extractor:
                   s"unusable marker: $err",
                 )
 
-              case Right(None) => () // ordinary prose section — an ancestor, not a card
+              // AN ANCESTOR, NOT A CARD — and since 2026-08-29 its own body is still read, for
+              // the cloze deletions an author may have written in it without a heading. This is
+              // the whole of *highlight a phrase anywhere and get a card*: the section carries
+              // no marker, so nothing here claims its blocks, and each block that holds a
+              // deletion becomes a card of its own keyed by its `^blockid`.
+              //
+              // ONLY WHERE NO MARKER CLAIMS THE BLOCKS. A `#flashcard/cloze` section already
+              // turns its highlights into cards keyed by its heading, and reading them again
+              // here would make two cards of every one of them. A section with any OTHER marker
+              // is left alone too — its body belongs to that card, and taking highlights out of
+              // it is a separate decision nobody has made.
+              case Right(None) => clozeBlockCards(ownBody(section), ancestorTitles :+ title)
 
               case Right(Some(marker)) =>
                 val key = CardKey(noteId, CardPath.Headings(HeadingPath(NonEmptyVector.fromVectorUnsafe(path))))
@@ -352,6 +412,19 @@ object Extractor:
       case _                         => ()
 
     root.content.foreach(walk(_, Vector.empty, Vector.empty))
+
+    // THE NOTE'S OWN BODY, OUTSIDE ANY HEADING — the blocks before the first one, and the whole
+    // of a note that has no headings at all.
+    //
+    // WALKED SEPARATELY BECAUSE `walk` CANNOT SEE THEM. It descends through sections and ignores
+    // anything else, so a paragraph at the top level reaches its `case _ => ()` and produces
+    // nothing. That was invisible until this feature: before it, a block outside a marked
+    // heading was never going to make a card anyway.
+    //
+    // AND IT IS THE MOST LITERAL READING OF WHAT WAS ASKED FOR. "Highlight a phrase anywhere and
+    // get a card" includes a note with no headings, which is exactly the note somebody writes
+    // when they did not want to think about structure at all.
+    clozeBlockCards(root.content.filterNot(_.isInstanceOf[Section]), Vector.empty)
     ExtractedNote(specs.result(), failures.result())
 
   private def describe(e: SpecError): String = e match

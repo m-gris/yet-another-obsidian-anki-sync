@@ -12,6 +12,11 @@ enum SourceKind:
   case TablePair
   case TableRow
 
+  /** One block of a note, named by the `^blockid` its author wrote at the end of it. Not a
+    * heading, so a diagnostic sends the reader to a paragraph rather than to a title.
+    */
+  case Block
+
   /** A frontmatter property — a typed edge. Not a heading, and named so that a diagnostic sends
     * the reader to the top of the file rather than into its body.
     */
@@ -22,6 +27,7 @@ enum SourceKind:
     case TablePair => "table pair card"
     case TableRow  => "table row card"
     case Property  => "frontmatter property"
+    case Block     => "block"
 
 /** Where a spec came from.
   *
@@ -118,6 +124,19 @@ enum BuildFailure:
     * Non-degrading, like its neighbour: this says nothing about which notes the file owns.
     */
   case MarkerNotOnHeading(file: String, reason: String)
+
+  /** A block holds cloze deletions and carries no `^blockid`, so no card could be keyed to it.
+    *
+    * ITS OWN CASE, AND NON-DEGRADING LIKE ITS NEIGHBOUR. There is no key to exclude, but unlike
+    * `KeyUnderivableInFile` this says nothing about which notes the file owns: every other card
+    * in it is sound, and one anchorless paragraph must not suppress a whole note's worth.
+    *
+    * WORTH REPORTING FOR THE REASON THAT ONE IS. The author wrote `==<<…>>==`, which is a
+    * statement of intent as explicit as a marker on a heading. Producing nothing and saying
+    * nothing is the silent-omission failure this design exists to prevent — and the fix is one
+    * keystroke in Obsidian, which the message can name.
+    */
+  case ClozeBlockUnanchored(file: String, line: Int, reason: String)
 
   /** A frontmatter tag that ALMOST names a marker — `IN-FLIGHT.md` item 37.
     *
@@ -250,6 +269,14 @@ enum BuildFailure:
     // can see those. Sheltering on the strength of a tag that names nothing would hide a real
     // orphan behind a typo.
     case MarkerMisspelled(_, _) => OrphanShelter.Nothing
+
+    // NOTHING TO SHELTER, AND FOR A THIRD REASON. There is no key here — the anchor that would
+    // have made one is missing — but the note this block sits in is otherwise sound and its
+    // other cards are all accounted for. Widening to the whole note would suppress every one of
+    // them because one paragraph lacks a keystroke, which is the opposite of proportionate. If
+    // that block once HAD an anchor and it was deleted, its card genuinely is an orphan and
+    // should be flagged: sheltering it would hide a real one.
+    case ClozeBlockUnanchored(_, _, _) => OrphanShelter.Nothing
 
     // NEVER OWNED ANYTHING. A card's identity begins with the frontmatter id, so a file without
     // one has never produced an Anki note and cannot own an observed key.

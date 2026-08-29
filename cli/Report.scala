@@ -650,6 +650,8 @@ object Report:
       s"$file: $reason"
     case BuildFailure.EdgeVocabularyUnusable(file, reason) =>
       s"$file: $reason (none of this note's properties makes a card until this is fixed)"
+    case BuildFailure.ClozeBlockUnanchored(file, line, reason) =>
+      s"$file:$line  $reason"
     case BuildFailure.FileUnreadable(file, reason) =>
       s"$file: $reason (SCAN IS PARTIAL — no orphans will be computed)"
 
