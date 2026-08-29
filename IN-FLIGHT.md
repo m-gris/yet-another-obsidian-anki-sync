@@ -550,6 +550,44 @@ document because a finding nobody can find is a finding nobody acts on._
     _The underlying note-type mismatch is fixed (item 16) and the gate is widened. What is NOT
     fixed is that the tool had no vocabulary for the state, which is why it could not describe it._
 
+    **A FOURTH PART, ADDED 2026-08-29 AFTER IT COST SOMETHING.** A note's FIELD SET travels as
+    `Vector[(String, String)]` — measured, 23 production signatures and 11 in tests: the card
+    spec, three `SyncAction` cases, the `Anki` port, both implementations, the wire client, and
+    the card-generation rules.
+
+    **What it cost.** The in-memory collection let `addNote` create a note holding FEWER fields
+    than its note type declares — a state Anki cannot represent, since a note's fields ARE its
+    type's list and adding a field to a type gives every existing note that field, empty. A test
+    then modelled "a note synced before the `Identity` field existed" as exactly that impossible
+    note, and proved two false things at once: `updateNoteFields` merges over the fields a note
+    ALREADY has, so writing the missing one was dropped silently while the modification count
+    still moved.
+
+    **There WAS a check, and it was one-sided.** `checkFields` rejects a field name the note type
+    does not declare and says nothing about a name the type DOES declare that the caller omitted.
+    A check that can be one-sided is a check separable from the value it guards — which is the
+    argument for the type rather than for a better check.
+
+    **And the field-ORDER rule is a comment repeated three times.** Anki's `modelFieldAdd`
+    appends, so a field declared anywhere but last leaves a repaired collection permanently
+    reporting a difference it can never fix. That reasoning is written out at `CardSpec.fields`'
+    concept-descriptor arm and twice more in `Marker.FieldOrder` — three copies of a rule nothing
+    enforces, which is what a missing type looks like from outside.
+
+    **THE SHAPE OF THE FIX, for this part.** A field set constructible only from a
+    `NoteTypeSpec`: the spec supplies the names and their order, the caller supplies values by
+    name, anything absent is empty rather than missing. `checkFields` is then DELETED rather than
+    made symmetric, because the state it looks for stops existing. Gone with it: a missing field,
+    an extra field, a wrong order, a misspelled name at construction. NOT gone: a wrong value —
+    worth saying, so the type is not later blamed for something it never claimed.
+
+    **WHY THE ASYMMETRY EXISTS AT ALL**, which is the question underneath all four parts. This
+    project already applies boundary discipline once: `content/Content.scala` is a closed algebra
+    that exists precisely because Laika's types are open and foreign, so the parse boundary is
+    where foreign shapes stop. The same reasoning was never applied to AnkiConnect, whose wire
+    format is JSON with string keys — and that shape was carried inward instead of being parsed
+    at the edge. Not a principle this repository lacks; a principle it applied on one side.
+
     **Where the full diagnosis lives, and why that is not good enough.** `docs/PIPELINE-DESIGN.md`
     surveys every site, and its back-end fact table was independently verified — nine of eleven
     rows opened and all nine accurate. But that document opens with a warning telling readers not
