@@ -436,3 +436,30 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     assertEquals(inlineTex(src), List("A", "B"))
     assertEquals(headingPath(parse(src)), List(List("Notation (Given 2 sets,  and )")))
   }
+
+  /** THE CARD THAT STARTED THE WHOLE SLICE, pinned as a regression in its ACTUAL shape rather
+    * than a tidied one. Reported 2026-08-27 from `Identity Function.md` in Marc's vault, where
+    * it reached Anki showing its own TeX as literal text.
+    *
+    * THE SHAPE IS THE POINT AND WAS NOT WHAT ANY EARLIER TEST USED. The delimiters sit on their
+    * own lines, the block runs across five more, and every line carries a two-space indent —
+    * which is under the four a code block needs, so it stays a paragraph and the span parser
+    * really does have to cross those newlines. That is why display maths does not fail on one.
+    *
+    * IT ASSERTS PROPERTIES RATHER THAN A STRING, deliberately. The exact payload depends on how
+    * much of the indentation Laika hands over, which is not a thing this slice decides or
+    * should pin; what it decides is that the row separators arrive doubled and the environment
+    * arrives whole.
+    */
+  test("regression: the multi-line display block from Identity Function.md survives") {
+    val src =
+      "# Special Property\n\n" +
+        "  $$\n  \\begin{align}\n  f \\circ \\mathrm{Id} &= f \\\\\n" +
+        "  \\mathrm{Id} \\circ f &= f \\\\\n  \\forall f \\\\\n  \\end{align}\n  $$\n"
+    val found = displayTex(src)
+    assertEquals(found.size, 1, s"expected one display span, got: $found")
+    val tex = found.head
+    assert(tex.contains("""\begin{align}"""), s"environment opener lost: $tex")
+    assert(tex.contains("""\end{align}"""), s"environment closer lost: $tex")
+    assertEquals(tex.sliding(2).count(_ == """\\"""), 3, s"row separators not doubled: $tex")
+  }
