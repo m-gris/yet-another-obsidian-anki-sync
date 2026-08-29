@@ -249,9 +249,10 @@ enum SyncAction:
     // judgement about a large, destructive write; this one adds a note's own identity to a
     // field that is empty and touches nothing else. A run that declined to do it would leave a
     // note whose identity lives only in a tag this run has just stopped writing, which is the
-    // failure this exists to prevent rather than a risk worth weighing. (The tag remains the
-    // permanent home for a note on a note type this tool does not own; this action reaches only
-    // notes that CAN hold the field, which is what `canHoldTheField` in the planner tests.)
+    // failure this exists to prevent rather than a risk worth weighing. (It reaches only notes
+    // that CAN hold the field, which is what `canHoldTheField` in the planner tests; a legacy
+    // note on a stock type is reached by the retype path instead, which moves it somewhere it
+    // can hold one.)
     case _: CarryIdentity => Disposition.Attempt
     case _: Retype =>
       policy match

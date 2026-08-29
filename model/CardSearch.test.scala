@@ -54,13 +54,14 @@ class CardSearchTest extends munit.FunSuite:
     )
   }
 
-  /** BOTH HOMES, PERMANENTLY. Asserted separately from the law above, because the law would
-    * still hold if one half were dropped — and dropping either is invisible: a Browse window
-    * listing no cards reads as "this note made none".
+  /** BOTH HOMES, WHILE A LEGACY NOTE COULD EXIST. Asserted separately from the law above,
+    * because the law would still hold if one half were dropped — and dropping either is
+    * invisible: a Browse window listing no cards reads as "this note made none".
     *
-    * THIS IS THE TEST THAT REFUSES THE TIDYING. A reader who believes the tag is transitional
-    * will eventually delete its half; the tag is the only home a note on a foreign note type
-    * has, so this fails when they try. See `plan/Executor.scala`'s resolution comment.
+    * THIS TEST REFUSES A PREMATURE TIDYING, NOT A PERMANENT ONE. The tag half serves notes
+    * written before the identity had a field, and removing it while any remain strands exactly
+    * the notes that still need migrating. When that population is gone, this test and its half
+    * go together — see `IN-FLIGHT.md` item 40.
     */
   test("the search names both the field and the tag") {
     val s = CardSearch.forNoteId("abc123")

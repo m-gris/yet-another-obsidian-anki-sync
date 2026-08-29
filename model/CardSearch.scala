@@ -21,10 +21,10 @@ object CardSearch:
 
   /** EVERY NOTE THIS TOOL OWNS, in whichever home its identity currently sits.
     *
-    * BOTH, AND THE `or` IS NOT OPTIONAL — NOR IS IT TRANSITIONAL. The argument is written out
-    * once, at `plan/Executor.scala`'s resolution comment: a note on a note type this tool does
-    * not own has nowhere to put the field, so for that note the tag is the only possible home,
-    * permanently. Two kinds of note keeping the same value in the only place each can.
+    * BOTH, AND THE `or` IS NOT OPTIONAL WHILE ANY LEGACY NOTE REMAINS. The argument is written
+    * out once, at `plan/Executor.scala`'s resolution comment: every note this tool generates
+    * carries the field by construction, so a note without one predates the field and keeps its
+    * identity in a tag. Finding it is what allows it to be migrated.
     *
     * WHAT A SEARCH NAMING ONE HOME WOULD COST. It finds half a collection, and the half it
     * misses looks to this tool like notes that DO NOT EXIST — which is the input that makes it
@@ -35,10 +35,12 @@ object CardSearch:
 
   /** Every card this tool made from one note, as an Anki search.
     *
-    * BOTH HOMES, AND NEITHER HALF MAY BE REMOVED. An earlier version of this docstring said the
-    * tag half "goes when the tag does" — WITHDRAWN 2026-08-29, because the tag does not go. A
-    * note on a note type this tool does not own cannot hold the field and keeps its identity in
-    * a tag permanently; `plan/Executor.scala`'s resolution comment carries the full argument.
+    * BOTH HOMES, UNTIL NO LEGACY NOTE REMAINS. An earlier version of this docstring said the tag
+    * half "goes when the tag does", which invited deleting it on a schedule nothing tracked; a
+    * later one said the tag stays "permanently", which overcorrected. Both are withdrawn. What is
+    * true: every note this tool generates carries the field, so the tag half serves notes written
+    * before the field existed — and it goes when those are gone, which somebody decides. See
+    * `plan/Executor.scala`'s resolution comment and `IN-FLIGHT.md` item 40.
     *
     * DELETING THE TAG HALF WOULD BE INVISIBLE, which is why the withdrawn sentence was worth
     * chasing down rather than leaving to be noticed later. Such a note's cards would simply stop

@@ -146,16 +146,27 @@ object Observer:
     // rather than caution — it was found by trying field-only and watching every retype test
     // fail.
     //
-    // A NOTE ON A NOTE TYPE THIS TOOL DOES NOT OWN HAS NOWHERE TO PUT THE FIELD. Anki's stock
-    // `Basic` and `Cloze` do not declare `Identity`, and this tool is ruled never to write to a
-    // note type it did not create (2026-08-21), so it cannot add one. For such a note the tag is
-    // the ONLY possible home — permanently, not transitionally. Those are precisely the notes
-    // the retype path exists to migrate onto this tool's own types, so refusing to read their
-    // identity would break the migration for exactly the collections that need it.
+    // EVERY NOTE THIS TOOL GENERATES CARRIES THE FIELD, BY CONSTRUCTION. It is ruled never to
+    // write to a note type it did not create (2026-08-21), it owns five, and all five declare
+    // `Identity`. There is no vault note it can make that lacks one.
     //
-    // SO THESE ARE NOT TWO SPELLINGS OF ONE THING WITH ONE PREFERRED. They are two kinds of note
-    // keeping the same value in the only place each can. The field is read first because a note
-    // that HAS one is on a type this tool owns, and that is the answer that cannot be stale.
+    // SO A NOTE WITHOUT THE FIELD IS A LEGACY NOTE — made before that ruling, when this tool
+    // wrote to Anki's stock `Basic` and `Cloze`, which declare no such field. Its identity is in
+    // a tag because that was the only home available when it was written.
+    //
+    // READING THAT TAG IS THEREFORE MIGRATION MACHINERY, NOT A SECOND HOME, and the distinction
+    // decides what a later reader does with it. "Permanent" — which this comment said until
+    // 2026-08-29 — invites building on two homes and asking which is authoritative. What is
+    // true is narrower: this reads a legacy note's identity so the note can be MOVED onto a type
+    // that can hold a field, after which nothing consults its tag again. Moving stock `Basic`
+    // onto `Obsidian Basic` is not a shrink, so no gate refuses it.
+    //
+    // IT ENDS WHEN NO COLLECTION HOLDS A LEGACY NOTE, which is a judgement somebody makes rather
+    // than a state this code can detect on its own — see `IN-FLIGHT.md` item 40. Until then,
+    // deleting it would strand exactly the notes it exists to rescue.
+    //
+    // THE FIELD IS READ FIRST because a note that HAS one is on a type this tool owns, and that
+    // is the answer that cannot be stale.
     //
     // THE STRING IS IDENTICAL EITHER WAY, which is what keeps this a lookup rather than a second
     // code path: whatever is found goes to the one decoder.

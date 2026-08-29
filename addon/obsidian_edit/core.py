@@ -68,11 +68,15 @@ Verdict = Union[NotOurs, Open, Explain]
 def identity(fields: Mapping[str, str], tags: Sequence[str]) -> str | None:
     """A card's identity, from the field if it has one and from the tag if it does not.
 
-    NOT A FALLBACK, AND NOT TRANSITIONAL. A note on a note type the sync tool does not own -
-    Anki's stock Basic and Cloze among them - cannot be given a field, because that tool is
-    ruled never to write to a note type it did not create. For such a note the tag is the only
-    possible home, permanently. These are two kinds of note keeping the same value in the only
-    place each can, so neither branch may be removed.
+    THE TAG BRANCH SERVES LEGACY NOTES. Every note the sync tool generates carries the field,
+    because it is ruled never to write to a note type it did not create and all five of the
+    types it owns declare one. A note without the field therefore predates the field, and keeps
+    its identity in a tag because that was the only home available when it was written.
+
+    SO NEITHER BRANCH MAY BE REMOVED WHILE SUCH A NOTE COULD EXIST, and the tag branch goes when
+    that population does rather than on a schedule. Removing it earlier would make those notes
+    unreachable from Anki - and unreachable reads as "this card came from nowhere", not as a
+    fault.
 
     THE FIELD IS READ FIRST because a note that HAS one is on a type the tool owns, and that is
     the answer that cannot be stale.

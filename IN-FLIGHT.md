@@ -1146,3 +1146,51 @@ section: a pointer to a document that does not mention the thing is worse than n
     **NOT reducible, and it was checked**: the wire format between the two is already good.
     `locate` puts a URI on stdout and an explanation on stderr, and `interpret` is five lines.
     Channel splitting, not prose parsing. Left alone.
+
+---
+
+## OPEN — the thing that retires a migration reader, 2026-08-29
+
+40. **A LEGACY NOTE IS READ FOREVER INSTEAD OF BEING MIGRATED ONCE.** Ruled by Marc 2026-08-29.
+    **Nothing is built.**
+
+    **The settled principle.** Notes generated from the Obsidian vault do NOT use Anki's stock
+    note types. The tool is ruled never to write to a note type it did not create (2026-08-21),
+    it owns five, and all five declare `Identity`. **So every note it generates carries the
+    field, by construction rather than by luck.**
+
+    **Which makes a note without the field exactly one thing: a LEGACY note** — written before
+    the field existed, when the tool wrote to stock `Basic` and `Cloze`. Its identity is in a tag
+    because that was the only home available at the time.
+
+    **WHAT IS WRONG TODAY.** Such a note is READ through its tag on every run, indefinitely, and
+    nothing ever moves it. The tag reader is treated as a second permanent home rather than as
+    the means of ending the state it serves. Marc's question — *why limit and contort ourselves
+    with Anki's stock things?* — is the correction: nothing needs accommodating that can be
+    fixed.
+
+    **WHAT SHOULD HAPPEN.** A run that finds a note on a note type this tool does not own should
+    MIGRATE it onto the owned type its marker asks for, and say so — the same way a note-type
+    move is already reported. Moving stock `Basic` onto `Obsidian Basic` is not a shrink, so no
+    gate refuses it, and the retype machinery already exists.
+
+    **WHAT THAT RETIRES, once no collection holds one:** the tag half of `CardSearch`'s two
+    searches, `Executor.resolveFromTag`, the add-on's tag branch in `core.py`, and the test in
+    `CardSearch.test.scala` that guards both halves. Each of those now points here.
+
+    **WHY IT CANNOT SIMPLY BE DELETED NOW**, which is the trap this item exists to keep shut.
+    Removing the tag reader before the notes are migrated strands exactly the notes it exists to
+    rescue, and does so INVISIBLY: their cards stop appearing in Anki, and an empty Browse window
+    reads as *this note made no cards* rather than as a fault. The end condition is a judgement
+    somebody makes about the collections in the world, not a state the code can detect alone.
+
+    **TWO WRONG STATEMENTS WERE WITHDRAWN GETTING HERE, both Claude's, both recorded at the sites
+    so neither is re-proposed.** The first said the tag half "goes when the tag does", which
+    invited deleting it on a schedule nothing tracked. The second overcorrected to "permanently,
+    not transitionally", which invites building on two homes and asking which is authoritative.
+    Neither is true; the reader is migration machinery with an end.
+
+    _Marc also caught the method: asked why the design should contort around stock note types,
+    Claude reached for a measurement of what his collection currently holds. That answers "does
+    this bite today", not "what should the design be" — the same status-quo-for-status-bono error
+    recorded in `docs/CLOZE-REDESIGN.md`'s header. The principled answer needed no measurement._
