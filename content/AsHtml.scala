@@ -359,6 +359,35 @@ object Html:
   def element(t: Tag, inner: Fragment): Fragment =
     s"<${name(t)}>$inner</${name(t)}>"
 
+  /** THE ONE VOID ELEMENT, which is why it is a value rather than a [[Tag]]. Every tag in that
+    * enum is emitted by [[element]] as an open/close pair, and `<br></br>` is not HTML.
+    */
+  val lineBreak: Fragment = "<br>"
+
+  /** Escaped text in which every newline BECOMES A LINE BREAK.
+    *
+    * OBSIDIAN'S OWN DEFAULT, AND THE REASON THE PREVIOUS RULE WAS WRONG. Obsidian has a setting
+    * called *Strict line breaks*, and it is OFF unless somebody turns it on — so a single
+    * newline inside a paragraph renders as a LINE BREAK in reading view. The rule that stood
+    * here until 2026-08-29 said the opposite, on the grounds that collapsing a newline "turns
+    * the author's 80-column wrap back into flowing prose". That reasoning assumes CommonMark
+    * semantics, which is not what the author is looking at: nobody hard-wraps at 80 columns in
+    * an editor that shows them the wrap.
+    *
+    * MEASURED BEFORE CHANGING IT, against Marc's live collection: three notes of sixty-nine hold
+    * a newline in a field. One is between two blocks, where this never applies. One is inside
+    * LaTeX, which is untouched — maths has its own constructors and its own arm, so a newline
+    * there never reaches this function. The third is the card that prompted the change, whose
+    * three lines of a calculation had arrived as one run-on sentence.
+    *
+    * IT COVERS THE HARD BREAK TOO, WHICH NOTHING ELSE DID. Laika leaves the newline of a
+    * `LineBreak` at the head of the following text node — see `Content.scala` §(G) — so two
+    * trailing spaces produced exactly the same run-on line. There was no way to put a line break
+    * on a card at all.
+    */
+  def escapeWithBreaks(raw: String): Fragment =
+    raw.split("\n", -1).map(escape).mkString(lineBreak)
+
   /** `<pre>` IS MANDATORY, NOT STYLISTIC. Without it the `sql` block in
     * `dummy-vault/Replication.md` collapses onto one line — the exact defect this work exists to
     * fix, arriving inside code.
@@ -619,10 +648,10 @@ object AsHtml:
       i: Inline,
       deletion: (Option[Int], Html.Fragment) => Html.Fragment,
   ): Html.Fragment = i match
-    // THE NEWLINE IS LEFT ALONE. This is the hard-wrap rule and the whole point of the file:
-    // HTML collapses a newline inside a block to a space by itself, which is what turns the
-    // author's 80-column wrap back into flowing prose. NEVER `<br>`.
-    case Inline.Text(text) => Html.escape(text)
+    // A NEWLINE IS A LINE BREAK, because that is what Obsidian shows the author. The rule that
+    // stood here said the opposite and its reasoning is corrected at `Html.escapeWithBreaks`,
+    // which is also where the measurement that preceded the change is recorded.
+    case Inline.Text(text) => Html.escapeWithBreaks(text)
 
     // RULE 1 for the next three: emit the tag ONLY if the inner is non-empty. These are the only
     // inlines that can turn empty content into non-empty output, and `<p><em></em></p>` would

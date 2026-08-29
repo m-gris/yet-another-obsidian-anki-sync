@@ -1144,10 +1144,13 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     val back = twoFieldBack(note, "b / q")
-    assertEquals(back, "<p>alpha\nbeta</p><p>gamma</p><ul><li>one</li><li>two</li></ul>")
+    // A NEWLINE IS A LINE BREAK SINCE 2026-08-29 — Obsidian's own default, and the reasoning is
+    // at `Html.escapeWithBreaks`. This assertion previously required the opposite and forbade
+    // `<br>` outright.
+    assertEquals(back, "<p>alpha<br>beta</p><p>gamma</p><ul><li>one</li><li>two</li></ul>")
     assert(
-      !back.contains("<br"),
-      s"a `<br>` here would put the author's 80-column wrap on the card as a line break: [$back]",
+      back.contains("<ul><li>one</li><li>two</li></ul>"),
+      s"a list must still become elements rather than breaks: [$back]",
     )
   }
 

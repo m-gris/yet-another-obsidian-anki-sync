@@ -48,21 +48,28 @@ class AsHtmlSuite extends munit.FunSuite:
 
   // ══════════════════════════════════════════════════════ the two halves of the job ════
 
-  /** TEST 1 — the trap, and the reason this renderer exists.
+  /** TEST 1 — A NEWLINE IS A LINE BREAK, because that is what Obsidian shows the author.
     *
-    * A newline INSIDE a paragraph is emitted VERBATIM and nothing else is done about it. The
-    * author hard-wraps prose at 80 columns; HTML collapses that newline to a space by itself,
-    * which is exactly what is wanted. Emitting `<br>` instead would print the author's wrap
-    * onto the card as a line break.
+    * THIS TEST USED TO ASSERT THE OPPOSITE, and was labelled a trap. Its reasoning was that an
+    * author hard-wraps prose at 80 columns, so collapsing the newline restores flowing prose and
+    * a `<br>` would print the wrap onto the card. **RETIRED DELIBERATELY BY MARC, 2026-08-29**,
+    * because the premise is false: Obsidian's *Strict line breaks* setting is OFF unless somebody
+    * turns it on, so a single newline already renders as a break in reading view — and nobody
+    * hard-wraps at 80 columns in an editor that shows them the wrap.
     *
-    * This reads as an omission — "surely a newline should become something?" — so it is pinned
-    * with its reason attached. NOTE the limit, stated so no reader mistakes this for
-    * preservation of the author's intent: `Lower.scala:421` DROPS `ast.LineBreak`, so by the
-    * time we hold a `Block` a deliberate two-space hard break is indistinguishable from a soft
-    * wrap. This renderer cannot preserve one and does not claim to.
+    * MEASURED BEFORE RETIRING IT, against Marc's live collection: three notes of sixty-nine hold
+    * a newline in a field. One sits between two blocks, where this never applied. One is inside
+    * LaTeX, which is untouched because maths has its own constructors and its own arm. The third
+    * is the card that prompted the change — three lines of a calculation arriving as one run-on
+    * sentence, which is what an author sees as a defect rather than as flowing prose.
+    *
+    * THE OLD DOCSTRING ALSO NAMED A LIMIT THAT THIS REMOVES. It said a deliberate two-space hard
+    * break was indistinguishable from a soft wrap, because laika drops `LineBreak` and leaves its
+    * newline in the following text — so there was NO WAY to put a line break on a card at all.
+    * Both now work, by the same route.
     */
-  test("TRAP: a newline inside a paragraph is emitted verbatim, never as <br>") {
-    assertEquals(rendered(Vector(p("alpha\nbeta"))), "<p>alpha\nbeta</p>")
+  test("a newline inside a paragraph becomes a line break") {
+    assertEquals(rendered(Vector(p("alpha\nbeta"))), "<p>alpha<br>beta</p>")
   }
 
   /** TEST 2 — the other half. Separation between blocks comes from the block ELEMENT and never

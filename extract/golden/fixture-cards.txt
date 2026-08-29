@@ -103,21 +103,21 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
 
 card ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
   note ⟦Obsidian Cloze⟧
-  field ⟦Text⟧ ⟦<p>The outermost layer is the {{c1::epidermis}}, beneath it lies the {{c2::dermis}}, and\nunder both sits the {{c3::hypodermis}}, which is mostly fat.</p>⟧
+  field ⟦Text⟧ ⟦<p>The outermost layer is the {{c1::epidermis}}, beneath it lies the {{c2::dermis}}, and<br>under both sits the {{c3::hypodermis}}, which is mostly fat.</p>⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › The three layers, blanked⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20forearm⟧
   note ⟦Obsidian Cloze⟧
-  field ⟦Text⟧ ⟦<p>Two bones run between elbow and wrist. On the thumb side is the {{c1::radius}};\non the little-finger side, the {{c2::ulna}}. In supination the {{c1::radius}} lies\nparallel to the {{c2::ulna}}, and in pronation it crosses over it — which is why\nboth are labelled: their text may be rewritten without either card losing its\nreview history.</p>⟧
+  field ⟦Text⟧ ⟦<p>Two bones run between elbow and wrist. On the thumb side is the {{c1::radius}};<br>on the little-finger side, the {{c2::ulna}}. In supination the {{c1::radius}} lies<br>parallel to the {{c2::ulna}}, and in pronation it crosses over it — which is why<br>both are labelled: their text may be rewritten without either card losing its<br>review history.</p>⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Bones of the forearm⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20forearm⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20two%20parts⟧
   note ⟦Obsidian Cloze⟧
-  field ⟦Text⟧ ⟦<p>The wrist itself is the {{c1::carpus}}, eight small bones in two rows. Beyond it the\npalm is built from the {{c2::metacarpals}}, one per digit.</p><p>The fingers themselves are the phalanges, and they come in three kinds:</p><ul><li>the {{c3::proximal}} phalanges, nearest the palm</li><li>the {{c4::middle}} phalanges, absent from the thumb</li><li>the {{c5::distal}} phalanges, carrying the nails</li></ul><p>A cloze section whose body is SEVERAL BLOCKS. Every other cloze in this vault is one\nparagraph, so the separator that joins one block to the next was never reached, and a\nchange to it passed the golden file unnoticed. This section is what makes that change\nshow up as a diff.</p>⟧
+  field ⟦Text⟧ ⟦<p>The wrist itself is the {{c1::carpus}}, eight small bones in two rows. Beyond it the<br>palm is built from the {{c2::metacarpals}}, one per digit.</p><p>The fingers themselves are the phalanges, and they come in three kinds:</p><ul><li>the {{c3::proximal}} phalanges, nearest the palm</li><li>the {{c4::middle}} phalanges, absent from the thumb</li><li>the {{c5::distal}} phalanges, carrying the nails</li></ul><p>A cloze section whose body is SEVERAL BLOCKS. Every other cloze in this vault is one<br>paragraph, so the separator that joins one block to the next was never reached, and a<br>change to it passed the golden file unnoticed. This section is what makes that change<br>show up as a diff.</p>⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Bones of the hand, in two parts⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20two%20parts⟧
@@ -125,7 +125,7 @@ card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20tw
 card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Surface area and volume of a sphere⟧
-  field ⟦Back⟧ ⟦<p>The area is \\(A = 4\\pi r^2\\). The volume follows from it:</p><p>\\[\\begin&#123;aligned&#125; V &amp;= \\frac&#123;4&#125;&#123;3&#125;\\pi r^3 \\\\ A &amp;= \\frac&#123;dV&#125;&#123;dr&#125; \\end&#123;aligned&#125;\\]</p><p>Formulae were the FIFTH construct this file's opening claims and the only one it\nnever carried. Added 2026-08-29, with the parser that made it possible. It is one\ncard rather than several on purpose, because it holds all four hazards at once:\ninline maths, display maths, a row separator that markdown used to eat, and\nbraces that the field escapes to character references.</p>⟧
+  field ⟦Back⟧ ⟦<p>The area is \\(A = 4\\pi r^2\\). The volume follows from it:</p><p>\\[\\begin&#123;aligned&#125; V &amp;= \\frac&#123;4&#125;&#123;3&#125;\\pi r^3 \\\\ A &amp;= \\frac&#123;dV&#125;&#123;dr&#125; \\end&#123;aligned&#125;\\]</p><p>Formulae were the FIFTH construct this file's opening claims and the only one it<br>never carried. Added 2026-08-29, with the parser that made it possible. It is one<br>card rather than several on purpose, because it holds all four hazards at once:<br>inline maths, display maths, a row separator that markdown used to eat, and<br>braces that the field escapes to character references.</p>⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
@@ -133,21 +133,21 @@ card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%2
 card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20of%20radius%20r⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Surface area of a sphere of radius \\(r\\)⟧
-  field ⟦Back⟧ ⟦<p>\\[A = 4\\pi r^2\\]</p><p>MATHS IN THE HEADING, not only in the body, and it is a separate card for a\nreason. The section above proves a card BODY renders maths; nothing proved a\ncard FACE did, because a heading takes a different route to its field — text\nextraction and escaping rather than lowering and rendering. Added 2026-08-29\nwith the slice that gave a heading a second reading.</p>⟧
+  field ⟦Back⟧ ⟦<p>\\[A = 4\\pi r^2\\]</p><p>MATHS IN THE HEADING, not only in the body, and it is a separate card for a<br>reason. The section above proves a card BODY renders maths; nothing proved a<br>card FACE did, because a heading takes a different route to its field — text<br>extraction and escaping rather than lowering and rendering. Added 2026-08-29<br>with the slice that gave a heading a second reading.</p>⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20of%20radius%20r⟧
 
 card ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
   note ⟦Obsidian Cloze⟧
-  field ⟦Text⟧ ⟦<p>The shaft of a long bone is the {{c1::diaphysis}}, and each widened end is an\n{{c2::epiphysis}}. Between them sits the {{c3::epiphyseal plate}}, the cartilage layer\nwhere lengthwise growth happens. The whole outer surface, except at the joint,\nis wrapped in a fibrous membrane called the {{c4::periosteum}}.</p>⟧
+  field ⟦Text⟧ ⟦<p>The shaft of a long bone is the {{c1::diaphysis}}, and each widened end is an<br>{{c2::epiphysis}}. Between them sits the {{c3::epiphyseal plate}}, the cartilage layer<br>where lengthwise growth happens. The whole outer surface, except at the joint,<br>is wrapped in a fibrous membrane called the {{c4::periosteum}}.</p>⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Bones › Anatomy of a long bone⟧
   field ⟦Identity⟧ ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
 
 card ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
   note ⟦Obsidian Cloze⟧
-  field ⟦Text⟧ ⟦<p>Bone is continuously rebuilt: {{c1::osteoblasts}} deposit new matrix while\n{{c2::osteoclasts}} dissolve old matrix and release its calcium. An osteoblast that\nbecomes walled into the matrix it secreted matures into an {{c3::osteocyte}}, which\nthen senses mechanical load and signals where remodelling is needed.</p>⟧
+  field ⟦Text⟧ ⟦<p>Bone is continuously rebuilt: {{c1::osteoblasts}} deposit new matrix while<br>{{c2::osteoclasts}} dissolve old matrix and release its calcium. An osteoblast that<br>becomes walled into the matrix it secreted matures into an {{c3::osteocyte}}, which<br>then senses mechanical load and signals where remodelling is needed.</p>⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Bones › Cells that remodel bone⟧
   field ⟦Identity⟧ ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
@@ -253,7 +253,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
 card ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦What does W + R &gt; N buy you?⟧
-  field ⟦Back⟧ ⟦<p>With N replicas, writing to W and reading from R such that W + R &gt; N forces the read set\nand the write set to intersect. The reader therefore always sees at least one replica\nholding the latest acknowledged write, which is what makes the read strongly consistent.</p>⟧
+  field ⟦Back⟧ ⟦<p>With N replicas, writing to W and reading from R such that W + R &gt; N forces the read set<br>and the write set to intersect. The reader therefore always sees at least one replica<br>holding the latest acknowledged write, which is what makes the read strongly consistent.</p>⟧
   field ⟦Context⟧ ⟦Patterns › Nested › Deep › Quorums⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f⟧
@@ -261,7 +261,7 @@ card ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20yo
 card ⟦src::fix-quorums::quorums/why%20do%20sloppy%20quorums%20weaken%20consistency%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why do sloppy quorums weaken consistency?⟧
-  field ⟦Back⟧ ⟦<p>A sloppy quorum accepts writes on any W reachable nodes, not necessarily the N nodes that\nown the key. The write and read sets are then drawn from different populations, so the\noverlap guarantee is lost until hinted handoff has returned the data to its home replicas.</p>⟧
+  field ⟦Back⟧ ⟦<p>A sloppy quorum accepts writes on any W reachable nodes, not necessarily the N nodes that<br>own the key. The write and read sets are then drawn from different populations, so the<br>overlap guarantee is lost until hinted handoff has returned the data to its home replicas.</p>⟧
   field ⟦Context⟧ ⟦Patterns › Nested › Deep › Quorums⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-quorums::quorums/why%20do%20sloppy%20quorums%20weaken%20consistency%3f⟧
@@ -393,7 +393,7 @@ card ⟦src::fix-consistency::consistency/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Consistency⟧
   field ⟦Descriptor⟧ ⟦Definition⟧
-  field ⟦Description⟧ ⟦<p>A consistency model is a contract between a storage system and its clients stating which\ninterleavings of reads and writes the system is allowed to expose. It is a restriction on\nthe set of histories the system may produce, not a property of any single operation.</p>⟧
+  field ⟦Description⟧ ⟦<p>A consistency model is a contract between a storage system and its clients stating which<br>interleavings of reads and writes the system is allowed to expose. It is a restriction on<br>the set of histories the system may produce, not a property of any single operation.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -404,7 +404,7 @@ card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Consistency⟧
   field ⟦Descriptor⟧ ⟦Why it is a spectrum⟧
-  field ⟦Description⟧ ⟦<p>Stronger models forbid more histories, which makes application reasoning easier but forces\nmore coordination between replicas. Weaker models permit anomalies in exchange for lower\nlatency and continued availability while the network is partitioned.</p>⟧
+  field ⟦Description⟧ ⟦<p>Stronger models forbid more histories, which makes application reasoning easier but forces<br>more coordination between replicas. Weaker models permit anomalies in exchange for lower<br>latency and continued availability while the network is partitioned.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -415,7 +415,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Monotonic reads⟧
   field ⟦Descriptor⟧ ⟦Definition⟧
-  field ⟦Description⟧ ⟦<p>Once a client has observed a value, later reads within the same session never return an\nolder one. The guarantee is scoped to the session, so two different clients may still\ndisagree about which value is current.</p>⟧
+  field ⟦Description⟧ ⟦<p>Once a client has observed a value, later reads within the same session never return an<br>older one. The guarantee is scoped to the session, so two different clients may still<br>disagree about which value is current.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design › Consistency › Session guarantees⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -426,7 +426,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Monotonic reads⟧
   field ⟦Descriptor⟧ ⟦Failure mode⟧
-  field ⟦Description⟧ ⟦<p>A client whose requests are spread across replicas can read a fresh value from an\nup-to-date replica and then a stale one from a lagging replica, so time appears to run\nbackwards. Sticky routing or a per-session version token prevents it.</p>⟧
+  field ⟦Description⟧ ⟦<p>A client whose requests are spread across replicas can read a fresh value from an<br>up-to-date replica and then a stale one from a lagging replica, so time appears to run<br>backwards. Sticky routing or a per-session version token prevents it.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design › Consistency › Session guarantees⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -436,7 +436,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
 card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Temporal coupling⟧
-  field ⟦Back⟧ ⟦<p>Two components are temporally coupled when one can only do its work while the other\nis available at that same moment. A synchronous HTTP call couples caller to callee in\ntime; putting a queue between them removes that coupling at the cost of latency and\nordering guarantees.</p>⟧
+  field ⟦Back⟧ ⟦<p>Two components are temporally coupled when one can only do its work while the other<br>is available at that same moment. A synchronous HTTP call couples caller to callee in<br>time; putting a queue between them removes that coupling at the cost of latency and<br>ordering guarantees.</p>⟧
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/temporal%20coupling⟧
@@ -444,7 +444,7 @@ card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
 card ⟦src::fix-coupling::coupling/afferent%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Afferent coupling⟧
-  field ⟦Back⟧ ⟦<p>The number of other modules that depend on a given module. High afferent coupling makes\na module expensive to change, because every change has to stay compatible with many\ncallers — it is a measure of responsibility, not of quality.</p>⟧
+  field ⟦Back⟧ ⟦<p>The number of other modules that depend on a given module. High afferent coupling makes<br>a module expensive to change, because every change has to stay compatible with many<br>callers — it is a measure of responsibility, not of quality.</p>⟧
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/afferent%20coupling⟧
@@ -452,7 +452,7 @@ card ⟦src::fix-coupling::coupling/afferent%20coupling⟧
 card ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20make%20a%20module%20fragile%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why does high efferent coupling make a module fragile?⟧
-  field ⟦Back⟧ ⟦<p>Efferent coupling counts the modules a given module depends on. Each dependency is a way\nfor someone else's change to break it, so a module that reaches out to many others fails\nfor reasons that have nothing to do with its own code.</p>⟧
+  field ⟦Back⟧ ⟦<p>Efferent coupling counts the modules a given module depends on. Each dependency is a way<br>for someone else's change to break it, so a module that reaches out to many others fails<br>for reasons that have nothing to do with its own code.</p>⟧
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20make%20a%20module%20fragile%3f⟧
@@ -460,7 +460,7 @@ card ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20ma
 card ⟦src::fix-coupling::coupling/why%20is%20connascence%20of%20meaning%20harder%20to%20maintain%20than%20connascence%20of%20name%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why is connascence of meaning harder to maintain than connascence of name?⟧
-  field ⟦Back⟧ ⟦<p>Connascence of name is visible: rename the thing and a compiler or a grep finds every\nsite. Connascence of meaning lives in a shared convention — a magic value, an agreed\nencoding — that nothing in the code records, so the matching sites cannot be found\nmechanically.</p>⟧
+  field ⟦Back⟧ ⟦<p>Connascence of name is visible: rename the thing and a compiler or a grep finds every<br>site. Connascence of meaning lives in a shared convention — a magic value, an agreed<br>encoding — that nothing in the code records, so the matching sites cannot be found<br>mechanically.</p>⟧
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/why%20is%20connascence%20of%20meaning%20harder%20to%20maintain%20than%20connascence%20of%20name%3f⟧
@@ -469,7 +469,7 @@ card ⟦src::fix-linearizability::linearizability/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Linearizability⟧
   field ⟦Descriptor⟧ ⟦Definition⟧
-  field ⟦Description⟧ ⟦<p>Every operation appears to take effect atomically at a single instant between its\ninvocation and its response, and that instant respects real time. Once a write is\nacknowledged, every later read — from any client — must observe it or a newer value.</p>⟧
+  field ⟦Description⟧ ⟦<p>Every operation appears to take effect atomically at a single instant between its<br>invocation and its response, and that instant respects real time. Once a write is<br>acknowledged, every later read — from any client — must observe it or a newer value.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -480,7 +480,7 @@ card ⟦src::fix-linearizability::linearizability/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Linearizability⟧
   field ⟦Descriptor⟧ ⟦Cost⟧
-  field ⟦Description⟧ ⟦<p>A linearizable read or write has to be confirmed by a quorum before it can respond, so its\nlatency is bounded below by the slowest link in that quorum. During a network partition the\nminority side must refuse requests rather than answer from state it cannot vouch for.</p>⟧
+  field ⟦Description⟧ ⟦<p>A linearizable read or write has to be confirmed by a quorum before it can respond, so its<br>latency is bounded below by the slowest link in that quorum. During a network partition the<br>minority side must refuse requests rather than answer from state it cannot vouch for.</p>⟧
   field ⟦ThreeWay⟧ ⟦1⟧
   field ⟦Context⟧ ⟦System-Design⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -491,7 +491,7 @@ card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%2
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Linearizability⟧
   field ⟦Descriptor⟧ ⟦Contrast with sequential consistency⟧
-  field ⟦Description⟧ ⟦<p>Sequential consistency only requires that all replicas agree on <em>some</em> total order that\npreserves each client's program order. Linearizability adds the real-time constraint: an\noperation that completed before another started must be ordered before it.</p>⟧
+  field ⟦Description⟧ ⟦<p>Sequential consistency only requires that all replicas agree on <em>some</em> total order that<br>preserves each client's program order. Linearizability adds the real-time constraint: an<br>operation that completed before another started must be ordered before it.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -502,7 +502,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦CAP Theorem⟧
   field ⟦Descriptor⟧ ⟦Definition⟧
-  field ⟦Description⟧ ⟦<p>When a network partition splits a distributed system, the system must choose between\nanswering with possibly stale data and refusing to answer at all. Consistency and\navailability cannot both be preserved while the partition lasts.</p>⟧
+  field ⟦Description⟧ ⟦<p>When a network partition splits a distributed system, the system must choose between<br>answering with possibly stale data and refusing to answer at all. Consistency and<br>availability cannot both be preserved while the partition lasts.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design › Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -513,7 +513,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦CAP Theorem⟧
   field ⟦Descriptor⟧ ⟦Failure mode⟧
-  field ⟦Description⟧ ⟦<p>Treating the C-versus-A choice as a permanent architectural setting rather than a\nper-partition decision. Outside a partition a system can offer both, so the tradeoff only\nbecomes real once messages start being dropped.</p>⟧
+  field ⟦Description⟧ ⟦<p>Treating the C-versus-A choice as a permanent architectural setting rather than a<br>per-partition decision. Outside a partition a system can offer both, so the tradeoff only<br>becomes real once messages start being dropped.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design › Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -524,7 +524,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Quorum⟧
   field ⟦Descriptor⟧ ⟦Definition⟧
-  field ⟦Description⟧ ⟦<p>A subset of replicas large enough that any two such subsets share at least one member.\nRequiring every read and every write to reach a quorum makes the newest accepted value\nvisible to every subsequent reader.</p>⟧
+  field ⟦Description⟧ ⟦<p>A subset of replicas large enough that any two such subsets share at least one member.<br>Requiring every read and every write to reach a quorum makes the newest accepted value<br>visible to every subsequent reader.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design › Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -535,7 +535,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
   field ⟦Concept⟧ ⟦Quorum⟧
   field ⟦Descriptor⟧ ⟦Failure mode⟧
-  field ⟦Description⟧ ⟦<p>Sizing the quorum against the number of live nodes instead of the configured replica count.\nAs nodes fail the quorum shrinks with them, two disjoint groups can each believe they hold\na majority, and split-brain follows.</p>⟧
+  field ⟦Description⟧ ⟦<p>Sizing the quorum against the number of live nodes instead of the configured replica count.<br>As nodes fail the quorum shrinks with them, two disjoint groups can each believe they hold<br>a majority, and split-brain follows.</p>⟧
   field ⟦ThreeWay⟧ ⟦⟧
   field ⟦Context⟧ ⟦System-Design › Multi-Topic⟧
   field ⟦ConceptLabel⟧ ⟦⟧
@@ -545,7 +545,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
 card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication%20trade%20availability%20for%20durability%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦Why does synchronous replication trade availability for durability?⟧
-  field ⟦Back⟧ ⟦<p>The leader cannot acknowledge a write until at least one follower has confirmed\nit, so a slow or unreachable follower stalls every writer. You buy the guarantee\nthat an acknowledged write survives leader loss — see Durability and\nFailover — by giving up availability during partitions, which is exactly the\ntension CAP describes.</p>⟧
+  field ⟦Back⟧ ⟦<p>The leader cannot acknowledge a write until at least one follower has confirmed<br>it, so a slow or unreachable follower stalls every writer. You buy the guarantee<br>that an acknowledged write survives leader loss — see Durability and<br>Failover — by giving up availability during partitions, which is exactly the<br>tension CAP describes.</p>⟧
   field ⟦Context⟧ ⟦System-Design › Replication⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-replication::replication/why%20does%20synchronous%20replication%20trade%20availability%20for%20durability%3f⟧
@@ -553,7 +553,7 @@ card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication
 card ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
   note ⟦Obsidian Basic (and reversed card)⟧
   field ⟦Front⟧ ⟦Read-your-writes consistency⟧
-  field ⟦Back⟧ ⟦<p>A guarantee that a client always sees its own prior writes, even when reads are\nserved by lagging replicas. It is strictly weaker than\nConsistency Models: other clients may still observe the old\nvalue. Typical implementations:</p><ul><li><p>Route reads to the leader for a short window after a write.</p><ul><li>Simple, but concentrates read load on one node.</li></ul></li><li><p>Pin the client to a replica whose applied log position is at least the\nposition returned by its last write.</p><ul><li>Needs the server to hand the client a version token, e.g. <code>last_lsn</code>.</li></ul></li></ul>⟧
+  field ⟦Back⟧ ⟦<p>A guarantee that a client always sees its own prior writes, even when reads are<br>served by lagging replicas. It is strictly weaker than<br>Consistency Models: other clients may still observe the old<br>value. Typical implementations:</p><ul><li><p>Route reads to the leader for a short window after a write.</p><ul><li>Simple, but concentrates read load on one node.</li></ul></li><li><p>Pin the client to a replica whose applied log position is at least the<br>position returned by its last write.</p><ul><li>Needs the server to hand the client a version token, e.g. <code>last_lsn</code>.</li></ul></li></ul>⟧
   field ⟦Context⟧ ⟦System-Design › Replication⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
@@ -561,7 +561,7 @@ card ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
 card ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up%20after%20a%20network%20partition%3f⟧
   note ⟦Obsidian Basic⟧
   field ⟦Front⟧ ⟦How does a follower catch up after a network partition?⟧
-  field ⟦Back⟧ ⟦<p>It reconnects and asks the leader for everything after the last log position it\ndurably applied; the leader replays from that offset if the segment still exists,\notherwise the follower must take a fresh snapshot. See Write-Ahead Log for\nwhy the position, not the wall clock, is the resume point.</p><pre><code class="language-sql">SELECT client_addr, state, sent_lsn, replay_lsn,\n       sent_lsn - replay_lsn AS lag_bytes\nFROM pg_stat_replication;</code></pre><p>A follower whose <code>replay_lsn</code> stops advancing while <code>sent_lsn</code> moves is applying\ntoo slowly, not disconnected — a distinction Monitoring dashboards routinely\nblur.</p>⟧
+  field ⟦Back⟧ ⟦<p>It reconnects and asks the leader for everything after the last log position it<br>durably applied; the leader replays from that offset if the segment still exists,<br>otherwise the follower must take a fresh snapshot. See Write-Ahead Log for<br>why the position, not the wall clock, is the resume point.</p><pre><code class="language-sql">SELECT client_addr, state, sent_lsn, replay_lsn,\n       sent_lsn - replay_lsn AS lag_bytes\nFROM pg_stat_replication;</code></pre><p>A follower whose <code>replay_lsn</code> stops advancing while <code>sent_lsn</code> moves is applying<br>too slowly, not disconnected — a distinction Monitoring dashboards routinely<br>blur.</p>⟧
   field ⟦Context⟧ ⟦System-Design › Replication⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up%20after%20a%20network%20partition%3f⟧
