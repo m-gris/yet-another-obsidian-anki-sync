@@ -8,8 +8,15 @@ Summary / Full form, following its siblings — `PARSER-DISAGREEMENTS.md`, `CLOZ
 
 **This document is row 5 of `PARSER-DISAGREEMENTS.md`, opened up.** That document owns the
 family and the argument for a check across it; this one owns the single member, because the
-member turns out to carry a cost the family framing does not predict. Two amendments this
-document owes back to row 5 are named at the foot.
+member turns out to carry a cost the family framing does not predict.
+
+**Read the family document first if you want the WHY rather than the WHAT.** Two sections there,
+added on 2026-08-29 out of the same conversation as this one, carry the general form of the
+problem and deliberately do not live here: *"The status column is not six facts. It is three
+mechanisms."* — which shows that maths is silent for the same reason a block reference is, that
+neither can ever be caught inside the parser, and that markdown's failure channel is keyed to
+resolution rather than to recognition. And *"What the tool does with a construct"* — which sets
+out the five deliberate dispositions and the one accident, and locates maths in the accident.
 
 ---
 
@@ -231,16 +238,21 @@ the reason a `<` inside a deletion cannot break it.
 
 ---
 
-## Two amendments owed to `PARSER-DISAGREEMENTS.md` row 5
+## Two amendments owed to `PARSER-DISAGREEMENTS.md` row 5 — MADE 2026-08-29
 
-Named here rather than made there, because that file was untracked and mid-edit when this was
-written and its author's work should not be swept into somebody else's commit.
+Kept here as a record of what changed and why, rather than deleted once done. When this document
+was first written the family document was untracked and mid-edit, so the amendments were named
+rather than made; both have since been applied at Marc's instruction, in the same pass that added
+the two framing sections named at the top.
 
-1. **The description is too kind.** Row 5 reads *"prints the delimiters and the TeX verbatim"*.
-   Verbatim is right for most TeX and wrong for two constructs; see the table above. Suggested:
-   *"prints the delimiters, and the TeX verbatim except that `\\` collapses to `\` and paired `_`
-   is consumed as emphasis"*.
-2. **The status understates it.** Row 5 is SILENT in the same sense as row 4 — a construct
+1. **The description was too kind.** Row 5 read *"prints the delimiters and the TeX verbatim"*.
+   Verbatim is right for most TeX and wrong for two constructs; see the table above. It now reads
+   *"prints the delimiters, and the TeX verbatim EXCEPT that `\\` collapses to `\` and paired `_`
+   is eaten as emphasis"*.
+2. **The status understated it.** Row 5 is SILENT in the same sense as row 4 — a construct
    printed on a card face. It is also the only row whose REMEDY is itself a silent re-keying, as
-   argued above. That is a different and larger fact than the row records, and it is the reason
-   this document exists.
+   argued above. That is a different and larger fact than the row recorded, and it is the reason
+   this document exists. The status cell now says so and points here.
+
+The evidence note for row 5 was updated in the same pass, to cite the executed measurements and
+the five characterisation tests in `parser/ObsidianSyntax.test.scala` rather than reading alone.
