@@ -22,7 +22,7 @@
 # Every emitted value is wrapped in U+27E6/U+27E7 brackets so that leading and trailing
 # whitespace is visible BY POSITION, and escaped so that an invisible character is visible
 # at all. Escaping is one-way: nothing ever unescapes this file.
-specs 55
+specs 56
 failures 2
 
 card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
@@ -121,6 +121,14 @@ card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20tw
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Bones of the hand, in two parts⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20two%20parts⟧
+
+card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
+  note ⟦Obsidian Basic (and reversed card)⟧
+  field ⟦Front⟧ ⟦Surface area and volume of a sphere⟧
+  field ⟦Back⟧ ⟦<p>The area is \\(A = 4\\pi r^2\\). The volume follows from it:</p><p>\\[\\begin&#123;aligned&#125; V &amp;= \\frac&#123;4&#125;&#123;3&#125;\\pi r^3 \\\\ A &amp;= \\frac&#123;dV&#125;&#123;dr&#125; \\end&#123;aligned&#125;\\]</p><p>Formulae were the FIFTH construct this file's opening claims and the only one it\nnever carried. Added 2026-08-29, with the parser that made it possible. It is one\ncard rather than several on purpose, because it holds all four hazards at once:\ninline maths, display maths, a row separator that markdown used to eat, and\nbraces that the field escapes to character references.</p>⟧
+  field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
+  field ⟦SameShape⟧ ⟦⟧
+  field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
 
 card ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
   note ⟦Obsidian Cloze⟧

@@ -63,3 +63,15 @@ A cloze section whose body is SEVERAL BLOCKS. Every other cloze in this vault is
 paragraph, so the separator that joins one block to the next was never reached, and a
 change to it passed the golden file unnoticed. This section is what makes that change
 show up as a diff.
+
+## Surface area and volume of a sphere #flashcard/2way
+
+The area is $A = 4\pi r^2$. The volume follows from it:
+
+$$\begin{aligned} V &= \frac{4}{3}\pi r^3 \\ A &= \frac{dV}{dr} \end{aligned}$$
+
+Formulae were the FIFTH construct this file's opening claims and the only one it
+never carried. Added 2026-08-29, with the parser that made it possible. It is one
+card rather than several on purpose, because it holds all four hazards at once:
+inline maths, display maths, a row separator that markdown used to eat, and
+braces that the field escapes to character references.
