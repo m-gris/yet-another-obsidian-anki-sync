@@ -417,6 +417,51 @@ enum Inline:
     */
   case Deletion(group: Option[Int], content: Vector[Inline])
 
+  /** MATHS THE AUTHOR WROTE BETWEEN SINGLE DOLLARS, held as TeX SOURCE and never parsed.
+    *
+    * THE PAYLOAD IS RAW, AND THAT IS THE WHOLE POINT. Measured 2026-08-28 and pinned in
+    * `parser/ObsidianSyntax.test.scala` under "maths: pinned, not supported": run through
+    * markdown's inline parsers, `\\` collapses to `\` and a PAIR of `_` is eaten as emphasis,
+    * so `x_1 + y_1` arrives as `x1 + y1` while a third subscript with no partner keeps its
+    * own. A multi-line `align` is destroyed before this algebra could ever see it. Capturing
+    * the source verbatim is what prevents that, and it is why this holds a `String` rather
+    * than a `Vector[Inline]` — the same reason [[Text]] and [[CodeSpan]] do.
+    *
+    * THE DELIMITERS ARE NOT IN `tex`, AND THEY ARE NOT THIS TYPE'S BUSINESS. `$` is how
+    * Obsidian spells maths and `\(` is how an Anki field spells it; a constructor of a closed
+    * algebra names the THING and never either spelling. Each renderer emits its own, which is
+    * the ordinary initial-encoding division of labour and not a decision special to maths.
+    *
+    * A CONSEQUENCE WORTH STATING, BECAUSE IT MOVES A CARD KEY ONCE. `AsText` strips every
+    * delimiter it meets — no backticks on [[CodeSpan]], no asterisks on [[Emphasis]], no `==`
+    * on [[Highlight]] — for the reason written at [[Highlight]]: that renderer is the oracle
+    * for whether a section has a body at all, so syntax must never inflate the count. Maths
+    * obeys the same rule. So `# Notation (Given 2 sets, $A$ and $B$)` keys on
+    * `notation (given 2 sets, a and b)` once this constructor exists, where today it keys with
+    * the dollars still in it. THAT RE-KEY IS ACCEPTED DELIBERATELY: holding the dollars would
+    * mean writing the only special case into the one renderer whose uniformity is load-bearing,
+    * in order to hold still a string that nothing yet depends on.
+    */
+  case MathInline(tex: String)
+
+  /** Maths the author wrote between DOUBLE dollars — display maths, set on a line of its own.
+    *
+    * A SEPARATE CONSTRUCTOR RATHER THAN A MODE ON [[MathInline]], AND THE CHOICE CARRIES NO
+    * DESIGN CONTENT. `Math(mode, tex)` and `MathInline(tex) | MathDisplay(tex)` are the same
+    * type up to isomorphism, so nothing follows from picking either. It is settled by the
+    * ruling recorded at [[Highlight]] — a consumer obliged to ask which kind it holds will one
+    * day forget to ask — and settled that way for consistency rather than for advantage.
+    *
+    * WHAT THE DISTINCTION IS NOT is a rendering detail smuggled into the algebra. Set-apart
+    * against flowing-in-the-sentence is the AUTHOR'S intent, in the way a heading is not a
+    * font size. Both spellings of it, `$$` and `\[`, stay out here.
+    *
+    * IT IS AN `Inline` AND NOT A `Block`, which is measured rather than assumed. Markdown
+    * hands a `$$…$$` line back as a PARAGRAPH containing text, so a block constructor would
+    * have to reconstitute a block the parser never produced. `<p>\[…\]</p>` is legal.
+    */
+  case MathDisplay(tex: String)
+
 /** One item of a bulleted or numbered list.
   *
   * HOLDS BLOCKS, NOT SPANS — and the evidence is thinner than it first looks, so it is stated

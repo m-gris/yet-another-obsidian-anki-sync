@@ -216,3 +216,14 @@ object AsText:
       // `Cloze.renderWithDeletions` does: its group key and its `inner` are the same string,
       // computed by the same recursion.
       deletion(label, content.map(inlineText(_, deletion)).mkString)
+
+    // MATHS CONTRIBUTES ITS TeX AND NOT ITS DOLLARS — the same rule as `CodeSpan` above and
+    // for the same reason as `Highlight`: this renderer is the oracle for ruled refusal B6, so
+    // syntax must never inflate the count of what is present. THE CONSEQUENCE IS A ONE-TIME
+    // RE-KEY of any heading containing maths, accepted deliberately rather than routed around
+    // — `content/Content.scala` at `MathInline` and `docs/MATHS-ON-A-CARD.md` carry it.
+    //
+    // BOTH MODES RENDER ALIKE, because plain text has no notion of set-apart against flowing.
+    // The distinction the algebra carries is spent by `AsHtml`, on `\(` against `\[`.
+    case Inline.MathInline(tex)  => tex
+    case Inline.MathDisplay(tex) => tex

@@ -130,3 +130,44 @@ class AsTextSuite extends munit.FunSuite:
   test("TRAP: a code block's language is carried but not rendered") {
     assertEquals(AsText.plain(Vector(Block.Code(Some("sql"), "select 1"))), "select 1")
   }
+
+  // ------------------------------------------------------------------ maths ----
+
+  /** MATHS RENDERS WITHOUT ITS DOLLARS, and that is uniformity rather than a choice made for
+    * maths. Every delimiter-bearing constructor loses its delimiters here: no backticks on a
+    * code span, no asterisks on emphasis, no `==` on a highlight. The reason is written at the
+    * highlight case in `AsText.scala` — this renderer is the oracle for ruled refusal B6, "does
+    * this section have a body at all", so syntax must never inflate the count of what is
+    * present.
+    *
+    * IT MOVES A CARD KEY, ONCE, AND THAT IS ACCEPTED. A key comes from a heading's extracted
+    * text, so `# Notation (Given 2 sets, $A$ and $B$)` keys with its dollars in it today and
+    * without them once maths is parsed. Holding them would mean writing the ONLY special case
+    * into the one renderer whose uniformity is load-bearing, to keep a string still that
+    * nothing depends on. `docs/MATHS-ON-A-CARD.md` carries the argument.
+    */
+  test("maths renders as bare TeX, with no dollars — the same rule as a code span") {
+    assertEquals(AsText.plain(Vector(Block.Paragraph(Vector(Inline.MathInline("B^A"))))), "B^A")
+    assertEquals(AsText.plain(Vector(Block.Paragraph(Vector(Inline.MathDisplay("B^A"))))), "B^A")
+  }
+
+  /** THE TWO MODES ARE INDISTINGUISHABLE HERE, ON PURPOSE. Plain text has no notion of set
+    * apart from flowing, so the distinction the algebra carries has nothing to say to this
+    * renderer. It is the HTML renderer that spends it, on `\(` against `\[`.
+    */
+  test("inline and display maths are the same plain text") {
+    val inline  = AsText.plain(Vector(Block.Paragraph(Vector(Inline.MathInline("""x_1""")))))
+    val display = AsText.plain(Vector(Block.Paragraph(Vector(Inline.MathDisplay("""x_1""")))))
+    assertEquals(inline, display)
+    assertEquals(inline, """x_1""")
+  }
+
+  /** THE PAYLOAD IS NOT TOUCHED, and the two constructs named here are exactly the two that
+    * markdown destroys when it is allowed to descend — measured 2026-08-28 and pinned in
+    * `parser/ObsidianSyntax.test.scala`. A renderer that "tidied" either would undo at the
+    * back end the protection the parser exists to provide at the front.
+    */
+  test("a row separator and a subscript pair survive rendering untouched") {
+    val tex = """\begin{aligned} x_1 &= a \\ y_1 &= b \end{aligned}"""
+    assertEquals(AsText.plain(Vector(Block.Paragraph(Vector(Inline.MathDisplay(tex))))), tex)
+  }

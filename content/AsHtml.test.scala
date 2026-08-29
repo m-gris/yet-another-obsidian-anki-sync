@@ -348,3 +348,46 @@ class AsHtmlSuite extends munit.FunSuite:
     assertEquals(labelsThroughText(blocks), expected)
     assertEquals(labelsThroughHtml(blocks), expected)
   }
+
+  // ------------------------------------------------------------------ maths ----
+
+  /** MATHS IS THE FIRST CONSTRUCT WHOSE FIELD SYNTAX IS NOT A TAG, and `Html.Tag` is closed
+    * with no `span` in it, so the wrapper cannot be an element. It is emitted the way
+    * `Html.clozeDeletion` is: characters placed around an ALREADY-ESCAPED fragment, so a `<`
+    * inside the TeX is `&lt;` before the wrapper goes on rather than because anyone remembered.
+    *
+    * THE DELIMITERS ARE ANKI'S, NOT OBSIDIAN'S, and that asymmetry is the whole feature. Read
+    * out of the config Anki ships at `_aqt/data/web/js/mathjax.js` in aqt 25.9.5: `displayMath`
+    * is `\[…\]` and nothing else, and `inlineMath` is unset so MathJax's own `\(…\)` default
+    * stands. `$$` is a delimiter to Anki in neither mode.
+    */
+  test("inline maths is wrapped in Anki's inline delimiters, not the author's dollars") {
+    assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathInline("B^A"))))),
+      """<p>\(B^A\)</p>""")
+  }
+
+  test("display maths is wrapped in Anki's display delimiters") {
+    assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathDisplay("B^A"))))),
+      """<p>\[B^A\]</p>""")
+  }
+
+  /** THE TeX IS ESCAPED LIKE ANY OTHER AUTHOR TEXT, and braces are the case that matters
+    * because TeX is full of them. Escaping them is what keeps `\frac{\text{a}}{b}` from
+    * putting a literal `}}` into a field that the cloze wrapper also uses — see the brace
+    * argument in this file's header. A browser decodes the reference before MathJax reads the
+    * text, so the maths still typesets; that half is reasoned and NOT yet measured against a
+    * live collection, and `docs/MATHS-ON-A-CARD.md` records it as owed.
+    */
+  test("braces in TeX are escaped, exactly as they are in prose") {
+    assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathInline("""\text{Id}"""))))),
+      """<p>\(\text&#123;Id&#125;\)</p>""")
+  }
+
+  /** RULE 1, and it is not imitation. An empty `\(\)` is four characters of non-empty output
+    * built from empty content, which is exactly what retires ruled refusal B6 — the same
+    * argument the emphasis and highlight cases above make for their tags.
+    */
+  test("maths with no TeX in it contributes nothing, so it cannot revive an empty body") {
+    assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathInline(""))))), "")
+    assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathDisplay(""))))), "")
+  }

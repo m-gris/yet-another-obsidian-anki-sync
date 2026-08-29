@@ -440,6 +440,14 @@ object Lower:
       // message; see the `Refusal` note on `toString`.
       ok(Vector.empty[Inline])
 
+    // MATHS, CARRIED ACROSS AS SOURCE AND UNTOUCHED. The parser captured it without descending,
+    // so `tex` is exactly what the author typed between the delimiters and this arm is a
+    // rename. It could not be anything more: no arm here could REPAIR maths that had been
+    // descended into, because `\\` and a paired `_` are already gone from the tree by the time
+    // lowering runs. The protection is a parser concern; this is where it is banked.
+    case ObsidianSyntax.MathInline(tex, _)  => ok(Vector(Inline.MathInline(tex)))
+    case ObsidianSyntax.MathDisplay(tex, _) => ok(Vector(Inline.MathDisplay(tex)))
+
     // ── refusals by ruling ──────────────────────────────────────────────────────────
     case ObsidianSyntax.ObsidianEmbed(target, _) => refuse(Refusal.Embed(target))
     case ObsidianSyntax.TaskListMarker(_, _)     => refuse(Refusal.TaskList)

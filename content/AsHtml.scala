@@ -423,6 +423,29 @@ object Html:
   def clozeDeletion(ordinal: Int, inner: Fragment): Fragment =
     s"{{c${ordinal}::$inner}}"
 
+  /** THE TWO SPELLINGS ANKI RECOGNISES FOR MATHS, and the only place either appears.
+    *
+    * NOT AN ELEMENT, BECAUSE THERE IS NO TAG TO REACH FOR. [[Tag]] is closed and holds no
+    * `span`, deliberately. MathJax does not want one either: it scans a field's TEXT for these
+    * delimiters, so wrapping in markup would hide the maths rather than mark it.
+    *
+    * READ OUT OF THE CONFIG ANKI SHIPS, not assumed — `_aqt/data/web/js/mathjax.js` in aqt
+    * 25.9.5, against the MathJax 3.2.2 bundled beside it. `displayMath` is `[["\\[","\\]"]]`
+    * and nothing else; `inlineMath` is unset, so MathJax's own `\(…\)` default stands. `$` is
+    * a delimiter in NEITHER mode, and `processEscapes` is off, so the author's dollars mean
+    * nothing here and must not be carried over.
+    *
+    * THE WRAPPER GOES ON AFTER ESCAPING, for [[clozeDeletion]]'s reason rather than by
+    * imitation: `inner` is already a `Fragment`, so no author character can reach these
+    * delimiters and split them. Braces inside the TeX are therefore `&#123;` in the stored
+    * field. A browser decodes those while parsing, so MathJax reads the braces it needs —
+    * REASONED, and recorded as owed a measurement in `docs/MATHS-ON-A-CARD.md`.
+    */
+  def mathInline(inner: Fragment): Fragment = s"""\\($inner\\)"""
+
+  /** Display maths. Same argument as [[mathInline]], the other delimiter pair. */
+  def mathDisplay(inner: Fragment): Fragment = s"""\\[$inner\\]"""
+
   /** Emptiness of the fragment itself. Written as a length test rather than `f.isEmpty` so that
     * a reader inside this object — where `Fragment` is transparently `String` — does not have to
     * work out whether it recurses.
@@ -619,3 +642,15 @@ object AsHtml:
     // would break it silently, because a hook that is not called leaves no trace.
     case Inline.Deletion(label, content) =>
       deletion(label, inlines(content, deletion))
+
+    // RULE 1 AGAIN, and for the same reason as the tags above rather than by imitation: an
+    // empty `\(\)` is four characters of non-empty output built from empty content, which is
+    // precisely what would retire ruled refusal B6. The TeX is escaped first and the
+    // delimiters go on after, so no author character can reach them.
+    case Inline.MathInline(tex) =>
+      val inner = Html.escape(tex)
+      if inner.isEmpty then Html.empty else Html.mathInline(inner)
+
+    case Inline.MathDisplay(tex) =>
+      val inner = Html.escape(tex)
+      if inner.isEmpty then Html.empty else Html.mathDisplay(inner)

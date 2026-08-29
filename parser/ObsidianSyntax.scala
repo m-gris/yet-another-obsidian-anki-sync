@@ -122,6 +122,37 @@ object ObsidianSyntax:
     def withContent(newContent: Seq[Span]): PlainHighlight = copy(content = newContent)
     def withOptions(newOptions: Options): PlainHighlight   = copy(options = newOptions)
 
+  /** Maths between SINGLE dollars, captured as source and never descended into.
+    *
+    * THE NAMES MATCH `Content.Inline.MathInline` AND `MathDisplay` EXACTLY, for the reason
+    * [[Highlighted]] states about its `group`: the vocabulary must not fork across the
+    * boundary, because a reader tracing a construct from source to field should meet one word
+    * for it and not two.
+    *
+    * IT CARRIES `tex: String` AND IS THEREFORE NOT A `SpanContainer`, WHICH IS THE POINT. A
+    * container's content goes through markdown's inline parsers, and that is precisely what
+    * destroys TeX: measured 2026-08-28 and pinned in this file's own test section, `\\`
+    * collapses to `\` and paired `_` is eaten as emphasis. The shape here is
+    * [[ObsidianComment]]'s, and for the identical reason.
+    *
+    * THE CONSEQUENCE IS THAT IT VANISHES FROM `extractText`, which is a trait match with a
+    * silent fallthrough for anything that is not a `SpanContainer`. Card keys come from a
+    * heading's extracted text, so a heading's maths contributes nothing to its key. That is
+    * accepted and is not routed around — see `Content.Inline.MathInline`, and
+    * `docs/MATHS-ON-A-CARD.md` for the argument.
+    */
+  case class MathInline(tex: String, options: Options = Options.empty) extends Span:
+    type Self = MathInline
+    def withOptions(newOptions: Options): MathInline = copy(options = newOptions)
+
+  /** Maths between DOUBLE dollars — display maths. Same shape and same reasons as
+    * [[MathInline]]; separate so that the two spellings do not have to be recovered later from
+    * a payload that no longer contains them.
+    */
+  case class MathDisplay(tex: String, options: Options = Options.empty) extends Span:
+    type Self = MathDisplay
+    def withOptions(newOptions: Options): MathDisplay = copy(options = newOptions)
+
   /** The display text of a wikilink's inner content.
     *
     * Priority — alias, then target, then fragment:
