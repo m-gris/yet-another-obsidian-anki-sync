@@ -1,7 +1,7 @@
 package obsidiananki.parser
 
 import laika.ast.*
-import obsidiananki.parser.ObsidianSyntax.{Highlighted, ObsidianEmbed}
+import obsidiananki.parser.ObsidianSyntax.{BlockId, Highlighted, ObsidianEmbed}
 
 class ObsidianSyntaxTest extends munit.FunSuite:
 
@@ -212,6 +212,84 @@ class ObsidianSyntaxTest extends munit.FunSuite:
       .map(cellText)
       .toList
     assertEquals(cells, List("Queue", "Load Absorption"))
+  }
+
+
+  // ═══════════════════════════════════════════════ Obsidian block identifiers ════
+  //
+  // `^abc123` at the END of a block is Obsidian's own identifier for that block. It is the one
+  // anchor in the vault that survives editing the block's text, which is what a cloze card needs
+  // if its review history is to outlive a typo fix.
+  //
+  // THESE TESTS ARE THE GRAMMAR, and they are written as one because the interesting property is
+  // POSITIONAL: the same characters are an identifier in one place and prose everywhere else. A
+  // pattern cannot express that; a parser can, and this file is where it is said.
+
+  private def blockIds(src: String): List[String] =
+    parse(src).collect { case b: BlockId => b.id }.toList
+
+  /** Every word the blocks of a document actually hold, which is what a card would show. */
+  private def textOf(src: String): String =
+    parse(src).collect { case p: Paragraph => p.extractText }.mkString(" ")
+
+  test("an id at the end of a block is the block's identifier") {
+    assertEquals(blockIds("The outermost layer is the epidermis. ^abc123"), List("abc123"))
+  }
+
+  /** THE BUG THIS EXISTS TO FIX — `IN-FLIGHT.md` item 20. With no production for it, the id fell
+    * through as prose and printed on the card face. Asserted on the TEXT rather than on the node,
+    * because a node that exists while the characters also remain would fix nothing.
+    */
+  test("an id is not part of the block's text") {
+    val text = textOf("The outermost layer is the epidermis. ^abc123")
+    assert(!text.contains("^abc123"), s"the id is still in the card's text: '$text'")
+    assert(text.contains("epidermis"), s"the block's own words were lost with it: '$text'")
+  }
+
+  /** POSITION IS THE WHOLE RULE. `x^2` is arithmetic, and a reader who wrote it did not name a
+    * block. This is the case a regular expression gets wrong, and the reason the parser and the
+    * positional rule are separate.
+    */
+  test("the same characters in the middle of a block are ordinary text") {
+    assertEquals(blockIds("The value x^2 grows quickly."), Nil)
+    assert(textOf("The value x^2 grows quickly.").contains("x^2"))
+  }
+
+  test("an id at the start of a block is ordinary text") {
+    assertEquals(blockIds("^abc123 was the identifier."), Nil)
+  }
+
+  test("something that looks like an id, followed by more words, is ordinary text") {
+    assertEquals(blockIds("See ^abc123 for the definition."), Nil)
+  }
+
+  /** OBSIDIAN'S OWN CHARACTER SET: letters, digits and hyphens. Asserted so that widening it
+    * later is a decision somebody makes rather than a regular expression quietly allowing more.
+    */
+  test("an id may hold letters, digits and hyphens") {
+    assertEquals(blockIds("Text. ^Z4YC85FV"), List("Z4YC85FV"))
+    assertEquals(blockIds("Text. ^a-b-2"), List("a-b-2"))
+  }
+
+  test("a bare caret is not an identifier") {
+    assertEquals(blockIds("Text ends with a caret ^"), Nil)
+  }
+
+  /** EACH BLOCK CARRIES ITS OWN, which is the property that makes an id usable as a key: two
+    * paragraphs under one heading are told apart by it, and nothing else in the vault does that.
+    */
+  test("two blocks each carry their own identifier") {
+    assertEquals(
+      blockIds("First paragraph. ^one\n\nSecond paragraph. ^two"),
+      List("one", "two"),
+    )
+  }
+
+  /** A LIST ITEM IS A BLOCK, and Obsidian lets an id attach to one. Included because the block
+    * a cloze sits in is often an item rather than a paragraph.
+    */
+  test("a list item carries its own identifier") {
+    assertEquals(blockIds("- first item ^i1\n- second item ^i2"), List("i1", "i2"))
   }
 
   /** The review flagged this specifically: a literal `==highlight==` written inside a code

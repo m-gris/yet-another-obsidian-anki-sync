@@ -6,6 +6,8 @@ import laika.format.Markdown
 import laika.ast.*
 import laika.parse.builders.*
 import laika.parse.syntax.*
+import laika.parse.text.CharGroup
+import cats.data.NonEmptySet
 
 /** Laika extensions for the Obsidian markdown dialect.
   *
@@ -168,6 +170,26 @@ object ObsidianSyntax:
     def content: String                               = tex
     def withOptions(newOptions: Options): MathDisplay = copy(options = newOptions)
 
+  /** `^abc123` AT THE END OF A BLOCK — Obsidian's own identifier for that block.
+    *
+    * WHY IT IS IN THE GRAMMAR AND NOT A STRING STRIPPED LATER. Until 2026-08-29 this project had
+    * no production for it, so a block id fell through as prose and printed on the card face
+    * (`IN-FLIGHT.md` item 20). The instinct is to remove it with a regular expression on the way
+    * out; that is the ad-hoc fix, and it is wrong for the reason Marc gave: Obsidian has a
+    * syntax, and a tool that reads Obsidian should model it rather than paper over the places it
+    * did not. The bug is a missing production, so the repair is a production.
+    *
+    * IT IS A GRAMMAR QUESTION RATHER THAN A PATTERN, and that is the interesting part. Obsidian
+    * honours `^abc123` as an identifier ONLY at the end of a block; the same characters in the
+    * middle of a sentence are ordinary text. A regular expression cannot express "at the end of
+    * a block" without knowing where blocks end — which is precisely what a parser knows and a
+    * pattern does not. So this is lexed as a candidate and its POSITION is decided separately,
+    * which keeps the two questions apart instead of entangling them in one expression.
+    */
+  case class BlockId(id: String, options: Options = Options.empty) extends Span:
+    type Self = BlockId
+    def withOptions(newOptions: Options): BlockId = copy(options = newOptions)
+
   /** The display text of a wikilink's inner content.
     *
     * Priority — alias, then target, then fragment:
@@ -290,6 +312,30 @@ object ObsidianSyntax:
       ("<!--" ~> delimitedBy("-->")).map(t => ObsidianComment(t))
     }
 
+  /** `^abc123` at the END of a block — see [[BlockId]].
+    *
+    * THE POSITION IS IN THE PRODUCTION, WHICH IS THE POINT. Obsidian honours these characters as
+    * an identifier only at the end of a block, so the rule reads
+    * `blockId ::= '^' idChars <end of block>` and the parser says exactly that. The `eof` is not
+    * an optimisation: without it, `The value x^2 grows` would name a block `2`.
+    *
+    * TWO ALTERNATIVES WERE AVAILABLE AND ARE WORSE. Stripping the text on the way out is the
+    * ad-hoc fix — it repairs one symptom while leaving the grammar wrong, so nothing else can
+    * ever ask a block for its identifier. Lexing candidates everywhere and rejecting the
+    * misplaced ones afterwards, through a rewrite rule, works but splits one rule across two
+    * places; a grammar that can state the constraint should state it.
+    *
+    * TRAILING SPACE IS TOLERATED, because `text ^abc123 ` is what an editor leaves behind and an
+    * author cannot see the difference.
+    *
+    * LETTERS, DIGITS AND HYPHENS, which is Obsidian's own set. Widening it later is then a
+    * decision somebody makes rather than a pattern quietly admitting more.
+    */
+  val blockIdParser: SpanParserBuilder =
+    SpanParserBuilder.standalone {
+      ("^" ~> someOf(CharGroup.alphaNum ++ NonEmptySet.one('-')) <~ ws.void <~ eof).map(BlockId(_))
+    }
+
   /** `==highlight==`, the cloze deletion marker. Recursive: inline markup inside a highlight
     * is ordinary markdown and should be parsed as such.
     */
@@ -373,12 +419,12 @@ object ObsidianSyntax:
     */
   object bundle extends ExtensionBundle:
     val description: String =
-      "Obsidian dialect: [[wikilinks]], ![[embeds]], ==highlights==, rejected task lists"
+      "Obsidian dialect: [[wikilinks]], ![[embeds]], ==highlights==, ^blockids, rejected task lists"
     override def parsers: ParserBundle =
       // Embed before wikilink: "![[" must win over "[[".
       ParserBundle(spanParsers =
         Seq(embedParser, wikilinkParser, taskListParser, highlightParser,
-            obsidianCommentParser, htmlCommentParser, mathParser))
+            obsidianCommentParser, htmlCommentParser, mathParser, blockIdParser))
 
   /** THE canonical parser for this project. Build it here and nowhere else — every element
     * below is load-bearing and two of them are silent when omitted.
