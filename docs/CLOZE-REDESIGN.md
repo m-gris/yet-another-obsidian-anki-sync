@@ -172,8 +172,21 @@ If `==` is not wanted for emphasis, the hybrid's one remaining benefit is that *
 glance which highlights are cards.** The plain form gives no way to know without checking. So the
 question is narrow: is that worth four extra characters on every cloze ever written?
 
-**Nobody has decided. Do not read the tool's current use of `==` as the answer** — it was
-inherited, not chosen.
+~~**Nobody has decided.**~~ **DECIDED BY MARC 2026-08-28, AND BUILT THE SAME DAY.** The hybrid
+won: a cloze is `==<<text>>==`, and a bare `==highlight==` is an ordinary Obsidian highlight that
+makes no card. Four characters buy the property reserving `==` could not — you can see, by looking
+at a note, which of its highlights are cards.
+
+**The migration cost nothing, which is the strongest fact about it.** The fixture vault's cloze
+notes were rewritten to the new spelling and the golden record of every card that vault produces
+came out BYTE-IDENTICAL: not one card identity and not one field value moved. That is not luck. An
+unlabelled deletion is keyed by its own text, and stripping the brackets leaves the text alone — so
+this changed a syntax and not a collection.
+
+**What it also bought, unplanned:** finding clozes WITHOUT a heading marker became safe. Before it,
+scanning every block for highlights would have swept up every emphasis highlight in the vault. Now
+only `<<…>>` counts, so "find every cloze in this note" is exact rather than a guess. That was a
+prerequisite for everything below, and it is done.
 
 ---
 
@@ -201,9 +214,19 @@ paragraphs*. That is the bundling.
 
 ## Identity is a matching problem, not a naming problem
 
-_Raised by Claude 2026-08-27, answering Marc's request for a deeper reflection. **NOT decided.** If
-it holds, it makes the two candidates below optional rather than necessary, so it should be weighed
-before either is treated as settled._
+_Raised by Claude 2026-08-27, answering Marc's request for a deeper reflection._
+
+**SETTLED 2026-08-29, AND NOT THE WAY THIS SECTION PROPOSES.** Identity stays a PURE FUNCTION OF
+THE VAULT — derived, deterministic, the same notes always producing the same cards whatever the
+collection happens to hold. What this section proposes would make identity depend on Anki's current
+state, so two runs over one vault could diverge. That property was never weighed when the section
+was written, and it is worth more than what matching was going to buy.
+
+**WHAT SURVIVES OF IT, AND IT IS THE USEFUL HALF.** Comparing old text with new is exactly right as
+a way to RANK candidates for a human to approve — which is this project's standing rule about fuzzy
+matching, and which is already designed as recovery tier 3 (`IN-FLIGHT.md` item 14, and the long
+comment at `plan/Planner.scala`'s `identityErrorFor`). It belongs there, on the suggest side of the
+line, and not in the identity function. See *How per-paragraph is actually unblocked* below.
 
 Both candidates below assume identity means a **name** — a label, a block id, a fingerprint;
 something written down that must survive arbitrary editing on its own. That may be answering a
@@ -283,12 +306,36 @@ earlier renumbers the later ones and review history re-attaches to different con
 card**, there are no ordinals to rotate. The defect stops being something to guard and becomes
 unrepresentable.
 
-**A generalisation worth keeping even if the rest is dropped:** do not hash the content — *project
-it onto the part that is already stable*. In a cloze block that part is the labels. A key of
+~~**A generalisation worth keeping even if the rest is dropped:** do not hash the content — project
+it onto the part that is already stable. In a cloze block that part is the labels. A key of
 `(frontmatter id, heading path, the labels in this block)` is content-derived, needs no new syntax,
-and moves only when the author deliberately renumbers. A block with **no** labels then has no
-stable identity, which is the truth rather than a failure, and is the argument for labels being how
-an author says *"I intend to keep this card."*
+and moves only when the author deliberately renumbers.~~
+
+**WITHDRAWN 2026-08-29. IT ASSUMES LABELS ARE UNIQUE ACROSS A NOTE, AND THEY ARE NOT.** Marc caught
+this by reading the syntax rather than the prose. A label is scoped to the section it appears in —
+which is what `extract/Cloze.scala`'s `number` actually does, computing over one section's
+highlights — so two blocks may each use `1` and `2` meaning different things:
+
+```markdown
+# Header
+
+The ==<<1|radius>>== and the ==<<2|ulna>>== are forearm bones.
+
+The ==<<1|femur>>== and the ==<<2|tibia>>== are leg bones.
+```
+
+Both project to `(note id, "Header", [1,2])`. **Same key, two different paragraphs.** The
+projection cannot identify a block, because a label only means something INSIDE a scope and the
+scope is the thing being named. It is circular.
+
+**A SECOND DEFECT, FOUND BEFORE THE FIRST ONE KILLED IT**, recorded so the idea is not revived in a
+patched form: the label SET is not stable under ADDITION either. Adding a third gap to a paragraph
+turns `[1,2]` into `[1,2,3]`, re-keying the note and orphaning the cards already in it — a cost
+paid for an edit that only adds.
+
+**It could be made to work by making labels note-scoped**, unique across a whole file. That is a
+real tax — in a ten-paragraph note the author numbers into the twenties and must remember which
+numbers are spent — and it is not needed, for the reason the next section gives.
 
 **The fork it forces.** If a paragraph holds three groups, do they become one Anki note with three
 cards, or three notes with one card each?
@@ -417,6 +464,38 @@ only thing per-group gives up.
 Two candidates remain, both described above: a similarity fingerprint traced across git commits,
 which requires the vault to be a git repository and it is not; or an invisible marker written into
 the source.
+
+### How per-paragraph is actually unblocked
+
+_Marc, 2026-08-29, and it removes the need to answer the question above at all._
+
+**THE PREMISE OF THIS WHOLE SECTION IS WRONG, AND THE WORD FOR IT WAS WRONG TOO.** "A block with no
+stable name loses its cards" is false. A card whose key moves is not destroyed — it is tagged
+`orphaned::`, suspended, and its review history sits in Anki untouched. Nothing is lost. What is
+missing is only the RECONNECTION: nothing offers to bind the orphan to the card that replaced it.
+The honest word is **disconnected, and recoverable if the tool helps** — never *fragile*.
+
+**SO THE MISSING PIECE IS RECOVERY, NOT NAMING**, and it is already designed. `IN-FLIGHT.md` item
+14 records recovery tiers 3 and 4 — matching a broken identity by SIMILAR content — with tiers 1
+and 2, exact hash and exact fields, already built. The long comment at `plan/Planner.scala`'s
+`identityErrorFor` says the same in more detail, including the constraint that makes it safe: it
+may only ever NAME a candidate, because a wrong rebind moves review history onto the wrong card,
+silently and irreversibly.
+
+**WHICH DISSOLVES THE TRADE.** The choice looked like: per-group and lose sibling burying, or
+note-scoped labels and pay a numbering tax. Neither is needed. Keep labels scoped to their block as
+they are; accept that a block whose clozes are unlabelled re-keys when their text changes; and let
+the sync put the orphan aside and PROPOSE the pairing — which is exactly the shape
+`REVIEW-QUEUE.md` describes and exactly what the standing fuzzy-matching rule permits.
+
+**THREE PIECES OF THIS ALREADY EXIST**: orphan flagging and suspension; recovery tiers 1 and 2; and
+the priced, named, approvable decision — a run that says *this costs N cards holding M reviews,
+approve it by this name*. Tier 3 is the missing middle: rank the candidates and put them in that
+queue.
+
+**WHAT THIS DOES NOT LICENSE.** Similarity never decides. Identity remains derived from the vault,
+and a proposal is something a person approves — see the correction added to *Identity is a matching
+problem* above.
 
 ### What a later reader must not assume
 
