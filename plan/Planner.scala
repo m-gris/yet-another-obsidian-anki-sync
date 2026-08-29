@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath, NewNote, ObservedNote}
-import obsidiananki.model.{CardKey, CardPath, CardSpec, Marker, OwnedTag, TagCodec}
+import obsidiananki.model.{CardKey, CardPath, CardSpec, Marker, OwnedTag, TagCodec, VaultTag}
 
 /** Why ONE note could not be placed. A fact about the note, carrying no advice.
   *
@@ -191,8 +191,21 @@ object Planner:
       // as well would put a machine's ledger back into the author's own tag tree, which is the
       // whole reason the identity moved. The content hash stays a tag: it is not an identity,
       // and it is read by a search that has no other home.
-      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)) ++ carried(sourced.vaultTags),
     )
+
+  /** The author's own tags, as tags to write. Everything else this note's frontmatter said is
+    * not a tag Anki can hold, and is the report's business rather than this function's.
+    *
+    * MATCHED EXHAUSTIVELY RATHER THAN COLLECTED, so an outcome added to [[VaultTag]] later has
+    * to say whether it is written. A partial function would skip it silently, which is how a
+    * tag the author wrote comes to do nothing at all.
+    */
+  private def carried(read: Vector[VaultTag]): Vector[OwnedTag] =
+    read.flatMap {
+      case VaultTag.Carried(t)     => Vector(t)
+      case VaultTag.Unusable(_, _) => Vector.empty
+    }
 
   /** Reject a key derived by more than one source, before anything is written.
     *

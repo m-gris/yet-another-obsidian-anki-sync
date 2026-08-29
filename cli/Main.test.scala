@@ -1107,6 +1107,7 @@ class MainTest extends munit.FunSuite:
           SourceRef("Note.md", line, SourceKind.Heading),
           SectionChain.NoSectionChain,
           SectionChain.NoRecall,
+          Vector.empty,
         )
       ),
       Vector.empty,

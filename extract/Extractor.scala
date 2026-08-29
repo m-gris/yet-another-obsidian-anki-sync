@@ -120,6 +120,11 @@ object Extractor:
       filePath: String,
       marker: Marker,
       root: RootElement,
+      /** The author's own frontmatter tags, already classified. Computed once by the walker,
+        * which is the only layer that sees frontmatter, and handed down so that every spec a
+        * note produces carries the same set rather than deriving it twice.
+        */
+      vaultTags: Vector[VaultTag],
       // NO DEFAULT, AND `1` WOULD BE THE WRONG ONE. This is the file line the body starts at,
       // and every card's source reference is computed from it. `1` is correct only for a note
       // with NO frontmatter — and a note without frontmatter yields no cards at all, because
@@ -159,7 +164,13 @@ object Extractor:
           case Right(built) =>
             ExtractedNote(
               built.map { case (spec, src) =>
-                SourcedSpec(spec, ref.copy(kind = src.kind, detail = src.detail), Vector.empty, RecallText.none)
+                SourcedSpec(
+                  spec,
+                  ref.copy(kind = src.kind, detail = src.detail),
+                  Vector.empty,
+                  RecallText.none,
+                  vaultTags,
+                )
               },
               Vector.empty,
             )
@@ -180,6 +191,11 @@ object Extractor:
       // for why `1` was the wrong default rather than merely an unstated one.
       body: String,
       bodyFirstLine: Int,
+      /** The author's own frontmatter tags, already classified. Computed once by the walker,
+        * which is the only layer that sees frontmatter, and handed down so that every spec a
+        * note produces carries the same set rather than deriving it twice.
+        */
+      vaultTags: Vector[VaultTag],
   ): ExtractedNote =
     val specs    = Vector.newBuilder[SourcedSpec]
     val failures = Vector.newBuilder[BuildFailure]
@@ -281,6 +297,7 @@ object Extractor:
                           // and an escaped concept can never match the heading a deck path is
                           // built from.
                           recall = recallFromLocation(marker, title, ancestorTitles, fileName),
+                          vaultTags = vaultTags,
                         )
                       }
                     case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))

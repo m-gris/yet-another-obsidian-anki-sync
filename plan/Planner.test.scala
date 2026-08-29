@@ -46,7 +46,48 @@ class PlannerTest extends munit.FunSuite:
   // where a card came from; a wrong file or line would show up in the key being asserted.
   // ast-grep-ignore: default-parameter
   def sourced(spec: CardSpec, file: String = "Note.md", line: Int = 1): SourcedSpec =
-    SourcedSpec(spec, SourceRef(file, line, SourceKind.Heading), NoSectionChain, NoRecall)
+    SourcedSpec(spec, SourceRef(file, line, SourceKind.Heading), NoSectionChain, NoRecall, Vector.empty)
+
+  /** THE AUTHOR'S OWN TAGS REACH A NEW NOTE, which is the whole of the feature Marc asked for on
+    * 2026-08-22: tag a note in Obsidian, and study by that tag in Anki.
+    *
+    * ASSERTED ON A CREATE because that is where a note's tag set is decided. What happens when a
+    * tag is later REMOVED from the vault is the reconciliation half and is not built yet.
+    */
+  test("a created note carries the author's own tags, namespaced") {
+    val k = key("n1", "coupling")
+    val withTags = SourcedSpec(
+      twoFieldSpec(k, "front", "back"),
+      SourceRef("Note.md", 1, SourceKind.Heading),
+      NoSectionChain,
+      NoRecall,
+      Vector(
+        VaultTag.read("backend/scala"),
+        // Refused rather than carried, and it must not silently become a tag anyway.
+        VaultTag.read("two words"),
+      ),
+    )
+
+    // `Planner.newNoteFor`, NOT this file's `newNoteOf`. The helper builds a note the way these
+    // tests find convenient; the production function is the one that decides what tags a note
+    // gets, and a test asserting about tags against the helper would assert about itself.
+    val plan = Planner
+      .plan(scanOf(withTags), ObservedState(Vector.empty), _ => defaultDeck, Planner.newNoteFor)
+      .fold(e => fail(s"plan: $e"), identity)
+    val created = plan.actions.collect { case c: SyncAction.Create => c }
+    assertEquals(created.size, 1, s"${plan.actions}")
+
+    val tags = created.head.note.tags.toVector.map(_.value)
+    assert(tags.contains("obsidian::backend::scala"), s"the author's tag did not reach Anki: $tags")
+    assert(
+      tags.exists(_.startsWith("sha::")),
+      s"the content hash was displaced by the new tags: $tags",
+    )
+    assert(
+      !tags.exists(_.contains("two words")),
+      s"a tag Anki cannot hold was written anyway: $tags",
+    )
+  }
 
   /** Builds the NewNote for a Create. Carries BOTH owned tags, because the identity tag and
     * the content hash must exist from the moment the note does.
@@ -451,8 +492,8 @@ class PlannerTest extends munit.FunSuite:
   test("B10: two sources deriving one key is rejected before anything is written") {
     val k = key("n1", "A", "Definition")
     val scan = scanOf(
-      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Note.md", 10, SourceKind.Heading), NoSectionChain, NoRecall),
-      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Note.md", 40, SourceKind.TablePair), NoSectionChain, NoRecall),
+      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Note.md", 10, SourceKind.Heading), NoSectionChain, NoRecall, Vector.empty),
+      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Note.md", 40, SourceKind.TablePair), NoSectionChain, NoRecall, Vector.empty),
     )
     Planner.plan(scan, ObservedState(Vector.empty), _ => defaultDeck, newNoteOf) match
       case Left(errors) => assertEquals(errors.size, 1)
@@ -465,8 +506,8 @@ class PlannerTest extends munit.FunSuite:
   test("B10: the error names both sources, their kinds and their positions") {
     val k = key("n1", "Messaging", "Definition")
     val scan = scanOf(
-      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Messaging.md", 10, SourceKind.Heading), NoSectionChain, NoRecall),
-      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Messaging.md", 42, SourceKind.TableRow), NoSectionChain, NoRecall),
+      SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Messaging.md", 10, SourceKind.Heading), NoSectionChain, NoRecall, Vector.empty),
+      SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Messaging.md", 42, SourceKind.TableRow), NoSectionChain, NoRecall, Vector.empty),
     )
     val message = Planner.checkUnique(scan.specs).map(_.describe).mkString
     assert(message.contains("messaging / definition"), s"key not named: $message")

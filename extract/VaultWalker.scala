@@ -509,7 +509,7 @@ object VaultWalker:
 
           tagReadings.foreach:
             case TagReading.AMarker(_) => ()
-            case TagReading.NotOurs    => ()
+            case TagReading.NotOurs(_) => ()
 
             case TagReading.Misspelled(raw, probably) =>
               failures += BuildFailure.MarkerMisspelled(
@@ -534,8 +534,26 @@ object VaultWalker:
               case TagReading.AMarker(m)       => Some(m)
               case TagReading.Unrecognised(_)  => None
               case TagReading.Misspelled(_, _) => None
-              case TagReading.NotOurs          => None
+              case TagReading.NotOurs(_)       => None
             }.headOption
+
+          /** THE AUTHOR'S OWN TAGS, ready to travel into Anki.
+            *
+            * COMPUTED HERE BECAUSE HERE IS THE ONLY LAYER THAT SEES FRONTMATTER. The extractor
+            * receives a parsed body and knows nothing of a note's properties, so deriving these
+            * anywhere further down would mean parsing frontmatter twice.
+            *
+            * MATCHED EXHAUSTIVELY, not collected, for the reason the block above records: a
+            * reading added later must say whether it is one of the author's tags rather than
+            * being skipped by a partial function.
+            */
+          val vaultTags: Vector[VaultTag] =
+            tagReadings.flatMap {
+              case TagReading.NotOurs(raw)     => Vector(VaultTag.read(raw))
+              case TagReading.AMarker(_)       => Vector.empty
+              case TagReading.Unrecognised(_)  => Vector.empty
+              case TagReading.Misspelled(_, _) => Vector.empty
+            }
 
           val identity = keys.get("id").map(noteIdFrom)
 
@@ -559,6 +577,7 @@ object VaultWalker:
                   file.relativePath,
                   marker,
                   document,
+                  vaultTags,
                   split.bodyFirstLine,
                 )
                 specs ++= note.specs
@@ -578,7 +597,7 @@ object VaultWalker:
             case TagReading.Misspelled(_, _) => true
             case TagReading.Unrecognised(_)  => true
             case TagReading.AMarker(_)       => false
-            case TagReading.NotOurs          => false
+            case TagReading.NotOurs(_)       => false
 
           def markerNotOnHeading(): Unit =
             // SILENT WHEN A NEAR MISS WAS ALREADY NAMED, and that suppression is the point rather
@@ -715,6 +734,7 @@ object VaultWalker:
                 properties = keys,
                 rawFrontmatter = split.frontmatter.getOrElse(""),
                 schema = declared,
+                vaultTags = vaultTags,
               )
               specs ++= edgeSpecs
               failures ++= edgeFailures
@@ -745,6 +765,7 @@ object VaultWalker:
                       doc.content,
                       body,
                       split.bodyFirstLine,
+                      vaultTags,
                     )
                   failures ++= note.failures
 

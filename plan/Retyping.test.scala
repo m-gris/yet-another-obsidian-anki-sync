@@ -47,7 +47,7 @@ class RetypingTest extends munit.FunSuite:
   val testContext: String = "Coupling"
 
   def sourced(spec: CardSpec): SourcedSpec =
-    SourcedSpec(spec, SourceRef("Note.md", 1, SourceKind.Heading), NoSectionChain, NoRecall)
+    SourcedSpec(spec, SourceRef("Note.md", 1, SourceKind.Heading), NoSectionChain, NoRecall, Vector.empty)
 
   def scanOf(specs: CardSpec*): VaultScan =
     VaultScan.from(specs.toVector.map(sourced), Vector.empty)

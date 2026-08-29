@@ -38,7 +38,13 @@ class LocateTest extends munit.FunSuite:
   def scanOf(entries: (CardKey, Int)*): VaultScan =
     VaultScan.from(
       entries.toVector.map((k, line) =>
-        SourcedSpec(spec(k), SourceRef("Note.md", line, SourceKind.Heading), NoSectionChain, NoRecall)
+        SourcedSpec(
+          spec(k),
+          SourceRef("Note.md", line, SourceKind.Heading),
+          NoSectionChain,
+          NoRecall,
+          Vector.empty,
+        )
       ),
       Vector.empty,
     )

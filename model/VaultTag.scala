@@ -5,26 +5,19 @@ package obsidiananki.model
   * REQUESTED BY MARC 2026-08-22, so that an Obsidian tag can drive an Anki filtered deck — study
   * everything tagged `backend/scala`, without maintaining a second list of what that means.
   *
-  * A SUM TYPE RATHER THAN AN `Option`, because three things can happen and only one of them is
-  * "carried". An `Option` would collapse *this is an instruction to the tool* and *Anki cannot
-  * hold this* into one silent `None`, and the second of those is something the author needs
-  * telling about — it is the shape of failure this project designs against.
+  * A SUM TYPE RATHER THAN AN `Option`, because a tag that is not carried is not merely absent —
+  * the author needs telling WHICH one and why, and a silent `None` is the shape of failure this
+  * project designs against.
+  *
+  * IT DOES NOT DECIDE WHAT A MARKER IS, and deliberately: [[TagReading]] has already answered
+  * that, better than a check here could. It catches a marker, a marker spelled wrongly, and a
+  * `flashcard/` prefix with an unrecognised tail — three outcomes a first-segment test here
+  * would have flattened into one. Only a tag it classified as the author's own reaches this.
   */
 enum VaultTag:
 
   /** Carried into Anki under this tool's namespace. */
   case Carried(tag: OwnedTag)
-
-  /** A `#flashcard/…` marker: an instruction addressed to this tool, not a description of the
-    * note.
-    *
-    * EXCLUDED BECAUSE IT IS ALREADY SPENT. By the time anything is written to Anki the marker has
-    * been read and obeyed — it decided which cards exist and what shape they are. Carrying it
-    * across would file an instruction in the author's tag tree as though it were a subject, so
-    * `obsidian::flashcard::sequence::headers::recursive` would sit beside `obsidian::backend`
-    * looking like something you might want to study.
-    */
-  case Marker
 
   /** Anki cannot hold this tag, so it is not carried and the author is told which one.
     *
@@ -70,15 +63,4 @@ object VaultTag:
     else if trimmed.contains("::") then
       Unusable(raw, "'::' is Anki's nesting separator — write '/' to nest an Obsidian tag")
 
-    else if isMarker(trimmed) then Marker
     else Carried(OwnedTag.vault(trimmed))
-
-  /** Whether a tag is one of this tool's own markers rather than the author's subject.
-    *
-    * MATCHED ON THE FIRST SEGMENT ONLY, so a genuine topic called `flashcards` or
-    * `flashcard-design` is carried. The marker vocabulary is `flashcard/…` exactly, and
-    * `Marker.parse` is what decides that everywhere else — this is the same first segment that
-    * `VaultWalker` already filters on when it looks for a whole-note marker.
-    */
-  private def isMarker(tag: String): Boolean =
-    tag.split("/", -1).headOption.exists(_.equalsIgnoreCase("flashcard"))

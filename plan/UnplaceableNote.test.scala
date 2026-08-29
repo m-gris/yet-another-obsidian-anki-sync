@@ -60,6 +60,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,
+     Vector.empty,
     )
 
   def newNoteOf(s: SourcedSpec, d: DeckPath, sha: String): NewNote =

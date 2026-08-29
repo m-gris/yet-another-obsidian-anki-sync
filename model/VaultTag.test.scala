@@ -8,8 +8,7 @@ package obsidiananki.model
 class VaultTagTest extends munit.FunSuite:
 
   private def carried(raw: String): String = VaultTag.read(raw) match
-    case VaultTag.Carried(t)   => t.value
-    case VaultTag.Marker       => fail(s"'$raw' was treated as a marker")
+    case VaultTag.Carried(t)     => t.value
     case VaultTag.Unusable(_, w) => fail(s"'$raw' was refused: $w")
 
   private def refused(raw: String): String = VaultTag.read(raw) match
@@ -56,23 +55,15 @@ class VaultTagTest extends munit.FunSuite:
 
   // ══════════════════════════════════════════════════ what is not ══════════════
 
-  /** A MARKER IS AN INSTRUCTION, ALREADY OBEYED BY THE TIME ANYTHING IS WRITTEN. Carrying it
-    * would file `obsidian::flashcard::sequence::headers` beside `obsidian::backend`, looking like
-    * a subject somebody might want to study.
-    */
-  test("a flashcard marker is not a subject and is not carried") {
-    assertEquals(VaultTag.read("flashcard/cloze"), VaultTag.Marker)
-    assertEquals(VaultTag.read("flashcard/sequence/headers/recursive"), VaultTag.Marker)
-    assertEquals(VaultTag.read("#flashcard/2way"), VaultTag.Marker)
-  }
-
-  /** THE FIRST SEGMENT ONLY, so a genuine subject that merely begins with the same letters is
-    * still the author's tag and is still carried.
-    */
-  test("a topic that merely resembles the marker prefix is carried") {
-    assertEquals(carried("flashcards/design"), "obsidian::flashcards::design")
-    assertEquals(carried("flashcard-design"), "obsidian::flashcard-design")
-  }
+  /* THE MARKER TESTS THAT WERE HERE HAVE MOVED, AND THEIR ABSENCE IS DELIBERATE.
+   *
+   * This type briefly decided for itself whether a tag was a `flashcard/…` marker, which
+   * duplicated `Marker.readTag` — and duplicated it WORSE, because that type distinguishes a
+   * marker, a marker spelled wrongly, and a `flashcard/` prefix with an unrecognised tail, where
+   * a first-segment test here flattened all three into one. Only a tag `Marker.readTag` has
+   * already classified as the author's own reaches this function, so there is no marker case
+   * left to test. `Marker.test.scala` covers that distinction.
+   */
 
   /** ANKI SEPARATES TAGS WITH WHITESPACE, so carrying this would silently produce TWO tags —
     * neither of which the author wrote. Refused by name rather than mangled into a spelling they

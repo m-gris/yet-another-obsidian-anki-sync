@@ -21,6 +21,9 @@ class ExtractorTest extends munit.FunSuite:
       root,
       body,
       split.bodyFirstLine,
+      // These tests are about what markdown yields, not about a note's own tags. Named at every
+      // site rather than defaulted, so that no call site holds a decision nobody made.
+      Vector.empty,
     )
 
   def paths(n: ExtractedNote): Vector[String] = n.specs.map(_.key.path.render)
@@ -1485,6 +1488,7 @@ class ExtractorTest extends munit.FunSuite:
       "Outline Learning.md",
       Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.DirectChildren)),
       root,
+      Vector.empty,
       7,
     )
 
@@ -1511,6 +1515,7 @@ class ExtractorTest extends munit.FunSuite:
       "Outline Learning.md",
       Marker.Sequence(SequenceSource.ChildHeadings(HeadingReach.WholeSubtree(RevealOrder.DepthFirst))),
       root,
+      Vector.empty,
       7,
     )
 

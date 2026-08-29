@@ -32,6 +32,7 @@ class EdgesTest extends munit.FunSuite:
       properties = properties.toMap,
       rawFrontmatter = properties.map((k, _) => s"$k: something").mkString("\n"),
       schema = schema,
+      vaultTags = Vector.empty,
     )
 
   def only(properties: (String, PropertyValue)*): CardSpec.ThreeField =
@@ -187,6 +188,7 @@ class EdgesTest extends munit.FunSuite:
       properties = Map("special-case-of" -> PropertyValue.One("[[HomSet]]")),
       rawFrontmatter = "special-case-of: \"[[HomSet]]\"",
       schema = schema,
+      vaultTags = Vector.empty,
     )
     val card = specs.head.spec.asInstanceOf[CardSpec.ThreeField]
     assert(!card.context.contains("Function Space"), s"the subject is repeated in: '${card.context}'")

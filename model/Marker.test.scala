@@ -65,9 +65,9 @@ class MarkerTest extends munit.FunSuite:
     * parts that matter.
     */
   test("an ordinary tag is left alone, however many segments it has") {
-    assertEquals(Marker.readTag("maths/topology"), TagReading.NotOurs)
-    assertEquals(Marker.readTag("todo"), TagReading.NotOurs)
-    assertEquals(Marker.readTag("reading/2026/august"), TagReading.NotOurs)
+    assertEquals(Marker.readTag("maths/topology"), TagReading.NotOurs("maths/topology"))
+    assertEquals(Marker.readTag("todo"), TagReading.NotOurs("todo"))
+    assertEquals(Marker.readTag("reading/2026/august"), TagReading.NotOurs("reading/2026/august"))
   }
 
   /** A BARE TAIL IS NOT A NEAR MISS. `2way` on its own has nothing after its first segment, so
@@ -75,8 +75,8 @@ class MarkerTest extends munit.FunSuite:
     * reaching for a flashcard marker.
     */
   test("a single-segment tag that happens to name a marker's tail is left alone") {
-    assertEquals(Marker.readTag("2way"), TagReading.NotOurs)
-    assertEquals(Marker.readTag("cloze"), TagReading.NotOurs)
+    assertEquals(Marker.readTag("2way"), TagReading.NotOurs("2way"))
+    assertEquals(Marker.readTag("cloze"), TagReading.NotOurs("cloze"))
   }
 
   /** EVERY DOCUMENTED MARKER IS REACHABLE THROUGH THIS ROUTE, so the frontmatter path and the

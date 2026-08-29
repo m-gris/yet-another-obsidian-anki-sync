@@ -1,6 +1,6 @@
 package obsidiananki.plan
 
-import obsidiananki.model.{CardKey, CardSpec, NoteId, RecallText}
+import obsidiananki.model.{CardKey, CardSpec, NoteId, RecallText, VaultTag}
 
 /** Where a spec came from, so that a collision can be reported legibly.
   *
@@ -67,6 +67,19 @@ final case class SourcedSpec(
     source: SourceRef,
     sectionTitles: Vector[String],
     recall: RecallText,
+
+    /** WHAT THE AUTHOR'S OWN FRONTMATTER TAGS BECOME — every outcome, not only the carried ones.
+      *
+      * ALL THREE KINDS TRAVEL, which is lossless where filtering here would be lossy. A tag Anki
+      * cannot hold is something the author needs telling about; discarding it at the point the
+      * decision is made would leave nothing downstream able to say which tag was dropped, and a
+      * frontmatter tag that silently does nothing is the failure this project keeps meeting.
+      *
+      * PER SPEC RATHER THAN PER FILE, because one `CardSpec` becomes one Anki NOTE and tags
+      * belong to a note. Several specs from one file therefore repeat their file's tags, which
+      * is not duplication of state — it is the same value reaching each note that needs it.
+      */
+    vaultTags: Vector[VaultTag],
 ):
   def key: CardKey = spec.key
 

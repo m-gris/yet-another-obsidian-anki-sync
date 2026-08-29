@@ -141,6 +141,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
           SourceRef("Note.md", 1, SourceKind.Heading),
           NoSectionChain,
           NoRecall,
+         Vector.empty,
         )
       ),
       Vector.empty,

@@ -63,6 +63,11 @@ object Edges:
       properties: Map[String, PropertyValue],
       rawFrontmatter: String,
       schema: EdgeSchema,
+      /** The author's own frontmatter tags, already classified. Computed once by the walker,
+        * which is the only layer that sees frontmatter, and handed down so that every spec a
+        * note produces carries the same set rather than deriving it twice.
+        */
+      vaultTags: Vector[VaultTag],
   ): (Vector[SourcedSpec], Vector[BuildFailure]) =
     // SORTED BY THE NAME AS WRITTEN, so a note yields the same cards in the same order on every
     // run. A `Map` has no order, and "a second run changes nothing" must not depend on one.
@@ -106,6 +111,9 @@ object Edges:
             // never a location segment. Passing `none` says that rather than leaving it inferred.
             Vector.empty,
             RecallText.none,
+            // THE SAME TAGS A HEADING CARD FROM THIS NOTE GETS. A property card and a heading
+            // card are two cards of one note, and the author's tags describe the note.
+            vaultTags,
           )
         }
         .left
@@ -134,7 +142,7 @@ object Edges:
     */
   def reverseCollisions(specs: Vector[SourcedSpec]): Vector[BuildFailure] =
     val reversible = specs.collect {
-      case s @ SourcedSpec(t: CardSpec.ThreeField, _, _, _)
+      case s @ SourcedSpec(t: CardSpec.ThreeField, _, _, _, _)
           if t.directions != ThreeFieldDirections.ValueOnly && isEdge(s) =>
         (t.descriptor, t.description.value) -> s
     }

@@ -92,7 +92,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       spec <- genSpecFor(k)
       line <- Gen.choose(1, 200)
       kind <- Gen.oneOf(SourceKind.Heading, SourceKind.TablePair, SourceKind.TableRow)
-    yield SourcedSpec(spec, SourceRef("Note.md", line, kind), NoSectionChain, NoRecall)
+    yield SourcedSpec(spec, SourceRef("Note.md", line, kind), NoSectionChain, NoRecall, Vector.empty)
 
   /** A scan with no duplicate keys — duplicates are a separate, already-tested rejection,
     * and including them here would only exercise that path.

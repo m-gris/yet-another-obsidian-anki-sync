@@ -305,8 +305,15 @@ enum TagReading:
     */
   case Misspelled(raw: String, probably: String)
 
-  /** An ordinary tag. Most tags in most vaults, and none of this tool's business. */
-  case NotOurs
+  /** An ordinary tag — the author's own, not addressed to this tool.
+    *
+    * IT CARRIES THE TAG, and until 2026-08-29 it did not, because this case's own docstring said
+    * an ordinary tag was "none of this tool's business". That stopped being true when a note's
+    * tags began travelling into Anki so they could drive a filtered deck: the author's tags are
+    * now the one part of this reading that gets used. See [[VaultTag]], which decides what
+    * becomes of one, and takes the marker question as already answered by this type.
+    */
+  case NotOurs(raw: String)
 
 object Marker:
 
@@ -675,7 +682,7 @@ object Marker:
         // a near miss: somebody tagging a note `2way` was not reaching for a marker.
         tailOf(bare)
           .flatMap(tail => Documented.map(_._1).find(t => tailOf(t.stripPrefix("#")).contains(tail)))
-          .fold(TagReading.NotOurs)(TagReading.Misspelled(rawTag, _))
+          .fold(TagReading.NotOurs(rawTag))(TagReading.Misspelled(rawTag, _))
 
   /** The part of a slash-separated tag after its first segment, if it has one. */
   private def tailOf(bare: String): Option[String] =
