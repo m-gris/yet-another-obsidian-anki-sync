@@ -145,11 +145,19 @@ final class InMemoryAnki private (
     browsed += query
     Right(())
 
-  def findNotesByTagPrefix(prefix: String): Either[AnkiError, Vector[AnkiNoteId]] =
-    val wanted = foldTag(prefix)
+  /** BOTH HOMES, MODELLED AS THE MEANING RATHER THAN AS A QUERY. The wire client asks Anki with
+    * a search string; this answers the same question by looking, which is the whole reason the
+    * port method is semantic — a fake reproducing Anki's query dialect would let a test pass
+    * against a language Anki does not speak.
+    */
+  def ownedNotes: Either[AnkiError, Vector[AnkiNoteId]] =
+    val prefix = foldTag(s"${OwnedTag.SrcPrefix}::")
     Right(
       notes.collect {
-        case (id, n) if n.tags.exists(t => foldTag(t).startsWith(wanted)) => AnkiNoteId(id)
+        case (id, n)
+            if n.tags.exists(t => foldTag(t).startsWith(prefix)) ||
+              n.fields.exists((name, v) => name == Marker.IdentityField && v.trim.nonEmpty) =>
+          AnkiNoteId(id)
       }.toVector.sortBy(_.value)
     )
 
@@ -304,7 +312,25 @@ final class InMemoryAnki private (
             .toLeft(())
     yield
       val id = fresh()
-      notes += id -> StoredNote(note.noteType, note.fields, tagStrings, modCount = 0)
+      // EVERY FIELD THE NOTE TYPE DECLARES, WHETHER THE CALLER NAMED IT OR NOT.
+      //
+      // ANKI CANNOT REPRESENT A NOTE MISSING ONE. A note's fields ARE its note type's field
+      // list — adding a field to a type gives every existing note that field, empty — so a note
+      // holding fewer is a state no collection can be in.
+      //
+      // THE FAKE USED TO ALLOW IT, and on 2026-08-29 a test built exactly that impossible note
+      // to model "a note synced before the `Identity` field existed". It then proved the wrong
+      // thing twice over: `updateNoteFields` merges over the fields a note ALREADY has, so
+      // writing the missing one was silently dropped while still bumping the modification
+      // count. Both the test and the behaviour it measured were fictional.
+      //
+      // THE REAL PRE-MIGRATION STATE IS THE FIELD PRESENT AND EMPTY, which is what a collection
+      // looks like after `install-note-types --repair` adds it. Padding here makes the fake
+      // produce that state rather than one Anki has no way to reach.
+      val declared = noteTypes.get(note.noteType).map(_.fields.toVector).getOrElse(Vector.empty)
+      val supplied = note.fields.toMap
+      val padded   = declared.map(name => name -> supplied.getOrElse(name, ""))
+      notes += id -> StoredNote(note.noteType, padded, tagStrings, modCount = 0)
       val cards = Vector.fill(cardCountOf(note.noteType, note.fields))(fresh())
       cardsByNote += id -> cards
       cards.foreach(c => cardDecks += c -> note.deck)

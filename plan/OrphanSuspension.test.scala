@@ -63,7 +63,10 @@ class OrphanSuspensionTest extends munit.FunSuite:
       noteType = s.spec.noteTypeName,
       deck = d,
       fields = s.spec.fields,
-      tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
+      // MIRRORS PRODUCTION, which stopped writing the identity tag on 2026-08-29: a note this
+      // tool creates carries its identity in a field. A helper still writing the tag would make
+      // every fixture a note that needs migrating, and the convergence law would never hold.
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
     )
 
   val k: CardKey = key("n1", "Coupling", "Temporal coupling")
@@ -80,7 +83,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty).fold(e => fail(s"run failed: $e"), identity)
 
   def cardsOf(anki: InMemoryAnki): Vector[AnkiCardId] =
-    val ids = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+    val ids = anki.ownedNotes.fold(e => fail(s"$e"), identity)
     anki.cardsOf(ids).fold(e => fail(s"$e"), identity)
 
   /** Sync a vault holding the card, then sync one that does not — which is what deleting a
@@ -91,6 +94,99 @@ class OrphanSuspensionTest extends munit.FunSuite:
     runSync(anki, scanOf(specOf(k)))
     runSync(anki, scanOf())
     anki
+
+  /** A NOTE AS THIS TOOL WROTE THEM BEFORE 2026-08-28: identity in the tag, no `Identity` field.
+    *
+    * Built by hand rather than by syncing, because syncing uses today's code and would write the
+    * field — which is exactly the state these tests must NOT start from.
+    */
+  def noteFromBeforeTheField(anki: InMemoryAnki, k: CardKey): AnkiNoteId =
+    anki
+      .addNote(
+        NewNote(
+          noteType = specOf(k).spec.noteTypeName,
+          deck = deck,
+          fields = specOf(k).spec.fields.filterNot(_._1 == Marker.IdentityField),
+          tags = NonEmptyVector.of(TagCodec.encode(k), OwnedTag.sha("deadbeefdeadbeef")),
+        )
+      )
+      .fold(e => fail(s"seeding failed: $e"), identity)
+
+  def identityFieldOf(anki: InMemoryAnki, id: AnkiNoteId): String =
+    anki
+      .notesInfo(Vector(id))
+      .fold(e => fail(s"$e"), identity)
+      .head
+      .fields
+      .collectFirst { case (n, v) if n == Marker.IdentityField => v }
+      .getOrElse("")
+
+  // ════════════════════════════════════ carrying an identity to a note nothing updates ══
+
+  /** THE GAP MARC'S FIRST REAL SYNC EXPOSED, 2026-08-28.
+    *
+    * The identity moved into a field, and the migration was a condition on the UPDATE path: a
+    * note lacking the field is written on whatever run next updates it. Of his 67 owned notes,
+    * 56 gained it and ELEVEN did not — and the eleven were exactly his orphans, holding 20 cards
+    * and 32 reviews.
+    *
+    * AN ORPHAN IS NEVER UPDATED, so it was never reached, and no number of runs would have
+    * reached it. Removing the tag then leaves those notes with no identity at all: unfindable by
+    * this tool, unfindable by `prune`, their review history unreachable, and nothing saying so.
+    */
+  test("a note nothing updates still has its identity carried into the field") {
+    val anki = InMemoryAnki()
+    val id   = noteFromBeforeTheField(anki, k)
+    assertEquals(identityFieldOf(anki, id), "", "the fixture must start WITHOUT the field")
+
+    // An empty vault: the note's source is gone, so it is an orphan and no update touches it.
+    runSync(anki, scanOf())
+
+    assertEquals(
+      identityFieldOf(anki, id),
+      TagCodec.encode(k).value,
+      "an orphan was left with no identity in its field — it becomes unfindable when the tag goes",
+    )
+  }
+
+  /** THE OTHER HALF, AND IT IS WHAT MAKES THE FIRST SAFE TO SHIP. This runs on every sync over
+    * every owned note, so a version that rewrote notes already carrying the field would move
+    * every orphan's modification stamp on every run, forever.
+    */
+  test("a note that already carries its identity is not written again") {
+    val anki = InMemoryAnki()
+    val id   = noteFromBeforeTheField(anki, k)
+    runSync(anki, scanOf())
+    val afterFirst = anki.modCountOf(id)
+
+    runSync(anki, scanOf())
+    assertEquals(
+      anki.modCountOf(id),
+      afterFirst,
+      "the identity was written a second time, so every run now touches every orphan",
+    )
+  }
+
+  /** IT DOES NOT BLANK WHAT IT DOES NOT KNOW. An orphan has no `CardSpec` — its source is gone —
+    * so the fields written back are the note's OWN, read from the collection. A version that
+    * named only the identity would depend on `updateNoteFields` leaving unnamed fields alone,
+    * which this repository has never verified.
+    */
+  test("carrying the identity leaves every other field untouched") {
+    val anki   = InMemoryAnki()
+    val id     = noteFromBeforeTheField(anki, k)
+    val before = anki.notesInfo(Vector(id)).fold(e => fail(s"$e"), identity).head.fields.toMap
+
+    runSync(anki, scanOf())
+
+    val after = anki.notesInfo(Vector(id)).fold(e => fail(s"$e"), identity).head.fields.toMap
+    // EVERY FIELD BUT THE ONE THIS ACTION EXISTS TO WRITE. Asserting on `Identity` too would
+    // assert the action does nothing, which is the opposite of the test above.
+    before.filterNot(_._1 == Marker.IdentityField).foreach { (name, value) =>
+      assertEquals(after.get(name), Some(value), s"field '$name' was changed or lost")
+    }
+    assert(after.contains(Marker.IdentityField), "the identity field disappeared entirely")
+  }
 
   // ═══════════════════════════════════════════════════════ leaving the queue ══
 
@@ -108,7 +204,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     // Without the tag the card is invisible AND unfindable: suspended, unexplained, and absent
     // from every orphan search a person would run to reconcile it.
     val anki = collectionWithAnOrphan()
-    val ids  = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+    val ids  = anki.ownedNotes.fold(e => fail(s"$e"), identity)
     val tags = anki.notesInfo(ids).fold(e => fail(s"$e"), identity).flatMap(_.tags)
     assert(
       tags.exists(_.startsWith(OwnedTag.OrphanedPrefix)),
@@ -146,7 +242,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     cardsOf(anki).foreach { c =>
       assert(!anki.isSuspended(c), s"card ${c.value} stayed suspended after its heading returned")
     }
-    val ids  = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+    val ids  = anki.ownedNotes.fold(e => fail(s"$e"), identity)
     val tags = anki.notesInfo(ids).fold(e => fail(s"$e"), identity).flatMap(_.tags)
     assert(!tags.exists(_.startsWith(OwnedTag.OrphanedPrefix)), s"orphan tag not cleared: $tags")
   }
@@ -155,12 +251,12 @@ class OrphanSuspensionTest extends munit.FunSuite:
     // The point of flagging rather than deleting: the SAME note survives, so its history does.
     val anki   = InMemoryAnki()
     runSync(anki, scanOf(specOf(k)))
-    val before = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+    val before = anki.ownedNotes.fold(e => fail(s"$e"), identity)
 
     runSync(anki, scanOf())
     runSync(anki, scanOf(specOf(k)))
 
-    assertEquals(anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity), before)
+    assertEquals(anki.ownedNotes.fold(e => fail(s"$e"), identity), before)
   }
 
   // ══════════════════ coming back ON A DIFFERENT NOTE TYPE ═══════════════════
@@ -215,7 +311,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     )
     runSync(anki, scanOf(sequence))
 
-    val ids = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+    val ids = anki.ownedNotes.fold(e => fail(s"$e"), identity)
     val notes = anki.notesInfo(ids).fold(e => fail(s"$e"), identity)
 
     // The retype itself happened — without this the test could pass by the move never occurring.

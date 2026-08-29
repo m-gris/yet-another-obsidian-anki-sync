@@ -169,6 +169,38 @@ enum SyncAction:
     */
   case Flag(key: CardKey, noteId: AnkiNoteId)
 
+  /** CARRY A NOTE'S IDENTITY INTO ITS `Identity` FIELD, and change nothing else.
+    *
+    * WHY IT EXISTS, MEASURED RATHER THAN ANTICIPATED. The identity moved from a tag into a field
+    * on 2026-08-28, and the migration was written as a condition on the UPDATE path: a note
+    * lacking the field is written once, on whatever run next reaches it. Marc's first real sync
+    * afterwards showed what that missed — 56 of his 67 owned notes gained the field and eleven
+    * did not, and the eleven were EXACTLY his orphans, holding twenty cards and thirty-two
+    * reviews between them.
+    *
+    * AN ORPHAN IS NEVER UPDATED, so it was never reached. It is flagged and suspended once and
+    * then deliberately left alone — a note already flagged is not flagged again — so no number
+    * of runs would ever have written its field. Removing the tag at that point would have left
+    * those notes with NO identity at all: unfindable by this tool, unfindable by `prune`, and
+    * thirty-two reviews unreachable, with nothing reporting it.
+    *
+    * IT CARRIES THE NOTE'S OWN FIELDS BACK, with the identity added, rather than naming that one
+    * field. `updateNoteFields`' behaviour when handed a SUBSET is not documented in this
+    * repository and has not been measured here, and a wrong guess would blank the rest of an
+    * orphan's content — the one thing worse than leaving it unmigrated. The observation already
+    * read those fields, so writing them back costs nothing and relies on nothing unverified.
+    *
+    * IT IS NOT AN `Update`. An update is computed from a `CardSpec`, and an orphan has none —
+    * its source is gone, which is what makes it an orphan. This action needs only what Anki
+    * already holds plus a key, both of which the observation provides.
+    */
+  case CarryIdentity(
+      key: CardKey,
+      noteId: AnkiNoteId,
+      fields: Vector[(String, String)],
+      legacyTags: Vector[OwnedTag],
+  )
+
   /** Previously flagged, now present again. Clears the orphan tag.
     *
     * Without this the flag set only grows, and a stale orphan becomes indistinguishable
@@ -189,11 +221,36 @@ enum SyncAction:
     * executor by a run whose entire contract is "do not act on an instruction you were not
     * given" — a deletion nobody asked for, in the mode chosen for caution.
     */
+  /** WHICH CARD THIS ACTION IS ABOUT.
+    *
+    * NAMED `cardKey` RATHER THAN `key` because every case already has a field of that name, and
+    * a method sharing it would shadow rather than summarise.
+    *
+    * IT LIVES ON THE TYPE BECAUSE TWO CALLERS ALREADY NEEDED IT. `Main` carried a private copy
+    * whose own comment said it was in the wrong file, and the planner needed the same answer to
+    * decide which notes an update already covers. A third copy would have been the point at
+    * which they could start disagreeing about a case added later; here the match is exhaustive
+    * and a new action must answer.
+    */
+  def cardKey: CardKey = this match
+    case Create(key, _)                    => key
+    case Update(key, _, _)                 => key
+    case Retype(key, _, _, _, _, _, _, _)  => key
+    case Flag(key, _)                      => key
+    case Unflag(key, _)                    => key
+    case CarryIdentity(key, _, _, _)       => key
+
   def dispositionUnder(policy: RetypePolicy): Disposition = this match
     case _: Create => Disposition.Attempt
     case _: Update => Disposition.Attempt
     case _: Flag   => Disposition.Attempt
     case _: Unflag => Disposition.Attempt
+    // ATTEMPTED UNDER EVERY POLICY, and deliberately not deferrable. Deferring a retype is a
+    // judgement about a large, destructive write; this one adds a note's own identity to a
+    // field that is empty and touches nothing else. A run that declined to do it would leave a
+    // note the tool can no longer find once the tag goes, which is the failure this exists to
+    // prevent rather than a risk worth weighing.
+    case _: CarryIdentity => Disposition.Attempt
     case _: Retype =>
       policy match
         case RetypePolicy.Defer => Disposition.Defer

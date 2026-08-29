@@ -57,7 +57,10 @@ class RetypingTest extends munit.FunSuite:
       noteType = s.spec.noteTypeName,
       deck = d,
       fields = s.spec.fields,
-      tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
+      // MIRRORS PRODUCTION, which stopped writing the identity tag on 2026-08-29: a note this
+      // tool creates carries its identity in a field. A helper still writing the tag would make
+      // every fixture a note that needs migrating, and the convergence law would never hold.
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
     )
 
   def observe(anki: InMemoryAnki): ObservedState =
@@ -612,7 +615,10 @@ class RetypingTest extends munit.FunSuite:
         )
 
         val owned = ownedTags.toVector.map(_.value)
-        assert(owned.contains(TagCodec.encode(k).value), s"the identity tag is not carried: $owned")
+        // THE IDENTITY IS IN THE FIELDS THIS MOVE WRITES, NOT IN A TAG, since 2026-08-29. A
+        // retype replaces the note's whole tag set, so what matters is that the identity
+        // survives the move — and it does, in the field, which is asserted just below.
+        assert(!owned.exists(_.startsWith("src::")), s"the identity tag was reinstated: $owned")
         assert(
           owned.contains(OwnedTag.sha(Planner.contentHash(basicSpec)).value),
           s"the hash of the content being written is not carried: $owned",
@@ -739,7 +745,11 @@ class RetypingTest extends munit.FunSuite:
       after.tags.contains("leech") && after.tags.contains("marc-put-this-here"),
       s"a foreign tag was destroyed by the move: ${after.tags}",
     )
-    assert(after.tags.contains(TagCodec.encode(k).value), s"the note lost its identity: ${after.tags}")
+    assertEquals(
+      after.fields.toMap.get(Marker.IdentityField),
+      Some(TagCodec.encode(k).value),
+      s"the note lost its identity across the move: ${after.fields}",
+    )
     assert(
       !after.tags.contains("sha::deadbeefdeadbeef"),
       s"the stale content hash survived: ${after.tags}",

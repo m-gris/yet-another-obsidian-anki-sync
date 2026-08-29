@@ -4,7 +4,7 @@ import cats.MonadError
 import cats.syntax.all.*
 import obsidiananki.anki.*
 import cats.data.NonEmptyVector
-import obsidiananki.model.{CardKey, KeyError, OwnedTag, TagCodec}
+import obsidiananki.model.{CardKey, KeyError, Marker, OwnedTag, TagCodec}
 
 // Reading Anki's current state, and carrying out a plan. Both are written against the
 // algebra rather than a concrete client, so the same code runs against the in-memory
@@ -95,7 +95,7 @@ object Observer:
     */
   def observe[F[_]: cats.Monad](anki: Anki[F]): F[ObservedState] =
     for
-      ids   <- anki.findNotesByTagPrefix(s"${OwnedTag.SrcPrefix}::")
+      ids   <- anki.ownedNotes
       notes <- anki.notesInfo(ids)
       decks <- notes.traverse(n => firstDeckOf(anki, n.id))
     yield
@@ -139,6 +139,52 @@ object Observer:
       UnplaceableNote(note.id, problem, recordedShaOf(note))
 
     val prefix = s"${OwnedTag.SrcPrefix}::"
+
+    // ── THE FIELD IF THE NOTE CAN HAVE ONE, THE TAG IF IT CANNOT ────────────────────────
+    //
+    // MARC ASKED WHY THIS IS NOT THE FIELD ALONE, 2026-08-29, and the answer is a constraint
+    // rather than caution — it was found by trying field-only and watching every retype test
+    // fail.
+    //
+    // A NOTE ON A NOTE TYPE THIS TOOL DOES NOT OWN HAS NOWHERE TO PUT THE FIELD. Anki's stock
+    // `Basic` and `Cloze` do not declare `Identity`, and this tool is ruled never to write to a
+    // note type it did not create (2026-08-21), so it cannot add one. For such a note the tag is
+    // the ONLY possible home — permanently, not transitionally. Those are precisely the notes
+    // the retype path exists to migrate onto this tool's own types, so refusing to read their
+    // identity would break the migration for exactly the collections that need it.
+    //
+    // SO THESE ARE NOT TWO SPELLINGS OF ONE THING WITH ONE PREFERRED. They are two kinds of note
+    // keeping the same value in the only place each can. The field is read first because a note
+    // that HAS one is on a type this tool owns, and that is the answer that cannot be stale.
+    //
+    // THE STRING IS IDENTICAL EITHER WAY, which is what keeps this a lookup rather than a second
+    // code path: whatever is found goes to the one decoder.
+    val inField = note.fields.collectFirst {
+      case (name, value) if name == Marker.IdentityField && value.trim.nonEmpty => value.trim
+    }
+
+    inField match
+      case Some(identity) =>
+        TagCodec
+          .decode(identity)
+          .left
+          .map(err => unplaceable(IdentityProblem.Unreadable(identity, reasonFor(err))))
+          .map(key => ObservedCard(key, note, deck))
+
+      case None => resolveFromTag(note, deck, prefix, unplaceable)
+
+  /** THE IDENTITY OF A NOTE THAT CANNOT CARRY THE FIELD.
+    *
+    * Reached by a note on a note type this tool does not own — see the note above — and by one
+    * written before the field existed and not yet rewritten. Both keep their identity in a tag
+    * because there is nowhere else for it to be.
+    */
+  private def resolveFromTag(
+      note: ObservedNote,
+      deck: Option[DeckPath],
+      prefix: String,
+      unplaceable: IdentityProblem => UnplaceableNote,
+  ): Either[UnplaceableNote, ObservedCard] =
     note.tags.filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(prefix)) match
       case Vector(only) =>
         TagCodec
@@ -147,15 +193,16 @@ object Observer:
           .map(err => unplaceable(IdentityProblem.Unreadable(only, reasonFor(err))))
           .map(key => ObservedCard(key, note, deck))
 
-      // The query that produced this note matched on the prefix, so an empty result here would
-      // mean the collection changed under the run. Reported as unreadable rather than dropped:
-      // "the note has no identity" is exactly as unplaceable as "its identity is malformed".
+      // The search that produced this note matched one of the two homes, so finding neither now
+      // would mean the collection changed under the run. Reported rather than dropped: "the note
+      // has no identity" is exactly as unplaceable as "its identity is malformed".
       case Vector() =>
         Left(
           unplaceable(
             IdentityProblem.Unreadable(
               "",
-              s"the note matched a search for '$prefix' but carries no such tag now",
+              s"the note matched a search for this tool's own notes but carries no identity now " +
+                s"— neither a '${Marker.IdentityField}' field nor a '$prefix' tag",
             )
           )
         )
@@ -564,6 +611,19 @@ object Executor:
       // SUSPENSION IS PER CARD, THE TAG IS PER NOTE. A three-field note has up to three cards
       // and all of them must leave the queue: suspending one of three would leave the heading's
       // other directions still being asked.
+      // THE NOTE'S OWN FIELDS, WRITTEN BACK WITH ITS IDENTITY ADDED. The planner computed
+      // them from what was observed, so nothing here is guessed and nothing else is disturbed.
+      // See `SyncAction.CarryIdentity` for why this is not an `Update` and why it names every
+      // field rather than the one that changed.
+      case SyncAction.CarryIdentity(_, noteId, fields, legacyTags) =>
+        // FIELD FIRST, THEN THE TAG. Interrupted between the two, the note holds the identity in
+        // BOTH homes — which every reader tolerates, since they agree. The other order would
+        // leave a window where it holds the identity in NEITHER, and a note in that state is one
+        // this tool can no longer find.
+        anki.updateNoteFields(noteId, fields) *>
+          (if legacyTags.isEmpty then cats.Monad[F].unit
+           else anki.removeTags(Vector(noteId), legacyTags))
+
       case SyncAction.Flag(key, noteId) =>
         anki.addTags(Vector(noteId), Vector(OwnedTag.orphaned(key))) *>
           anki.cardsOf(Vector(noteId)).flatMap(anki.suspend)

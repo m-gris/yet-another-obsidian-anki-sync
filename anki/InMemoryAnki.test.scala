@@ -71,10 +71,17 @@ class InMemoryAnkiTest extends munit.FunSuite:
     }
   }
 
-  test("tag lookup is case-insensitive, as Anki's is") {
+  /** ANKI FOLDS TAG CASE, and this fake must too or a reconciler that compares tags exactly
+    * would pass here and fail against a real collection.
+    *
+    * ASKED THROUGH `ownedNotes` SINCE 2026-08-29, when the prefix-taking lookup was replaced by
+    * one that asks for MEANING rather than for a query. The property under test is unchanged: a
+    * note whose identity tag is written in another case is still one of this tool's.
+    */
+  test("a note tagged in another case is still found, because Anki folds tag case") {
     val anki = InMemoryAnki()
-    added(anki, basicNote(OwnedTag.unsafeFromString("src::n1::definition")))
-    assertEquals(anki.findNotesByTagPrefix("SRC::N1").map(_.size), Right(1))
+    added(anki, basicNote(OwnedTag.unsafeFromString("SRC::N1::DEFINITION")))
+    assertEquals(anki.ownedNotes.map(_.size), Right(1))
   }
 
   // ------------------------------------------------- create ----
@@ -84,7 +91,7 @@ class InMemoryAnkiTest extends munit.FunSuite:
     val tag  = TagCodec.encode(key("n1", "Coupling", "Temporal coupling"))
     val id   = added(anki, basicNote(tag, front = "Temporal coupling", back = "All up at once."))
 
-    assertEquals(anki.findNotesByTagPrefix("src::"), Right(Vector(id)))
+    assertEquals(anki.ownedNotes, Right(Vector(id)))
     val info = anki.notesInfo(Vector(id)).fold(e => fail(s"$e"), identity).head
     assertEquals(info.fields.toMap.get("Back"), Some("All up at once."))
     assertEquals(info.tags, Vector(tag.value))

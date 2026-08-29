@@ -629,6 +629,12 @@ object Report:
     case _: SyncAction.Flag   => "flag as orphaned"
     case _: SyncAction.Unflag => "clear orphan flag"
 
+    // NAMED IN THE AUTHOR'S TERMS, NOT THE TOOL'S. "Carry identity" describes the mechanism;
+    // what a person sees is a note being brought up to date with how this tool now records
+    // which card is which. It appears once per note and then never again, so a wording that
+    // invites a question nobody needs to answer twice would be the wrong trade.
+    case _: SyncAction.CarryIdentity => "record its identity in a field (once)"
+
   private def describeFailure(f: BuildFailure): String = f match
     case BuildFailure.KeyKnown(key, source, reason) =>
       s"${source.describe}  ${key.path.render}: $reason"

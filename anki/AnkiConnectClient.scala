@@ -6,7 +6,7 @@ import cats.syntax.all.*
 import io.circe.{Decoder, Json}
 import io.circe.syntax.*
 import obsidiananki.anki.AnkiConnect.given
-import obsidiananki.model.OwnedTag
+import obsidiananki.model.{CardSearch, OwnedTag}
 import org.http4s.{Method, Request, Uri}
 import org.http4s.circe.jsonEncoder
 import org.http4s.client.Client
@@ -195,8 +195,14 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
     * because [[obsidiananki.model.TagCodec]] percent-encodes everything outside
     * `[A-Za-z0-9.-]`, so it can contain neither whitespace nor a search metacharacter.
     */
-  def findNotesByTagPrefix(prefix: String): Result[Vector[AnkiNoteId]] =
-    call[Vector[Long]]("findNotes", Json.obj("query" := s"tag:$prefix*")).map(_.map(AnkiNoteId.apply))
+  /** THE SEARCH COMES FROM `CardSearch`, not from a string built here. That object owns how an
+    * identity is spelled and which homes it can occupy; a second copy in this file would be free
+    * to fall behind it, which is the defect that made a keystroke in Obsidian silently return an
+    * empty window earlier the same week.
+    */
+  def ownedNotes: Result[Vector[AnkiNoteId]] =
+    call[Vector[Long]]("findNotes", Json.obj("query" := CardSearch.everythingOwned))
+      .map(_.map(AnkiNoteId.apply))
 
   /** `guiBrowse` RETURNS THE CARD IDS IT SELECTED, and they are discarded on purpose: the
     * point of the call is the window, and reading the ids would invite a caller to treat an

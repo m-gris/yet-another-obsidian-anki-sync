@@ -66,7 +66,10 @@ class UnplaceableNoteTest extends munit.FunSuite:
     NewNote(
       noteType = s.spec.noteTypeName,
       deck = d,
-      fields = s.spec.fields,
+      // TAG-ONLY, LIKE EVERY FIXTURE IN THIS FILE. These tests are about identities kept in
+      // TAGS — broken ones, duplicated ones — and a note that also carried a good identity field
+      // would be resolved from it and never reach the code under test.
+      fields = tagOnlyFields(s.spec),
       tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
     )
 
@@ -102,6 +105,25 @@ class UnplaceableNoteTest extends munit.FunSuite:
     anki.simulateUserTag(id, TagCodec.encode(k2).value)
     anki
 
+  /** A NOTE'S FIELDS WITH THE IDENTITY FIELD BLANKED — "its identity is in the tag and nowhere
+    * else", which is what every fixture in this file means.
+    *
+    * NEEDED FROM 2026-08-29, when a card spec began emitting its identity as a field. Without
+    * this, a fixture built from a spec carries a PERFECTLY GOOD identity in its field alongside
+    * the broken or duplicated tag it was constructed to be about — and the resolver, which reads
+    * the field first, places the note happily. Every test here would then pass while measuring
+    * nothing.
+    *
+    * IT ALSO MODELS SOMETHING REAL rather than only satisfying the tests: a note on a note type
+    * this tool does not own has no identity field to fill, and its identity therefore lives in a
+    * tag. That is the case the retype path exists for.
+    */
+  def tagOnlyFields(spec: CardSpec): Vector[(String, String)] =
+    spec.fields.map {
+      case (name, _) if name == Marker.IdentityField => name -> ""
+      case other                                     => other
+    }
+
   /** One note whose only identity tag cannot be decoded — `src::n1` has two components where
     * the codec requires three, so it is found by the prefix search and refused by the decoder.
     */
@@ -112,7 +134,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
         NewNote(
           noteType = specOf(k1, "back").spec.noteTypeName,
           deck = deck,
-          fields = specOf(k1, "back").spec.fields,
+          fields = tagOnlyFields(specOf(k1, "back").spec),
           tags = NonEmptyVector.of(OwnedTag.unsafeFromString("src::n1"), OwnedTag.sha("aaaa")),
         )
       )
@@ -131,7 +153,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
       "two identity tags" -> noteWithTwoIdentities(),
       "an unreadable tag" -> noteWithUnreadableIdentity(),
     ).foreach { (label, anki) =>
-      val found    = anki.findNotesByTagPrefix("src::").fold(e => fail(s"$e"), identity)
+      val found    = anki.ownedNotes.fold(e => fail(s"$e"), identity)
       val observed = observe(anki)
       assertEquals(
         observed.notes.size + observed.unresolved.size,
@@ -172,7 +194,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
         NewNote(
           noteType = spec.spec.noteTypeName,
           deck = deck,
-          fields = spec.spec.fields,
+          fields = tagOnlyFields(spec.spec),
           // The identity is broken; the content hash is intact and correct.
           tags = NonEmptyVector.of(
             OwnedTag.unsafeFromString("src::n1"),
@@ -214,7 +236,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
         NewNote(
           noteType = specOf(k1, "back").spec.noteTypeName,
           deck = deck,
-          fields = specOf(k1, "back").spec.fields,
+          fields = tagOnlyFields(specOf(k1, "back").spec),
           tags = NonEmptyVector.of(
             OwnedTag.unsafeFromString("src::n1"),
             OwnedTag.sha("0000000000000000"),
@@ -268,7 +290,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
         NewNote(
           noteType = spec.spec.noteTypeName,
           deck = deck,
-          fields = spec.spec.fields,
+          fields = tagOnlyFields(spec.spec),
           tags = NonEmptyVector.of(
             OwnedTag.unsafeFromString("src::n1"),
             OwnedTag.sha(Planner.contentHash(spec.spec)),
@@ -332,7 +354,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
         NewNote(
           noteType = specOf(k1, "back").spec.noteTypeName,
           deck = deck,
-          fields = specOf(k1, "back").spec.fields,
+          fields = tagOnlyFields(specOf(k1, "back").spec),
           tags = NonEmptyVector.of(OwnedTag.unsafeFromString("SRC::n1::coupling"), OwnedTag.sha("aaaa")),
         )
       )

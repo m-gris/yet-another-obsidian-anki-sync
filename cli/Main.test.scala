@@ -225,7 +225,12 @@ class MainTest extends munit.FunSuite:
     val (state, outcome) = runSync(dryRun = false, "A.md" -> oneCard)
     assertEquals(state.notes.size, 1)
     val tags = state.notes.values.head.tags
-    assert(tags.exists(_.startsWith("src::")), s"no identity tag: $tags")
+    // THE IDENTITY IS A FIELD NOW, and the tag is deliberately absent — a machine's ledger
+    // stops filling the author's own tag tree. Asserted both ways: present where it belongs,
+    // and gone from where it used to be.
+    assert(!tags.exists(_.startsWith("src::")), s"the identity tag was written after all: $tags")
+    val idField = state.notes.values.head.fields.toMap.get("Identity")
+    assert(idField.exists(_.startsWith("src::")), s"no identity in the field: $idField")
     assert(tags.exists(_.startsWith("sha::")), s"no content hash: $tags")
     outcome match
       case Main.SyncOutcome.Applied(_, report) => assert(report.failures.isEmpty, s"$report")
@@ -955,7 +960,10 @@ class MainTest extends munit.FunSuite:
       moved.fields.exists((name, value) => name == Marker.ContextField && value.nonEmpty),
       s"the field the new note type exists for was not written: ${moved.fields}",
     )
-    assert(moved.tags.exists(_.startsWith("src::")), s"the note lost its identity: ${moved.tags}")
+    assert(
+      moved.fields.toMap.get("Identity").exists(_.startsWith("src::")),
+      s"the note lost its identity across the move: ${moved.fields}",
+    )
     assert(moved.tags.contains("leech"), s"a foreign tag was destroyed by the move: ${moved.tags}")
 
     // THE LAW, through the shell: the hash written by the move describes what the move wrote,

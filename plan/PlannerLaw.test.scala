@@ -116,7 +116,10 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       noteType = s.spec.noteTypeName,
       deck = d,
       fields = s.spec.fields,
-      tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
+      // MIRRORS PRODUCTION, which stopped writing the identity tag on 2026-08-29: a note this
+      // tool creates carries its identity in a field. A helper still writing the tag would make
+      // every fixture a note that needs migrating, and the convergence law would never hold.
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
     )
 
   // A fixture default. The law tests place every card in one deck on purpose — the property

@@ -19,6 +19,18 @@ package obsidiananki.model
   */
 object CardSearch:
 
+  /** EVERY NOTE THIS TOOL OWNS, in whichever home its identity currently sits.
+    *
+    * BOTH, AND THE `or` IS NOT OPTIONAL. From 2026-08-29 a newly created note carries its
+    * identity ONLY in the field, while every note created before then carries it only in a tag
+    * until something rewrites it. A search naming one home finds half a collection — and the
+    * half it misses looks to this tool like notes that do not exist, which is the input that
+    * makes it CREATE them again. Duplicating a collection is the worst outcome available here,
+    * so the two are searched together for as long as either can occur.
+    */
+  def everythingOwned: String =
+    s"\"${Marker.IdentityField}:${OwnedTag.SrcPrefix}::*\" or \"tag:${OwnedTag.SrcPrefix}::*\""
+
   /** Every card this tool made from one note, as an Anki search.
     *
     * BOTH HOMES, JOINED BY `or`, FOR AS LONG AS BOTH EXIST. The identity moved into a field on

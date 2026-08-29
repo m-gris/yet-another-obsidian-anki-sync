@@ -1270,6 +1270,7 @@ object Main
     case SyncAction.Retype(key, _, _, _, _, _, _, _) => key
     case SyncAction.Flag(key, _)                  => key
     case SyncAction.Unflag(key, _)                => key
+    case SyncAction.CarryIdentity(key, _, _, _)   => key
 
   /** How the run is to be judged: ONE value, read by the exit code and by the last line on
     * screen alike.

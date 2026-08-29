@@ -56,7 +56,10 @@ class PlannerTest extends munit.FunSuite:
       noteType = s.spec.noteTypeName,
       deck = d,
       fields = s.spec.fields,
-      tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
+      // MIRRORS PRODUCTION, which stopped writing the identity tag on 2026-08-29: a note this
+      // tool creates carries its identity in a field. A helper still writing the tag would make
+      // every fixture a note that needs migrating, and the convergence law would never hold.
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
     )
 
   def planOf(scan: VaultScan, observed: ObservedState): Plan =
@@ -632,14 +635,11 @@ class PlannerTest extends munit.FunSuite:
     val plan = planOf(scan, observe(anki))
 
     // THE KEY EACH ACTION NAMES. Every case carries one, but the enum does not expose a common
-    // accessor, so this match does it — exhaustively, on purpose: an action added later has to
-    // say which card it is about rather than falling into a wildcard and being skipped here.
-    def keyOf(a: SyncAction): CardKey = a match
-      case SyncAction.Create(k, _)    => k
-      case SyncAction.Update(k, _, _) => k
-      case r: SyncAction.Retype       => r.key
-      case SyncAction.Flag(k, _)      => k
-      case SyncAction.Unflag(k, _)    => k
+    // THE ACCESSOR EXISTS NOW, so this no longer matches by hand. It was one of three copies —
+    // this file, the one below, and a private one in `Main` — and `SyncAction.cardKey` replaced
+    // them on 2026-08-29, when a fourth would have been needed for a new action. The
+    // exhaustiveness the copies provided is now provided once, where the cases live.
+    def keyOf(a: SyncAction): CardKey = a.cardKey
 
     val failingAt = plan.actions.indexWhere(a => keyOf(a) == clash)
     assert(failingAt >= 0, s"the clashing action was not planned: ${plan.actions.map(keyOf)}")
@@ -691,13 +691,9 @@ class PlannerTest extends munit.FunSuite:
     )
     // And nothing that DID land is rewritten.
     assert(
-      !resumed.actions.exists(a => applied.collect { case SyncAction.Create(k, _) => k }.contains(a match {
-        case SyncAction.Create(k, _)    => k
-        case SyncAction.Update(k, _, _) => k
-        case SyncAction.Flag(k, _)      => k
-        case SyncAction.Unflag(k, _)    => k
-        case SyncAction.Retype(k, _, _, _, _, _, _, _) => k
-      })),
+      !resumed.actions.exists(a =>
+        applied.collect { case SyncAction.Create(k, _) => k }.contains(a.cardKey)
+      ),
       "an already-applied action was scheduled again",
     )
 

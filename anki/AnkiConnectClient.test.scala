@@ -194,7 +194,7 @@ class AnkiConnectClientTest extends munit.FunSuite:
     val (state, anki) = fixture
     state.seed("Basic", Vector("Front" -> "f"), Vector("src::x"), "Obsidian::Patterns")
     // Reaches the fake's strict query check; a query of the wrong shape is refused there.
-    assertEquals(anki.findNotesByTagPrefix("src::").get.size, 1)
+    assertEquals(anki.ownedNotes.get.size, 1)
   }
 
   test("notes are found by tag prefix, and read back with fields in order") {
@@ -202,7 +202,7 @@ class AnkiConnectClientTest extends munit.FunSuite:
     state.seed("Basic", Vector("Front" -> "f", "Back" -> "b"), Vector("src::x"), "Obsidian::Patterns")
     state.seed("Basic", Vector("Front" -> "g"), Vector("unrelated::y"), "Obsidian::Patterns")
 
-    val ids = anki.findNotesByTagPrefix("src::").get
+    val ids = anki.ownedNotes.get
     assertEquals(ids.size, 1, "the tag prefix search matched the wrong set")
 
     val notes = anki.notesInfo(ids).get

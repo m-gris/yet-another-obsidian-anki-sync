@@ -5,6 +5,7 @@ import io.circe.{Json, JsonObject}
 import io.circe.syntax.*
 import org.http4s.{HttpApp, Response, Status}
 import org.http4s.circe.{jsonDecoder, jsonEncoder}
+import obsidiananki.model.{CardSearch, Marker, OwnedTag}
 
 /** A fake AnkiConnect SERVER, answering over http4s' in-process client.
   *
@@ -200,13 +201,21 @@ object FakeAnkiConnect:
       case "findNotes" =>
         p.downField("query").as[String] match
           case Left(_) => err("bad argument type for built-in operation")
-          case Right(query) if !query.startsWith("tag:") || !query.endsWith("*") =>
-            err(s"fake: refusing a search that is not a tag-prefix query: '$query'")
-          case Right(query) =>
-            val prefix = query.drop("tag:".length).dropRight(1).toLowerCase
+          // THE EXACT QUERY, NOT A SHAPE. It used to require a tag-prefix search and pull the
+          // prefix out of the string; since 2026-08-29 the enumeration spans two homes and is
+          // built by `CardSearch.everythingOwned`, so this compares against that value rather
+          // than re-deriving it — a second parser here would be free to keep accepting a query
+          // the tool no longer sends.
+          case Right(query) if query != CardSearch.everythingOwned =>
+            err(s"fake: refusing a search that is not this tool's own enumeration: '$query'")
+          case Right(_) =>
+            val prefix = s"${OwnedTag.SrcPrefix}::".toLowerCase
             ok(
               state.notes
-                .filter((_, n) => n.tags.exists(_.toLowerCase.startsWith(prefix)))
+                .filter((_, n) =>
+                  n.tags.exists(_.toLowerCase.startsWith(prefix)) ||
+                    n.fields.exists((name, v) => name == Marker.IdentityField && v.trim.nonEmpty)
+                )
                 .keys
                 .toVector
                 .sorted

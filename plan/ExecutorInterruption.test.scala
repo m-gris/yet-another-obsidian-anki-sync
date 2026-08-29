@@ -54,8 +54,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
       underlying.noteTypeTemplates(noteType)
     def noteTypeStyling(noteType: String): Result[String] = underlying.noteTypeStyling(noteType)
     def noteTypeIsCloze(noteType: String): Result[Boolean] = underlying.noteTypeIsCloze(noteType)
-    def findNotesByTagPrefix(prefix: String): Result[Vector[AnkiNoteId]] =
-      underlying.findNotesByTagPrefix(prefix)
+    def ownedNotes: Result[Vector[AnkiNoteId]] = underlying.ownedNotes
 
     /** DELEGATED WITHOUT SPENDING BUDGET. This double interrupts after N WRITES, and browsing
       * opens a window rather than touching the collection — charging for it would silently
@@ -152,7 +151,10 @@ class ExecutorInterruptionTest extends munit.FunSuite:
       noteType = s.spec.noteTypeName,
       deck = d,
       fields = s.spec.fields,
-      tags = NonEmptyVector.of(TagCodec.encode(s.key), OwnedTag.sha(sha)),
+      // MIRRORS PRODUCTION, which stopped writing the identity tag on 2026-08-29: a note this
+      // tool creates carries its identity in a field. A helper still writing the tag would make
+      // every fixture a note that needs migrating, and the convergence law would never hold.
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
     )
 
   def planOf(scan: VaultScan, anki: Anki[Result]): Plan =

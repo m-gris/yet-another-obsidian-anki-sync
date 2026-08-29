@@ -280,7 +280,19 @@ trait Anki[F[_]]:
     * detect an orphan, because an orphan is by definition a key present in Anki and absent
     * from markdown — invisible to a loop over markdown's keys.
     */
-  def findNotesByTagPrefix(prefix: String): F[Vector[AnkiNoteId]]
+  /** EVERY NOTE THIS TOOL OWNS, however its identity is currently stored.
+    *
+    * SEMANTIC RATHER THAN A QUERY STRING, deliberately. An earlier version took a tag prefix,
+    * and taking an Anki search instead would force the in-memory collection to implement a query
+    * language it does not have — letting a test pass against a dialect Anki does not speak. What
+    * a caller means is "the notes I own"; how that is asked is the wire client's business and
+    * the fake's, separately.
+    *
+    * IT MUST SPAN BOTH HOMES. The identity moved from a tag into a field, so a collection holds
+    * notes with the tag, with the field, or with both. Missing half of them reads as "those notes
+    * do not exist", which is precisely the input that makes this tool create them a second time.
+    */
+  def ownedNotes: F[Vector[AnkiNoteId]]
 
   /** OPEN ANKI'S BROWSE WINDOW ON A SEARCH — the only capability here that changes what a
     * PERSON sees rather than what the collection holds.

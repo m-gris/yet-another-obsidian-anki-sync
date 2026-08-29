@@ -186,7 +186,12 @@ object Planner:
       noteType = sourced.spec.noteTypeName,
       deck = deck,
       fields = sourced.spec.fields,
-      tags = NonEmptyVector.of(TagCodec.encode(sourced.key), OwnedTag.sha(sha)),
+      // NO IDENTITY TAG SINCE 2026-08-29. A note this tool creates is always on a note type
+      // it owns, so it always has an `Identity` field to hold its identity — and writing the tag
+      // as well would put a machine's ledger back into the author's own tag tree, which is the
+      // whole reason the identity moved. The content hash stays a tag: it is not an identity,
+      // and it is read by a search that has no other home.
+      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
     )
 
   /** Reject a key derived by more than one source, before anything is written.
@@ -364,7 +369,10 @@ object Planner:
                     from = existing.note.noteType,
                     to = sourced.spec.noteTypeName,
                     fields = sourced.spec.fields,
-                    ownedTags = NonEmptyVector.of(TagCodec.encode(key), OwnedTag.sha(sha)),
+                    // THE IDENTITY IS IN THE FIELDS THIS MOVE WRITES, not in a tag — see the
+                    // note at the create above. A retype replaces the note's whole tag set, so
+                    // naming the identity tag here would reinstate it on every moved note.
+                    ownedTags = NonEmptyVector.one(OwnedTag.sha(sha)),
                     preservedTags = existing.note.tags.filterNot(OwnedTag.isOwned),
                     // TRAVELS WITH THE MOVE, so one action is still one whole note. Emitting a
                     // companion `Update` instead would be smaller here and wrong there: the
@@ -484,4 +492,71 @@ object Planner:
             }
             (orphans.map(c => SyncAction.Flag(c.key, c.note.id)), OrphanInference.Computed)
 
-        Right(Plan(perSpec ++ orphanActions, inference, scan.failures, observed.parkedOrphans.map(_.key)))
+        // ── BACKFILLING AN IDENTITY THE UPDATE PATH CANNOT REACH ────────────────────────
+        //
+        // WHY A SEPARATE PASS RATHER THAN A CONDITION ON AN UPDATE. The identity moved into a
+        // field on 2026-08-28 and the migration was written as exactly that condition: a note
+        // lacking the field is written on whatever run next updates it. Marc's first real sync
+        // showed what it missed — 56 of 67 owned notes gained the field and ELEVEN did not, and
+        // the eleven were precisely his orphans, holding 20 cards and 32 reviews.
+        //
+        // AN ORPHAN IS NEVER UPDATED. It is flagged and suspended once and then left alone, and
+        // a note already flagged is not flagged again — so no number of runs would have reached
+        // it. Removing the tag at that point leaves those notes with no identity at all:
+        // unfindable by this tool, unfindable by `prune`, and their review history unreachable,
+        // with nothing reporting it.
+        //
+        // IT DOES NOT DEPEND ON THE SCAN BEING COMPLETE, which is why it sits outside the
+        // orphan inference above. Whether a key is absent from the markdown is a question about
+        // the vault and needs a whole one; whether a note Anki holds is missing a field is a
+        // question about that note alone, and the observation already answered it.
+        //
+        // NOTES BEING UPDATED ANYWAY ARE EXCLUDED, so this never duplicates work: an update
+        // writes every field including the identity, and the update path already forces one for
+        // a live note that lacks it.
+        val updatedKeys = perSpec.map(_.cardKey).toSet
+        // WHICH NOTES CAN HOLD THE FIELD AT ALL, WHICH IS NOT ALL OF THEM. A note on a note
+        // type this tool does not own has no `Identity` field, and this tool is ruled never to
+        // write to a note type it did not create — so its identity stays in its tag,
+        // permanently, and it must be left alone rather than repeatedly failed against.
+        //
+        // TOLD APART BY THE FIELD NAME'S PRESENCE, not by asking Anki a second time: a note's
+        // fields ARE its note type's list, so if the name is absent the type does not declare it.
+        def canHoldTheField(card: ObservedCard): Boolean =
+          card.note.fields.exists((name, _) => name == Marker.IdentityField)
+
+        def fieldIsEmpty(card: ObservedCard): Boolean =
+          !card.note.fields.exists((name, value) => name == Marker.IdentityField && value.nonEmpty)
+
+        def legacyTagsOn(card: ObservedCard): Vector[OwnedTag] =
+          card.note.tags
+            .filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.SrcPrefix}::"))
+            .map(OwnedTag.unsafeFromString)
+
+        val backfill = observed.notes.collect {
+          case card
+              if !updatedKeys.contains(card.key) && canHoldTheField(card) &&
+                (fieldIsEmpty(card) || legacyTagsOn(card).nonEmpty) =>
+            SyncAction.CarryIdentity(
+              card.key,
+              card.note.id,
+              // THE NOTE'S OWN FIELDS, WITH THE IDENTITY SET. Named in full rather than alone
+              // because `updateNoteFields`' behaviour on a subset is unverified here, and a
+              // wrong guess would blank the rest of an orphan's content.
+              card.note.fields.filterNot(_._1 == Marker.IdentityField) :+
+                (Marker.IdentityField -> TagCodec.encode(card.key).value),
+              // THE TAG GOES WHEN THE FIELD ARRIVES, in one action, so that no note is ever left
+              // holding the identity in a place nothing writes. Removing it is the entire point
+              // of the move: a machine's ledger stops filling the author's own tag tree.
+              legacyTagsOn(card),
+            )
+        }
+
+        Right(
+          Plan(
+            perSpec ++ orphanActions ++ backfill,
+            inference,
+            scan.failures,
+            observed.parkedOrphans.map(_.key),
+          )
+        )
