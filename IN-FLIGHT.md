@@ -1060,3 +1060,89 @@ section: a pointer to a document that does not mention the thing is worse than n
     you mean `flashcard/sequence/headers`?"* ranks and hands the author the choice, so edit
     distance and thresholds are fine here, ruled acceptable by Marc 2026-08-28. It stays OUT of
     the sync path and beside the heading-level linter as an opt-in pass.
+
+---
+
+## OPEN — one defect class, three measured instances, 2026-08-29
+
+38. **CONTRACTS THIS REPOSITORY OWNS ARE HELD IN PLACES IT CANNOT SEE, AND NOTHING CHECKS THEM.**
+    Found by Marc asking, twice, whether anything else depended on the identity tag. **Nothing
+    here could have answered.** Partly fixed; the class is not.
+
+    **INSTANCE ONE — FIVE CONSUMERS OF ONE FORMAT, ONE OUTSIDE THE REPOSITORY.** A card's
+    identity was written by the planner, decoded by `locate`, found by the add-on's
+    `source_tag`, CONSTRUCTED by the add-on's drill search (`tag:src::<id>::*`), and
+    CONSTRUCTED AGAIN in a `curl` one-liner in Marc's Obsidian configuration. `README.md`
+    presented that last one as the feature's whole trick — *composable without asking this tool
+    anything, so the binding costs nothing.* What it bought was a copy of the identity format in
+    a file this repository cannot read, test or migrate.
+
+    **TWO OF THE FOUR BREAKAGES WOULD HAVE BEEN SILENT**, which is why this is a defect class
+    rather than an inconvenience. Pressing `e` and the Anki drill menu do nothing visible. The
+    Obsidian-to-Anki browse keystroke opens an EMPTY BROWSE WINDOW and a drill builds an EMPTY
+    DECK — which read as *this note made no cards* and *nothing to drill*. Plausible wrong
+    answers, which is the failure this project is built against.
+
+    **FIXED for this instance**: a `browse` subcommand now owns the search, so the keystroke
+    passes a note id and knows nothing else; the add-on reads the field; the drill search asks
+    for both homes. `model/CardSearch.test.scala` holds the test that was missing — it asserts
+    the search this tool hands out MATCHES THE IDENTITY THIS TOOL WRITES, and fails if either
+    side moves alone.
+
+    **INSTANCE TWO — 37 TESTS THAT NOTHING RAN.** `addon/obsidian_edit/core_test.py` covered the
+    Python half of the edit workflow, including the exact function that would break, and `just
+    test` ran the Scala suite alone. There is no CI. A test file nobody runs is worse than none,
+    because its existence reads as coverage. **FIXED**: `just test` now depends on `addon-test`.
+
+    **INSTANCE THREE — SIX OBSIDIAN COMMANDS, TWO DOCUMENTED.** `README.md`'s binding table names
+    two; Marc's `.obsidian/plugins/obsidian-shellcommands/data.json` holds six Anki ones. Nothing
+    generates them, nothing reads them, nothing compares them. **The symptom that surfaced it**:
+    his `install-note-types` command was frozen without `--repair`, a flag added after he wrote
+    it, so a note-type repair was unavailable from the tool he actually uses. **NOT FIXED.**
+
+    **WHAT WOULD ACTUALLY CLOSE IT, in order of value.**
+
+    1. **Make the outside hold nothing volatile.** A shell command should pass a note id and
+       call the binary — never build a search, never speak AnkiConnect's protocol, never quote
+       JSON. Done for browse; the drill already did it by calling a custom add-on action.
+    2. **Generate what must live outside**, using the pattern already proven for note types:
+       report what differs, repair only when asked, never touch what the tool did not create.
+       The plugin keeps its commands in a JSON file that can be read and written. **CONSTRAINT
+       FOUND 2026-08-29**: Obsidian holds that file in memory, so a write while it runs is
+       silently overwritten by its own copy on the next settings save. Generation is therefore
+       "write it, then restart Obsidian" — a ceremony, which argues for it being rare, which it
+       becomes exactly when the commands stop holding volatile knowledge.
+    3. **A `doctor` command** for what generation cannot cover: is the add-on installed, is it
+       the version this repository holds, are the note types current.
+
+    **WHY IT WAS INVISIBLE, which is the part to keep.** Nothing tests a seam. Each side was
+    tested against its own idea of the contract — the Scala wrote tags and tested that; the
+    Python read tags and tested that — and no test asserted the two agreed. The golden record is
+    EXTRACT-LEVEL, built from the vault walk, so it pins the identity this tool DERIVES and would
+    not have noticed the tag ceasing to be written. Five consumers accumulated against an
+    unguarded format while every suite stayed green.
+
+39. **THE PYTHON ADD-ON'S SURFACE IS LARGER THAN IT HAS TO BE.** Measured 2026-08-29, after Marc
+    asked whether Python was needed at all. **Nothing is built.**
+
+    **Python is unavoidable** — Anki's extension mechanism is Python, and binding a key inside
+    the reviewer requires an add-on. **499 production lines**: `core.py` 205 (pure, tested),
+    `__init__.py` 294 (imports `aqt`, so untestable by construction).
+
+    **IRREDUCIBLE**: hooking Anki's edit action, reading the add-on's config, opening a link,
+    showing a tooltip, running a subprocess. That is the glue, and it is the part that cannot be
+    unit-tested anyway.
+
+    **REDUCIBLE, and worth naming separately.**
+
+    - **~50 lines exist only because the tool runs on a JVM** — the `JAVA_HOME` hunt, the
+      missing-Java diagnosis, the hint text. Accidental complexity from the runtime rather than
+      the domain; a native binary deletes all of it.
+    - **The drill's deck naming and search construction are DOMAIN LOGIC in the wrong language.**
+      What a deck is called, what counts as one of ours, how a search is built — the Scala
+      decides exactly these things everywhere else, and here they are re-decided in Python with
+      their own reasoning written out fresh.
+
+    **NOT reducible, and it was checked**: the wire format between the two is already good.
+    `locate` puts a URI on stdout and an explanation on stderr, and `interpret` is five lines.
+    Channel splitting, not prose parsing. Left alone.
