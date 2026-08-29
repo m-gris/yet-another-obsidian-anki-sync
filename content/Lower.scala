@@ -454,6 +454,28 @@ object Lower:
       // PLACEMENT, not by design. The consequence for the algebra is stated at `ast.Text` above.
       ok(Vector.empty[Inline])
 
+    case ObsidianSyntax.BlockId(_, _) =>
+      // `^abc123` — OBSIDIAN'S NAME FOR THE BLOCK, WHICH IS METADATA AND NOT CONTENT.
+      //
+      // ZERO INLINES, so it can never reach a card. That is a stronger guarantee than removing
+      // it downstream would be: this algebra has no constructor for it, so no renderer can
+      // print one, and `IN-FLIGHT.md` item 20 — a block id appearing on the card face — becomes
+      // unrepresentable rather than fixed.
+      //
+      // AND IT IS READ BEFORE THIS POINT, NOT LOST HERE. The extractor takes a block's anchor
+      // off the PARSE TREE, where the position that makes it an identifier is still visible.
+      // By the time anything is lowered, a block is a list of inlines and "at the end of the
+      // block" has stopped being a thing that can be asked.
+      //
+      // DROPPED RATHER THAN REFUSED, which it was for a few hours on 2026-08-29 and which was a
+      // regression: giving the parser a production for `^abc123` turned it from harmless text
+      // into an unknown span, so a block carrying one refused its whole card. Measured against
+      // Marc's vault the same day — 125 block ids, all in one note with no frontmatter id, so
+      // nothing was producing cards yet and nothing broke. It would have bitten the moment he
+      // gave that note an id, which is exactly what somebody does when they want its
+      // annotations to become cards.
+      ok(Vector.empty[Inline])
+
     case ObsidianSyntax.ObsidianComment(_, _) =>
       // `%%…%%` or `<!--…-->`. Obsidian hides both in reading view, which is precisely why they
       // get used for private notes and precisely why printing one on a flashcard is a
