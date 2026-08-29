@@ -607,6 +607,19 @@ object Marker:
 
   private val MarkerPattern = """#flashcard(?:/[\w-]+)*""".r
 
+  /** THE MARKER TOKEN REMOVED FROM ONE PIECE OF TEXT, AND NOTHING ELSE CHANGED.
+    *
+    * Split out of [[stripMarker]] so that the two readings of a heading share ONE definition of
+    * where a marker is. A heading is also rendered SPAN BY SPAN for its card face, and the
+    * marker sits inside one of those spans; without this, that path would need its own copy of
+    * the pattern, and a second copy is how `plainLink` and `ObsidianSyntax.displayText` came to
+    * disagree about wikilinks — see the UNSPLIT note on the former.
+    *
+    * No trim and no whitespace collapse, because a caller working span by span cannot see
+    * whether the space it is about to drop is adjacent to another span's.
+    */
+  def stripMarkerToken(text: String): String = MarkerPattern.replaceAllIn(text, "")
+
   /** The heading text with its marker removed, for display.
     *
     * Distinct from [[HeadingSegment.fromExtractedText]], which additionally canonicalises
@@ -614,7 +627,7 @@ object Marker:
     * it keeps its original casing.
     */
   def stripMarker(headingText: String): String =
-    MarkerPattern.replaceAllIn(headingText, "").trim.replaceAll("\\s+", " ")
+    stripMarkerToken(headingText).trim.replaceAll("\\s+", " ")
 
   /** EVERY MARKER THIS TOOL ACCEPTS, with the one-line gloss `--help` prints for it.
     *

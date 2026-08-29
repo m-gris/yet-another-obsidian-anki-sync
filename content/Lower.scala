@@ -285,7 +285,8 @@ object Lower:
     * through here it is refused by name, and the key it would have corrupted is derived
     * separately and still exists to attach the refusal to.
     */
-  def spans(ss: Vector[ast.Span]): Either[NonEmptyVector[Refusal], Vector[Inline]] = ???
+  def spans(ss: Vector[ast.Span]): Either[NonEmptyVector[Refusal], Vector[Inline]] =
+    spansV(ss).toEither
 
   // ══════════════════════════════════════════════════════════════════ blocks ════
 

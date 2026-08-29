@@ -22,7 +22,7 @@
 # Every emitted value is wrapped in U+27E6/U+27E7 brackets so that leading and trailing
 # whitespace is visible BY POSITION, and escaped so that an invisible character is visible
 # at all. Escaping is one-way: nothing ever unescapes this file.
-specs 56
+specs 57
 failures 2
 
 card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
@@ -129,6 +129,14 @@ card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%2
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
+
+card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20of%20radius%20r⟧
+  note ⟦Obsidian Basic (and reversed card)⟧
+  field ⟦Front⟧ ⟦Surface area of a sphere of radius \\(r\\)⟧
+  field ⟦Back⟧ ⟦<p>\\[A = 4\\pi r^2\\]</p><p>MATHS IN THE HEADING, not only in the body, and it is a separate card for a\nreason. The section above proves a card BODY renders maths; nothing proved a\ncard FACE did, because a heading takes a different route to its field — text\nextraction and escaping rather than lowering and rendering. Added 2026-08-29\nwith the slice that gave a heading a second reading.</p>⟧
+  field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
+  field ⟦SameShape⟧ ⟦⟧
+  field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20of%20radius%20r⟧
 
 card ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
   note ⟦Obsidian Cloze⟧

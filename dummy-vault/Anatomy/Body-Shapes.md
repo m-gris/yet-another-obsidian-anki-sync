@@ -75,3 +75,13 @@ never carried. Added 2026-08-29, with the parser that made it possible. It is on
 card rather than several on purpose, because it holds all four hazards at once:
 inline maths, display maths, a row separator that markdown used to eat, and
 braces that the field escapes to character references.
+
+## Surface area of a sphere of radius $r$ #flashcard/2way
+
+$$A = 4\pi r^2$$
+
+MATHS IN THE HEADING, not only in the body, and it is a separate card for a
+reason. The section above proves a card BODY renders maths; nothing proved a
+card FACE did, because a heading takes a different route to its field — text
+extraction and escaping rather than lowering and rendering. Added 2026-08-29
+with the slice that gave a heading a second reading.

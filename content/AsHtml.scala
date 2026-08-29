@@ -485,6 +485,20 @@ object AsHtml:
   /** The body as an ordinary (non-cloze) card carries it. */
   def plain(blocks: Vector[Block]): Html.Fragment = html(blocks, Plain)
 
+  /** A RUN OF INLINES WITH NO ENCLOSING BLOCK, which is what a HEADING is.
+    *
+    * NOT `plain(Vector(Block.Paragraph(is)))`, and the difference is visible on a card: that
+    * would wrap the heading in `<p>`, and a heading is a field's whole value rather than a
+    * paragraph inside one. It pairs with `Lower.spans`, which exists for the same reason —
+    * Laika keeps a `Section`'s header outside its content, so a heading is a run of spans and
+    * never a block.
+    *
+    * RULE 1 IS NOT APPLIED HERE and must not be. Emptiness of a heading is decided upstream, by
+    * the key derivation, which fails a whole file when a heading extracts to nothing. Filtering
+    * here would turn that loud failure into a card with a blank face.
+    */
+  def spans(is: Vector[Inline]): Html.Fragment = inlines(is, Plain)
+
   // ══════════════════════════════════════════════════════════════════ blocks ════
 
   private def blockHtml(

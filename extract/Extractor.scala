@@ -159,7 +159,20 @@ object Extractor:
         // it later finds the note's own name rather than an empty string.
         val section = Section(Header(1, Seq(Text(fileName))), root.content)
 
-        buildSpecs(key, marker, fileName, Vector.empty, section, fileName, foldersOf(filePath)) match
+        // THE FACE OF A WHOLE-NOTE CARD IS ITS FILE NAME, WHICH IS NOT MARKDOWN. It never went
+        // through a parser and holds no spans, so there is nothing to lower and escaping is the
+        // entire display reading. A file called `Function Space $B^A$.md` would show its dollars
+        // — correctly, because they are characters in a name rather than maths in a document.
+        buildSpecs(
+          key,
+          marker,
+          fileName,
+          C.Html.escape(fileName),
+          Vector.empty,
+          section,
+          fileName,
+          foldersOf(filePath),
+        ) match
           case Left(err) => ExtractedNote(Vector.empty, Vector(BuildFailure.KeyKnown(key, ref, describe(err))))
           case Right(built) =>
             ExtractedNote(
@@ -290,27 +303,40 @@ object Extractor:
                     )
                   failures += BuildFailure.KeyKnown(key, ref, describe(why))
                 else
-                  buildSpecs(key, marker, title, ancestorTitles, section, fileName, folders) match
-                    case Right(built) => built.foreach { case (spec, src) =>
-                        specs += SourcedSpec(
-                          spec,
-                          ref.copy(kind = src.kind, detail = src.detail),
-                          // `nextTitles`, NOT `ancestorTitles`: the chain a deck is built from
-                          // ends AT the marked heading, so the deck a `#flashcard` heading
-                          // produces is named after that heading. It is the same vector the
-                          // recursive descent below passes on, so a card and the cards under
-                          // it agree about where they sit.
-                          sectionTitles = nextTitles,
-                          // COMPUTED HERE BECAUSE HERE IS WHERE THE RAW TEXT STILL EXISTS.
-                          // `title` and `ancestorTitles` are unescaped at this point; by the
-                          // time they reach a `CardSpec` they have been through `Html.escape`,
-                          // and an escaped concept can never match the heading a deck path is
-                          // built from.
-                          recall = recallFromLocation(marker, title, ancestorTitles, fileName),
-                          vaultTags = vaultTags,
-                        )
-                      }
-                    case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))
+                  face match
+                    // A REFUSAL IN THE FACE FAILS THE CARD, BY NAME, AND THAT IS NEW. Today an
+                    // image in a marked heading is dropped in silence and the card ships with a
+                    // gap where it was. The key was derived above and still exists, which is
+                    // what lets this be reported rather than becoming a missing key — see the
+                    // ruling this ordering exists to respect, at `headingFace`.
+                    case Left(refusals) =>
+                      failures += BuildFailure.KeyKnown(
+                        key,
+                        ref,
+                        s"the heading itself holds ${refusals.toVector.map(_.describe).mkString(", ")}",
+                      )
+                    case Right(shownAs) =>
+                      buildSpecs(key, marker, title, shownAs, ancestorTitles, section, fileName, folders) match
+                        case Right(built) => built.foreach { case (spec, src) =>
+                            specs += SourcedSpec(
+                              spec,
+                              ref.copy(kind = src.kind, detail = src.detail),
+                              // `nextTitles`, NOT `ancestorTitles`: the chain a deck is built from
+                              // ends AT the marked heading, so the deck a `#flashcard` heading
+                              // produces is named after that heading. It is the same vector the
+                              // recursive descent below passes on, so a card and the cards under
+                              // it agree about where they sit.
+                              sectionTitles = nextTitles,
+                              // COMPUTED HERE BECAUSE HERE IS WHERE THE RAW TEXT STILL EXISTS.
+                              // `title` and `ancestorTitles` are unescaped at this point; by the
+                              // time they reach a `CardSpec` they have been through `Html.escape`,
+                              // and an escaped concept can never match the heading a deck path is
+                              // built from.
+                              recall = recallFromLocation(marker, title, ancestorTitles, fileName),
+                              vaultTags = vaultTags,
+                            )
+                          }
+                        case Left(err) => failures += BuildFailure.KeyKnown(key, ref, describe(err))
 
             // Descend regardless: an unmarked heading is still an ancestor, and a marked one
             // can contain further marked headings.
@@ -382,14 +408,43 @@ object Extractor:
     * of the heading and is plain text, so it lands inside the final `Text` span, which may
     * also carry the last words of the title.
     */
-  private def headingFace(header: Header): Either[NonEmptyVector[C.Refusal], C.Html.Fragment] =
-    ???
+  private[extract] def headingFace(header: Header): Either[NonEmptyVector[C.Refusal], C.Html.Fragment] =
+    C.Lower.spans(spansWithoutMarker(header.content.toVector)).map(C.AsHtml.spans)
 
-  /** The heading's spans with the trailing `#flashcard/…` token removed, and nothing else
-    * changed. Separate from [[headingFace]] because it is the part that can silently take a
-    * word of the author's title with it, so it is tested on its own.
+  /** The heading's spans with the `#flashcard/…` token removed, and nothing else changed.
+    * Separate from [[headingFace]] because it is the part that can silently take a word of the
+    * author's title with it, so it is tested on its own.
+    *
+    * ONLY `Text` SPANS ARE TOUCHED, because a marker is plain text by construction — it is what
+    * an author typed, and nothing in the dialect turns `#flashcard/2way` into a node. So maths,
+    * wikilinks and emphasis pass through untouched rather than being reconstructed.
+    *
+    * WHITESPACE IS COLLAPSED PER SPAN, WHICH IS NOT QUITE WHAT `Marker.stripMarker` DOES and
+    * the difference is named rather than hidden. That function collapses over the whole
+    * extracted string, so it can close a gap that spans two `Text` nodes; this one cannot see
+    * across a boundary. The two agree on every heading in either fixture vault and on Marc's,
+    * and `ExtractorTest`'s differential is what would catch a case where they do not — which is
+    * the point of stating the divergence rather than assuming it never bites.
+    *
+    * THE RUN IS TRIMMED AT BOTH ENDS, and that is not tidiness. Removing ` #flashcard/2way`
+    * leaves a trailing space, so without this the face reads `Layers of the epidermis ` while
+    * the key reads `Layers of the epidermis`, and the two readings would differ in a way no
+    * author wrote. `Marker.stripMarker` trims the whole extracted string for the same reason;
+    * this is that `.trim` expressed over a run of spans, which is why it touches only the first
+    * and last, and only if those are `Text`.
     */
-  private def spansWithoutMarker(spans: Vector[Span]): Vector[Span] = ???
+  private[extract] def spansWithoutMarker(spans: Vector[Span]): Vector[Span] =
+    val stripped = spans.map {
+      case t: Text => Text(Marker.stripMarkerToken(t.content).replaceAll("\\s+", " "), t.options)
+      case other   => other
+    }
+    val leadTrimmed = stripped.headOption match
+      case Some(t: Text) => stripped.updated(0, Text(t.content.stripLeading, t.options))
+      case _             => stripped
+    leadTrimmed.lastOption match
+      case Some(t: Text) =>
+        leadTrimmed.updated(leadTrimmed.length - 1, Text(t.content.stripTrailing, t.options))
+      case _ => leadTrimmed
 
   /** A marked heading yields ONE spec for most markers and MANY for a table — n pair cards
     * plus a row card per row. Each carries the source kind it should be reported as, so a
@@ -399,6 +454,16 @@ object Extractor:
       key: CardKey,
       marker: Marker,
       title: String,
+      // THE SAME HEADING, READ THE OTHER WAY. `title` is the IDENTITY reading and reaches keys,
+      // deck paths and `recallFromLocation`; `shownAs` is the DISPLAY reading and reaches only
+      // fields a human looks at. Carrying both is the point rather than a redundancy: one string
+      // doing both jobs is precisely what stopped a heading's maths from ever rendering.
+      //
+      // THE ANCESTOR'S FACE IS NOT HERE, AND THAT IS THE DEFERRED HALF. A three-field card's
+      // CONCEPT comes from `ancestorTitles`, which is threaded down the tree and into keys, so
+      // giving it a face means carrying two vectors instead of deriving one extra value. Marked
+      // UNSPLIT at `CardContext.render`; until then a concept holding maths still shows dollars.
+      shownAs: C.Html.Fragment,
       ancestorTitles: Vector[String],
       section: Section,
       fileName: String,
@@ -559,7 +624,7 @@ object Extractor:
             Vector(
               CardSpec.TwoField(
                 key,
-                C.Html.escape(title).render,
+                shownAs.render,
                 body,
                 directions,
                 CardContext.compose(location, Vector(title)),
@@ -610,7 +675,7 @@ object Extractor:
               CardSpec.ThreeField(
                 key,
                 C.Html.escape(concept).render,
-                C.Html.escape(title).render,
+                shownAs.render,
                 body,
                 directions,
                 // TWO FIELDS CARRY LOCATION SEGMENTS HERE — the concept, which is the nearest
@@ -803,7 +868,7 @@ object Extractor:
               Vector(
                 CardSpec.Sequence(
                   key,
-                  C.Html.escape(title).render,
+                  shownAs.render,
                   body,
                   // The marked heading IS a field here — the template renders `{{Title}}` above
                   // the list — so it is excluded and everything above it kept.

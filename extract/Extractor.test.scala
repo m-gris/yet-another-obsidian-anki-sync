@@ -1,5 +1,6 @@
 package obsidiananki.extract
 
+import obsidiananki.content as C
 import obsidiananki.model.*
 import obsidiananki.parser.ObsidianSyntax
 import obsidiananki.plan.{BuildFailure, SourcedSpec}
@@ -1776,4 +1777,103 @@ class ExtractorTest extends munit.FunSuite:
       sdp("#flashcard/3way/all").specs.map(s => (s.key, s.spec)),
       sdp("#flashcard/cdd/3way").specs.map(s => (s.key, s.spec)),
     )
+  }
+
+  // ------------------- a heading's SECOND reading: what it looks like on a card ----
+
+  /** Parse one heading and hand back its `Header`, THROUGH THE PRODUCTION PARSER. Hand-built
+    * Laika values are banned here — see the note at the head of `AsText.test.scala` — because
+    * such a tree can encode an input no parser can produce, and which markdown yields which
+    * spans is the entire subject of these tests.
+    */
+  def header(line: String): laika.ast.Header =
+    ObsidianSyntax.markupParser
+      .parse(line + "\n\nbody\n")
+      .fold(e => fail(s"parse: $e"), _.content)
+      .collect { case s: laika.ast.Section => s.header }
+      .headOption
+      .getOrElse(fail(s"no section produced by: $line"))
+
+  /** The plain-text reading of a run of spans, which is what a key is made of. */
+  def plainOf(spans: Vector[laika.ast.Span]): String =
+    C.Lower.spans(spans) match
+      case Left(refusals) => fail(s"refused: ${refusals.toVector}")
+      case Right(inlines) => C.AsText.plain(Vector(C.Block.Paragraph(inlines)))
+
+  def faceOf(line: String): String =
+    Extractor.headingFace(header(line)).fold(rs => fail(s"refused: ${rs.toVector}"), _.render)
+
+  /** THE LAW THAT KEEPS THE TWO READINGS HONEST, and the reason this is not merely another
+    * hand-written second walk.
+    *
+    * A heading has an identity reading and a display reading. They are allowed to differ in
+    * FORM, since one is a key and the other is markup, and they must never differ in WHICH
+    * WORDS the heading contains. Nothing enforced that before, which is exactly how two walks
+    * drifted in the cloze case (`extract/Cloze.scala:62`) and how the two collapsed into one
+    * here.
+    *
+    * A DIFFERENTIAL RATHER THAN TWO FIXED STRINGS, deliberately. A fixed pair can be satisfied
+    * by editing both; this fails the moment either derivation learns something the other does
+    * not.
+    */
+  def assertReadingsAgree(line: String): Unit =
+    val h           = header(line)
+    val keyReading  = Marker.stripMarker(h.extractText)
+    val faceReading = plainOf(Extractor.spansWithoutMarker(h.content.toVector))
+    assertEquals(faceReading, keyReading, s"the two readings disagree for: $line")
+
+  test("readings agree: a plain heading") {
+    assertReadingsAgree("# Definition #flashcard/2way")
+  }
+
+  test("readings agree: a heading carrying maths") {
+    assertReadingsAgree("# Notation (Given 2 sets, $A$ and $B$) #flashcard/cdd/2way")
+  }
+
+  test("readings agree: a heading carrying a wikilink and emphasis") {
+    assertReadingsAgree("# The *fast* [[Message Queue]] path #flashcard/2way")
+  }
+
+  test("readings agree: a heading with no marker at all") {
+    assertReadingsAgree("# An ancestor heading nobody marked")
+  }
+
+  // ── the face itself ──────────────────────────────────────────────────────────────
+
+  test("face: a plain heading is escaped text, exactly as it is today") {
+    assertEquals(faceOf("# Layers of the epidermis #flashcard/2way"), "Layers of the epidermis")
+  }
+
+  test("face: a heading's maths is RENDERED, not shown as the author's dollars") {
+    assertEquals(
+      faceOf("# Notation (Given 2 sets, $A$ and $B$) #flashcard/cdd/2way"),
+      """Notation (Given 2 sets, \(A\) and \(B\))""",
+    )
+  }
+
+  test("face: the escaped characters are still escaped") {
+    assertEquals(faceOf("# W + R > N & b #flashcard/2way"), "W + R &gt; N &amp; b")
+  }
+
+  /** AN IMPROVEMENT RATHER THAN A NEW FAILURE, and the reason it is safe to make here. An image
+    * in a marked heading is dropped in silence today, which is the open defect named at this
+    * file's section walk. Routed through the lowering it is refused BY NAME. The key was
+    * derived before this runs and still exists, so there is something to attach the refusal to,
+    * and that ordering is the whole reason the ruling about the identity path is not violated.
+    */
+  test("face: an image in a heading REFUSES, where today it vanishes without a word") {
+    val result = Extractor.headingFace(header("# See ![[diagram.png]] here #flashcard/2way"))
+    assert(result.isLeft, s"an image in a heading was silently accepted: $result")
+  }
+
+  // ── stripping the marker off SPANS, which is the part that can eat a word ────────
+
+  test("marker strip: the token goes and the rest of the trailing text stays") {
+    assertEquals(plainOf(Extractor.spansWithoutMarker(header("# Definition #flashcard/2way").content.toVector)),
+      "Definition")
+  }
+
+  test("marker strip: non-text spans either side of the marker survive") {
+    val spans = Extractor.spansWithoutMarker(header("# $A$ and $B$ #flashcard/2way").content.toVector)
+    assertEquals(spans.collect { case m: ObsidianSyntax.MathInline => m.tex }, Vector("A", "B"))
   }
