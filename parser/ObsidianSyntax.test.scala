@@ -425,16 +425,20 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     noMaths("""costs \$5 and \$10""")
   }
 
-  /** MATHS IN A HEADING IS THE CASE THAT MOVES A CARD KEY, so the mechanism is pinned rather
-    * than described. The node is not a `SpanContainer`, so `extractText` — a trait match with
-    * a silent fallthrough for anything else — contributes nothing for it. The heading above,
-    * under "maths: pinned, not supported", asserts what this same input keys as TODAY; this
-    * one asserts what it keys as once maths parses, and the pair IS the migration.
+  /** MATHS IN A HEADING IS THE CASE THAT MOVES A CARD KEY, so it is pinned as a string rather
+    * than described. THE KEY LOSES THE DOLLARS AND KEEPS THE TeX, which is the same rule every
+    * other delimiter-bearing construct follows — a code span keys on `foo`, not on `` `foo` ``.
+    *
+    * THIS TEST ASSERTED THE OPPOSITE FOR ONE COMMIT, AND THE OPPOSITE WAS A DEFECT. While the
+    * node was modelled on [[ObsidianSyntax.ObsidianComment]] it was not a `TextContainer`, so
+    * `extractText` dropped it whole and this heading keyed on `notation (given 2 sets, and )`.
+    * The letters went, not merely the dollars, and the test below about two cases proves what
+    * that costs: headings differing only in their maths collapse onto one key.
     */
-  test("maths in a heading is recognised, and drops out of the extracted text") {
-    val src  = "# Notation (Given 2 sets, $A$ and $B$)\n\nbody\n"
+  test("maths in a heading contributes its TeX to the key, without the dollars") {
+    val src = "# Notation (Given 2 sets, $A$ and $B$)\n\nbody\n"
     assertEquals(inlineTex(src), List("A", "B"))
-    assertEquals(headingPath(parse(src)), List(List("Notation (Given 2 sets,  and )")))
+    assertEquals(headingPath(parse(src)), List(List("Notation (Given 2 sets, A and B)")))
   }
 
   /** THE CARD THAT STARTED THE WHOLE SLICE, pinned as a regression in its ACTUAL shape rather
@@ -462,4 +466,15 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     assert(tex.contains("""\begin{align}"""), s"environment opener lost: $tex")
     assert(tex.contains("""\end{align}"""), s"environment closer lost: $tex")
     assertEquals(tex.sliding(2).count(_ == """\\"""), 3, s"row separators not doubled: $tex")
+  }
+
+  /** TWO HEADINGS THAT DIFFER ONLY IN THEIR MATHS MUST NOT SHARE A KEY. A card's key is its
+    * heading path, and the planner treats a duplicate key as FATAL in the markdown exactly as
+    * it does in Anki, so a collision here is not a near miss — it is a refusal on two headings
+    * an author had every right to write.
+    */
+  test("two headings differing only in their maths keep distinct keys") {
+    val root = parse("# The case $n = 1$\n\nbody\n\n# The case $n = 2$\n\nbody\n")
+    assertEquals(headingPath(root).map(_.last).distinct.size, 2,
+      s"headings collapsed to one key: ${headingPath(root)}")
   }

@@ -129,28 +129,43 @@ object ObsidianSyntax:
     * boundary, because a reader tracing a construct from source to field should meet one word
     * for it and not two.
     *
-    * IT CARRIES `tex: String` AND IS THEREFORE NOT A `SpanContainer`, WHICH IS THE POINT. A
-    * container's content goes through markdown's inline parsers, and that is precisely what
-    * destroys TeX: measured 2026-08-28 and pinned in this file's own test section, `\\`
-    * collapses to `\` and paired `_` is eaten as emphasis. The shape here is
-    * [[ObsidianComment]]'s, and for the identical reason.
+    * IT IS NOT A `SpanContainer`, AND THAT IS THE POINT. A span container's content goes
+    * through markdown's inline parsers, which is precisely what destroys TeX: measured
+    * 2026-08-28 and pinned in this file's own test section, `\\` collapses to `\` and paired
+    * `_` is eaten as emphasis.
     *
-    * THE CONSEQUENCE IS THAT IT VANISHES FROM `extractText`, which is a trait match with a
-    * silent fallthrough for anything that is not a `SpanContainer`. Card keys come from a
-    * heading's extracted text, so a heading's maths contributes nothing to its key. That is
-    * accepted and is not routed around — see `Content.Inline.MathInline`, and
-    * `docs/MATHS-ON-A-CARD.md` for the argument.
+    * IT IS A `TextContainer`, AND THAT IS A DIFFERENT DECISION THAT COST A CARD KEY TO GET
+    * WRONG. The two traits are not degrees of the same thing. `SpanContainer` is what makes the
+    * inline parsers descend; `TextContainer` merely says "I am some text", and `extractText`
+    * — a trait match at `laika/ast/containers.scala:117` — tries `TextContainer` FIRST, then
+    * `SpanContainer`, then silently yields the empty string. Laika's own [[laika.ast.Literal]],
+    * the node behind inline code, is exactly this pair of choices and for exactly this reason:
+    * unparsed text that still counts as text.
+    *
+    * THIS SHAPE WAS ORIGINALLY COPIED FROM [[ObsidianComment]], WHICH WAS THE WRONG PRECEDENT.
+    * A comment is deliberately invisible to extraction because it must never reach a card.
+    * Maths must. With the comment's shape, `# Notation (Given 2 sets, $A$ and $B$)` keyed on
+    * `notation (given 2 sets, and )` — the letters gone, not merely the dollars — so two
+    * headings differing only in their maths collapsed onto ONE key, which the planner treats as
+    * fatal. `ObsidianSyntax.test.scala` pins that they stay distinct.
+    *
+    * `content` IS LAIKA'S INTERFACE OBLIGATION AND `tex` IS THE DOMAIN WORD. Both are kept
+    * rather than renaming the field, so a reader sees which name is owed to whom.
     */
-  case class MathInline(tex: String, options: Options = Options.empty) extends Span:
+  case class MathInline(tex: String, options: Options = Options.empty)
+      extends Span
+      with TextContainer:
     type Self = MathInline
+    def content: String                              = tex
     def withOptions(newOptions: Options): MathInline = copy(options = newOptions)
 
   /** Maths between DOUBLE dollars — display maths. Same shape and same reasons as
     * [[MathInline]]; separate so that the two spellings do not have to be recovered later from
     * a payload that no longer contains them.
     */
-  case class MathDisplay(tex: String, options: Options = Options.empty) extends Span:
+  case class MathDisplay(tex: String, options: Options = Options.empty) extends Span with TextContainer:
     type Self = MathDisplay
+    def content: String                               = tex
     def withOptions(newOptions: Options): MathDisplay = copy(options = newOptions)
 
   /** The display text of a wikilink's inner content.
