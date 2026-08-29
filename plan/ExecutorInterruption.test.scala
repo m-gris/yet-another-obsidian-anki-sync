@@ -56,6 +56,12 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     def noteTypeIsCloze(noteType: String): Result[Boolean] = underlying.noteTypeIsCloze(noteType)
     def findNotesByTagPrefix(prefix: String): Result[Vector[AnkiNoteId]] =
       underlying.findNotesByTagPrefix(prefix)
+
+    /** DELEGATED WITHOUT SPENDING BUDGET. This double interrupts after N WRITES, and browsing
+      * opens a window rather than touching the collection — charging for it would silently
+      * shift every interruption point in this file.
+      */
+    def browse(query: String): Result[Unit] = underlying.browse(query)
     def notesInfo(ids: Vector[AnkiNoteId]): Result[Vector[ObservedNote]] = underlying.notesInfo(ids)
     def cardsOf(ids: Vector[AnkiNoteId]): Result[Vector[AnkiCardId]]     = underlying.cardsOf(ids)
     def standingOf(cards: Vector[AnkiCardId]): Result[Vector[CardStanding]] = underlying.standingOf(cards)

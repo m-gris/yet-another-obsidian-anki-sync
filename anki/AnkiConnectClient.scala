@@ -198,6 +198,13 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   def findNotesByTagPrefix(prefix: String): Result[Vector[AnkiNoteId]] =
     call[Vector[Long]]("findNotes", Json.obj("query" := s"tag:$prefix*")).map(_.map(AnkiNoteId.apply))
 
+  /** `guiBrowse` RETURNS THE CARD IDS IT SELECTED, and they are discarded on purpose: the
+    * point of the call is the window, and reading the ids would invite a caller to treat an
+    * empty Browse as an error when it is an ordinary answer.
+    */
+  def browse(query: String): Result[Unit] =
+    call[Vector[Long]]("guiBrowse", Json.obj("query" := query)).void
+
   def notesInfo(ids: Vector[AnkiNoteId]): Result[Vector[ObservedNote]] =
     if ids.isEmpty then EitherT.pure(Vector.empty)
     else call[Vector[ObservedNote]]("notesInfo", Json.obj("notes" := ids.map(_.value)))

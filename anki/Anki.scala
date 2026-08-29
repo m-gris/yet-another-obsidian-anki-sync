@@ -282,6 +282,20 @@ trait Anki[F[_]]:
     */
   def findNotesByTagPrefix(prefix: String): F[Vector[AnkiNoteId]]
 
+  /** OPEN ANKI'S BROWSE WINDOW ON A SEARCH — the only capability here that changes what a
+    * PERSON sees rather than what the collection holds.
+    *
+    * IT EXISTS SO THAT A SHELL COMMAND DOES NOT HAVE TO. Until 2026-08-29 the Obsidian keystroke
+    * that browses a note's cards built the search itself and posted it with `curl`, which meant
+    * the identity format lived in a configuration file this repository cannot read or migrate.
+    * See [[obsidiananki.model.CardSearch]] for what that cost.
+    *
+    * THE SEARCH IS PASSED THROUGH UNREAD. This is a window-opening operation, not a query: what
+    * Anki finds is for the person looking at it, and an empty result is a legitimate answer that
+    * this tool must not interpret.
+    */
+  def browse(query: String): F[Unit]
+
   def notesInfo(ids: Vector[AnkiNoteId]): F[Vector[ObservedNote]]
 
   def addNote(note: NewNote): F[AnkiNoteId]

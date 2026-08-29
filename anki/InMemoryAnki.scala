@@ -130,6 +130,21 @@ final class InMemoryAnki private (
   def noteTypeIsCloze(noteType: String): Either[AnkiError, Boolean] =
     noteTypeAt(noteType).map(_.isCloze)
 
+  /** THE SEARCHES A CALLER ASKED TO BROWSE, in order, so a test can assert WHAT was asked for.
+    *
+    * NOTHING IS SEARCHED. This fake models a collection, and browsing is a window-opening
+    * operation on a running application — there is no in-memory equivalent to reproduce. Faking
+    * the SEARCH here would invent an Anki query engine and let a test pass against a dialect
+    * Anki does not speak, which is worse than recording the request and saying so.
+    */
+  private val browsed = scala.collection.mutable.ArrayBuffer.empty[String]
+
+  def browsedQueries: Vector[String] = browsed.toVector
+
+  def browse(query: String): Either[AnkiError, Unit] =
+    browsed += query
+    Right(())
+
   def findNotesByTagPrefix(prefix: String): Either[AnkiError, Vector[AnkiNoteId]] =
     val wanted = foldTag(prefix)
     Right(

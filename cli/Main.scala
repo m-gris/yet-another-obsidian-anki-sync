@@ -18,7 +18,7 @@ import obsidiananki.anki.{
 }
 import obsidiananki.extract.{DeckShape, VaultFile, VaultIndex, VaultWalker}
 import obsidiananki.locate.{Locate, Located, VaultName}
-import obsidiananki.model.CardKey
+import obsidiananki.model.{CardKey, CardSearch}
 import obsidiananki.plan.{
   DecisionHandle,
   ExecutionReport,
@@ -85,6 +85,8 @@ object Main
       )
     case Command.InstallNoteTypes(profile, repair) =>
       withVerifiedProfile(profile, stdoutIsClaimed = false)(installNoteTypes(_, repair))
+    case Command.Browse(profile, noteId) =>
+      withVerifiedProfile(profile, stdoutIsClaimed = false)(browse(_, noteId))
     case Command.Locate(selection, vaultName, tag, uriOnly) =>
       withChosenVault(selection)(locate(_, vaultName, tag, uriOnly))
   }
@@ -195,6 +197,34 @@ object Main
     * what 2 means here; and the fault is in the build or the packaging rather than in anything
     * the person did.
     */
+  /** OPEN BROWSE ON ONE NOTE'S CARDS.
+    *
+    * THE SEARCH IS BUILT HERE AND NOT BY THE CALLER, which is the whole reason this command
+    * exists. Before 2026-08-29 an Obsidian keystroke built `tag:src::<id>::*` itself with `curl`,
+    * so the identity format lived in a configuration file this repository cannot read, test or
+    * migrate — and moving the identity into a field would have turned that keystroke into an
+    * EMPTY Browse window, which reads as *this note made no cards*. See `model/CardSearch.scala`.
+    *
+    * AN EMPTY RESULT IS NOT AN ERROR AND IS NOT REPORTED AS ONE. A note that genuinely made no
+    * cards is an ordinary answer, and the window says so better than this could. What IS worth
+    * saying is which search was run, because a person looking at an unexpected Browse needs to
+    * know what was asked for — so it goes to stderr, leaving stdout free.
+    */
+  private def browse(anki: AnkiConnectClient[IO], noteId: String): IO[ExitCode] =
+    val query = CardSearch.forNoteId(noteId)
+    anki.browse(query).value.flatMap {
+      case Right(_) =>
+        IO.consoleForIO.errorln(s"browsing: $query").as(ExitCode.Success)
+      case Left(error) =>
+        IO.consoleForIO
+          // `toString`, MATCHING ITS NEIGHBOURS RATHER THAN INVENTING A SECOND STYLE. That a
+          // raw case class reaches a terminal here is a known defect covering six sites —
+          // `IN-FLIGHT.md` item 33 — and its fix is one `describe` on `AnkiError`, not a
+          // seventh hand-written wording that would then have to be found and changed too.
+          .errorln(s"REFUSED: Anki did not open Browse.\n\n  Anki's answer:  ${error.toString}")
+          .as(ExitCode.Error)
+    }
+
   private def installNoteTypes(anki: AnkiConnectClient[IO], repair: Boolean): IO[ExitCode] =
     NoteTypeAssets.all match
       case Left(errors) =>

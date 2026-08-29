@@ -105,6 +105,16 @@ enum Command:
     */
   case InstallNoteTypes(profile: String, repair: Boolean)
 
+  /** Open Anki's Browse window on every card one note produced.
+    *
+    * IT TAKES A NOTE'S FRONTMATTER ID AND NOTHING ELSE, which is the entire point. The caller —
+    * an Obsidian keystroke — knows an id because it is reading the note. It must not have to
+    * know how an identity is spelled, which of its two homes it currently lives in, or how a
+    * value containing colons is quoted for Anki's search syntax. All of that changed twice in
+    * two days; a caller holding a copy of it would have broken silently both times.
+    */
+  case Browse(profile: String, noteId: String)
+
   /** Say where in the vault a card came from, and print a URI that opens it there.
     *
     * NO PROFILE, because it reads no collection. The `src::` tag is handed IN — by the Anki
@@ -433,4 +443,19 @@ object Cli:
       (vaultSelectionOpt, vaultNameOpt, tagArg, uriOnlyOpt).mapN(Command.Locate.apply)
     }
 
-  val command: Opts[Command] = inspect orElse sync orElse installNoteTypes orElse locate
+  private val browse: Opts[Command] =
+    Opts.subcommand(
+      "browse",
+      "Open Anki's Browse window on the cards one note produced.",
+    ) {
+      (
+        profileOpt,
+        Opts.option[String](
+          "note-id",
+          "The note's frontmatter id. Its cards are found from it; nothing else is needed.",
+        ),
+      ).mapN(Command.Browse.apply)
+    }
+
+  val command: Opts[Command] =
+    inspect orElse sync orElse installNoteTypes orElse locate orElse browse

@@ -116,6 +116,10 @@ class NoteTypeRepairTest extends munit.FunSuite:
       noteTypeIsCloze,
       createNoteType,
       findNotesByTagPrefix,
+      // EXPORTED RATHER THAN WRAPPED IN `write`. Browsing opens a window and changes nothing in
+      // the collection, so counting it as a write would move every fault-injection budget in
+      // this file by one and change what each test is actually measuring.
+      browse,
       notesInfo,
       addNote,
       updateNoteFields,

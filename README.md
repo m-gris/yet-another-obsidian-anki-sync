@@ -700,45 +700,38 @@ The dual of the above: from a note in Obsidian, a keystroke that opens Anki's **
 filtered to the cards that note produced. Together the two close the loop — a card takes you to
 its source, and a note takes you to everything it became.
 
-**This needs nothing from this tool.** A card's identity begins `src::{frontmatter id}::`, and the
-id is already sitting in the note's frontmatter, so the Anki search is composable without decoding
-anything. That is the whole trick, and it is why this direction is a shell command rather than a
-feature.
+**Ask the tool where the cards are; do not work it out yourself.** A card's identity is this
+tool's to spell, and it has changed twice in two days — it moved from a tag into a field, and the
+tag will stop being written. So the command below hands over a note's frontmatter id and nothing
+else, and every volatile part stays inside the binary.
 
-> **⚠️ The identity moved on 2026-08-28**, from a tag into a field named `Identity`, so that a
-> machine's bookkeeping stops filling your own tag tree. The tag is still written beside it today
-> and will stop being written later, so the search below asks for **both**. Once your whole
-> collection has been synced since the move you may drop the `tag:` half; until then, dropping it
-> silently returns an empty Browse window — which looks like *this note made no cards*.
->
-> The cost of that convenience is now visible: composing the search yourself means the identity
-> format is copied into your Obsidian config, where this repository cannot see it, test it, or
-> migrate it for you.
+> **This used to be a `curl` one-liner that built the Anki search itself**, and the README called
+> that its whole trick: composable without asking the tool anything, so the binding cost nothing.
+> What it actually bought was a copy of the identity format in a config file this repository
+> cannot read, test, or migrate — so moving the identity would have turned the keystroke into an
+> **empty Browse window**, which reads as *this note made no cards* rather than as a fault. It was
+> found by someone asking, not by anything failing. Changed 2026-08-29.
 
-It uses [Shell commands](https://github.com/Taitava/obsidian-shellcommands) and Anki's
-**AnkiConnect** add-on, which the tool already requires. Create a shell command with this as its
-body, give it an alias, and bind it:
+It uses [Shell commands](https://github.com/Taitava/obsidian-shellcommands). Create a shell
+command with this as its body, give it an alias, and bind it:
 
 ```bash
-open -a Anki ; ID={{yaml_value:id}} ; curl -sS localhost:8765 -X POST -d "{\"action\":\"guiBrowse\",\"version\":6,\"params\":{\"query\":\"Identity:src::$ID::* or tag:src::$ID::*\"}}" > /dev/null
+open -a Anki ; obsidian-anki-sync browse --profile "Your Profile" --note-id {{yaml_value:id}}
 ```
 
 `open -a Anki` is macOS. Elsewhere, whatever raises a window: `wmctrl -a Anki`, or nothing at all
 if your window manager already follows focus.
 
-**Two details in that line are load-bearing, and both were found the hard way.**
+**`open -a Anki` runs FIRST**, and that is the one detail still worth knowing. Anki opens the
+Browse window and raises it *within* Anki, but macOS will not let Anki pull itself in front of
+Obsidian, so the app has to be raised separately. Do that last and it raises Anki's *main* window
+over the Browse window that just opened — which looks exactly like Browse never opening.
 
-**The id is assigned unquoted, and it must be.** Shell commands escapes variable values so they
-are safe for a shell — it turns every hyphen of a UUID into `\-`. Interpolated straight into a
-JSON body those backslashes are an *invalid JSON escape*, AnkiConnect rejects the entire request,
-and nothing happens: no window, no visible error. An unquoted assignment is the context that
-escaping exists for — the shell strips it, `$ID` holds the clean value, and the JSON is built from
-that. Verified identical under `sh`, `zsh` and `bash`.
-
-**`open -a Anki` runs FIRST.** `guiBrowse` opens the Browse window and raises it *within* Anki,
-but macOS will not let Anki pull itself in front of Obsidian, so the app has to be raised
-separately. Do that last and it raises Anki's *main* window over the Browse window that just
-opened — which looks exactly like Browse never opening.
+**Two hazards this command used to carry are simply gone**, and they are recorded because they
+are what the change bought. The id no longer passes through a JSON body, so the plugin's escaping
+— which turns every hyphen of a UUID into `\-` and made AnkiConnect reject the whole request
+silently — can no longer break anything. And the search is no longer written by hand, so it
+cannot fall behind the identity it is searching for.
 
 **Orphaned cards appear too**, which is a feature rather than an accident: a flagged card keeps
 its `src::` tag beside the `orphaned::` one. A note whose heading you reworded shows the live card
