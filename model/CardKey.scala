@@ -146,6 +146,19 @@ enum CardPath:
     */
   case Note
 
+  /** ONE BLOCK OF A NOTE, named by the `^blockid` its author wrote at the end of it.
+    *
+    * THE FOURTH KIND, AND THE ONE THE CODEC RESERVED ROOM FOR. A cloze card scoped to a block
+    * needs to be told apart from the block beside it, and nothing else in this type can do that:
+    * two paragraphs under one heading share a heading path, and a note has only one of itself.
+    *
+    * IT CARRIES NO HEADING CHAIN, deliberately. An Obsidian block id is unique within its note,
+    * so the note and the anchor are the whole identity — and including the heading would make
+    * moving a paragraph from under one heading to another re-key its card, which is exactly the
+    * fragility the anchor exists to remove.
+    */
+  case Block(anchor: BlockAnchor)
+
   /** For a human reading a report. The kinds are told apart in words, because a reader who
     * cannot see which node a card came from cannot act on the line.
     */
@@ -153,6 +166,7 @@ enum CardPath:
     case Headings(headings) => headings.render
     case Property(name)     => s"property '${name.value}'"
     case Note               => "the note itself"
+    case Block(anchor)      => s"block '^${anchor.value}'"
 
 /** The identity of a card's source location. */
 final case class CardKey(noteId: NoteId, path: CardPath)
@@ -247,6 +261,15 @@ enum KeyError:
     * has no empty keys, but can from a tag that was hand-edited into that shape.
     */
   case EmptyPropertyName(raw: String)
+
+  /** A `^blockid` that is empty once trimmed. Cannot arise from the parser, whose production
+    * requires at least one character, but can from a tag hand-edited into that shape.
+    */
+  case EmptyBlockAnchor(raw: String)
+
+  /** A `^blockid` holding something outside Obsidian's own set of letters, digits and hyphens. */
+  case UnusableBlockAnchor(raw: String)
+
   case MalformedTag(tag: String, reason: String)
 
 /** Encoding of a [[CardKey]] into the Anki tag that binds it to a note, and back.
@@ -370,10 +393,16 @@ object TagCodec:
   private val PropertyMark = "p"
   private val NoteMark     = "n"
 
+  /** ONE LETTER, LIKE ITS TWO NEIGHBOURS, and it must never be reused for anything else: an
+    * identity written into a collection outlives every decision made after it.
+    */
+  private val BlockMark = "b"
+
   /** `src::{id}::{path}` — the tag that binds a markdown card to its Anki note.
     *
-    * The path is `{seg}/{seg}/…` for headings, `/p/{name}` for a frontmatter property, and `/n`
-    * for the note itself. See [[NotAHeadingPath]] for why the last two are unambiguous.
+    * The path is `{seg}/{seg}/…` for headings, `/p/{name}` for a frontmatter property, `/n` for
+    * the note itself, and `/b/{anchor}` for one block named by its `^blockid`. See
+    * [[NotAHeadingPath]] for why the last three are unambiguous.
     */
   def encode(key: CardKey): OwnedTag =
     val id = encodeComponent(key.noteId.value)
@@ -384,6 +413,8 @@ object TagCodec:
         Vector(NotAHeadingPath, PropertyMark, encodeComponent(name.value)).mkString(SegmentSep)
       case CardPath.Note =>
         Vector(NotAHeadingPath, NoteMark).mkString(SegmentSep)
+      case CardPath.Block(anchor) =>
+        Vector(NotAHeadingPath, BlockMark, encodeComponent(anchor.value)).mkString(SegmentSep)
     OwnedTag.unsafe(s"${OwnedTag.SrcPrefix}$FieldSep$id$FieldSep$path")
 
   /** Recover the key from a tag read back out of Anki.
@@ -420,6 +451,12 @@ object TagCodec:
   ): Either[KeyError, CardPath] =
     rawPath.split(SegmentSep, -1).toVector match
       case Vector(NotAHeadingPath, NoteMark) => Right(CardPath.Note)
+
+      case Vector(NotAHeadingPath, BlockMark, rawAnchor) =>
+        for
+          text   <- decodeComponent(rawAnchor)
+          anchor <- BlockAnchor.fromDecoded(text)
+        yield CardPath.Block(anchor)
 
       case Vector(NotAHeadingPath, PropertyMark, rawName) =>
         for

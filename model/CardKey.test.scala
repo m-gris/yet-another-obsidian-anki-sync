@@ -76,6 +76,49 @@ class CardKeyTest extends munit.FunSuite:
     assertEquals(TagCodec.decode(encoded(k)), Right(k))
   }
 
+  /** THE FOURTH KIND, AND THE ONE THAT MAKES A CLOZE CARD SCOPED TO A PARAGRAPH POSSIBLE.
+    *
+    * An `^abc123` written at the end of a block is Obsidian's own name for it, and it is the only
+    * thing in a vault that survives editing the block's text — which is exactly the edit a card
+    * about that text invites.
+    */
+  test("a block card round-trips through its tag") {
+    val anchor = BlockAnchor.fromParsed("abc123").fold(e => fail(s"$e"), identity)
+    val k      = CardKey(id("n1"), CardPath.Block(anchor))
+    assertEquals(encoded(k), "src::n1::/b/abc123")
+    assertEquals(TagCodec.decode(encoded(k)), Right(k))
+  }
+
+  /** THE SHAPE THAT KEEPS THE FOUR KINDS APART. A heading path never begins with the separator,
+    * because a heading segment is non-empty by construction — so a leading empty token is a shape
+    * no heading can take, and each kind claims one letter after it. A block claiming a letter a
+    * heading could have produced would file two different cards under one identity.
+    */
+  test("a block path cannot be confused with a heading path") {
+    val anchor = BlockAnchor.fromParsed("b").fold(e => fail(s"$e"), identity)
+    val block  = encoded(CardKey(id("n1"), CardPath.Block(anchor)))
+    val heading = encoded(key("n1", "b"))
+    assertNotEquals(block, heading, "a one-letter block anchor collided with a heading of the same name")
+    assertEquals(TagCodec.decode(block).map(_.path.render), Right("block '^b'"))
+  }
+
+  /** ANKI FOLDS TAG CASE, so an anchor that reached the collection in two spellings would be one
+    * tag there and two identities here — which is how a card comes to be created twice.
+    */
+  test("an anchor is folded to lower case, because Anki folds tag case") {
+    val upper = BlockAnchor.fromParsed("ABC-123").fold(e => fail(s"$e"), identity)
+    assertEquals(upper.value, "abc-123")
+  }
+
+  /** REFUSED RATHER THAN CARRIED. A tag hand-edited in Anki can hold anything; an identity that
+    * cannot round-trip must fail here rather than name a card nothing can find again.
+    */
+  test("an anchor outside Obsidian's character set is refused") {
+    assert(BlockAnchor.fromParsed("a b").isLeft, "a space was accepted into an identity")
+    assert(BlockAnchor.fromParsed("a/b").isLeft, "a separator was accepted into an identity")
+    assert(BlockAnchor.fromParsed("").isLeft, "an empty anchor was accepted")
+  }
+
   /** THE COLLISION THIS TYPE EXISTS TO PREVENT.
     *
     * `special-case-of:` in the frontmatter and `# Special-Case-Of` in the body are two different

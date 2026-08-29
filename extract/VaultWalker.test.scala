@@ -1228,6 +1228,7 @@ class VaultWalkerTest extends munit.FunSuite:
     assertEquals(
       index.scan.specs.map(_.key.path).map {
         case CardPath.Note        => "note"
+        case CardPath.Block(_)    => "block"
         case CardPath.Property(_) => "property"
         case CardPath.Headings(_) => "headings"
       }.sorted,

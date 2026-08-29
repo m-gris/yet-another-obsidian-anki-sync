@@ -514,9 +514,21 @@ object Planner:
                       case CardPath.Headings(failedPath) =>
                         failedPath.segments.length < cardPath.segments.length &&
                           cardPath.segments.toVector.startsWith(failedPath.segments.toVector)
-                      case CardPath.Property(_) | CardPath.Note => false)
+                      case CardPath.Property(_) | CardPath.Note | CardPath.Block(_) => false)
                   }
-                case CardPath.Property(_) | CardPath.Note => false)
+
+                // ── A BLOCK CARD IS OUTSIDE THE RELATION, AND THAT IS A COST RATHER THAN A
+                // TIDY FIT. A property and the note-itself card genuinely sit outside any
+                // section. A BLOCK does not — it is inside one — but its key deliberately
+                // records no heading chain, because carrying one would make moving a paragraph
+                // between headings re-key its card, which is the fragility the `^blockid`
+                // anchor exists to remove.
+                //
+                // SO THE RELATION CANNOT BE COMPUTED FOR IT, and a block card inside a section
+                // that failed to build reads as deleted rather than as sheltered. That is a
+                // real gap, not a case awaiting an implementation, and it is the honest price
+                // of a location-independent identity. Filed rather than papered over.
+                case CardPath.Property(_) | CardPath.Note | CardPath.Block(_) => false)
 
             val orphans = observed.notes.filter { card =>
               !builtKeys.contains(card.key) &&

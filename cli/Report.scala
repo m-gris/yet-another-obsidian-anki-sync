@@ -734,6 +734,9 @@ object Report:
     case KeyError.BlankNoteId              => "its note id is blank"
     case KeyError.EmptyHeadingSegment(raw) => s"a heading in its path is empty: '$raw'"
     case KeyError.EmptyPropertyName(raw)   => s"the property it names is empty: '$raw'"
+    case KeyError.EmptyBlockAnchor(raw)    => s"the block id it names is empty: '$raw'"
+    case KeyError.UnusableBlockAnchor(raw) =>
+      s"'$raw' is not a usable block id — Obsidian's are letters, digits and hyphens"
 
   private def unplaceable(why: Unplaceable): Vector[String] = why match
     case Unplaceable.CardGone(path) =>

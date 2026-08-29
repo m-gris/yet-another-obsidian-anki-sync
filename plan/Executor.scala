@@ -244,6 +244,8 @@ object Observer:
     case KeyError.BlankNoteId              => "the note id part is blank"
     case KeyError.EmptyHeadingSegment(raw) => s"a heading segment is empty in '$raw'"
     case KeyError.EmptyPropertyName(raw)   => s"a property name is empty in '$raw'"
+    case KeyError.EmptyBlockAnchor(raw)    => s"a block id is empty in '$raw'"
+    case KeyError.UnusableBlockAnchor(raw) => s"'$raw' is not a usable block id"
     case KeyError.MalformedTag(_, reason)  => reason
 
   /** A note's deck, via its cards — decks are a per-CARD property while identity is

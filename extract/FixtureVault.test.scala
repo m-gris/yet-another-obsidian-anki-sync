@@ -103,6 +103,7 @@ class FixtureVaultTest extends munit.FunSuite:
 
     val kinds = index.scan.specs.map(_.key.path).map {
       case CardPath.Headings(_) => "headings"
+      case CardPath.Block(_)    => "block"
       case CardPath.Property(_) => "property"
       case CardPath.Note        => "note"
     }.distinct
