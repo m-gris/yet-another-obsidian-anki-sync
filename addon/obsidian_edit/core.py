@@ -68,10 +68,16 @@ Verdict = Union[NotOurs, Open, Explain]
 def identity(fields: Mapping[str, str], tags: Sequence[str]) -> str | None:
     """A card's identity, from the field if it has one and from the tag if it does not.
 
-    THE FIELD WINS, so that a collection which has been re-synced never consults the tag again
-    and the two can never disagree about a note that carries both.
+    NOT A FALLBACK, AND NOT TRANSITIONAL. A note on a note type the sync tool does not own -
+    Anki's stock Basic and Cloze among them - cannot be given a field, because that tool is
+    ruled never to write to a note type it did not create. For such a note the tag is the only
+    possible home, permanently. These are two kinds of note keeping the same value in the only
+    place each can, so neither branch may be removed.
 
-    IT IS THE SAME STRING EITHER WAY, which is what makes the fallback safe rather than a second
+    THE FIELD IS READ FIRST because a note that HAS one is on a type the tool owns, and that is
+    the answer that cannot be stale.
+
+    IT IS THE SAME STRING EITHER WAY, which is what keeps this a lookup rather than a second
     code path: whatever comes back goes to `locate` unread, exactly as before.
     """
     written = fields.get(IDENTITY_FIELD, "").strip()

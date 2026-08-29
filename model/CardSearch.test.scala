@@ -54,9 +54,13 @@ class CardSearchTest extends munit.FunSuite:
     )
   }
 
-  /** BOTH HOMES, WHILE BOTH EXIST. Asserted separately from the law above, because the law would
-    * still hold if one half were dropped — and dropping the wrong half is invisible: a Browse
-    * window listing no cards reads as "this note made none".
+  /** BOTH HOMES, PERMANENTLY. Asserted separately from the law above, because the law would
+    * still hold if one half were dropped — and dropping either is invisible: a Browse window
+    * listing no cards reads as "this note made none".
+    *
+    * THIS IS THE TEST THAT REFUSES THE TIDYING. A reader who believes the tag is transitional
+    * will eventually delete its half; the tag is the only home a note on a foreign note type
+    * has, so this fails when they try. See `plan/Executor.scala`'s resolution comment.
     */
   test("the search names both the field and the tag") {
     val s = CardSearch.forNoteId("abc123")

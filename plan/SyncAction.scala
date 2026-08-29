@@ -248,8 +248,10 @@ enum SyncAction:
     // ATTEMPTED UNDER EVERY POLICY, and deliberately not deferrable. Deferring a retype is a
     // judgement about a large, destructive write; this one adds a note's own identity to a
     // field that is empty and touches nothing else. A run that declined to do it would leave a
-    // note the tool can no longer find once the tag goes, which is the failure this exists to
-    // prevent rather than a risk worth weighing.
+    // note whose identity lives only in a tag this run has just stopped writing, which is the
+    // failure this exists to prevent rather than a risk worth weighing. (The tag remains the
+    // permanent home for a note on a note type this tool does not own; this action reaches only
+    // notes that CAN hold the field, which is what `canHoldTheField` in the planner tests.)
     case _: CarryIdentity => Disposition.Attempt
     case _: Retype =>
       policy match

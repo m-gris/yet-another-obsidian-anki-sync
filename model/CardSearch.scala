@@ -21,26 +21,29 @@ object CardSearch:
 
   /** EVERY NOTE THIS TOOL OWNS, in whichever home its identity currently sits.
     *
-    * BOTH, AND THE `or` IS NOT OPTIONAL. From 2026-08-29 a newly created note carries its
-    * identity ONLY in the field, while every note created before then carries it only in a tag
-    * until something rewrites it. A search naming one home finds half a collection — and the
-    * half it misses looks to this tool like notes that do not exist, which is the input that
-    * makes it CREATE them again. Duplicating a collection is the worst outcome available here,
-    * so the two are searched together for as long as either can occur.
+    * BOTH, AND THE `or` IS NOT OPTIONAL — NOR IS IT TRANSITIONAL. The argument is written out
+    * once, at `plan/Executor.scala`'s resolution comment: a note on a note type this tool does
+    * not own has nowhere to put the field, so for that note the tag is the only possible home,
+    * permanently. Two kinds of note keeping the same value in the only place each can.
+    *
+    * WHAT A SEARCH NAMING ONE HOME WOULD COST. It finds half a collection, and the half it
+    * misses looks to this tool like notes that DO NOT EXIST — which is the input that makes it
+    * create them again. Duplicating a collection is the worst outcome available here.
     */
   def everythingOwned: String =
     s"\"${Marker.IdentityField}:${OwnedTag.SrcPrefix}::*\" or \"tag:${OwnedTag.SrcPrefix}::*\""
 
   /** Every card this tool made from one note, as an Anki search.
     *
-    * BOTH HOMES, JOINED BY `or`, FOR AS LONG AS BOTH EXIST. The identity moved into a field on
-    * 2026-08-28 and the tag is still written beside it, so a collection carries the tag, or both,
-    * or eventually only the field. A search naming one home would return nothing for a note in
-    * the wrong state — and an empty result here is invisible, because it renders as a Browse
-    * window listing no cards.
+    * BOTH HOMES, AND NEITHER HALF MAY BE REMOVED. An earlier version of this docstring said the
+    * tag half "goes when the tag does" — WITHDRAWN 2026-08-29, because the tag does not go. A
+    * note on a note type this tool does not own cannot hold the field and keeps its identity in
+    * a tag permanently; `plan/Executor.scala`'s resolution comment carries the full argument.
     *
-    * THE TAG HALF GOES WHEN THE TAG DOES, in the same change, so that nothing is left searching
-    * for something nothing writes.
+    * DELETING THE TAG HALF WOULD BE INVISIBLE, which is why the withdrawn sentence was worth
+    * chasing down rather than leaving to be noticed later. Such a note's cards would simply stop
+    * appearing, and an empty Browse window reads as *this note made no cards* rather than as a
+    * fault — the exact failure this file was created to close.
     *
     * ANKI'S FIELD SEARCH TOLERATES `::` IN A VALUE — verified 2026-08-29 against Marc's live
     * collection, read-only, using cloze text which already contains `{{c1::…}}`: `Text:*c1::*`
