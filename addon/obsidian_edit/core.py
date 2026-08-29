@@ -17,6 +17,16 @@ from typing import Mapping, Optional, Sequence, Union
 
 SRC_PREFIX = "src::"
 
+# THE FIELD THE IDENTITY MOVED INTO on 2026-08-28. It holds the same string the tag holds,
+# `src::` prefix and all, because the move changed where an identity is kept and nothing about
+# what it is.
+#
+# WHY BOTH ARE STILL READ. A collection carries the tag until the next sync rewrites its notes,
+# so a reader that consulted only the field would stop working the moment the note types gained
+# it and start working again some runs later. Reading the field first and the tag second is
+# correct throughout, and the tag half becomes dead once no collection carries one.
+IDENTITY_FIELD = "Identity"
+
 
 @dataclass(frozen=True)
 class NotOurs:
@@ -53,6 +63,21 @@ class Explain:
 # `|` form is evaluated at import time and raises below 3.10. Annotations elsewhere use the
 # modern spelling freely: `from __future__ import annotations` leaves those as strings.
 Verdict = Union[NotOurs, Open, Explain]
+
+
+def identity(fields: Mapping[str, str], tags: Sequence[str]) -> str | None:
+    """A card's identity, from the field if it has one and from the tag if it does not.
+
+    THE FIELD WINS, so that a collection which has been re-synced never consults the tag again
+    and the two can never disagree about a note that carries both.
+
+    IT IS THE SAME STRING EITHER WAY, which is what makes the fallback safe rather than a second
+    code path: whatever comes back goes to `locate` unread, exactly as before.
+    """
+    written = fields.get(IDENTITY_FIELD, "").strip()
+    if written:
+        return written
+    return source_tag(tags)
 
 
 def source_tag(tags: Sequence[str]) -> str | None:
@@ -197,7 +222,14 @@ def drill_search_for_id(note_id: str) -> str:
     """
     if not note_id.strip():
         return "nid:0"
-    return f'"tag:src::{note_id.strip()}::*" -is:suspended'
+    # BOTH HOMES, FOR THE SAME REASON `identity` READS BOTH: a collection holds the tag until
+    # its notes are next written, and a drill that gathered only field-carrying notes would
+    # quietly return an EMPTY deck — which reads as "nothing to drill" rather than as a fault.
+    # That is the failure mode this whole project is built against, so it is worth the `or`.
+    ident = note_id.strip()
+    return (
+        f'("Identity:src::{ident}::*" or "tag:src::{ident}::*") -is:suspended'
+    )
 
 
 def drill_search(tag: str) -> str:

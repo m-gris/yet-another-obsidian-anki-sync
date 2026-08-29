@@ -5,7 +5,8 @@
 
 import unittest
 
-from core import (DRILL_PREFIX, JAVA_HINT, Explain, NotOurs, Open, command,
+from core import (
+    identity,DRILL_PREFIX, JAVA_HINT, Explain, NotOurs, Open, command,
                   drill_deck_name, drill_search, drill_search_for_id, environment,
                   interpret, is_drill_deck,
                   missing_java, source_tag)
@@ -37,6 +38,40 @@ class SourceTagTest(unittest.TestCase):
         """The sync flags a card by ADDING `orphaned::`; the `src::` tag stays beside it."""
         tags = ["orphaned::abc::intro", "src::abc::intro"]
         self.assertEqual(source_tag(tags), "src::abc::intro")
+
+
+class IdentityTest(unittest.TestCase):
+    """Reading a card's identity from wherever it currently lives.
+
+    IT MOVED FROM A TAG INTO A FIELD ON 2026-08-28, and a collection is in one of three states
+    until every note has been rewritten: tag only, both, or field only. All three must work, or
+    pressing `e` stops working somewhere in the middle of a migration nobody triggered.
+    """
+
+    def test_the_field_is_used_when_it_has_been_written(self) -> None:
+        self.assertEqual(
+            identity({"Identity": "src::n1::a/b"}, ["leech"]),
+            "src::n1::a/b",
+        )
+
+    def test_a_collection_not_yet_re_synced_still_works_from_its_tag(self) -> None:
+        """The state Marc's collection was in the day the field arrived: note types declared it,
+        no sync had populated it, and every note still carried the tag."""
+        self.assertEqual(identity({"Identity": ""}, ["src::n1::a/b"]), "src::n1::a/b")
+
+    def test_a_note_carrying_both_prefers_the_field(self) -> None:
+        """They hold the same string, so this cannot matter today. It is asserted so that the
+        day they CAN differ, the answer is already decided and written down."""
+        self.assertEqual(
+            identity({"Identity": "src::field::x"}, ["src::tag::y"]),
+            "src::field::x",
+        )
+
+    def test_a_field_of_whitespace_is_not_an_identity(self) -> None:
+        self.assertEqual(identity({"Identity": "   "}, ["src::n1::a/b"]), "src::n1::a/b")
+
+    def test_a_note_this_tool_never_touched_has_neither(self) -> None:
+        self.assertIsNone(identity({"Front": "x"}, ["leech"]))
 
 
 class CommandTest(unittest.TestCase):
@@ -171,6 +206,16 @@ class SweepTest(unittest.TestCase):
 
 class DrillSearchTest(unittest.TestCase):
     def test_the_search_is_anchored_to_the_note(self) -> None:
+        """BOTH HOMES ARE GATHERED, and this is asserted separately from the tag half because
+        the tag half alone would still satisfy every assertion written before 2026-08-28. A
+        drill that gathered only tag-carrying notes after a collection was re-synced would
+        return an EMPTY deck, which reads as "nothing to drill" rather than as a fault."""
+        both = drill_search_for_id("abc123")
+        self.assertIn("Identity:src::abc123::*", both, "the field half is missing")
+        self.assertIn("tag:src::abc123::*", both, "the tag half is missing")
+        self.assertIn(" or ", both, "the two homes are not combined as alternatives")
+
+    def test_a_full_tag_is_reduced_to_its_id(self) -> None:
         s = drill_search("src::abc123::cap%20theorem/definition")
         self.assertIn("tag:src::abc123::*", s)
 

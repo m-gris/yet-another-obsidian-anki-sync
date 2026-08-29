@@ -110,7 +110,12 @@ def edit_current(main_window: Any) -> Any:
     if card is None:
         return _delegate(main_window)
 
-    tag = core.source_tag(card.note().tags)
+    # FIELD FIRST, TAG SECOND. The identity moved into a field on 2026-08-28 and the tag is
+    # still written beside it, so a collection re-synced since then carries both and one synced
+    # before carries only the tag. `core.identity` prefers the field and falls back, which is
+    # correct in every one of those states and needs no flag day.
+    note = card.note()
+    tag = core.identity(dict(note.items()), note.tags)
     if tag is None:
         return _delegate(main_window)
 
