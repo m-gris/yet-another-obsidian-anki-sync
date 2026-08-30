@@ -102,58 +102,29 @@ friendlier face.
 question is never only "is the threshold right?" It is "who is entitled to decide?" Tuning a
 threshold answers the first and silently keeps the second.
 
-### What blocks (c) is a measurement, and the dependency is stronger than it looks
+### What (c) has to say, once the cost is known
 
-The tool cannot state the cost, because nobody has established it. The refusal's own text says so:
-*"this tool has not established what Anki then does with them"*. Cards past the new note type's
-last ordinal might be kept, orphaned, or destroyed, and all three remain consistent with what is
-known.
+The cost is knowable, and it is specific. A stranded card is **orphaned, not destroyed** — and
+`Tools > Check Database` destroys it later; the review log for the doomed ordinals can be read in
+full *before* the change is made. `docs/findings/EVOLVABILITY.md` § M4 has the protocol and the
+figures.
 
-**SO (c) BUILT BEFORE THE MEASUREMENT WOULD BE WORSE THAN (a), NOT BETTER.** An "apply anyway" that
-means *"proceed, and I cannot tell you what happens"* violates this document's own founding rule —
-**nothing is applied that has not been shown with its cost** — and it fails in the worse direction,
-because it LOOKS informed. A refusal at least tells the truth about what the tool does not know.
+Three things follow, and they are what (c) must actually do:
 
-**This makes M4 the critical path rather than one measurement among four.** See *What must be
-measured before building anything* below.
-
-### ~~What blocks (c)~~ — MEASURED 2026-08-27, AND (c) IS NOW BUILDABLE
-
-The experiment above was run the same day it was named. **The answer is that a stranded card is
-ORPHANED, NOT DESTROYED — and `Tools > Check Database` destroys it later.** Full protocol and
-figures in `docs/findings/EVOLVABILITY.md` § M4. What it changes here:
-
-- **The cost is exactly countable.** `getReviewsOfCards` returns the complete log for the doomed
-  ordinals, *before* the retype. So row 2's third state can state a real price — *"this strands 2
-  cards holding 5 reviews"* — rather than a shrug. **The objection above no longer applies, and
-  (c) is buildable now.**
-- **The loss is DEFERRED, which the cost line must say out loud.** Nothing dies at the moment of
-  the retype. The cards die whenever the person next runs `Check Database`, days later, for
-  unrelated reasons. A message saying only "2 cards will be lost" would be wrong in a way the
-  author would discover by being surprised; it must say WHEN.
-- ~~**A shrink leaves the note unreadable by this tool until then.**~~ **CORRECTED 2026-08-28.**
-  `cardsInfo` does fail for the whole note rather than for the stranded ordinals alone, but this
-  tool calls it in exactly one place — the pricing of a narrowing. Ordinary sync uses `notesInfo`
-  and `getDecks` and is unaffected, and pricing only runs for a note that still needs narrowing.
-  **The stranded cards sit invisible until `Check Database`, and nothing else breaks.**
-- **THE TOOL CANNOT REAP THE ORPHANS, so "apply anyway" does not have to.** VERIFIED against the
-  add-on's own action list: AnkiConnect offers `deleteNotes`, `removeEmptyNotes` and
-  `forgetCards`, and nothing that deletes a chosen card — cards are generated from a note and its
-  templates rather than being independently deletable. `guiCheckDatabase` exists but would reap
-  every empty card in the collection, including ones from notes nobody has decided about, which
-  is the collection-wide sweep this document's ruling exists to avoid. **So approving a change
-  performs the move and SAYS the cards are stranded; the person runs `Check Database` when they
-  choose.** This replaces the open design question the measurement was thought to have raised.
-
-
-### It is not hypothetical, and the numbers say so
-
-MEASURED 2026-08-27, live: `Database Scaleability.md` had both its headings turned down from
-`cdd/3way` to `2way`. The tool read the vault correctly — `inspect` reports
-`Obsidian Basic (and reversed card)` for both — and then refused the move, twice, under
-`SOME ACTIONS FAILED`. **The six cards it protected hold 0 reviews, 0 lapses and 0 interval
-between them.** The author was blocked from an edit that would have cost nothing, and told to go
-and do it by hand in another application.
+- **The price is countable per note** — *"this strands 2 cards holding 5 reviews"* — rather than a
+  shrug. Without that, (c) would be **worse than (a)**: an "apply anyway" meaning *"proceed, and I
+  cannot tell you what happens"* breaks this document's founding rule, and fails in the worse
+  direction because it looks informed. A refusal at least tells the truth about what is unknown.
+- **The loss is DEFERRED, and the message must say when.** Nothing dies at the moment of the
+  change. The cards die whenever somebody next runs `Check Database`, days later, for unrelated
+  reasons. "2 cards will be lost" would be wrong in the way its author discovers by being surprised.
+- **The tool cannot reap them, so approving does not have to.** VERIFIED against the add-on's own
+  action list: AnkiConnect offers `deleteNotes`, `removeEmptyNotes` and `forgetCards`, and nothing
+  that deletes a chosen card — cards are generated from a note and its templates rather than being
+  independently deletable. `guiCheckDatabase` exists but would sweep every empty card in the
+  collection, including ones nobody has decided about, which is the collection-wide reap this
+  document's ruling exists to avoid. **So approving performs the move and SAYS the cards are
+  stranded; the person runs `Check Database` when they choose.**
 
 ---
 
@@ -233,6 +204,13 @@ disappears. That is a smaller surface and a stronger guarantee.
 - No TTY in the Scala. Enumerate and apply; the UI is a separate thing.
 - One decision per application. A batch is a caller looping, not a flag.
 - Nothing is applied that has not been shown with its cost.
+- **A refused shrink is answered by a named per-note decision, not a flag on `sync`.** The run
+  reports each affected note with what going ahead would cost *that* note; the author authorises
+  notes one at a time, by name. The rejected alternative was a single flag approving every
+  affected note in a run — cheaper to build and scriptable, and rejected because it **approves
+  notes the author never read about**, which is the same *confirm a list you did not read* failure
+  this document uses to argue `prune` should stop being a command. A flag remains possible later
+  over the same core; it is not excluded, merely not first.
 
 **Not decided, and each is Marc's:**
 
@@ -240,66 +218,19 @@ disappears. That is a smaller surface and a stronger guarantee.
    and the only one needing a target chosen. Leaving it out makes the first version much smaller;
    leaving it out also means the orphan queue can only be emptied by deleting, which is the wrong
    incentive.
-2. ~~**Where the third state for a refused shrink lands.**~~ **DECIDED BY MARC 2026-08-27: a
-   named per-note decision, NOT a flag on `sync`.** The run reports each affected note with what
-   going ahead would cost *that* note; the author then authorises notes one at a time, by name.
-
-   **The rejected alternative was a single flag** — one `--delete-extra-cards` approving every
-   affected note in the run. It is cheaper to build and scriptable. It was rejected because it
-   **approves notes the author never read about**, including ones they did not know were
-   affected, which is the same "confirm a list you did not read" failure this document uses to
-   argue `prune` should stop being a command.
-
-   **The measurement is what settled it.** Before 2026-08-27 the cost was unknown, so a flag and
-   a decision carried the same (absent) information. Now the price is specific per note — which
-   cards, how many reviews, and that they vanish at the next `Check Database` — and a flag
-   discards that specificity at the moment it finally exists. A flag remains possible later, over
-   the same core; it is not excluded, merely not first.
-3. **Whether a terminal consumer is written at all before the plugin**, or whether enumeration
+2. **Whether a terminal consumer is written at all before the plugin**, or whether enumeration
    simply prints as text until the plugin exists.
-4. **Whether cloze groups at risk of ordinal drift belong here.** They are a *risk*, not a pending
+3. **Whether cloze groups at risk of ordinal drift belong here.** They are a *risk*, not a pending
    decision — nothing is waiting, and the vault can be edited to remove the risk. Arguably a
    different category, and `CLOZE-REDESIGN.md` covers it.
 
 ---
 
-## What must be measured before building anything
+---
 
-- ~~**What a shrink actually does to a card at a stranded ordinal.**~~ **MEASURED 2026-08-27:
-  orphaned, then destroyed by `Check Database`; the review log outlives the card and stays
-  readable.** It decided
-  whether row 2's third state is *"proceed, it is fine"*, *"proceed, the cards are recoverable via
-  Check Database"*, or *"proceed and spend this much review history"*. `EVOLVABILITY.md` M4 records
-  the experiment; only its growth half has been run. One hour in a throwaway profile, and the
-  `Check Database` step is not optional — *orphaned* and *destroyed* look identical without it.
-- **Whether AnkiConnect exposes template MAPPING on a note-type change.** UNMEASURED, and with
-  no bead — it is an improvement to the refusal's advice rather than something anything waits on. Anki's own
-  *Change Note Type* dialogue lets a person map templates explicitly, which is the one real
-  advantage the current refusal's advice has over this tool. If the API exposes it, the tool can
-  offer what the dialogue offers instead of pointing at it.
-- **What `Tools > Empty Cards` does to a retired card**, and whether it takes the review log with
-  it. UNMEASURED, recorded in `EVOLVABILITY.md` M5, whose gate-flip half has been run. It decides
-  whether row 3's flag is a convenience or the only thing standing between a card and deletion.
-  **`oas-1r3`, and `oas-jco` waits on it.**
-- ~~**How many reviews the parked orphans actually hold.**~~ **MEASURED 2026-08-27**, and the
-  answer is *untidy, not urgent*:
-
-  | orphan | cards | reviews | max interval |
-  |---|---|---|---|
-  | `descriptor` | 3 | 7 | 0d |
-  | `surjection/definition` | 2 | 3 | 0d |
-  | `module 1 thinking in patterns/…` | 1 | 0 | 0d |
-  | `framework` | 2 | 7 | 1d |
-  | `/n` — a whole-note anchor | 1 | 0 | 0d |
-  | `scale` | 1 | 2 | 1d |
-  | | | **19** | **1 day** |
-
-  **That it took a deliberate script to learn this is the finding.** The count of parked orphans is
-  printed on every run; the cost of each has never been printed at all, so "six notes parked" has
-  been carrying the same weight whether those notes held nineteen reviews or nineteen hundred. That
-  is precisely the gap this document proposes to close, and the measurement is its first instance.
-
-  _One entry is worth knowing about: `framework` is the note migrated between note types on
-  2026-08-26 and orphaned on 2026-08-27 because its file was deleted from the vault. The tool
-  behaved correctly; it is listed here only so that nobody reading later mistakes it for a
-  regression in the migration._
+_Everything this document once carried about what was built, what was blocked and what remained to
+be measured has moved into the beads the query at the top lists — on 2026-08-30, when it was cut
+from 305 lines. The measurements themselves are findings and live in
+`docs/findings/EVOLVABILITY.md`; what was removed is in
+`git log --follow -p docs/design/REVIEW-QUEUE.md`, each removal attached to the commit explaining
+it._
