@@ -560,20 +560,57 @@ tags, and introduction order from new-card position. Conflating the three is a t
 
 ## What it refuses to do
 
-The tool would rather stop and tell you than produce a card that looks right and is not. It
-refuses, naming the file and line, when:
+The tool would rather stop and tell you than produce a card that looks right and is not. Every
+refusal names the file and the line.
 
-- **two cards would have the same identity** — nothing at all is written for that run
-- **a nested list is indented fewer than four spaces** — its own parser reads such a line as a
+### It refuses the whole run, writing nothing at all
+
+- **two things in your vault derive the same identity** — two sources, one key
+- **two notes in Anki carry the same identity** — which the vault cannot fix, so nothing is
+  written until you delete one
+
+### It refuses one card, and syncs the rest
+
+**Because of what the note says:**
+
+- **a marked heading has no prose of its own**, because a subheading follows it immediately —
+  *except* for `#flashcard/sequence/headers`, where that is the ordinary shape and the
+  subheadings themselves are the card
+- **a `#flashcard/cloze` heading has no `==<<highlight>>==`** in its body. A bare `==highlight==`
+  is emphasis and makes no card, which is the usual cause
+- **a block holds cloze deletions and carries no `^blockid`** — it would have no identity that
+  survives an edit. Add one (in Obsidian, copy the block link), or put the deletions under a
+  `#flashcard/cloze` heading
+- **two unlabelled cloze deletions share their text** — nothing could tell their cards apart.
+  Label them: `==<<1|quorum>>==`
+- **a `#flashcard/sequence` heading has no list**, or its list items all render to nothing
+- **a `#flashcard/sequence/headers` heading has no subheadings**
+- **a `#flashcard/table` heading has no table**, or the table has no descriptor columns, or no
+  column header that could name one
+- **a `#flashcard/table/rows` heading has no rows to make row cards from**
+- **a whole-note marker asks for a `cdd` shape** — that needs three parts and a note has two, its
+  name and its body
+
+**Because of what the note contains:**
+
+- **an image, an Obsidian embed, or a task list** anywhere in the body. Each would reach the card
+  as something the tool cannot render honestly, so it refuses rather than ship a card with a
+  broken image or a silently dropped line. Embeds are the one worth knowing about — see *Not
+  built yet*
+- **markdown this tool's parser does not recognise.** Parsing is strict on purpose: an unknown
+  construct must fail loudly rather than lose its text quietly
+
+**Because of how it is written:**
+
+- **a nested list is indented fewer than four spaces** — this tool's parser reads such a line as a
   new list rather than a sub-item, so the card would say something your note does not. Indent to
   four spaces or a tab. Obsidian's own Tab key writes one; two-space indentation usually arrives
   from another editor or a formatter
-- **a marked heading has no prose of its own**, because a subheading follows it immediately
-- **a table can produce no card** — no descriptor columns, or none whose header can name one
-- **a `sequence` heading has no list**, or a `table` heading has no table
-- **two unlabelled cloze deletions share their text**
-- **a folder or heading contains `::`**, which is Anki's deck separator — and only when that
-  part is actually being used as a deck level
+
+**Because of where it would go:**
+
+- **a folder or heading contains `::`**, which is Anki's deck separator — and only when that part
+  is actually being used as a deck level
 - **the open Anki profile is not the one you named**
 
 ## Changing your mind about a card's shape
