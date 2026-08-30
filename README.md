@@ -1,7 +1,8 @@
 # yet-another-obsidian-anki-sync
 
-A command-line tool that turns marked headings in an [Obsidian](https://obsidian.md) vault
-into [Anki](https://apps.ankiweb.net) notes, and keeps them in step as the vault changes.
+A command-line tool that turns marked headings — and highlighted phrases, frontmatter
+relations, and whole notes — in an [Obsidian](https://obsidian.md) vault into
+[Anki](https://apps.ankiweb.net) notes, and keeps them in step as the vault changes.
 
 It is not an Obsidian plugin. It reads a folder of markdown files and talks to a running Anki
 over [AnkiConnect](https://foosoft.net/projects/anki-connect/).
@@ -11,10 +12,15 @@ over [AnkiConnect](https://foosoft.net/projects/anki-connect/).
 **Nothing generated is ever written back into your markdown.** No identifiers, no scheduling
 comments, no note ids in frontmatter. Your notes are exactly what you typed.
 
-A card's identity is *derived* from the note's frontmatter `id` plus the chain of headings
-above it, and the binding to an Anki note is stored **in Anki**, as a tag beginning `src::`.
+A card's identity is *derived* from the note's frontmatter `id` plus where in the note the card
+came from — a chain of headings, a frontmatter property, one block named by its `^blockid`, or
+the note itself. The binding to an Anki note is stored **in Anki**, in a field called `Identity`.
 Anki is a derived artifact, so bookkeeping there costs nothing — which is precisely what makes
 it unacceptable in the source.
+
+> **It used to be a tag**, `src::…`, and moved into a field on 2026-08-29 because a machine's
+> ledger does not belong in your tag tree. Notes on a note type this tool does not own cannot
+> hold a field, so their identity is still read from the tag — see *Not built yet*.
 
 The consequence you will feel: **rename a marked heading and its card loses its history.** The
 tool has no rename detection. The old card is not deleted — it is flagged and suspended, so you
@@ -24,10 +30,10 @@ before you re-word a heading you have been reviewing for six months.
 ## ⚠️ ONE VAULT PER ANKI PROFILE. NOTHING ENFORCES THIS
 
 **Nothing this tool writes into Anki records which vault a note came from.** A card's identity
-tag is `src::{frontmatter id}::{path}` and stops there. The deck comes from `--deck-root`, which
+identity is `src::{frontmatter id}::{path}` and stops there. The deck comes from `--deck-root`, which
 is a flag. The breadcrumb printed on the card is vault-relative. There is no vault anywhere.
 
-The reconciler enumerates every note carrying `src::` in a single query, and it has to: an orphan
+The reconciler enumerates every note carrying an identity in a single query, and it has to: an orphan
 is by definition a key the markdown does not have, so it can never be found by a lookup driven
 from the markdown. That enumeration **cannot be filtered by vault, because the vault is not there
 to filter on.**
@@ -671,7 +677,8 @@ moment it matters — if the card you are opening has already lost its anchor, i
 
 ### The command underneath it
 
-The add-on decodes nothing. It reads the card's `src::` tag and asks the tool:
+The add-on decodes nothing. It reads the card's identity — from its `Identity` field, or from a
+`src::` tag if the note is on a note type this tool does not own — and asks the tool:
 
 ```bash
 obsidian-anki-sync locate --vault-path ~/my-vault 'src::abc123::cap%20theorem/definition'
@@ -766,7 +773,7 @@ silently — can no longer break anything. And the search is no longer written b
 cannot fall behind the identity it is searching for.
 
 **Orphaned cards appear too**, which is a feature rather than an accident: a flagged card keeps
-its `src::` tag beside the `orphaned::` one. A note whose heading you reworded shows the live card
+its identity beside its `orphaned::` tag. A note whose heading you reworded shows the live card
 and the retired one side by side, which is the clearest view you will get of what a rewording cost.
 
 ### Drilling a note's cards, ignoring the schedule
@@ -879,10 +886,11 @@ Named here so their absence is not mistaken for a promise:
 | `docs/reference/LEARNING-MODEL.md` | the pedagogy the card shapes come from |
 | `docs/design/EDIT-IN-OBSIDIAN.md` | why Edit redirects to Obsidian, and where the identity tag gets decoded |
 | `docs/history/EDIT-IN-OBSIDIAN-PLAN.md` | what was built for it, what was measured, and what is left |
-| `HANDOFF.md` | how the code is laid out, and the AnkiConnect behaviours it defends against |
-| `FIXTURES.md` | what every file in `dummy-vault/` and `hostile-vaults/` is for, and which are meant to fail |
-| `NOTE-TYPES-AND-CONTEXT-DESIGN.md` | why the note types are shaped as they are |
-| `RECONCILER-SHAPE.md` | how the plan is computed and applied |
+| `docs/reference/FIXTURES.md` | what every file in `dummy-vault/` and `hostile-vaults/` is for, and which are meant to fail |
+| `docs/history/HANDOFF.md` | how the code is laid out, and the AnkiConnect behaviours it defends against |
+| `docs/history/NOTE-TYPES-AND-CONTEXT-DESIGN.md` | why the note types are shaped as they are |
+| `docs/history/RECONCILER-SHAPE.md` | how the plan is computed and applied |
+| `docs/README.md` | what each documentation directory claims, and which of it may be out of date |
 
 ## Running the tests
 

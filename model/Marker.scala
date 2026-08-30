@@ -651,7 +651,7 @@ object Marker:
     "#flashcard/cdd/3way"         -> "the same again, and also which aspect this is",
     "#flashcard/3way"             -> "an older spelling of cdd/2way",
     "#flashcard/3way/all"         -> "an older spelling of cdd/3way",
-    "#flashcard/cloze"            -> "==highlights== blanked out, one card per group",
+    "#flashcard/cloze"            -> "==<<highlights>>== blanked out, one card per group",
     "#flashcard/sequence"         -> "a list revealed one item at a time, on one schedule",
     "#flashcard/sequence/headers" -> "this heading's subheadings, revealed one at a time",
     "#flashcard/sequence/headers/recursive" -> "the whole subtree, revealed a level at a time",
