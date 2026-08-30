@@ -1,30 +1,17 @@
 # Redesigning cloze
 
-> **STATUS — 2026-08-30.** Beads carry the live status (`bd list`, prefix `oas`); this is the
-> summary for a reader who arrived at the document rather than at the tracker.
+> **Work on this document** — `bd list --all --spec docs/design/CLOZE-REDESIGN.md`
 >
-> **BUILT** — the `==<<text>>==` syntax, so a bare `==highlight==` is emphasis and makes no card ·
-> `^blockid` as a production in the grammar rather than prose that reaches the card face · a card
-> identified by the block it sits in, encoded `src::{id}::/b/{anchor}` · a cloze card from any
-> block, with no heading needed.
->
-> **OPEN** — what an unlabelled highlight is keyed by (`oas-9yz.1`, waiting on recovery tier 3,
-> `oas-4ti`) · block identifiers inside Obsidian callouts fail the strict parse (`oas-yom`) · the
-> `%%card%%` uniqueness objection (`oas-9yz.3`) · the git replay, M1 (`oas-nmg`).
->
-> **WITHDRAWN** — identity by matching old text against new · a key projected onto the labels in a
-> block. Both are kept below with the reasoning that killed them.
+> Closed means built, and the closing reason says what shipped; open means outstanding. **This
+> document records decisions and reasoning, never progress** — a status kept in two places goes
+> stale in one of them.
 
 _Named `ANCHORS-BELOW-A-HEADING.md` until 2026-08-27. That named one mechanism inside it —
 attaching a card to something smaller than a heading — while the document is about cloze as a
 whole: what text a card shows, how it is packaged into Anki, what identifies it, and what has been
 ruled out. Renamed with `git mv`, so the history is intact._
 
-_Written 2026-08-27, from a design conversation between Marc and Claude. It opened with "nothing
-here is built" until 2026-08-30, by which time four of its decisions had shipped — see the status
-block above, which exists because prose does not update itself._
-
-_Claims marked VERIFIED were established by running something; everything else is reasoning, and
+_Written 2026-08-27, from a design conversation between Marc and Claude. Claims marked VERIFIED were established by running something; everything else is reasoning, and
 says so. It follows this repository's convention of opening with the answer rather than the
 three-layer form, because its siblings — `EVOLVABILITY.md`, `PIPELINE-DESIGN.md` — do._
 

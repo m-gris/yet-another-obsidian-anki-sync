@@ -1,20 +1,12 @@
 # Table cards: one note per row, so that siblings exist at all
 
-> **STATUS — 2026-08-30.** Beads carry the live status (`bd list`, prefix `oas`); this is the
-> summary for a reader who arrived at the document rather than at the tracker.
+> **Work on this document** — `bd list --all --spec docs/design/TABLE-CARDS-REDESIGN.md`
 >
-> **NOTHING HERE IS BUILT, AND THAT IS STILL TRUE** — unlike its siblings, which said it after it
-> had stopped being. The work is `oas-hnr`, and two spikes under `spike/` explored it: one on
-> where a row's cards should sit, one on what evidence a rename leaves behind.
->
-> **WHAT IT WAITS ON IS A DECISION, NOT EFFORT.** Moving a table's cards from one note per cell
-> to one note per row means several Anki notes must become one, and Anki has no operation that
-> merges notes while keeping their cards — so the cards that exist today would be destroyed with
-> their review history. The cost is proportional to how many table cards exist when the switch
-> happens, which is why the bead carries a re-measure instruction rather than a number.
+> Closed means built, and the closing reason says what shipped; open means outstanding. **This
+> document records decisions and reasoning, never progress** — a status kept in two places goes
+> stale in one of them.
 
-_Written 2026-08-28, from a design conversation between Marc and Claude. **Nothing here is
-built.** Claims marked MEASURED were established against a live collection in the
+_Written 2026-08-28, from a design conversation between Marc and Claude. Claims marked MEASURED were established against a live collection in the
 `claude-POC-test` profile and are recorded with their versions in
 `docs/findings/ANKICONNECT-BEHAVIOUR.md`; everything else is reasoning, and says so. It follows this
 repository's convention of opening with the answer rather than the three-layer TLDR / Summary /

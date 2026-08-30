@@ -1,7 +1,12 @@
 # Where this tool and Obsidian read the same markdown differently
 
-_Written 2026-08-27, from a design conversation between Marc and Claude. **Nothing here is
-built.** Claims marked VERIFIED were established by running something in this session or by
+> **Work on this document** — `bd list --all --spec docs/findings/PARSER-DISAGREEMENTS.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding. **This
+> document records measurements and the reasoning around them, never progress** — a status kept in two places goes stale in one of
+> them.
+
+_Written 2026-08-27, from a design conversation between Marc and Claude. Claims marked VERIFIED were established by running something in this session or by
 reading the file cited; everything else is reasoning, and says so. It follows this repository's
 convention of opening with the answer rather than the three-layer TLDR / Summary / Full form,
 because its siblings — `EVOLVABILITY.md`, `CLOZE-REDESIGN.md`, `EDIT-IN-OBSIDIAN.md` —

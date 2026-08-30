@@ -1,7 +1,8 @@
-> **STATUS — 2026-08-30.** Superseded in its conclusions, kept for its surveys. Its review is at
-> `history/PIPELINE-DESIGN-REVIEW.md`. Of the two findings below that were *verified by
-> execution*, one is fixed and one is open as `oas-yom`; the rest of this document is reasoning
-> that did not survive, and is kept so the surveys stay readable in context.
+> **Work on this document** — `bd list --all --spec docs/design/PIPELINE-DESIGN.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding. **This
+> document records decisions and reasoning, never progress** — a status kept in two places goes
+> stale in one of them.
 
 > # ⚠️ THIS DOCUMENT DID NOT SURVIVE ITS OWN REVIEW. READ `PIPELINE-DESIGN-REVIEW.md` FIRST.
 >

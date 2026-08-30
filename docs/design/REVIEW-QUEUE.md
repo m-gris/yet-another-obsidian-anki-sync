@@ -1,26 +1,12 @@
 # Decisions the tool will not take alone
 
-> **STATUS — 2026-08-30.** Beads carry the live status (`bd list`, prefix `oas`); this is the
-> summary for a reader who arrived at the document rather than at the tracker.
+> **Work on this document** — `bd list --all --spec docs/design/REVIEW-QUEUE.md`
 >
-> **BUILT** — the second of the four members below, end to end. A run states what a refused
-> note-type shrink would cost *that* note, gives the decision a short typeable name derived from
-> the card's identity, and applies exactly one when named: `--approve <name>`. The enumeration is
-> emitted as structured data as well as prose, which is the architecture ruling below rather than
-> a convenience.
->
-> **NOT VERIFIED** — that path has only ever been run against the in-memory collection and in dry
-> runs. The code that actually moves a note and strands a card has never executed: `oas-02y`.
->
-> **OPEN** — `prune` as an action rather than a command (`oas-m0a`) · flagging a card retired by
-> narrowing, member three (`oas-jco`, waiting on `oas-1r3`) · members one and four are designed
-> and unbuilt · whether `relink` is in the first version at all, and whether a terminal consumer
-> is written before the plugin, are both still Marc's.
+> Closed means built, and the closing reason says what shipped; open means outstanding. **This
+> document records decisions and reasoning, never progress** — a status kept in two places goes
+> stale in one of them.
 
-_Written 2026-08-27, from a design conversation between Marc and Claude. It opened with "nothing
-here is built" until 2026-08-30, by which time one of its four members had shipped whole._
-
-_Claims marked VERIFIED were established by running something or by reading the file cited;
+_Written 2026-08-27, from a design conversation between Marc and Claude. Claims marked VERIFIED were established by running something or by reading the file cited;
 everything else is reasoning, and says so. It opens with the answer rather than the three-layer
 TLDR / Summary / Full form, following its siblings — `EVOLVABILITY.md`,
 `CLOZE-REDESIGN.md`, `EDIT-IN-OBSIDIAN.md`, `PARSER-DISAGREEMENTS.md`._

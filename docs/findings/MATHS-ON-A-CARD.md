@@ -1,7 +1,12 @@
 # What it would take for maths to reach a card
 
-_Written 2026-08-28, from a design conversation between Marc and Claude. **Nothing here is
-built.** Claims marked VERIFIED were established by running something in this session or by
+> **Work on this document** — `bd list --all --spec docs/findings/MATHS-ON-A-CARD.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding. **This
+> document records a measurement and the reasoning around it, never progress** — a status kept in two places goes stale in one of
+> them.
+
+_Written 2026-08-28, from a design conversation between Marc and Claude. Claims marked VERIFIED were established by running something in this session or by
 reading the file cited; everything else is reasoning, and says so. It opens with the answer rather than the three-layer TLDR /
 Summary / Full form, following its siblings — `PARSER-DISAGREEMENTS.md`, `CLOZE-REDESIGN.md`,
 `EDIT-IN-OBSIDIAN.md`, `REVIEW-QUEUE.md`._
