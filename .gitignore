@@ -25,3 +25,6 @@ addon/**/__pycache__/
 .dolt/
 *.db
 .beads-credential-key
+
+# Serena language-server cache and project config — a tool artefact, not source.
+.serena/

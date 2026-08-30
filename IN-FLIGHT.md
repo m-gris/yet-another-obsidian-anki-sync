@@ -648,6 +648,82 @@ document because a finding nobody can find is a finding nobody acts on._
     card in". Recorded twice already (`docs/findings/EVOLVABILITY.md` §3.7, and item 23 above) and applied
     to neither.
 
+## OPEN — found in Marc's live vault, 2026-08-27
+
+_Appended rather than filed into a section above, for the reason item 17 already gives:
+`HANDOFF.md` cross-references these items BY NUMBER and renumbering would silently break it._
+
+27. ⚠️ **A `#` HEADING ON THE LINE DIRECTLY AFTER A LIST LINE IS SWALLOWED BY THE LIST, AND
+    EVERY CONSEQUENCE OF THAT IS SILENT.**
+
+    **How it was found.** Marc opened an Anki card of note type `Obsidian Cloze Sequence`
+    (note `1787823966254`, key `essential numbers/scale`) and found it holding five items
+    belonging to a different heading, plus the literal text `5 Questions #flashcard/sequence`
+    as a list item. Source: `System Design Interview Framework.md`, line 21.
+
+    **The trigger is one missing blank line.**
+
+    ```markdown
+    - data size
+    # 5 Questions #flashcard/sequence
+    ```
+
+    **The mechanism, every link read.** laika-core 1.3.2 follows original Markdown plus the
+    PHP Markdown suite and explicitly NOT the CommonMark suite — the same divergence
+    `extract/ListIndent.scala` already documents for indentation. It keeps the list open and
+    absorbs the `#` line into the item, parsing it there as a nested `ast.Header`. Laika's
+    `SectionBuilder` lifts only TOP-LEVEL headers into `Section`s, so it never becomes one.
+    `Extractor.walk` matches on `Section`, so the marker is never seen. And
+    `content/Lower.scala`'s `case ast.Header` arm — commented "a heading NESTED inside a
+    blockquote or a list item … it flattens rather than refusing" — turns it into a
+    `Block.Paragraph`, which is how the marker text reaches the card as content.
+
+    **THREE OUTCOMES, MEASURED BY A/B** on copies of one file differing by ONE BLANK LINE.
+    Every one of them reports `failures: 0`, `scan: complete`, and exits 0:
+
+    | shape | result |
+    |---|---|
+    | the swallowed heading carries the marker | its card is never created |
+    | a marked heading sits below it, inside the list | no card at all — `notes: 0` |
+    | a marked heading sits below it, outside the list | the card is built UNDER THE WRONG PARENT |
+
+    The third is the expensive one. `# Alpha` / list / `# Beta` / `## Gamma #flashcard/1way`
+    keys as `alpha / gamma` without the blank line and `beta / gamma` with it. Nothing fails
+    to build — the card is well-formed and merely mis-keyed — so **no refusal can reach it**:
+    a refusal fires on a `BuildFailure`, and there is none. The heading path is half the card
+    identity, so adding the blank line LATER, or letting `conform.nvim`'s prettier add it
+    (item 13), re-keys the card: the old note is orphaned and suspended and a replacement is
+    created with no review history.
+
+    **BOUNDED, so the gap is not overstated.** A heading immediately after a PARAGRAPH parses
+    correctly — Laika's `headerOrParagraph` handles it — and so does one after another heading
+    or after a fence. It is specifically heading-after-LIST-ITEM. A sweep of Marc's vault on
+    2026-08-27 found ten headings with no blank line above them and exactly ONE after a list
+    line: the instance above.
+
+    **WHY THE ONE GUARD BUILT FOR THIS CLASS MISSED IT.** `extract/ListIndent.scala` exists to
+    report "this tool's parser reads this list differently from Obsidian, so the card would say
+    something the note does not". Its own scanner matches `^#{1,6}(\s|$)` and, on a match, does
+    `heading = lineNumber; open = List.empty` — "A heading closes every open list." **So the
+    scanner believes the line is a heading and closes the list, while Laika keeps the list open
+    and swallows it.** The disagreement is present inside the very file whose job is to report
+    disagreements, and goes unreported because the only thing compared afterwards is
+    INDENTATION. A scope note naming this was added to that docstring on 2026-08-27.
+
+    **The vault side is a one-character fix and it is Marc's to make**, and it is not free:
+    `essential numbers/motivation ?` re-keys to `5 questions/motivation ?`, so the run reports
+    one orphan and one create beside the update and the new `5 questions` card. Measured
+    read-only against the live collection the same day: every affected card is at 0 reps, so
+    no review history is at stake in THIS instance.
+
+    **The tool side is not decided.** Widening `ListIndent` closes the first two outcomes and
+    NOT the third, which needs something that runs before a card is keyed rather than when one
+    fails to build. The argument, and what a linter would have to cover to be worth building,
+    is `docs/findings/PARSER-DISAGREEMENTS.md`. Nothing is built.
+
+    _Recorded here rather than only in that document for the reason item 20 gives: a finding
+    nobody can find is a finding nobody acts on._
+
 ---
 
 ## OPEN — requested by Marc, 2026-08-27
@@ -910,6 +986,7 @@ section: a pointer to a document that does not mention the thing is worse than n
     notes failing for the same reason printed the same four hundred characters twice. Narrowings
     no longer take this path at all, so the remaining case is a cloze-kind mismatch across
     several notes — rarer, and not measured.
+
 ---
 
 ## PARKED — wanted, but fixing no defect yet, 2026-08-28

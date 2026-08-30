@@ -110,6 +110,14 @@ Conflating them produces the standard rebuttal ("shuffling is better, the algori
 
 **Caveat.** Over-extending the blocked phase produces *context-bound* fluency: you can do it when you know it is coming. The blocked phase should end at fluency, not at comfort.
 
+### Siblings must not share a session
+
+A fact asked several ways produces several cards, and each card's answer is visible on its siblings' prompts. A three-way concept-descriptor card is the clearest case: every card shows two of the three fields and asks for the third, so each answer is printed on the front of both the others. Meeting two of them in one sitting makes the second a recognition test rather than a recall one — the same failure mode as a content card met before its concept is understood, and just as invisible from the inside.
+
+This is an **interference** claim, not an ordering one. It concerns the several askings of a single fact, not the sequence of distinct concepts, and it applies at introduction, in review and mid-learning alike.
+
+*Realised on 2026-08-27 by Anki's three burying settings — new, review and interday learning siblings — which defer a sibling by a day and re-defer it on each encounter. It is the smallest available step toward the ordering programme above: nothing is authored, computed or written, and it is a checkbox rather than a mechanism.*
+
 ### Ending the blocked phase
 
 A block graduates when **every** card in it is past a one-week review horizon.

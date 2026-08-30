@@ -97,7 +97,26 @@ Nothing tests the property that carries the history: `extract/Extractor.test.sca
 
 What is not built is any report of it. The tool creates the condition, never counts it, and cannot undo it once a human runs the bulk tidy. At eighteen cards a stray blank is noticed by eye; at thousands it is a maintenance chore performed in bulk.
 
-**The Anki half of this is UNVERIFIED — repo-asserted, uncited.** Whether Anki keeps the card, whether `Empty Cards` takes the revlog with it, and whether re-widening the marker restores the card intact are all unmeasured. The reversibility claim that makes this "a missing report" rather than "a live loss" rests entirely on that unmeasured behaviour.
+**The Anki half of this NAMED THREE UNKNOWNS. TWO ARE NOW MEASURED AND ONE REMAINS.** _Updated
+2026-08-28; the original sentence is kept below because it is what the rest of this section was
+reasoned from._
+
+- **Does Anki keep the card?** YES. Measured by M5's flip half on 2026-08-26 — and this section
+  was not updated then, which is §3.10's disease arriving inside §3.
+- **Does re-widening restore the card intact?** YES. Measured 2026-08-28: emptying a gate field
+  and refilling it returned the **same card id, the same ordinal, the same review count and the
+  same due timestamp**. This was the specific claim the section called unmeasured.
+- **Does `Empty Cards` take the revlog with it?** STILL UNMEASURED, and it is now the only thing
+  standing between this section and "survivable". It is the open half of M5.
+
+**A SECOND, NEWER UNKNOWN, and it is not the same question.** The stranded card retains its
+`queue` value and its due timestamp rather than being lifted out of scheduling. Whether Anki's
+scheduler actually PRESENTS such a card in a review session was not established. This matters
+beyond this section: oas-jco rules for a per-card flag over suspension partly
+because "a retired card's front renders empty and Anki never queues it", and that sentence is
+load-bearing for a ruling already made.
+
+_Original entry follows._ **The Anki half of this is UNVERIFIED — repo-asserted, uncited.** Whether Anki keeps the card, whether `Empty Cards` takes the revlog with it, and whether re-widening the marker restores the card intact are all unmeasured. The reversibility claim that makes this "a missing report" rather than "a live loss" rests entirely on that unmeasured behaviour.
 
 ### 3.4 A partially materialised vault flags and suspends the whole collection, and the run reports success — **live today; damage scales**
 
@@ -167,6 +186,75 @@ The preservation rules live almost entirely in prose. `-Wconf:msg=exhaustive:e` 
 - **`model/CardSpec.scala:42-46`** — the cloze consolation that does not exist (§3.2).
 
 And nothing pins the far end: every Anki fact this project owns cites `__init__.py:NNNN` "read on this machine", across at least a dozen files, with **no Anki version, no AnkiConnect version and no add-on build recorded anywhere**. The installed add-on's `meta.json` pins `min/max_point_version: 45`. An add-on update moves every one of those line numbers and no test reddens.
+
+**HALF OF THAT IS NOW CLOSED, AND THE HALF THAT MATTERS MORE IS NOT.** _Updated 2026-08-28._
+`docs/findings/ANKICONNECT-BEHAVIOUR.md` records the Anki version, the add-on directory and build, the
+declared `required_anki_version`, the JSON API version and the profile every measurement was taken
+in, together with the commands that re-read them. That is M7, and it means a reader can now tell
+WHICH Anki the citations describe.
+
+**It does not make staleness detectable.** No test reddens when the add-on updates, the line
+numbers still live in a dozen comments rather than in one checked place, and nothing compares the
+recorded version against the installed one at run time. The document converts an unanswerable
+question into an answerable one; it does not convert a silent failure into a loud one. Treating
+M7 as having closed this item would be exactly the over-reading this section is about.
+
+### 3.11 A heading swallowed by the list above it re-keys or deletes cards, silently — **live today**
+
+**NUMBERED BY ARRIVAL, NOT BY RANK.** This section's ordering claim — *irreplaceable history at
+risk × silence* — would place this between §3.2 and §3.4. It is appended instead because
+§3.1–§3.10 are cited BY NUMBER from `plan/Planner.scala`, `docs/design/PIPELINE-DESIGN.md` and
+`IN-FLIGHT.md`, and renumbering would break those citations silently.
+
+**THE TRIGGER IS ONE MISSING BLANK LINE, AND OBSIDIAN SHOWS NO SIGN OF IT.** laika-core 1.3.2
+follows original Markdown plus the PHP Markdown suite rather than CommonMark — the same
+divergence `extract/ListIndent.scala` already documents for indentation. So a `#` line sitting
+immediately after a list line, with no blank line between them, is absorbed into the open list
+item and parsed there as a nested `ast.Header`. Laika's section rewrite lifts only TOP-LEVEL
+headers into `Section`s, so that header never becomes one — and `Extractor.walk` matches on
+`Section`.
+
+**VERIFIED BY EXECUTION 2026-08-27**, by running `inspect` over pairs of vaults differing by
+exactly one blank line. Three variants, and the middle one is the expensive one:
+
+| what is swallowed | what the run reports | what actually happens |
+|---|---|---|
+| **A** — the swallowed heading CARRIES the marker | `failures: 0`, exit 0 | its card is never created; its body lands on the card above, and the literal marker text prints there as content |
+| **B** — swallowed heading is UNMARKED; a marked heading below it survives | `failures: 0`, exit 0, same card COUNT | the card builds perfectly **under the wrong parent**, so its key is wrong |
+| **C** — swallowed heading is unmarked and the marked heading is swallowed too | `notes: 0`, `failures: 0`, `scan: complete`, exit 0 | no card at all |
+
+**VARIANT B IS THE ONE THAT COSTS HISTORY**, and it costs it later rather than now. The card
+syncs clean under the wrong key. Adding the blank line afterwards — by hand, or by the prettier
+pass oas-1tg records as running on markdown — moves the key, which is an orphan
+plus a history-less replacement. Measured: two vaults identical but for one blank line produced
+one card each, `failures: 0` each, keyed `alpha / gamma` and `beta / gamma`.
+
+**LIVE INSTANCE.** `System Design Interview Framework.md:21` in Marc's vault is variant A:
+`# 5 Questions #flashcard/sequence` follows `- data size` with no blank line. Its card was never
+made; `## Motivation ?` re-parented to `essential numbers / motivation ?`; and the note Anki
+holds for `essential numbers/scale` carries five foreign list items plus the literal text
+`5 Questions #flashcard/sequence` in its `Text` field. A sweep of the vault on 2026-08-27 found
+ten headings with no blank line above them, of which this is the ONLY one following a list line
+— the other nine follow `---`, another heading, or a fence, and a heading following a PARAGRAPH
+was measured to parse correctly.
+
+**WHY THE GUARD THAT EXISTS DOES NOT CATCH IT.** `extract/ListIndent.scala` was built for exactly
+this class — "this tool's parser reads this list differently from the way Obsidian shows it back,
+so the card would say something the note does not" — and its own scanner contains
+`else if isHeading(line) then heading = lineNumber; open = List.empty`, commented *"A heading
+closes every open list."* **ListIndent believes the line is a heading. Laika does not.** That
+disagreement is the thing it exists to report, and it is blind to it because it inspects
+INDENTATION only. Two further places could have noticed and do not: `content/Lower.scala`'s
+`ast.Header` arm flattens a nested header to a `Block.Paragraph` rather than refusing (a scoping
+decision correct for the S8 refactor, load-bearing differently in production), and
+`Extractor.hasMarkedHeading` walks `Section` and `BlockContainer` — a `BulletList` is a
+`ListContainer`, and a nested `Header` is not a `Section`.
+
+**NOT ESTABLISHED HERE:** that Obsidian renders the swallowed line as a heading. That is reasoned
+from CommonMark's lazy-continuation rule, which admits only paragraph continuation lines, and
+corroborated by the author having written it as a heading and expected a card. It has not been
+measured against Obsidian, and one look in reading view would settle it.
+
 
 ---
 
@@ -333,7 +421,25 @@ For every note tagged `orphaned::`, compare its non-`Context` fields against the
 Three-template type, one note, all three cards reviewed to distinct intervals; record card ids and scheduling; retype onto a one-template type; re-read; then run `Tools > Check Database` and re-read again — "orphaned until Check Database" and "destroyed" differ only after that step. Then the mirror: a reviewed one-template note retyped onto a three-template type whose extra templates render non-empty; count cards; confirm the original kept its id and scheduling.
 *Unblocks:* the retype gate in both directions, and the `framework` note waiting on the growth half (IN-FLIGHT.md:179-185). *Recorded footgun to carry into it:* `getReviewsOfCards` returns **empty** for card ids passed as strings and real entries for the same ids as integers, and errors on neither.
 
-**M5 — ~~Gate-field flip~~ — THE FLIP HALF IS RUN (2026-08-26); the `Empty Cards` half is still open.** Widening GENERATES the extra card from a field edit alone; narrowing does NOT remove it — it survives blank-fronted with its history. What remains unmeasured is what `Tools > Empty Cards` actually does to such a card and whether it takes the revlog with it. _Original entry follows._
+**M5 — ~~Gate-field flip~~ — THE FLIP HALF IS RUN (2026-08-26); the `Empty Cards` half is still open.** Widening GENERATES the extra card from a field edit alone; narrowing does NOT remove it — it survives blank-fronted with its history. What remains unmeasured is what `Tools > Empty Cards` actually does to such a card and whether it takes the revlog with it.
+
+**THE ROUND TRIP IS NOW MEASURED TOO (2026-08-28), and one new unknown was opened.** Refilling a
+cleared gate field returns the **same card id, ordinal, review count and due timestamp** — so
+re-widening genuinely restores the card rather than minting a replacement, which is what §3.3
+rested on. Taken on a purpose-built note type whose second and third templates were gated on their
+own value fields, rather than on the shipped concept-descriptor type, so it also says the
+behaviour is a property of conditional generation and not of one note type.
+
+**Read the accounting honestly: this was mostly a REPRODUCTION of the flip half already run on
+2026-08-26**, undertaken while designing something else and without checking §6 first. What it
+adds is the round trip, and four add-on facts now in `docs/findings/ANKICONNECT-BEHAVIOUR.md` —
+`createModel` returning Anki's own per-template generation rule, `loadProfile` reporting success
+for work it has only scheduled, `removeEmptyNotes` deleting unused NOTE TYPES rather than anything
+empty, and `deleteDecks` refusing to spare the cards.
+
+**THE NEW UNKNOWN:** the stranded card keeps its `queue` and its due timestamp, so whether the
+scheduler actually serves a blank-fronted card is open. See §3.3, where it now sits beside the
+`Empty Cards` question. _Original entry follows._
 One concept-descriptor note with `ThreeWay` empty and both cards reviewed. Set `ThreeWay` via a fields-only update: does Anki *generate* the third card? Then clear it again: does the third card persist blank-fronted, with its history? Then run `Tools > Empty Cards`, read the dialogue's report before confirming, confirm, and check whether the card row **and its revlog rows** are gone.
 *Unblocks:* §3.3 entirely — whether the blank-card report is a nicety or the primary safeguard, and whether re-widening a marker genuinely restores a card intact. The reversibility claim that makes §3.3 survivable rests on this.
 
@@ -341,6 +447,15 @@ One concept-descriptor note with `ThreeWay` empty and both cards reviewed. Set `
 A reviewed card in a normal deck; a filtered deck that gathers it, with rescheduling on and off; record `did`, `odid`, `odue`, `due`, `queue`; then (a) `changeDeck` it elsewhere, (b) suspend and unsuspend it; re-read each time; then empty the filtered deck and re-read.
 *Unblocks:* §3.8. Only worth running when filtered decks are actually in use, which is not yet.
 
+**M7 — ~~Pin the far end.~~ RUN 2026-08-28.** `docs/findings/ANKICONNECT-BEHAVIOUR.md` records Anki 25.09,
+add-on directory `2055492159` with `meta.json`'s `min/max_point_version: 45`, the source's declared
+`required_anki_version (23, 10, 0)`, JSON API version 6, and the profile every measurement was
+taken in — with the two commands that re-read them.
+
+**What it did NOT do**, stated here so the strike-through is not read as more than it is: no test
+reddens on an add-on update, the `__init__.py` line numbers still live in a dozen scattered
+comments, and nothing compares the recorded version against the installed one at run time. See
+§3.10, which stays open for exactly that reason. _Original entry follows._
 **M7 — Pin the far end.** *File read. Minutes.*
 Record the Anki version, the AnkiConnect version and the add-on build alongside the `__init__.py` citations. `meta.json` already pins `min/max_point_version: 45` and nothing in the repo records it.
 *Unblocks:* nothing today; prevents a whole class of silent staleness on the next add-on update.
@@ -380,9 +495,39 @@ I mark each item **[NOW-OR-PRICIER]** or **[SAME-COST-WHENEVER]**.
 5. **Say "suspend" in the plan line, and name every `Flag` key.** [SAME-COST-WHENEVER.] `Flag` is the action that removes cards from review, and it is exactly as unlisted as `create`. This also closes `README.md:342-344`'s unkept promise, and `Plan.parked` already carries the keys the report discards (`plan/SyncAction.scala:332-344` says so in as many words: "KEYS RATHER THAN A COUNT, because the count is derivable from the keys and the keys are not derivable from the count").
 6. **Refuse a run whose complete scan yields zero cards while the collection holds some.** [SAME-COST-WHENEVER.] This is precisely the revisit `docs/reference/CARD-MODEL.md:214` asked for "before or alongside" suspension, whose condition expired when suspension shipped. Note what it is *not*: the **proportional** guard was considered and rejected on the stated grounds that "the proportion is a number nobody can justify". Zero needs no justified number. Say plainly that it does not catch a *half*-arrived vault.
 
+6b. **Detect a heading the parser never saw** (§3.11). [SAME-COST-WHENEVER — but every day it
+    stands is a day an ordinary authoring slip can silently re-key a card.] Sub-numbered rather
+    than inserted, so items 7–16 keep the numbers other documents cite; placed beside item 6
+    because it is the same move, *refuse rather than silently mis-infer*.
+
+    **THE DECISION THIS ITEM CARRIES IS THAT A REFUSAL ALONE IS STRUCTURALLY INSUFFICIENT.** A
+    refusal fires when a MARKED SECTION FAILS TO BUILD. §3.11's variant B builds a perfectly good
+    card under the wrong parent — nothing fails — and variant C leaves no marked section for a
+    refusal to attach to. Neither is reachable from `SpecError` at all, so shipping only the
+    refusal would close the one variant that happens to be visible and leave the one that costs
+    review history open.
+
+    What sees all three is a check over RAW SOURCE asking whether Obsidian and this tool agree
+    about what is a heading — which is what `extract/ListIndent.scala` already is, one rule short
+    of. `docs/findings/PARSER-DISAGREEMENTS.md` carries the design and the rest of the family it belongs
+    to; what is open is whether to ship the narrow refusal first or the whole check once.
+
+    Cheapest thing available meanwhile, and already done: `extract/ListIndent.scala`'s class
+    docstring now says what it does NOT cover, because until it did it read as covering the class.
+
 ### Next few weeks
 
-7. **Run M4 and M5.** Unblocks the retype gate (a real note is waiting), and decides whether §3.3 needs a report or is already survivable.
+7. ~~**Run M4 and M5.**~~ **M4 IS FULLY RUN** (both directions, 2026-08-26 and 2026-08-27).
+   **M5 IS RUN EXCEPT FOR ITS `Empty Cards` HALF** — the flip 2026-08-26, the round trip
+   2026-08-28. _Original entry follows._ Unblocks the retype gate (a real note is waiting), and decides whether §3.3 needs a report or is already survivable.
+
+   **WHAT IS ACTUALLY LEFT IS TWO QUESTIONS, BOTH SMALL, AND BOTH INSIDE ANKI'S OWN USER
+   INTERFACE rather than reachable over the add-on** — which is why they have outlasted the rest
+   of the list rather than because they are hard.
+   - What `Tools > Empty Cards` does to a blank-fronted card, and whether it takes the revlog.
+   - Whether the scheduler PRESENTS a blank-fronted card at all. This one was opened on
+     2026-08-28 and bears on a ruling already made (oas-jco), so it is the more
+     urgent of the two despite being the newer.
 8. **Build the exact-field pairing as a report line** (§4A), speaking only when exactly one candidate matches. Then **`relink`** (§4B), refusing when the new key already has a note. Together these make the rename tax payable and retroactively clear the existing parked set.
 9. **If M5 says it matters: count blank-rendering cards on every run.** It commits the design to nothing; the cost is that the tool must know which templates render empty for which field values, and a rule table can drift from the templates it describes — this project's most-recorded failure mode.
 10. **Decide the identity question, with M1's numbers in hand.** [NOW-OR-PRICIER — the only genuinely time-sensitive item on this list.] Anchors, wider canonicalisation, git evidence, or explicitly nothing. Whatever the answer, **write it down with its reasoning**, because the last time this was decided the reasoning did not survive (§5). If the answer is anchors, the in-place rebind for already-live keys is a precondition, not a detail.
@@ -391,7 +536,9 @@ I mark each item **[NOW-OR-PRICIER]** or **[SAME-COST-WHENEVER]**.
 
 11. **`prune`, list-first.** Only honest once the parked set has been triaged, which needs item 8. Its whole safety argument is "a human sees a list", and that argument's strength is inversely proportional to the size of the accident it must catch. It is also the first operation that would put a delete verb on the algebra, and `plan/SyncAction.scala:181-191` was written longhand specifically so that verb cannot arrive by accident. **This can wait years, and the waiting is what makes everything else safe.**
 12. **Tag-format versioning / a tolerant reader.** Only needed if item 10 changes the format — and if it does, the tolerant reader must ship *before* the change, so it is a precondition of 10, not an independent item.
-13. **M7 (version pinning).** Cheap; only bites on an add-on update.
+13. ~~**M7 (version pinning).** Cheap; only bites on an add-on update.~~ **DONE 2026-08-28** —
+    `docs/findings/ANKICONNECT-BEHAVIOUR.md`. The RECORDING half only; §3.10 stays open because nothing
+    detects drift.
 14. **M6 (filtered decks).** Only when filtered decks are actually in use.
 15. **Vault tags flowing into Anki** — the study-scope half of the design that does not exist at all. Blocked on the tag-ownership ruling (IN-FLIGHT.md item 9: an unprefixed vault tag is indistinguishable from one added by hand in Anki), not on anything in this document.
 16. **A run ledger.** Deferred, and I want to say why rather than leave it implied: its main justification — reconstructing an aborted run — does not hold. `applyEach` wraps every action in `.attempt` and folds failures into `ExecutionFailure` (`plan/Executor.scala:255-266`), so no `AnkiError` escapes mid-write; the only `Left` from `Executor.run` comes from `Retyping.shapesOf` under `Apply`, which runs **before the first write** (`:215-218`). So `AbortedDuringExecution`'s "writing may already have begun" is over-cautious on every reachable path. The genuinely unknown case — process death or a transport `Throwable` — never reaches that branch at all; it crashes out of `IO`. A ledger's remaining justification is an audit trail, which is real but not urgent.

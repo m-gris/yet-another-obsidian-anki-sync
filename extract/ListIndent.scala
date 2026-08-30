@@ -51,6 +51,57 @@ package obsidiananki.extract
   * another editor, a formatter such as Prettier (which indents by two), or an agent writing a
   * note directly into the vault. That is the whole point of scanning: those are exactly the
   * files nobody proofreads.
+  *
+  * ═══════════════════════════════════════════════════════════════════════════════════════════
+  * WHAT THIS DOES **NOT** COVER — added 2026-08-27, and the omission was found the hard way
+  * ═══════════════════════════════════════════════════════════════════════════════════════════
+  *
+  * THE OPENING SENTENCE OF THIS FILE READS WIDER THAN THE FILE IS. It says this finds list items
+  * "this tool's markdown parser will read differently from the way the author meant them, and
+  * than the way Obsidian shows them back". That is the CLASS. What is implemented is one MEMBER
+  * of it: a sub-item indented too little. A heading swallowed BY a list is the same disagreement
+  * one step over, and it falls straight through this scanner.
+  *
+  * VERIFIED BY EXECUTION, 2026-08-27, against `System Design Interview Framework.md` in Marc's
+  * vault. A `# heading` on the line immediately after a list line, with NO BLANK LINE between
+  * them, is absorbed by laika-core 1.3.2 into the open list item and parsed there as a nested
+  * `ast.Header`. `SectionBuilder` lifts only TOP-LEVEL headers into `Section`s, so it never
+  * becomes one; `Extractor.walk` matches on `Section`, so it is never seen as a marked heading;
+  * and `content/Lower.scala`'s `case ast.Header` arm flattens it to a `Block.Paragraph`, which
+  * puts the literal marker text onto the card as content.
+  *
+  * THREE OUTCOMES, ALL SILENT, all measured by A/B on copies differing by ONE BLANK LINE:
+  *
+  *   1. the swallowed heading carried the marker  -> its card is never created
+  *   2. a marked heading sits BELOW the swallowed one, inside the same list -> no card at all
+  *   3. a marked heading sits below it but outside the list -> THE CARD IS BUILT UNDER THE
+  *      WRONG PARENT. `# Alpha` / list / `# Beta` / `## Gamma #flashcard/1way` keys as
+  *      `alpha / gamma` without the blank line and `beta / gamma` with it.
+  *
+  * Every one of the three reports `failures: 0`, `scan: complete`, and exits 0.
+  *
+  * OUTCOME 3 IS THE ONE THAT COSTS REVIEW HISTORY, AND IT IS THE ONE NO REFUSAL CAN REACH.
+  * Nothing fails to build there — the card is well-formed and merely mis-keyed — so there is no
+  * `BuildFailure` to attach a refusal to. The heading path is half the card identity, so adding
+  * the blank line LATER (or letting a formatter add it) re-keys the card: the old note is
+  * orphaned and suspended, and a replacement is created with no review history. That is the
+  * failure this file's own opening paragraph promises to prevent, arriving through a door it
+  * does not watch.
+  *
+  * WHY THE SCANNER CANNOT SEE IT AS WRITTEN. `isHeading` below matches `^#{1,6}(\s|$)`, and on a
+  * match the loop does `heading = lineNumber; open = List.empty` — "A heading closes every open
+  * list." So THIS SCANNER BELIEVES THE LINE IS A HEADING AND CLOSES THE LIST, while Laika keeps
+  * the list open and swallows the line. The disagreement is present in this very file and is not
+  * reported, because the only thing compared afterwards is INDENTATION.
+  *
+  * BOUNDED, so the gap is not overstated: a heading immediately after a PARAGRAPH parses
+  * correctly — Laika's `headerOrParagraph` handles that case — and so does one after another
+  * heading, or after a fence. It is specifically heading-after-LIST-ITEM.
+  *
+  * NOT FIXED HERE. Widening this scanner would close outcomes 1 and 2 and NOT outcome 3, which
+  * needs something that runs before a card is keyed rather than when one fails to build. The
+  * options, and the argument between them, are `docs/findings/PARSER-DISAGREEMENTS.md`; the finding is
+  * oas-30t.
   */
 object ListIndent:
 
