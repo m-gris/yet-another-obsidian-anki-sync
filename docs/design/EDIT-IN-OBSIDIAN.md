@@ -480,6 +480,6 @@ that could fail.
 - **Whether a `obsidian://adv-uri` URL reports anything when the plugin is absent.** Expected:
   no. If confirmed, the startup check in §3 is not optional. §3.
 
-The convention for pending measurements in this repository is `IN-FLIGHT.md`, which
+The convention for pending measurements in this repository is `docs/history/IN-FLIGHT.md`, which
 `plan/Retyping.scala` already cites for exactly this purpose. These three belong there when work
 starts.

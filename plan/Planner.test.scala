@@ -626,7 +626,7 @@ class PlannerTest extends munit.FunSuite:
     //
     // THE ORIGINAL INVARIANT IS NOW UNCOVERED, and nothing else covers it — checked. Only a
     // cloze-kind mismatch still raises from a retype, and building that fixture here is more
-    // than a rename. Recorded as item 30 of `IN-FLIGHT.md`, which also names the fault-injecting
+    // than a rename. Recorded as item 30 of `docs/history/IN-FLIGHT.md`, which also names the fault-injecting
     // doubles in two other test files as the route nobody tried.
     val report = runReport(planOf(scan, observe(anki)), anki, RetypePolicy.Apply)
 
@@ -637,7 +637,7 @@ class PlannerTest extends munit.FunSuite:
     assert(present.contains(good2), "an action beside the one set aside was abandoned")
   }
 
-  /** THE OTHER HALF, RESTORED 2026-08-28 — `IN-FLIGHT.md` item 30.
+  /** THE OTHER HALF, RESTORED 2026-08-28 — `docs/history/IN-FLIGHT.md` item 30.
     *
     * The test above is about an action SET ASIDE. This one is about an action that genuinely
     * RAISES, which is what the pair's name has always claimed and what stopped being covered on

@@ -138,7 +138,7 @@ enum BuildFailure:
     */
   case ClozeBlockUnanchored(file: String, line: Int, reason: String)
 
-  /** A frontmatter tag that ALMOST names a marker — `IN-FLIGHT.md` item 37.
+  /** A frontmatter tag that ALMOST names a marker — `docs/history/IN-FLIGHT.md` item 37.
     *
     * ITS OWN CASE RATHER THAN A VARIANT OF THE ONE ABOVE, because the fix is different. That one
     * says "move your marker onto a heading"; this one says "you have spelled it wrong". Telling

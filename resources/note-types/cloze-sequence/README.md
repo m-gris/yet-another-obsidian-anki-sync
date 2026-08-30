@@ -74,7 +74,7 @@ reported and left alone — unless `--repair` is asked for, which is what rewrot
 templates and stylesheet in the collection.
 
 **It HAS been run against a live collection**: profile `claude-POC-test`, 2026-08-21, plain
-then `--repair`, then a migrating `sync`; the measurements are in `../../../IN-FLIGHT.md`.
+then `--repair`, then a migrating `sync`; the measurements are in `../../../docs/history/IN-FLIGHT.md`.
 Re-read read-only later the same day: `modelNames` lists `Obsidian Cloze Sequence`, and
 `findNotes` finds 2 notes on it. (This sentence previously said no agent had ever run it.)
 

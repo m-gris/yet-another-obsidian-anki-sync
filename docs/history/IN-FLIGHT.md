@@ -1,3 +1,25 @@
+# The open-work list, superseded
+
+> **THIS IS A HISTORICAL RECORD AS OF 2026-08-30. DO NOT ADD TO IT.**
+>
+> This file was the project's open-work list for ten days and grew to 1,351 lines, which is
+> exactly the markdown task tracker Marc's standing rules prohibit. On 2026-08-30 its **open**
+> items moved into beads — `bd list`, prefix `oas` — carried across verbatim so that no argument
+> was lost in translation. Thirty beads, with the relations that had only ever been stated in
+> prose made real: a decision blocked by the measurement it waits on, a cloze epic with its open
+> questions as children.
+>
+> **What remains here is the sixteen CLOSED items**, and they are why the file was archived
+> rather than deleted. Each records what was decided, what was measured, and — more valuable —
+> which confident claims turned out to be wrong and how that was discovered. A bead for a closed
+> item would be a ticket nobody will ever work; the reasoning belongs in a document, and this is
+> the document.
+>
+> Code comments that pointed at an open item now name its bead. The ones pointing at a closed
+> item still point here, which is where their reasoning is.
+
+---
+
 # In flight — delete this file when the work below has landed
 
 _Rewritten 2026-08-24, appended to daily since. Everything here was checked, not remembered._

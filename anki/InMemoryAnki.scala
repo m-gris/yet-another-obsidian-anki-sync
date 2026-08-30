@@ -78,7 +78,7 @@ final class InMemoryAnki private (
 
   /** How many cards a note of this type generates.
     *
-    * ANSWERED FROM THE NOTE TYPE'S SPEC, NEVER FROM ITS NAME, since 2026-08-28 — `IN-FLIGHT.md`
+    * ANSWERED FROM THE NOTE TYPE'S SPEC, NEVER FROM ITS NAME, since 2026-08-28 — `docs/history/IN-FLIGHT.md`
     * item 31. The rule itself lives in [[CardGeneration]], where it is tested against this
     * repository's real templates rather than only through this fake.
     *

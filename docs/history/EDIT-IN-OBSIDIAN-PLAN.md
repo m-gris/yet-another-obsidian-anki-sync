@@ -1,6 +1,6 @@
 # Edit in Obsidian — execution plan
 
-_Written 2026-08-27. **Delete this file when the work below has landed**, the way `IN-FLIGHT.md`
+_Written 2026-08-27. **Delete this file when the work below has landed**, the way `docs/history/IN-FLIGHT.md`
 says of itself._
 
 The design this executes is `docs/design/EDIT-IN-OBSIDIAN.md`. That document is the argument; this one

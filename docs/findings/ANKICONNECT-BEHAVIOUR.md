@@ -157,7 +157,7 @@ must be checked before the call rather than relying on a flag to make the call s
 **Whether Anki's scheduler serves a card whose front renders blank.** The stranded card retained
 its queue value and its due timestamp, which is evidence that it stays in scheduling, but no test
 established whether it is actually presented in a review session. This matters because entry 23
-of `IN-FLIGHT.md` rules for a per-card flag over suspension partly on the grounds that "a retired
+of `docs/history/IN-FLIGHT.md` rules for a per-card flag over suspension partly on the grounds that "a retired
 card's front renders empty and Anki never queues it." That sentence is load-bearing and is
 currently in doubt.
 

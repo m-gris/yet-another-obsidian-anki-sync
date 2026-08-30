@@ -132,7 +132,7 @@ class CardGenerationTest extends munit.FunSuite:
 
   // ══════════════════════════════════ the count itself ══════════════════════════════════════
 
-  /** THE REGRESSION THAT MOTIVATED ALL OF THIS — `IN-FLIGHT.md` item 31. A note type defined
+  /** THE REGRESSION THAT MOTIVATED ALL OF THIS — `docs/history/IN-FLIGHT.md` item 31. A note type defined
     * in a test with three templates produced ONE card, silently, because the fake matched on
     * the note type's NAME and fell through to a default. A test doing this on 2026-08-28 was
     * pointed at a named note type instead, with a comment explaining why; this is the fix that

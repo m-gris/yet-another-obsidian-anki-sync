@@ -15,7 +15,7 @@ _Amended 2026-08-21. This paragraph previously said nothing here was read by the
 
 These files HAVE been installed into a live collection. `install-note-types` was run against
 profile `claude-POC-test` on 2026-08-21 — plain, then `--repair`, then a migrating `sync`; the
-run and its before/after measurements are recorded in `IN-FLIGHT.md` (43 notes before and 43
+run and its before/after measurements are recorded in `docs/history/IN-FLIGHT.md` (43 notes before and 43
 after, 21 moved to a new note type, **0** card ids changed, **0** scheduling values changed, 38
 of 43 carrying a populated `Context`). Re-read later the same day, read-only, via `modelNames`,
 `modelFieldNames`, `modelTemplates` and `modelStyling`: that profile holds all five note types,

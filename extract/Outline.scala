@@ -37,7 +37,7 @@ final case class HeadingNode(title: String, children: Vector[HeadingNode]):
   *
   * WHAT THIS IS FOR. `#flashcard/sequence/headers` makes the STRUCTURE of a document the thing
   * recalled — a table of contents you can be tested on — rather than only the scaffolding that
-  * other cards hang off. Filed as `IN-FLIGHT.md` item 28, requested by Marc 2026-08-27.
+  * other cards hang off. Filed as `docs/history/IN-FLIGHT.md` item 28, requested by Marc 2026-08-27.
   *
   * IT ADDS NO RENDERING CODE, WHICH IS THE STRONGEST FACT ABOUT IT. The blocks built here are
   * the SAME `Block.Bullets` a hand-written markdown list already lowers to, so `AsHtml` emits

@@ -100,7 +100,7 @@ because CommonMark reads `[!note]` as a shortcut reference link. It is silent to
 that note has no frontmatter `id`; giving it one, which is exactly what somebody does when they
 want its annotations to become cards, is what makes the failure appear.
 
-_Both findings are recorded as open items 20 and 21 in `IN-FLIGHT.md`._
+_Both findings are recorded as open items 20 and 21 in `docs/history/IN-FLIGHT.md`._
 
 ### A plain content hash — ELIMINATED, and instructively
 

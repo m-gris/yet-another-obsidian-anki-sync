@@ -27,7 +27,7 @@ Everything below was checked against the source. Where I say VERIFIED I opened t
 293	"  sync --migrate-note-types ..."
 ```
 
-**Why it matters.** For the `framework` note that produced the 34.5 seconds, that remedy does not work. `plan/Retyping.scala:165-177` asks the **policy first** — under `Defer` the verdict is `DeferredByPolicy` and *no shapes are read at all* (the docstring at `:159-163` says so and defends it as load-bearing). Ask with `--migrate-note-types` and `refusalFor` (`:187-197`) fires `TemplateCountDiffers`, because `IN-FLIGHT.md:179-185` records this note as `Obsidian Basic (and reversed card)` (2 templates) → `Obsidian Concept-Descriptor` (3) — "the GROWTH direction," which the gate refuses and `docs/findings/EVOLVABILITY.md:49` marks UNMEASURED pending M4.
+**Why it matters.** For the `framework` note that produced the 34.5 seconds, that remedy does not work. `plan/Retyping.scala:165-177` asks the **policy first** — under `Defer` the verdict is `DeferredByPolicy` and *no shapes are read at all* (the docstring at `:159-163` says so and defends it as load-bearing). Ask with `--migrate-note-types` and `refusalFor` (`:187-197`) fires `TemplateCountDiffers`, because `docs/history/IN-FLIGHT.md:179-185` records this note as `Obsidian Basic (and reversed card)` (2 templates) → `Obsidian Concept-Descriptor` (3) — "the GROWTH direction," which the gate refuses and `docs/findings/EVOLVABILITY.md:49` marks UNMEASURED pending M4.
 
 So the run tells the reader: *nothing was written; leaving them is safe; ask with `--migrate-note-types`.* Two of those three are misleading, and the document only found one. The reader who follows the printed remedy lands on `Report.retypePreview`'s "OF THE MOVES COUNTED ABOVE, 1 WILL NOT HAPPEN" and a *different* reassurance at `:344-345` — which is where the 34.5 seconds actually come from.
 
@@ -125,7 +125,7 @@ Three things this glosses:
 
 ### F9. Converting an existing cloze section into block clozes destroys its review history, and the document's own "no adoption event" argument does not cover it. **[cost understated]**
 
-§3 argues: *"A paragraph has no card today. No live key, no adoption event, no orphan."* True for a paragraph that never carried a card. False for the migration the sniper invites: a one-paragraph `#flashcard/cloze` section moved to `%%card cloze: …%%` produces a **byte-identical `Text` field under a new key** — `AsText`/`AsHtml` render the same single block either way — so the planner sees an orphan plus a historyless create (`docs/findings/EVOLVABILITY.md:55`). The exact-field pairing that would catch it (§4A) is not built (`docs/findings/EVOLVABILITY.md:194`: *"IN-FLIGHT.md:174-176 claims tier 2 ('exact fields') is built; it is not"*).
+§3 argues: *"A paragraph has no card today. No live key, no adoption event, no orphan."* True for a paragraph that never carried a card. False for the migration the sniper invites: a one-paragraph `#flashcard/cloze` section moved to `%%card cloze: …%%` produces a **byte-identical `Text` field under a new key** — `AsText`/`AsHtml` render the same single block either way — so the planner sees an orphan plus a historyless create (`docs/findings/EVOLVABILITY.md:55`). The exact-field pairing that would catch it (§4A) is not built (`docs/findings/EVOLVABILITY.md:194`: *"docs/history/IN-FLIGHT.md:174-176 claims tier 2 ('exact fields') is built; it is not"*).
 
 **Fix.** Say it: *adopting a block anchor for content that already has a section-level cloze card orphans that card. Nothing detects the pairing today. The sniper is for new content until §4A ships.*
 
@@ -133,7 +133,7 @@ Three things this glosses:
 
 ### F10. A block marker inside an already-marked section produces two notes over the same content, and the document never says what happens. **[decision dodged]**
 
-Nothing in §3 or §4 says what a `%%card cloze: x%%` inside a `#flashcard/cloze` section means. Both markers are legal under the proposal; both produce a note; the block's content is a subset of the section's. That is *"two notes holding the same fact, on two schedules, forever, with nothing comparing content across keys to notice"* — the project's own words, at `model/CardSpec.scala:182-186`, given there as the reason a whole refusal (`TableRowsWithoutRows`) exists. `IN-FLIGHT.md:141-145` records content-duplicate detection as open and unbuilt.
+Nothing in §3 or §4 says what a `%%card cloze: x%%` inside a `#flashcard/cloze` section means. Both markers are legal under the proposal; both produce a note; the block's content is a subset of the section's. That is *"two notes holding the same fact, on two schedules, forever, with nothing comparing content across keys to notice"* — the project's own words, at `model/CardSpec.scala:182-186`, given there as the reason a whole refusal (`TableRowsWithoutRows`) exists. `docs/history/IN-FLIGHT.md:141-145` records content-duplicate detection as open and unbuilt.
 
 **Fix.** Decide it, in §3, in one sentence. The candidates are: refuse a block marker inside a marked section (`SpecError`, message naming both); or let the block marker *suppress* the section card; or admit both and count them. Do not leave it to the implementer.
 

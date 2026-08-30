@@ -185,7 +185,7 @@ enum HeadingReach:
   * (headings present suggests the marker fell off one of them, the accident Obsidian's editor
   * causes) and exactly backwards for one reading its STRUCTURE, which needs headings because
   * they are its items. The condition asked whether there was SOME marker and never WHICH, so
-  * nothing forced a marker added later to answer. See `IN-FLIGHT.md` item 35.
+  * nothing forced a marker added later to answer. See `docs/history/IN-FLIGHT.md` item 35.
   *
   * A MATCH RATHER THAN A PREDICATE, so the compiler demands an answer from every marker. That
   * is the whole mechanism: an inexhaustive match is an error in this project, and a boolean
@@ -261,7 +261,7 @@ enum MarkerError:
 
 /** WHAT ONE FRONTMATTER TAG TURNED OUT TO BE.
   *
-  * IT REPLACES A FILTER FOLLOWED BY A SWALLOWED ERROR — `IN-FLIGHT.md` item 37, found by Marc
+  * IT REPLACES A FILTER FOLLOWED BY A SWALLOWED ERROR — `docs/history/IN-FLIGHT.md` item 37, found by Marc
   * on 2026-08-28 after a note of his produced nothing and said nothing. The old code kept tags
   * beginning with `flashcard` and then parsed them with the failure discarded:
   *

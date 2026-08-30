@@ -3,7 +3,7 @@ package obsidiananki.anki
 /** HOW MANY CARDS A NOTE HAS, ANSWERED THE WAY ANKI ANSWERS IT.
   *
   * IT EXISTS BECAUSE THE IN-MEMORY COLLECTION WAS ANSWERING IT FROM THE NOTE TYPE'S NAME —
-  * `IN-FLIGHT.md` item 31. `Basic (and reversed)` gave two, concept-descriptor gave two or
+  * `docs/history/IN-FLIGHT.md` item 31. `Basic (and reversed)` gave two, concept-descriptor gave two or
   * three, and **anything else gave one**, including a note type a test had just defined with
   * three templates. So a test seeding its own multi-template note type and asserting about its
   * cards was measuring something other than what it appeared to, and said nothing while doing

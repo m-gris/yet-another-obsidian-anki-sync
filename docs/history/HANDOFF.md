@@ -54,11 +54,11 @@ collection.
 ⚠️ ~~**Nothing in this tool has touched a live collection since the note types were renamed on
 2026-08-21.** `install-note-types` and `sync --migrate-note-types` have both been driven only
 against the in-process fakes.~~ **CONTRADICTED — do not act on the struck-through paragraph.**
-_Flagged 2026-08-21._ `IN-FLIGHT.md` records the whole sequence as having been run against
+_Flagged 2026-08-21._ `docs/history/IN-FLIGHT.md` records the whole sequence as having been run against
 profile `claude-POC-test`, with before/after measurements (43 notes, 0 card ids changed, 0
-scheduling moves, 21 notes retyped). The two documents cannot both be right and `IN-FLIGHT.md`
+scheduling moves, 21 notes retyped). The two documents cannot both be right and `docs/history/IN-FLIGHT.md`
 is the later one. **NOT RE-VERIFIED HERE:** nothing in this session talked to a collection, so
-which is true was established by reading `IN-FLIGHT.md`, not by measuring. Read that file
+which is true was established by reading `docs/history/IN-FLIGHT.md`, not by measuring. Read that file
 before you believe either.
 
 The live sequence, in order, is: hand-rename the two note types in Anki's Tools → Manage Note
@@ -77,7 +77,7 @@ rewrites the templates; the by-hand field addition the old text called for is no
 - `extract/` — `Frontmatter`, `Extractor`, `Tables`, `Cloze`, `VaultWalker`.
 - `cli/` — `inspect`, `sync` and `install-note-types`. `sync` has run against a real collection: it creates, updates, refuses an inconsistent vault before writing, and a second run reports the collection already matches the vault. `install-note-types` (added 2026-08-21) creates this tool's five note types from `resources/note-types/`, and with `--repair` also adds missing fields and overwrites templates and styling. `sync` refuses before observing when those note types are missing or lack a field it writes.
   `sync --migrate-note-types` (added 2026-08-21) additionally moves notes that sit on a DIFFERENT note type from the one the vault asks for — which since the rename is every note synced before that date. Without the flag those notes are left alone and reported as *deferred*, which makes the run exit 1 rather than 0.
-  _Two sentences here claiming these commands "have NOT been run against a live collection by any agent" were removed on 2026-08-21: `IN-FLIGHT.md` says they have. See the contradiction flagged above; nothing in this session measured a collection either way._
+  _Two sentences here claiming these commands "have NOT been run against a live collection by any agent" were removed on 2026-08-21: `docs/history/IN-FLIGHT.md` says they have. See the contradiction flagged above; nothing in this session measured a collection either way._
 
 Try it: `scala-cli run <tool dir> -- inspect --vault-path <tool dir>/dummy-vault` → 12 files,
 55 notes, 2 expected failures, 3 deliberate duplicate keys, `scan: complete`, exit 2.
@@ -425,7 +425,7 @@ Ruled by Marc. The reasoning is in the source and in `docs/reference/CARD-MODEL.
     `ChangeKind`, `extract/Tables.scala`'s `DescriptorColumn`, among them.
 
     The four that remain are written out in full, with file and line, as items **3, 4, 5 and 6
-    of `IN-FLIGHT.md`** — that is IN-FLIGHT's own numbering, not the audit's, and the entries
+    of `docs/history/IN-FLIGHT.md`** — that is IN-FLIGHT's own numbering, not the audit's, and the entries
     there are the ones to read. In the order they should be taken:
 
     - ~~`extract/VaultWalker.scala:264`~~ **DONE 2026-08-24** — the one that changed behaviour.
@@ -435,16 +435,16 @@ Ruled by Marc. The reasoning is in the source and in `docs/reference/CARD-MODEL.
     - ~~`NoteTypeStatus` catch-alls at three sites~~ **DONE 2026-08-24** — see IN-FLIGHT item 4.
     - **STYLE only** — behaviour-preserving, and the entry argues it may not be worth doing.
 
-11. **THE DAY-TO-DAY QUEUE IS `IN-FLIGHT.md`, NOT THIS LIST.** This section holds the items that
+11. **THE DAY-TO-DAY QUEUE IS `docs/history/IN-FLIGHT.md`, NOT THIS LIST.** This section holds the items that
     outlive a session: rulings deferred to Marc, subsystems not built, hazards with a blast
-    radius. `IN-FLIGHT.md` holds what is mid-flight right now — currently sixteen numbered
+    radius. `docs/history/IN-FLIGHT.md` holds what is mid-flight right now — currently sixteen numbered
     items, the settled rulings behind them, the fixtures that look untidy on purpose, and the
     mistakes worth not repeating. **Read both.** An item that survives more than a few sessions
     belongs here; an item finished this week belongs there and then disappears.
 
 12. **FIVE DECISIONS ARE WAITING ON MARC, none of them blocking.** Named here so a later session
     does not rediscover them as bugs and 'fix' them. Four of the five are written out in full as items 7–11
-    of `IN-FLIGHT.md`.
+    of `docs/history/IN-FLIGHT.md`.
 
     - **Blank-rendering cards.** NOT the same thing as an empty section body, which is already a
       hard refusal (`B6`, above). This is a card Anki keeps but cannot show — switching a table

@@ -987,7 +987,7 @@ class VaultWalkerTest extends munit.FunSuite:
     )
   }
 
-  /** THE SILENCE MARC HIT ON 2026-08-28 — `IN-FLIGHT.md` item 37.
+  /** THE SILENCE MARC HIT ON 2026-08-28 — `docs/history/IN-FLIGHT.md` item 37.
     *
     * He wrote `flashard/sequence/headers` into a note's frontmatter, one character short of
     * `flashcard`, synced, and was told NOTHING. Two checks missed it for the same reason: the
@@ -1108,7 +1108,7 @@ class VaultWalkerTest extends munit.FunSuite:
     )
   }
 
-  /** THE DEFECT MARC HIT ON THE DAY THE MARKER SHIPPED — `IN-FLIGHT.md` item 35.
+  /** THE DEFECT MARC HIT ON THE DAY THE MARKER SHIPPED — `docs/history/IN-FLIGHT.md` item 35.
     *
     * He wrote `flashcard/sequence/headers` into a note's frontmatter, synced, and got a refusal
     * telling him to move the marker onto a heading. That advice was impossible to follow: a

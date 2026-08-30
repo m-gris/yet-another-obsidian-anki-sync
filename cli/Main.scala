@@ -219,7 +219,7 @@ object Main
         IO.consoleForIO
           // `toString`, MATCHING ITS NEIGHBOURS RATHER THAN INVENTING A SECOND STYLE. That a
           // raw case class reaches a terminal here is a known defect covering six sites —
-          // `IN-FLIGHT.md` item 33 — and its fix is one `describe` on `AnkiError`, not a
+          // `docs/history/IN-FLIGHT.md` item 33 — and its fix is one `describe` on `AnkiError`, not a
           // seventh hand-written wording that would then have to be found and changed too.
           .errorln(s"REFUSED: Anki did not open Browse.\n\n  Anki's answer:  ${error.toString}")
           .as(ExitCode.Error)

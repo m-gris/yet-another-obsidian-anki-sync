@@ -48,7 +48,7 @@ found by looking things up from the markdown. That enumeration has nothing to fi
 no vault is recorded anywhere.
 
 **Until that is fixed, give each vault its own Anki profile.** It is not a rule the design
-believes in — it is a defect with a known fix, written up as item 42 in `IN-FLIGHT.md`: a `Vault`
+believes in — it is a defect with a known fix, written up as item 42 in `docs/history/IN-FLIGHT.md`: a `Vault`
 field written beside the identity, holding the vault directory's name, so the enumeration has
 something to filter on. The same entry covers making decks read `Obsidian::<vault>::…`, which is
 what makes two vaults legible in one collection rather than merely possible.

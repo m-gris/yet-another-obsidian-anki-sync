@@ -331,7 +331,7 @@ class RetypingTest extends munit.FunSuite:
     // THE NAMED TYPE IS NOW A CHOICE RATHER THAN A WORKAROUND. Until 2026-08-28 it was forced:
     // the fake decided a note's card count from the note type's NAME, so `stockWide` — three
     // templates, defined right here in this file — yielded ONE card and this test could not be
-    // written against it. That gap is closed (`IN-FLIGHT.md` item 31), and the test directly
+    // written against it. That gap is closed (`docs/history/IN-FLIGHT.md` item 31), and the test directly
     // below proves it. This one keeps the named type deliberately, because it is Marc's own
     // case from 2026-08-27 and reads as such.
     val anki = collectionWith()
@@ -367,7 +367,7 @@ class RetypingTest extends munit.FunSuite:
   }
 
   /** THE SAME PRICE, OVER A NOTE TYPE DEFINED IN THIS FILE — which could not be written before
-    * 2026-08-28 and is the reason `IN-FLIGHT.md` item 31 mattered.
+    * 2026-08-28 and is the reason `docs/history/IN-FLIGHT.md` item 31 mattered.
     *
     * `stockWide` declares three templates, all ungated. The fake used to answer ONE for it,
     * because it read the note type's NAME and fell through to a default for anything it did not

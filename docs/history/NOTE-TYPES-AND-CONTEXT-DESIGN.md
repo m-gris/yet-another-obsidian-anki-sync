@@ -836,7 +836,7 @@ plans as a `Retype`. A navigator reported 43 such notes in `claude-POC-test`. Pe
 `Executor.run` these are collected as per-action failures so the run continues and reports
 them — nothing is corrupted — but **no note is migrated**.
 
-Also settled and not in dispute: IN-FLIGHT.md records a live probe showing `updateNoteModel`
+Also settled and not in dispute: docs/history/IN-FLIGHT.md records a live probe showing `updateNoteModel`
 preserves the card id, `type`/`queue`/`interval`/`factor`/`reps`, and the review-log entry. So
 retyping does not cost review history. It is simply unbuilt.
 

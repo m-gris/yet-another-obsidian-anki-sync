@@ -807,7 +807,7 @@ object Extractor:
         // ── A HEADING'S SUBHEADINGS AS THE SEQUENCE — NOT BUILT ─────────────────────────
         //
         // THE HOLE IS DELIBERATE, AND THIS ARM EXISTS SO THE COMPILER HOLDS THE PLACE. Filed
-        // as `IN-FLIGHT.md` item 28. What it must do is understood: synthesise the same
+        // as `docs/history/IN-FLIGHT.md` item 28. What it must do is understood: synthesise the same
         // `Block.Bullets` a hand-written list would have lowered to, from this section's child
         // headings, so `AsHtml` emits the `<li>` elements the note type's `#text li` selector
         // already hides. No new rendering code, exactly as the arm below added none.

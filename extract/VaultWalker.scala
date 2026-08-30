@@ -331,7 +331,7 @@ enum MarkedHeadings:
     * SPLIT FROM `Headingless` ON 2026-08-28. These were one case, `Absent`, told apart by a
     * boolean in a pattern guard — while the comment above that guard described the difference
     * in prose and called only the first a mistake. A distinction that load-bearing belongs in
-    * the type, where a new branch cannot fail to notice it. See `IN-FLIGHT.md` item 36.
+    * the type, where a new branch cannot fail to notice it. See `docs/history/IN-FLIGHT.md` item 36.
     */
   case NoneMarked(document: laika.ast.RootElement)
 
@@ -481,7 +481,7 @@ object VaultWalker:
 
           // ── EVERY FRONTMATTER TAG, READ RATHER THAN FILTERED ────────────────────────────
           //
-          // THIS USED TO BE A FILTER FOLLOWED BY A SWALLOWED ERROR — `IN-FLIGHT.md` item 37 —
+          // THIS USED TO BE A FILTER FOLLOWED BY A SWALLOWED ERROR — `docs/history/IN-FLIGHT.md` item 37 —
           // and two different mistakes fell through it, both without a word:
           //
           //   .filter(_.toLowerCase.startsWith("flashcard"))
@@ -635,7 +635,7 @@ object VaultWalker:
               // saying so is the whole message.
               //
               // A MARKER THAT READS STRUCTURE makes this its INTENDED use, and refusing it was
-              // a defect — `IN-FLIGHT.md` item 35, found by Marc on the day the marker shipped.
+              // a defect — `docs/history/IN-FLIGHT.md` item 35, found by Marc on the day the marker shipped.
               // A whole-note `#flashcard/sequence/headers` card is made OF the headings, since
               // they are its items, so it cannot work on a note without them; the old advice to
               // move the marker onto a heading was advice the author had to ignore.

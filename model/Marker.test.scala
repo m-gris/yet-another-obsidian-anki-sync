@@ -9,7 +9,7 @@ class MarkerTest extends munit.FunSuite:
 
   // ------------------------------------------------------ reading a frontmatter tag ----
 
-  /** THE NOTE THAT STARTED THIS — `IN-FLIGHT.md` item 37, 2026-08-28.
+  /** THE NOTE THAT STARTED THIS — `docs/history/IN-FLIGHT.md` item 37, 2026-08-28.
     *
     * Marc wrote `flashard/sequence/headers` into a note's frontmatter, one character short of
     * `flashcard`, synced, and was told nothing at all. The tag failed a `startsWith("flashcard")`
