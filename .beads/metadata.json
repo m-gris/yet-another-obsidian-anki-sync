@@ -2,6 +2,6 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_database": "yet_another_obsidian_anki_sync",
-  "project_id": "fd4f8216-8364-4f3d-8587-22cdcf291f88"
+  "dolt_database": "oas",
+  "project_id": "a0b5ece5-05a8-4a5b-93e5-d2a071d49d66"
 }
