@@ -40,7 +40,7 @@ object CardSearch:
     * later one said the tag stays "permanently", which overcorrected. Both are withdrawn. What is
     * true: every note this tool generates carries the field, so the tag half serves notes written
     * before the field existed — and it goes when those are gone, which somebody decides. See
-    * `plan/Executor.scala`'s resolution comment and `IN-FLIGHT.md` item 40.
+    * `plan/Executor.scala`'s resolution comment and oas-ktm.
     *
     * DELETING THE TAG HALF WOULD BE INVISIBLE, which is why the withdrawn sentence was worth
     * chasing down rather than leaving to be noticed later. Such a note's cards would simply stop

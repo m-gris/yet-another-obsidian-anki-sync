@@ -74,7 +74,7 @@ one-card concept-descriptor shape, `cdd/1way`, did not appear in the ratified mo
 
 **`3way` and `3way/all` remain as ALIASES** of `cdd/2way` and `cdd/3way` — the same values, so
 rewriting a vault's markers changes no key, no note type and no field, and syncs nothing.
-`IN-FLIGHT.md` item 11 carries the open question of whether to retire them.
+oas-3h7 carries the open question of whether to retire them.
 
 **Why the rename.** `Nway` counts RETRIEVAL DIRECTIONS everywhere, and the ceiling is a property of
 the SHAPE — a heading-and-body card has two fields and so at most two directions, a

@@ -693,7 +693,7 @@ needed, and the two cases behave differently.
 **Within the `cdd` family**, narrowing does *not* delete the card it retires. It stays, holding its
 review history, with nothing on its front, so it never comes up again. Anki's **Tools → Empty
 Cards** will offer to delete exactly those, so read that dialogue rather than confirming it.
-_Reporting and flagging such a card is decided and not yet built; see `IN-FLIGHT.md` item 23._
+_Reporting and flagging such a card is decided and not yet built; see oas-jco._
 
 **Across note types** — anything that would leave a card on a note type with fewer templates than
 it needs — is **refused**, whatever flags you pass. Not out of caution about your files: nobody has

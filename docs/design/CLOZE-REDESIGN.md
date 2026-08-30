@@ -224,7 +224,7 @@ was written, and it is worth more than what matching was going to buy.
 
 **WHAT SURVIVES OF IT, AND IT IS THE USEFUL HALF.** Comparing old text with new is exactly right as
 a way to RANK candidates for a human to approve — which is this project's standing rule about fuzzy
-matching, and which is already designed as recovery tier 3 (`IN-FLIGHT.md` item 14, and the long
+matching, and which is already designed as recovery tier 3 (oas-4ti, and the long
 comment at `plan/Planner.scala`'s `identityErrorFor`). It belongs there, on the suggest side of the
 line, and not in the identity function. See *How per-paragraph is actually unblocked* below.
 
@@ -475,8 +475,8 @@ stable name loses its cards" is false. A card whose key moves is not destroyed �
 missing is only the RECONNECTION: nothing offers to bind the orphan to the card that replaced it.
 The honest word is **disconnected, and recoverable if the tool helps** — never *fragile*.
 
-**SO THE MISSING PIECE IS RECOVERY, NOT NAMING**, and it is already designed. `IN-FLIGHT.md` item
-14 records recovery tiers 3 and 4 — matching a broken identity by SIMILAR content — with tiers 1
+**SO THE MISSING PIECE IS RECOVERY, NOT NAMING**, and it is already designed. `oas-4ti` records
+recovery tiers 3 and 4 — matching a broken identity by SIMILAR content — with tiers 1
 and 2, exact hash and exact fields, already built. The long comment at `plan/Planner.scala`'s
 `identityErrorFor` says the same in more detail, including the constraint that makes it safe: it
 may only ever NAME a candidate, because a wrong rebind moves review history onto the wrong card,

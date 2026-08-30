@@ -162,7 +162,7 @@ object Observer:
     // onto `Obsidian Basic` is not a shrink, so no gate refuses it.
     //
     // IT ENDS WHEN NO COLLECTION HOLDS A LEGACY NOTE, which is a judgement somebody makes rather
-    // than a state this code can detect on its own — see `IN-FLIGHT.md` item 40. Until then,
+    // than a state this code can detect on its own — see oas-ktm. Until then,
     // deleting it would strand exactly the notes it exists to rescue.
     //
     // THE FIELD IS READ FIRST because a note that HAS one is on a type this tool owns, and that

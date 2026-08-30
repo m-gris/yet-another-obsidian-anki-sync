@@ -61,7 +61,7 @@ class CardSearchTest extends munit.FunSuite:
     * THIS TEST REFUSES A PREMATURE TIDYING, NOT A PERMANENT ONE. The tag half serves notes
     * written before the identity had a field, and removing it while any remain strands exactly
     * the notes that still need migrating. When that population is gone, this test and its half
-    * go together — see `IN-FLIGHT.md` item 40.
+    * go together — see oas-ktm.
     */
   test("the search names both the field and the tag") {
     val s = CardSearch.forNoteId("abc123")

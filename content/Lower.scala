@@ -459,7 +459,7 @@ object Lower:
       //
       // ZERO INLINES, so it can never reach a card. That is a stronger guarantee than removing
       // it downstream would be: this algebra has no constructor for it, so no renderer can
-      // print one, and `IN-FLIGHT.md` item 20 — a block id appearing on the card face — becomes
+      // print one, and oas-3lu — a block id appearing on the card face — becomes
       // unrepresentable rather than fixed.
       //
       // AND IT IS READ BEFORE THIS POINT, NOT LOST HERE. The extractor takes a block's anchor

@@ -236,7 +236,7 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     assertEquals(blockIds("The outermost layer is the epidermis. ^abc123"), List("abc123"))
   }
 
-  /** THE BUG THIS EXISTS TO FIX — `IN-FLIGHT.md` item 20. With no production for it, the id fell
+  /** THE BUG THIS EXISTS TO FIX — oas-3lu. With no production for it, the id fell
     * through as prose and printed on the card face. Asserted on the TEXT rather than on the node,
     * because a node that exists while the characters also remain would fix nothing.
     */

@@ -137,7 +137,7 @@ final case class RetypeDestroysCards(from: String, fromCount: Int, to: String, t
   /** WORDED AS A REFUSAL FOR NOW, DELIBERATELY. The ruling says the author decides, but the
     * command that lets him say so does not exist yet, so this slice changes the TYPES without
     * changing what a run does. When the per-note decision lands this becomes an invitation to
-    * authorise the move by name, and `IN-FLIGHT.md` item 29 is where that is tracked.
+    * authorise the move by name, and oas-uo5 is where that is tracked.
     */
   def remedy: String =
     "this tool will not move it; do it in Anki if you want it — Browse, select the notes, " +

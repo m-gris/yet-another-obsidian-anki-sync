@@ -60,7 +60,7 @@ one category with four instances.
 **Live counts on Marc's collection, VERIFIED 2026-08-27:** six parked orphans; two notes whose
 shrink is refused, both with zero reviews on every card. The orphan count was three the day before.
 
-**Row 3 is not built** — see `IN-FLIGHT.md` item 23, where flagging such a card is decided and
+**Row 3 is not built** — see oas-jco, where flagging such a card is decided and
 unbuilt. **Row 2's third state does not exist**: today the answer is refuse, permanently, and the
 report tells you to do it by hand in Anki instead.
 

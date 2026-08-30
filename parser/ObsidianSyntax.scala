@@ -174,7 +174,7 @@ object ObsidianSyntax:
     *
     * WHY IT IS IN THE GRAMMAR AND NOT A STRING STRIPPED LATER. Until 2026-08-29 this project had
     * no production for it, so a block id fell through as prose and printed on the card face
-    * (`IN-FLIGHT.md` item 20). The instinct is to remove it with a regular expression on the way
+    * (oas-3lu). The instinct is to remove it with a regular expression on the way
     * out; that is the ad-hoc fix, and it is wrong for the reason Marc gave: Obsidian has a
     * syntax, and a tool that reads Obsidian should model it rather than paper over the places it
     * did not. The bug is a missing production, so the repair is a production.
