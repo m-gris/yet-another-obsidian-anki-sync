@@ -7,53 +7,51 @@ relations, and whole notes — in an [Obsidian](https://obsidian.md) vault into
 It is not an Obsidian plugin. It reads a folder of markdown files and talks to a running Anki
 over [AnkiConnect](https://foosoft.net/projects/anki-connect/).
 
-## The one property everything else serves
+## What it does not write
 
-**Nothing generated is ever written back into your markdown.** No identifiers, no scheduling
-comments, no note ids in frontmatter. Your notes are exactly what you typed.
+**The tool writes nothing into your markdown.** No identifiers, no scheduling comments, no note
+ids in frontmatter. A card's identity is *derived* from what you already wrote — the note's
+frontmatter `id` plus where in the note the card came from: a chain of headings, a frontmatter
+property, one block named by its `^blockid`, or the note itself. The binding to an Anki note is
+stored in Anki, in a field called `Identity`.
 
-A card's identity is *derived* from the note's frontmatter `id` plus where in the note the card
-came from — a chain of headings, a frontmatter property, one block named by its `^blockid`, or
-the note itself. The binding to an Anki note is stored **in Anki**, in a field called `Identity`.
-Anki is a derived artifact, so bookkeeping there costs nothing — which is precisely what makes
-it unacceptable in the source.
+**Why it was built that way.** The usual approach is to write an identifier, and sometimes review
+state, into the note itself. That is noise in the source, and it is brittle: bookkeeping and prose
+end up sharing a file, so an edit to one can break the other. Deriving the identity avoids both.
+It also has a consequence worth having on its own — the tool only ever reads your vault, so
+pointing it at one cannot damage what you wrote.
 
-> **It used to be a tag**, `src::…`, and moved into a field on 2026-08-29 because a machine's
-> ledger does not belong in your tag tree. Notes on a note type this tool does not own cannot
-> hold a field, so their identity is still read from the tag — see *Not built yet*.
+**This is not a rule the design may not revisit.** Nothing in the architecture forbids writing to
+the vault; the tool has had no reason to. One case is open and genuinely undecided: a repair tool
+that reconnects a card to a note whose heading was reworded may need to write the vault side of
+that repair — or may do the whole thing in Anki. Nobody has worked it out.
 
-The consequence you will feel: **rename a marked heading and its card loses its history.** The
-tool has no rename detection. The old card is not deleted — it is flagged and suspended, so you
-can reconcile it by hand — but it will not follow the heading. Move prose around freely; think
+> **The identity used to be a tag**, `src::…`, and moved into a field on 2026-08-29, so that a
+> machine's ledger is not sitting in your own tag tree. Notes on a note type this tool does not
+> own cannot hold a field, so their identity is still read from the tag.
+
+**The consequence you will feel today:** rename a marked heading and its card loses its history.
+The tool has no rename detection. The old card is not deleted — it is flagged and suspended, so
+you can reconcile it by hand — but it will not follow the heading. Move prose around freely; think
 before you re-word a heading you have been reviewing for six months.
 
-## ⚠️ ONE VAULT PER ANKI PROFILE. NOTHING ENFORCES THIS
+## One vault per Anki profile, for now
 
-**Nothing this tool writes into Anki records which vault a note came from.** A card's identity
-identity is `src::{frontmatter id}::{path}` and stops there. The deck comes from `--deck-root`, which
-is a flag. The breadcrumb printed on the card is vault-relative. There is no vault anywhere.
+**Nothing this tool writes into Anki records which vault a note came from.** So if you sync a
+second vault into the same Anki profile, the first vault's cards are absent from the second's
+markdown — and absent from the markdown is what *orphaned* means. Every one of them gets flagged
+and suspended.
 
-The reconciler enumerates every note carrying an identity in a single query, and it has to: an orphan
-is by definition a key the markdown does not have, so it can never be found by a lookup driven
-from the markdown. That enumeration **cannot be filtered by vault, because the vault is not there
-to filter on.**
+The reason it cannot simply be avoided: the reconciler has to enumerate every note it owns in one
+query, because an orphan is by definition a key the markdown does *not* have, so it can never be
+found by looking things up from the markdown. That enumeration has nothing to filter on, because
+no vault is recorded anywhere.
 
-**So syncing a second vault into a collection that already holds one takes the first vault's
-entire card set out of review.** Every key the first vault owns is absent from the second vault's
-scan, so each is read as a deleted heading: tagged `orphaned::` and suspended. Sync the first
-vault again and the same thing happens to the second, in reverse.
-
-Nothing is deleted, and each run repairs what the last one did, so it is recoverable. It is also
-visible in advance, because the plan is printed before it is applied and would read
-`43  flag as orphaned`. It is still the most destructive thing this tool can do.
-
-`--profile` is what stands in the way, and it is worth being exact about what it guarantees: it
-binds a **run** to a collection, checked before anything is read. It does not bind a **vault** to
-a collection. Nothing stops `sync --vault-path ~/other-vault --profile the-one-for-this-vault`,
-and the tool would carry it out.
-
-**Use one Anki profile per vault.** Anki's profiles exist for exactly this. The check that would
-enforce it is listed under *Not built yet*.
+**Until that is fixed, give each vault its own Anki profile.** It is not a rule the design
+believes in — it is a defect with a known fix, written up as item 42 in `IN-FLIGHT.md`: a `Vault`
+field written beside the identity, holding the vault directory's name, so the enumeration has
+something to filter on. The same entry covers making decks read `Obsidian::<vault>::…`, which is
+what makes two vaults legible in one collection rather than merely possible.
 
 ## What you need
 

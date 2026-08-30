@@ -1272,3 +1272,68 @@ section: a pointer to a document that does not mention the thing is worse than n
 
     _Estimated at a day for the text-only version, most of it in refusals and tests rather than
     in resolution. Longer if embedded clozes are in scope._
+
+---
+
+## OPEN — designed with Marc, 2026-08-30
+
+42. **A COLLECTION CANNOT TELL ONE VAULT'S CARDS FROM ANOTHER'S.** Designed with Marc 2026-08-30,
+    replacing a warning the README had carried since the beginning. **Nothing is built.**
+
+    **The hazard.** Nothing this tool writes records which vault a note came from. The reconciler
+    enumerates every note carrying an identity in one query — it must, because an orphan is by
+    definition a key the markdown does not have, so it can never be found by a lookup driven from
+    the markdown. Sync a second vault into the same Anki profile and the first vault's cards are
+    absent from the second's markdown, so every one of them is flagged and suspended.
+
+    **THE README PRESENTED THIS AS A RULE TO LIVE BY** — in capitals, with a warning sign, third
+    in the document. Marc's response on 2026-08-30: *"I think this is a mistake."* It is a defect
+    with a fix, not a constraint users must absorb.
+
+    ### The fix, in three parts
+
+    **1. A `Vault` field beside `Identity`, and it is the discriminator.** Note-level, written only
+    by this tool, invisible in the author's tag tree. Adding a field to a note type this tool owns
+    is a proven non-migration — done twice in the week of 2026-08-28, with `Reveal` and with
+    `Identity`, and the golden record moved by one empty line each time.
+
+    **2. Its value is the vault directory's LEAF NAME, with the absolute path recorded beside it.**
+    Marc's first instinct was the absolute path alone, and the consequence decided against it:
+    the field answers *does this note belong to the vault being synced*, so an absolute path means
+    that **moving or renaming the vault directory makes every note in the collection look foreign
+    at once** — one `mv` and the whole collection flags as orphaned. The leaf name survives
+    relocation. The absolute path is still worth recording, so a message can say *these notes were
+    synced from `/old/path`* without the MATCH depending on it.
+
+    **3. A unique vault name is a contract, enforced.** Two vaults whose directories share a leaf
+    name must be refused by name, and the message says the fix: rename one directory. That contract
+    is what makes the leaf name usable as an identity in the first place.
+
+    ### The deck path, which is a separate benefit and needs no new mechanism
+
+    Decks should read `Obsidian::<vault name>::…`, derived from the vault rather than typed. Marc
+    asked for it for **navigation and legibility** rather than for correctness: without it, a
+    second vault's folders interleave with the first's under one root and the tree is unreadable.
+
+    **ALREADY EXPRESSIBLE TODAY.** `--deck-root` splits on `::` (`cli/Cli.scala:205`), so
+    `--deck-root "Obsidian::my-vault"` produces exactly that tree now. What is missing is deriving
+    the name so it is right by default rather than by the author remembering a flag.
+
+    ### Why the deck must NOT be the discriminator
+
+    Filtering the enumeration by deck is the tempting shortcut and it is wrong, for a reason that
+    has nothing to do with user discipline. **Anki's filtered decks RELOCATE cards** — a filtered
+    deck sets the card's deck to itself and remembers the original separately — so while one
+    exists, every card in it is outside `Obsidian::…` as far as any deck search can tell. A
+    deck-filtered enumeration would therefore stop seeing those cards, decide they were deleted,
+    and **create duplicates** — and could not move them back, because it could no longer see them.
+    The mechanism would depend on the thing it was fixing.
+
+    **MEASURED, NOT IMAGINED.** Exactly this state was found in Marc's own collection on
+    2026-08-29: three cards stranded in a leftover `Drill — Function Space` filtered deck, left by
+    testing the drill binding. His own drill command creates that state deliberately, every time
+    it is used.
+
+    _Marc's objection to the fragility argument was that a user should not move cards in Anki, and
+    that is right — but the hazard is Anki itself, not the user. The same shape as `leech` and
+    `marked`, which decided the tag namespace in item 9._
