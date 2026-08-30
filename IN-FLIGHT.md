@@ -1210,3 +1210,65 @@ section: a pointer to a document that does not mention the thing is worse than n
     Claude reached for a measurement of what his collection currently holds. That answers "does
     this bite today", not "what should the design be" — the same status-quo-for-status-bono error
     recorded in `docs/CLOZE-REDESIGN.md`'s header. The principled answer needed no measurement._
+
+---
+
+## OPEN — asked for 2026-08-30
+
+41. **RESOLVE AN OBSIDIAN EMBED INTO THE CARD, INSTEAD OF REFUSING IT.** Asked for by Marc
+    2026-08-30. **Nothing is built.**
+
+    **What it would do.** A note containing `![[Other note]]`, `![[Other note#Some heading]]` or
+    `![[Other note#^abc123]]` would have that content SPLICED INTO the card, so a card can say
+    *see this definition* and actually carry the definition — while the source of truth stays in
+    the one note that owns it.
+
+    **What happens today: the card is refused outright.** `content/Lower.scala` answers an embed
+    with `Refusal.Embed(target)`, so a marked section containing one produces nothing at all.
+
+    **WHY IT IS TIMELY RATHER THAN INCIDENTAL.** `![[Note#^abc123]]` addresses a BLOCK BY ITS
+    IDENTIFIER, and until 2026-08-29 this tool had no model of a block identifier. It has one
+    now — `ObsidianSyntax.BlockId` in the grammar and `model.BlockAnchor` in the identity — so
+    the third and most precise form of embed became resolvable as a side effect of item 20's fix.
+
+    ### What already exists, measured 2026-08-30
+
+    - **The walker holds every file before it builds anything** — `scan(files: Vector[VaultFile],
+      …)`. A two-phase pass is therefore available without redesigning the walk.
+    - **The embed is a first-class node**, not mangled text, and its docstring already says
+      keeping it in the AST is what would make this reversible.
+    - **Target splitting exists** — `ObsidianSyntax.displayText` already cuts `Target#Heading`
+      and `Target^blockid` apart for the display-text rule. Reusing it is a refactor, not new
+      parsing.
+
+    ### What is genuinely new
+
+    **The extractor is a PER-DOCUMENT function today.** It sees one parsed note and nothing else.
+    Resolving an embed makes a card's content depend on ANOTHER note, so the walk has to become:
+    parse everything, index note-name to parsed document, then extract. The loop is one
+    `files.sortBy(_.relativePath).foreach` and everything it needs is already in hand, but the
+    SHAPE of extraction changes and every signature along that path grows an index.
+
+    ### Where the difficulty actually is, and it is not the resolution
+
+    - **CYCLES.** `A` embeds `B` embeds `A`. Must be detected and refused from the first version,
+      or the tool does not terminate.
+    - **THE FAILURE MODES MULTIPLY.** Target note missing, heading missing, block identifier
+      missing, target note unparseable — each needs a refusal naming WHICH note and WHICH anchor,
+      or the author gets "this card failed" and a hunt. This is most of the work.
+    - **THE CONTENT HASH, WHICH IS THE INTERESTING ONE.** A card's content would depend on a note
+      it does not live in. That works FOR FREE if resolution happens before hashing — edit the
+      embedded note and the embedding card's hash changes, so it updates. But it means editing
+      one note rewrites cards in notes the author did not touch, and the run should SAY so rather
+      than quietly listing them. A silent cascade is the shape this project designs against.
+
+    ### The design question that must be answered first
+
+    **DOES AN EMBEDDED BLOCK KEEP ITS OWN CLOZE DELETIONS?** If `![[Anatomy#^fa1]]` pulls in a
+    paragraph containing `==<<radius>>==`, does the embedding card get that gap — and if so,
+    which note OWNS the resulting card? That is the difference between embedding as
+    *transclusion of text* and embedding as *transclusion of cards*, and they are very different
+    features with very different identity consequences. **Unanswered, and it decides the scope.**
+
+    _Estimated at a day for the text-only version, most of it in refusals and tests rather than
+    in resolution. Longer if embedded clozes are in scope._
