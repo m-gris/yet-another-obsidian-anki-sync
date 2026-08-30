@@ -1,14 +1,23 @@
+> **STATUS — 2026-08-30.** Superseded in its conclusions, kept for its surveys. Its review is at
+> `history/PIPELINE-DESIGN-REVIEW.md`. Of the two findings below that were *verified by
+> execution*, one is fixed and one is open as `oas-yom`; the rest of this document is reasoning
+> that did not survive, and is kept so the surveys stay readable in context.
+
 > # ⚠️ THIS DOCUMENT DID NOT SURVIVE ITS OWN REVIEW. READ `PIPELINE-DESIGN-REVIEW.md` FIRST.
 >
 > It is kept because its **surveys are sound** — an adversary opened nine of the eleven rows in its
 > back-end fact table and found all nine accurate at the cited lines — and because two of its
 > findings are verified by execution and change what should be built:
 >
-> - **An Obsidian block reference prints on the card face.** `^abc123` at the end of a marked
->   paragraph renders into the card. `^` is a delimiter nowhere in this project's parser stack.
+> - ~~**An Obsidian block reference prints on the card face.**~~ **FIXED 2026-08-29**, and the
+>   finding turned out to be load-bearing in the opposite direction: `^` being a delimiter nowhere
+>   in the parser stack was a missing production, not a reason to abandon block references. The
+>   grammar has one now, the node lowers to nothing so no renderer can print it, and a block
+>   reference is what identifies a headingless cloze card. See `design/CLOZE-REDESIGN.md`.
 > - **Every block-id definition in `References/Modern Mathematics.md` sits inside a callout, and
->   callouts fail this tool's strict parse.** It is silent only because that note has no `id:` —
->   giving it one, so its annotations can become cards, is what detonates it.
+>   callouts fail this tool's strict parse.** Still true, still open: **`oas-yom`**. It is silent
+>   only because that note has no `id:` — giving it one, so its annotations can become cards, is
+>   what detonates it.
 >
 > **What did not survive** — see the review for all seventeen findings, with counterexamples:
 >

@@ -1,7 +1,22 @@
 # Editing a card at its source
 
-_Written 2026-08-27, from a design conversation between Marc and Claude. **Nothing here is
-built.** Claims marked VERIFIED were established by reading the file cited or by running
+> **STATUS — 2026-08-30.** Beads carry the live status (`bd list`, prefix `oas`); this is the
+> summary for a reader who arrived at the document rather than at the tracker.
+>
+> **BUILT AND IN DAILY USE** — `e` on a card in Anki opens its source note in Obsidian at the
+> card's line. The `locate` subcommand turns an identity into an `obsidian://` URI, the add-on
+> under `addon/obsidian_edit/` calls it, and `browse` went the other way on 2026-08-29. Setting
+> all three up is documented at `addon/README.md`.
+>
+> **THE DESIGN'S CENTRAL RULE HELD, AND WAS TESTED BY A REAL CHANGE.** The add-on decodes
+> nothing: the tool that wrote an identity is the tool that reads it. When the identity moved
+> from a tag into a field, the add-on needed no edit — while a `curl` one-liner in a config file
+> outside this repository, which the readme had recommended precisely because it asked the tool
+> nothing, would have broken silently. That is `oas-5x6`.
+>
+> **OPEN** — the add-on's surface is larger than it has to be, about fifty lines existing only
+> because the tool runs on a JVM, plus drill logic that is domain reasoning in the wrong
+> language: `oas-yrk`. Claims marked VERIFIED were established by reading the file cited or by running
 something in this session; everything else is reasoning or expectation, and says so. It follows
 this repository's convention of opening with the answer rather than the three-layer TLDR /
 Summary / Full form, because its siblings — `CLOZE-REDESIGN.md`, `EVOLVABILITY.md` —
