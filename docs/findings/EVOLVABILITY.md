@@ -209,7 +209,7 @@ M7 as having closed this item would be exactly the over-reading this section is 
 
 **NUMBERED BY ARRIVAL, NOT BY RANK.** This section's ordering claim — *irreplaceable history at
 risk × silence* — would place this between §3.2 and §3.4. It is appended instead because
-§3.1–§3.10 are cited BY NUMBER from `plan/Planner.scala`, `docs/design/PIPELINE-DESIGN.md` and
+§3.1–§3.10 are cited BY NUMBER from `plan/Planner.scala`, `docs/history/PIPELINE-DESIGN.md` and
 `docs/history/IN-FLIGHT.md`, and renumbering would break those citations silently.
 
 **THE TRIGGER IS ONE MISSING BLANK LINE, AND OBSIDIAN SHOWS NO SIGN OF IT.** laika-core 1.3.2

@@ -1,8 +1,28 @@
-> **Work on this document** — `bd list --all --spec docs/design/PIPELINE-DESIGN.md`
+> **SUPERSEDED. MOVED HERE 2026-08-30, AFTER ITS SURVEYS WERE HARVESTED.**
 >
-> Closed means built, and the closing reason says what shipped; open means outstanding. **This
-> document records decisions and reasoning, never progress** — a status kept in two places goes
-> stale in one of them.
+> Its recommendations did not survive their own review — see `PIPELINE-DESIGN-REVIEW.md` beside
+> this file. Its **surveys** were sound, so before it was moved every row of its back-end fact
+> table was re-checked against the code, and the ordinal-drift analysis with it. That audit is
+> the reason this is safe to file as history: nothing live is buried here.
+>
+> **Two rows had been fixed since it was written.** The observed note's fields, recorded as
+> "consumed by nothing", are now read in five places by the identity work. The in-memory
+> collection's card count, recorded as name-based and wrong for one gate, now derives from the
+> note type's templates.
+>
+> **Five findings were still true and are now tracked**, with their reasoning carried across:
+> `oas-d27` a zero cloze label reaching Anki as `{{c0::}}`; `oas-ksv` a note type's cloze-ness
+> declared, sent, and never compared by the drift check; `oas-89w` two holes in the template
+> tests; `oas-h9a` the ordinal-drift trigger set being wider than recorded, **and the documented
+> remedy being one of the triggers**; and the stringly-typed Anki seam, already `oas-1cj`.
+>
+> **One of its central judgements was inverted by what shipped.** It rejected `^blockid` as an
+> anchor on five grounds. The load-bearing one — that a block reference prints on the card face —
+> turned out to be a *missing production in the grammar*, not a property of block references. The
+> grammar has one now, the node lowers to nothing so no renderer can print it, and a block
+> reference is what identifies a headingless cloze card. See `design/CLOZE-REDESIGN.md`.
+>
+> _Read it for its surveys and its rejected alternatives. Do not implement from it._
 
 > # ⚠️ THIS DOCUMENT DID NOT SURVIVE ITS OWN REVIEW. READ `PIPELINE-DESIGN-REVIEW.md` FIRST.
 >

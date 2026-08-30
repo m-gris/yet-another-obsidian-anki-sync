@@ -13,7 +13,7 @@ ruled out. Renamed with `git mv`, so the history is intact._
 
 _Written 2026-08-27, from a design conversation between Marc and Claude. Claims marked VERIFIED were established by running something; everything else is reasoning, and
 says so. It follows this repository's convention of opening with the answer rather than the
-three-layer form, because its siblings — `EVOLVABILITY.md`, `PIPELINE-DESIGN.md` — do._
+three-layer form, because its siblings do._
 
 _**A warning about evidence, learned the hard way on 2026-08-27.** Claude surveyed what the vault
 contains today — `==` appearing outside any cloze marker — and proposed a design rule from it.
