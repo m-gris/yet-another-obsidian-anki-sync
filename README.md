@@ -121,8 +121,12 @@ one for you, not even the vault Obsidian currently has open.
 
 ## Marking a heading
 
-A file produces cards only if its frontmatter carries an `id`, and a heading produces a card
-only if it carries a marker. Everything unmarked is ordinary prose.
+A file produces cards only if its frontmatter carries an `id`. Within such a file, three things
+make a card and nothing else does: **a heading carrying a marker**, **a frontmatter relation** you
+have declared, and **a block holding `==<<highlights>>==`**. Everything else is ordinary prose.
+
+Markers are the main route, and the rest of this section is about them; the other two have their
+own sections below.
 
 ```markdown
 ---
@@ -271,6 +275,37 @@ little-finger side, the ==<<2|ulna>>==. In supination the ==<<1|radius>>== lies 
 
 Two *unlabelled* highlights with identical text are refused, because nothing but position could
 tell them apart. Label them.
+
+#### A cloze without a heading
+
+You do not need a marked heading at all. **Highlight a phrase anywhere in a note and give its
+block a `^blockid`**, and that block becomes a card:
+
+```markdown
+The ==<<radius>>== and the ==<<ulna>>== are the forearm bones. ^forearm
+```
+
+One Anki note, two cards, and the card shows **that block alone** — not the whole section around
+it. That last part is the point: under a marked heading, a card's text is the entire section, so
+a section with three paragraphs shows all three whichever phrase was highlighted.
+
+Because the two deletions belong to one note, they are **siblings**, and Anki can deliberately
+keep them off the same day rather than asking you the same sentence twice in one sitting.
+
+**The `^forearm` is Obsidian's own block identifier**, and it is required here. In Obsidian you
+get one by copying a block link — the identifier is written into the note for you. It is what
+lets the card survive editing: reword the sentence, fix a typo, move the paragraph to another
+heading, and the card keeps its review history, because the identifier did not move.
+
+A block with deletions and **no** identifier is refused by name rather than made into a card that
+would silently lose its history on your next edit.
+
+> **Any block works** — a paragraph, a list item, a quoted line. And the note needs no headings at
+> all; a file of plain prose with highlights in it produces cards.
+
+**Labels work the same way**, and they are scoped to their own block — so `1` in one paragraph and
+`1` in the next are different cards, and you never have to remember which numbers you have already
+spent.
 
 ### Sequence
 
