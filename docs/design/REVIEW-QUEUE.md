@@ -1,7 +1,26 @@
 # Decisions the tool will not take alone
 
-_Written 2026-08-27, from a design conversation between Marc and Claude. **Nothing here is built.**
-Claims marked VERIFIED were established by running something or by reading the file cited;
+> **STATUS — 2026-08-30.** Beads carry the live status (`bd list`, prefix `oas`); this is the
+> summary for a reader who arrived at the document rather than at the tracker.
+>
+> **BUILT** — the second of the four members below, end to end. A run states what a refused
+> note-type shrink would cost *that* note, gives the decision a short typeable name derived from
+> the card's identity, and applies exactly one when named: `--approve <name>`. The enumeration is
+> emitted as structured data as well as prose, which is the architecture ruling below rather than
+> a convenience.
+>
+> **NOT VERIFIED** — that path has only ever been run against the in-memory collection and in dry
+> runs. The code that actually moves a note and strands a card has never executed: `oas-02y`.
+>
+> **OPEN** — `prune` as an action rather than a command (`oas-m0a`) · flagging a card retired by
+> narrowing, member three (`oas-jco`, waiting on `oas-1r3`) · members one and four are designed
+> and unbuilt · whether `relink` is in the first version at all, and whether a terminal consumer
+> is written before the plugin, are both still Marc's.
+
+_Written 2026-08-27, from a design conversation between Marc and Claude. It opened with "nothing
+here is built" until 2026-08-30, by which time one of its four members had shipped whole._
+
+_Claims marked VERIFIED were established by running something or by reading the file cited;
 everything else is reasoning, and says so. It opens with the answer rather than the three-layer
 TLDR / Summary / Full form, following its siblings — `EVOLVABILITY.md`,
 `CLOZE-REDESIGN.md`, `EDIT-IN-OBSIDIAN.md`, `PARSER-DISAGREEMENTS.md`._
@@ -267,13 +286,15 @@ disappears. That is a smaller surface and a stronger guarantee.
   Check Database"*, or *"proceed and spend this much review history"*. `EVOLVABILITY.md` M4 records
   the experiment; only its growth half has been run. One hour in a throwaway profile, and the
   `Check Database` step is not optional — *orphaned* and *destroyed* look identical without it.
-- **Whether AnkiConnect exposes template MAPPING on a note-type change.** UNMEASURED. Anki's own
+- **Whether AnkiConnect exposes template MAPPING on a note-type change.** UNMEASURED, and with
+  no bead — it is an improvement to the refusal's advice rather than something anything waits on. Anki's own
   *Change Note Type* dialogue lets a person map templates explicitly, which is the one real
   advantage the current refusal's advice has over this tool. If the API exposes it, the tool can
   offer what the dialogue offers instead of pointing at it.
 - **What `Tools > Empty Cards` does to a retired card**, and whether it takes the review log with
   it. UNMEASURED, recorded in `EVOLVABILITY.md` M5, whose gate-flip half has been run. It decides
   whether row 3's flag is a convenience or the only thing standing between a card and deletion.
+  **`oas-1r3`, and `oas-jco` waits on it.**
 - ~~**How many reviews the parked orphans actually hold.**~~ **MEASURED 2026-08-27**, and the
   answer is *untidy, not urgent*:
 
