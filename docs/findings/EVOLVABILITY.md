@@ -1,5 +1,11 @@
 # Evolvability of `yet-another-obsidian-anki-sync`
 
+> **Work on this document** — `bd list --all --spec docs/findings/EVOLVABILITY.md`
+>
+> Closed means built or measured, and the closing reason says what was found; open means
+> outstanding. **This document records measurements and the reasoning around them, never
+> progress** — a status kept in two places goes stale in one of them.
+
 *Written 2026-08-25, from a read-only pass over the repository and the installed AnkiConnect add-on. Anki was not running, so **no live probe was performed in this pass**. Every claim about Anki's behaviour is labelled **VERIFIED** (read in source I cite, or recorded as a live measurement I recovered and cite) or **UNVERIFIED** (asserted in this repo with no citation, or never measured at all). Two of the system's most load-bearing beliefs turn out to sit in the second column.*
 
 ---
@@ -142,7 +148,7 @@ The first two are *tied* for the largest blast radius, and the H1 is the likelie
 
 Kept rather than deleted, because what it ranked was how much hangs on the answer, and that is
 unchanged: the entire flag-then-prune ruling substitutes suspension for deletion, so if unsuspend
-did not restore scheduling exactly, §2, §3 and §7 of this document would need rewriting rather
+did not restore scheduling exactly, §2 and §3 of this document would need rewriting rather
 than amending.
 
 **It was measured and it holds.** See the `suspend`/`unsuspend` row in §2 for what was compared.
@@ -350,9 +356,9 @@ A is the most promising because it is the only candidate that is *exact*, *retro
 
 B makes the claim payable. Together they take the recovery cost from "a fiddly Anki operation nobody performs two hundred times" to "a chore that scales", which is the specific thing missing today.
 
-C is the only option that makes rewording **free** rather than **payable**, and that is a real difference. But it is a one-way ratchet with a real adoption cost that grows with the collection, it does nothing for the ancestor channel — which is the *larger* of the two blast radii — and nobody has measured whether heading renames actually dominate the cost of change in this vault. That measurement is free, needs no Anki, and can be run this afternoon (§6, M1). **It is the thing that should decide C, and until it is run, C should not be decided.**
+C is the only option that makes rewording **free** rather than **payable**, and that is a real difference. But it is a one-way ratchet with a real adoption cost that grows with the collection, it does nothing for the ancestor channel — which is the *larger* of the two blast radii — and nobody has measured whether heading renames actually dominate the cost of change in this vault. That measurement is free, needs no Anki, and can be run this afternoon (`oas-nmg` — the git replay). **It is the thing that should decide C, and until it is run, C should not be decided.**
 
-Two things stay unresolved, and I want to name them rather than paper over them. First, whether renames dominate at all: it is the most *vivid* cost, which is not the same as the largest. M1 settles it. Second, the ancestor channel has no good candidate — A pairs ancestor renames well (only `Context` moves, so the field evidence is at its strongest), but nothing *prevents* them, and the H1 is bound to the file name by convention. If M1 shows ancestor rewordings are common, the answer is probably F (git evidence covering the subtree in one record) rather than C.
+Two things stay unresolved, and I want to name them rather than paper over them. First, whether renames dominate at all: it is the most *vivid* cost, which is not the same as the largest. The git replay (`oas-nmg`) settles it. Second, the ancestor channel has no good candidate — A pairs ancestor renames well (only `Context` moves, so the field evidence is at its strongest), but nothing *prevents* them, and the H1 is bound to the file name by convention. If that replay shows ancestor rewordings are common, the answer is probably F (git evidence covering the subtree in one record) rather than C.
 
 ---
 
@@ -378,22 +384,9 @@ One thing the restatement does **not** license: a sidecar being off-limits. It i
 
 ---
 
-## 6. What to measure, not reason about
+## 6. What has been measured
 
 **Anki was not running during this brainstorm. Nothing below marked as needing a collection was probed.** Every UNMEASURED row in §2 stays unmeasured, and every conclusion resting on one is provisional — specifically §2's `changeDeck` and `suspend`/`unsuspend` rows, §3.2's Anki half, §3.3's Anki half, and §3.8 in both directions.
-
-**M1 — Replay the vault's git history and classify every key death.** ⚠️ **IT CANNOT RUN: THE
-VAULT IS NOT UNDER GIT** (verified 2026-08-27). One `git init` and a habit of committing unblocks
-both this and the git-traced anchor candidate in `docs/design/CLOZE-REDESIGN.md`. Running it
-against this repository's fixture vault instead would measure how the fixtures were authored rather
-than how Marc edits, and the result would be easy to mistake for the real one. *No Anki. No writes.
-Read-only. An afternoon, once there is history to read.*
-For each commit, run the extractor over both trees and diff the key sets. Classify each key death as: file deleted, file renamed, ancestor heading reworded, marked heading reworded, frontmatter `id` changed, body-only edit (no key change). Count how many cards each ancestor rewording would have orphaned — **that number is the amplification factor**.
-*Unblocks:* everything in §4. It decides C-versus-A/B, decides whether the ancestor channel or the heading channel deserves the investment, and puts a date on "later". Cheaper than it looks: `inspect` already runs read-only and `extract/Golden.test.scala` already compares an extracted card set including `src::` lines, so this is a `git worktree` loop plus a key-set diff, not a subsystem.
-
-**M2 — Count how many parked orphans are recoverable renames.** *Read-only against the live collection. Needs Anki running. Minutes.*
-For every note tagged `orphaned::`, compare its non-`Context` fields against the fields of every card the current vault produces, confined to the same frontmatter id. Exactly-one match is a rename with the body unchanged.
-*Unblocks:* §4A. It validates the exact-field tier before building it, and turns "renames are the dominant loss channel" from an argument into a count.
 
 **M3 — ~~Does unsuspend restore interval, ease, due date and the review log?~~ RUN 2026-08-25, and it holds.** See §2's `suspend`/`unsuspend` row and §3.6. It was the highest load-bearing-ness per minute on this list and nobody had proposed it; it cost five minutes.
 
@@ -443,9 +436,12 @@ scheduler actually serves a blank-fronted card is open. See §3.3, where it now 
 One concept-descriptor note with `ThreeWay` empty and both cards reviewed. Set `ThreeWay` via a fields-only update: does Anki *generate* the third card? Then clear it again: does the third card persist blank-fronted, with its history? Then run `Tools > Empty Cards`, read the dialogue's report before confirming, confirm, and check whether the card row **and its revlog rows** are gone.
 *Unblocks:* §3.3 entirely — whether the blank-card report is a nicety or the primary safeguard, and whether re-widening a marker genuinely restores a card intact. The reversibility claim that makes §3.3 survivable rests on this.
 
-**M6 — Filtered decks crossed with `changeDeck` and with `suspend`.** *Throwaway profile.*
-A reviewed card in a normal deck; a filtered deck that gathers it, with rescheduling on and off; record `did`, `odid`, `odue`, `due`, `queue`; then (a) `changeDeck` it elsewhere, (b) suspend and unsuspend it; re-read each time; then empty the filtered deck and re-read.
-*Unblocks:* §3.8. Only worth running when filtered decks are actually in use, which is not yet.
+**An `.apkg` export silently omits scheduling.** VERIFIED by reading AnkiConnect's
+`__init__.py:2122-2133`: `exportPackage(deck, path, includeSched=False)` is **per deck**, defaults
+to **excluding scheduling**, and returns `False` rather than raising when the deck is not found. So
+the obvious call produces a plausible-looking snapshot with the whole accumulated layer stripped
+out, silently — which is worse than having no mechanism at all. Whether an export *with*
+`includeSched` survives a round trip is `oas-5i8`.
 
 **M7 — ~~Pin the far end.~~ RUN 2026-08-28.** `docs/findings/ANKICONNECT-BEHAVIOUR.md` records Anki 25.09,
 add-on directory `2055492159` with `meta.json`'s `min/max_point_version: 45`, the source's declared
@@ -456,93 +452,6 @@ taken in — with the two commands that re-read them.
 reddens on an add-on update, the `__init__.py` line numbers still live in a dozen scattered
 comments, and nothing compares the recorded version against the installed one at run time. See
 §3.10, which stays open for exactly that reason. _Original entry follows._
-**M7 — Pin the far end.** *File read. Minutes.*
-Record the Anki version, the AnkiConnect version and the add-on build alongside the `__init__.py` citations. `meta.json` already pins `min/max_point_version: 45` and nothing in the repo records it.
-*Unblocks:* nothing today; prevents a whole class of silent staleness on the next add-on update.
-
-**M8 — `.apkg` round trip, and what an export actually contains.** *Throwaway profile.*
-Already partly answered by reading the add-on, and the answer is bad: **VERIFIED** at `__init__.py:2122-2133`, `exportPackage(deck, path, includeSched=False)` is **per deck**, defaults to **excluding scheduling**, and returns `False` rather than raising when the deck is not found. So the obvious call produces a plausible-looking snapshot with the accumulated layer stripped out, silently. That is worse than having no mechanism. What remains to measure is whether an export *with* `includeSched` preserves `src::` tags and scheduling across import, and what a double import does to the reconciler (it should be a `DuplicateIdentityInAnki` refusal, `plan/Planner.scala:93-95`).
-*Unblocks:* whether an export is usable as a pre-run snapshot at all.
-
----
-
-## 7. An ordered programme
-
-**The governing fact.** The collection is nearly empty today. That makes exactly one class of work free now and expensive later — **work that touches stored data**: how the key is derived, how the tag is formatted, what shape the note types are. Everything else (measurements, reports, guards, bug fixes, new commands) costs the same whenever it is done. Sorting by that, rather than by how alarming each item sounds, is the whole of the ordering argument.
-
-I mark each item **[NOW-OR-PRICIER]** or **[SAME-COST-WHENEVER]**.
-
-### Next few days
-
-> **STATUS, 2026-08-26.** Items 1 and 4 are DONE and struck through below; the rest of this list
-> stands. It is annotated rather than rewritten because an adversarial reviewer read it on
-> 2026-08-26, saw item 1 unstruck, and correctly filed a finding that this project's own top
-> priority was missing from a design document. **The reviewer reasoned properly from a document
-> that was wrong** — which is the failure this repository keeps catching in its own comments,
-> arriving in a document instead. A staging list nobody strikes through is a list that misinforms
-> the next careful reader, and the more careful they are the more it costs them.
-
-
-1. ~~**Fix the retype-over-orphan stranding.**~~ **DONE 2026-08-25** (`41a3081`). The `Retype`
-   branch now emits the `Unflag` it had argued itself out of, before the retype rather than after,
-   and only when the note actually carries the orphan tag — a card somebody suspended by hand is
-   left alone. Three mutations confirm it. _Original entry follows._ [SAME-COST-WHENEVER, but the state it mints is permanent and invisible.] Either emit `Unflag` alongside `Retype`, or have the retype path unsuspend. Every day this exists is a day a stranded card can be created, and nothing will ever find it. This is the only confirmed permanent removal of accumulated value in the system (§3.1).
-2. **Fix the two false docstrings** on the history-protecting path: `plan/SyncAction.scala:162-166` (says suspension is not built) and `model/CardSpec.scala:42-46` / `docs/reference/CARD-MODEL.md:251` (promises an orphan that never comes). [SAME-COST-WHENEVER.] Free, and they are actively misleading the next reader about the mechanism that protects history.
-3. **Run M1** — the git replay. [SAME-COST-WHENEVER, but it gates the one NOW-OR-PRICIER decision.] No Anki, no writes, an afternoon.
-4. ~~**Run M3** — does unsuspend restore scheduling.~~ **RUN 2026-08-25, and it holds.** Ten card
-   columns and the whole review log came back identical; suspension moves `queue` to `-1` and
-   touches nothing else. See §2's row and §3.6. _Original entry follows._ [SAME-COST-WHENEVER.] Five minutes, and it is the premise everything else rests on.
-5. **Say "suspend" in the plan line, and name every `Flag` key.** [SAME-COST-WHENEVER.] `Flag` is the action that removes cards from review, and it is exactly as unlisted as `create`. This also closes `README.md:342-344`'s unkept promise, and `Plan.parked` already carries the keys the report discards (`plan/SyncAction.scala:332-344` says so in as many words: "KEYS RATHER THAN A COUNT, because the count is derivable from the keys and the keys are not derivable from the count").
-6. **Refuse a run whose complete scan yields zero cards while the collection holds some.** [SAME-COST-WHENEVER.] This is precisely the revisit `docs/reference/CARD-MODEL.md:214` asked for "before or alongside" suspension, whose condition expired when suspension shipped. Note what it is *not*: the **proportional** guard was considered and rejected on the stated grounds that "the proportion is a number nobody can justify". Zero needs no justified number. Say plainly that it does not catch a *half*-arrived vault.
-
-6b. **Detect a heading the parser never saw** (§3.11). [SAME-COST-WHENEVER — but every day it
-    stands is a day an ordinary authoring slip can silently re-key a card.] Sub-numbered rather
-    than inserted, so items 7–16 keep the numbers other documents cite; placed beside item 6
-    because it is the same move, *refuse rather than silently mis-infer*.
-
-    **THE DECISION THIS ITEM CARRIES IS THAT A REFUSAL ALONE IS STRUCTURALLY INSUFFICIENT.** A
-    refusal fires when a MARKED SECTION FAILS TO BUILD. §3.11's variant B builds a perfectly good
-    card under the wrong parent — nothing fails — and variant C leaves no marked section for a
-    refusal to attach to. Neither is reachable from `SpecError` at all, so shipping only the
-    refusal would close the one variant that happens to be visible and leave the one that costs
-    review history open.
-
-    What sees all three is a check over RAW SOURCE asking whether Obsidian and this tool agree
-    about what is a heading — which is what `extract/ListIndent.scala` already is, one rule short
-    of. `docs/findings/PARSER-DISAGREEMENTS.md` carries the design and the rest of the family it belongs
-    to; what is open is whether to ship the narrow refusal first or the whole check once.
-
-    Cheapest thing available meanwhile, and already done: `extract/ListIndent.scala`'s class
-    docstring now says what it does NOT cover, because until it did it read as covering the class.
-
-### Next few weeks
-
-7. ~~**Run M4 and M5.**~~ **M4 IS FULLY RUN** (both directions, 2026-08-26 and 2026-08-27).
-   **M5 IS RUN EXCEPT FOR ITS `Empty Cards` HALF** — the flip 2026-08-26, the round trip
-   2026-08-28. _Original entry follows._ Unblocks the retype gate (a real note is waiting), and decides whether §3.3 needs a report or is already survivable.
-
-   **WHAT IS ACTUALLY LEFT IS TWO QUESTIONS, BOTH SMALL, AND BOTH INSIDE ANKI'S OWN USER
-   INTERFACE rather than reachable over the add-on** — which is why they have outlasted the rest
-   of the list rather than because they are hard.
-   - What `Tools > Empty Cards` does to a blank-fronted card, and whether it takes the revlog.
-   - Whether the scheduler PRESENTS a blank-fronted card at all. This one was opened on
-     2026-08-28 and bears on a ruling already made (oas-jco), so it is the more
-     urgent of the two despite being the newer.
-8. **Build the exact-field pairing as a report line** (§4A), speaking only when exactly one candidate matches. Then **`relink`** (§4B), refusing when the new key already has a note. Together these make the rename tax payable and retroactively clear the existing parked set.
-9. **If M5 says it matters: count blank-rendering cards on every run.** It commits the design to nothing; the cost is that the tool must know which templates render empty for which field values, and a rule table can drift from the templates it describes — this project's most-recorded failure mode.
-10. **Decide the identity question, with M1's numbers in hand.** [NOW-OR-PRICIER — the only genuinely time-sensitive item on this list.] Anchors, wider canonicalisation, git evidence, or explicitly nothing. Whatever the answer, **write it down with its reasoning**, because the last time this was decided the reasoning did not survive (§5). If the answer is anchors, the in-place rebind for already-live keys is a precondition, not a detail.
-
-### Months, or years, or never
-
-11. **`prune`, list-first.** Only honest once the parked set has been triaged, which needs item 8. Its whole safety argument is "a human sees a list", and that argument's strength is inversely proportional to the size of the accident it must catch. It is also the first operation that would put a delete verb on the algebra, and `plan/SyncAction.scala:181-191` was written longhand specifically so that verb cannot arrive by accident. **This can wait years, and the waiting is what makes everything else safe.**
-12. **Tag-format versioning / a tolerant reader.** Only needed if item 10 changes the format — and if it does, the tolerant reader must ship *before* the change, so it is a precondition of 10, not an independent item.
-13. ~~**M7 (version pinning).** Cheap; only bites on an add-on update.~~ **DONE 2026-08-28** —
-    `docs/findings/ANKICONNECT-BEHAVIOUR.md`. The RECORDING half only; §3.10 stays open because nothing
-    detects drift.
-14. **M6 (filtered decks).** Only when filtered decks are actually in use.
-15. **Vault tags flowing into Anki** — the study-scope half of the design that does not exist at all. Blocked on the tag-ownership ruling (docs/history/IN-FLIGHT.md item 9: an unprefixed vault tag is indistinguishable from one added by hand in Anki), not on anything in this document.
-16. **A run ledger.** Deferred, and I want to say why rather than leave it implied: its main justification — reconstructing an aborted run — does not hold. `applyEach` wraps every action in `.attempt` and folds failures into `ExecutionFailure` (`plan/Executor.scala:255-266`), so no `AnkiError` escapes mid-write; the only `Left` from `Executor.run` comes from `Retyping.shapesOf` under `Apply`, which runs **before the first write** (`:215-218`). So `AbortedDuringExecution`'s "writing may already have begun" is over-cautious on every reachable path. The genuinely unknown case — process death or a transport `Throwable` — never reaches that branch at all; it crashes out of `IO`. A ledger's remaining justification is an audit trail, which is real but not urgent.
-
 ---
 
 ## 8. What we decided not to do
@@ -557,12 +466,20 @@ I mark each item **[NOW-OR-PRICIER]** or **[SAME-COST-WHENEVER]**.
 
 **Anki's own note GUID as identity.** Not reachable: `notesInfo` returns noteId, profile, tags, fields, modelName, mod and cards, and the string `guid` does not occur in the add-on at all (VERIFIED, `__init__.py:1729-1737` plus a grep). But this is *not* the reason the door is shut, and the brainstorm briefly presented it as though it were: what forecloses an Anki-side identifier is the write-back rule, and the note *id* — which is what both rival Obsidian plugins key on — **is** returned. Manufacturing a second closed door in front of the real one is the kind of move this document should not make.
 
-**The cloze-label-generalises argument for heading anchors.** Dropped, with reasons, at §4C. The anchor option itself survives, on different grounds and pending M1.
+**The cloze-label-generalises argument for heading anchors.** Dropped, with reasons, at §4C. The anchor option itself survives, on different grounds and pending the git replay (`oas-nmg`).
 
-**Treating `.apkg` export as the backup answer.** The mechanism exists and is worse than absent: per-deck, `includeSched=False` by default, `False` on a missing deck rather than an error (VERIFIED, `__init__.py:2122-2133`). An export taken through the obvious call is a plausible-looking, silent, historyless snapshot. If a pre-run checkpoint is ever wanted, this is not it without M8.
+**Treating `.apkg` export as the backup answer.** The mechanism exists and is worse than absent: per-deck, `includeSched=False` by default, `False` on a missing deck rather than an error (VERIFIED, `__init__.py:2122-2133`). An export taken through the obvious call is a plausible-looking, silent, historyless snapshot. If a pre-run checkpoint is ever wanted, this is not it without the round-trip measurement (`oas-5i8`).
 
 **Reframing every silent hazard as silent.** Several of the risks surfaced in this brainstorm were rated silent against a report line built five days ago to end exactly that silence: `Report.parkedNote` prints the parked count and the word "suspended" on every run, including runs that would otherwise print `nothing to do` (`cli/Report.scala:108-117`; docs/history/IN-FLIGHT.md:160-170). The residual claim is narrower and still worth making — **the run that does the damage is the silent one, and the exit code stays 0 forever after** — and that is what §3.4 says.
 
 ---
 
-*Two things in this document are unresolved rather than decided, and I would rather say so than round them off. Whether heading renames actually dominate the cost of change in this vault is unknown and M1 settles it; the whole of §4's recommendation is conditional on that number. And whether suspension preserves scheduling is unverified in this repository despite five assertions to the contrary; M3 settles it in five minutes, and if it comes back wrong, §2, §3 and §7 all need rewriting rather than amending.*
+*Two things in this document are unresolved rather than decided, and I would rather say so than round them off. Whether heading renames actually dominate the cost of change in this vault is unknown and the git replay (`oas-nmg`) settles it; the whole of §4's recommendation is conditional on that number. And whether suspension preserves scheduling is unverified in this repository despite five assertions to the contrary; M3 settles it in five minutes, and if it comes back wrong, §2 and §3 need rewriting rather than amending.*
+
+---
+
+_Trimmed on 2026-08-30 from 567 lines. The programme of work it carried — sixteen ordered items and
+five unrun measurements — became beads, which is the one place a status is authoritative; the
+measurements that had been RUN stayed, because those are findings and a finding cannot rot. Nothing
+was summarised away: everything removed is in `git log --follow -p docs/findings/EVOLVABILITY.md`,
+each removal attached to the commit that explains it._
