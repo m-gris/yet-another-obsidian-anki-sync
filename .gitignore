@@ -20,3 +20,8 @@ addon/obsidian_edit/meta.json
 # Anki compiles the add-on when it loads it, and the installed add-on is a symlink back into
 # this directory, so the bytecode lands here.
 addon/**/__pycache__/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
