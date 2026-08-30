@@ -31,19 +31,27 @@ package obsidiananki.content
  *
  * THE DISTINCTION THAT IS THE WHOLE JOB:
  *
- *   - a newline INSIDE a paragraph MUST go on collapsing. The author hard-wraps prose at 80
- *     columns and that wrap must never appear on the card as a line break.
+ *   - a newline INSIDE a paragraph BECOMES A LINE BREAK, because that is what Obsidian shows
+ *     the author: its *Strict line breaks* setting is off unless somebody turns it on.
  *   - a boundary BETWEEN blocks must NOT collapse. That is what today's renderer loses.
  *
  * So: block separation comes from the block ELEMENT, never from inserted whitespace, and a
- * newline inside `Inline.Text` is emitted verbatim and left for HTML to collapse. `<br>` IS
- * NEVER EMITTED.
+ * newline inside `Inline.Text` becomes `<br>` — see `Html.escapeWithBreaks`, which carries the
+ * reasoning and the measurement that preceded the change.
  *
- * NAMED LOSS, so that no comment here overclaims: `Lower.scala:421` DROPS `ast.LineBreak`. By
- * the time this renderer holds a `Block`, an author's deliberate two-space hard break is
- * INDISTINGUISHABLE from a soft wrap. This file therefore CANNOT preserve a deliberate break
- * and does not claim to. Recovering it costs a `Content` constructor plus a `Lower` case — a
- * different slice.
+ * ~~THE AUTHOR HARD-WRAPS PROSE AT 80 COLUMNS and that wrap must never appear on the card.~~
+ * **WITHDRAWN 2026-08-29, AND WORTH KEEPING VISIBLE.** That sentence stood here from this
+ * file's first commit and was the stated reason for the rule for nine days. It was never
+ * measured and never discussed — an assertion about how one author writes, presented as a fact
+ * about authors. Marc asked where it had come from, which is how it was found. His vault: three
+ * notes of sixty-nine hold a newline in a field, and only one of those is inside a paragraph.
+ * He does not hard-wrap, and Obsidian's default actively discourages it by showing the wrap.
+ *
+ * ~~NAMED LOSS: a deliberate two-space hard break is INDISTINGUISHABLE from a soft wrap, so this
+ * file CANNOT preserve one.~~ Also withdrawn, and it was true when written: `Lower` drops
+ * `ast.LineBreak` and laika leaves its newline at the head of the following text. The
+ * consequence was that NO line break of any kind could reach a card. Both kinds now do, by the
+ * same route, and no `Content` constructor was needed after all.
  *
  * `extract/Extractor.scala` and `extract/Cloze.scala` both reach this file, so what it renders
  * is what an Anki field holds. `extract/Tables.scala` reaches its `Html` type as well, for cell
