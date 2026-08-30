@@ -590,8 +590,10 @@ subtree you can delete and rebuild without touching decks you made by hand.
 scheduling state. The run reports it as `move to another deck` rather than as an update, so you
 can tell a re-filing from a re-writing at a glance.
 
-Decks carry **filing only**, never learning order. Study scope comes from filtered decks over
-tags, and introduction order from new-card position. Conflating the three is a trap.
+A deck says **where a card is filed**. Anki has two other things that are easy to confuse with
+it: a filtered deck gathers cards to study now, whatever deck they live in, and new-card position
+decides the order unseen cards are introduced. Changing where a card is filed does not touch
+either.
 
 ## What it refuses to do
 
