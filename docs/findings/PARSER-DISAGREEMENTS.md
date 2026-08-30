@@ -295,21 +295,17 @@ Candidates, not a recommendation:
 
 ---
 
-## What must be measured before building anything
+## What was measured, and what was only reasoned
 
-- **DOES PRETTIER ALREADY FIX ROW 2?** oas-1tg records `conform.nvim` running
-  prettier over markdown at `--tab-width 4`, bound to `<leader>fo`. Prettier parses CommonMark, so
-  it should see the swallowed line as a heading and insert the blank line. **If it does, the
-  formatter already repairs this at authoring time, and the check's value shifts to being a
-  backstop for files prettier never touched — web clippings, imports, agent writes.** That
-  materially changes how much this is worth. NOT MEASURED. It costs one `prettier --write` on a
-  copy of `System Design Interview Framework.md`.
-- **Does Obsidian in fact render the swallowed line as a heading?** Reasoned from CommonMark's
-  lazy-continuation rule, which admits only paragraph continuation lines, and corroborated by the
-  author having written it as a heading and expected a card. One look in reading view settles it.
-- **How large is the family really?** The six rows are what has been tripped over, not the result
-  of a survey. A deliberate pass — writing each construct Obsidian supports into a throwaway vault
-  and running `inspect` — would replace an anecdotal list with a measured one, and is read-only.
-- **How often does row 2 occur in a vault that is not this one?** The sweep on 2026-08-27 found
-  ten headings with no blank line above them across Marc's vault, of which exactly one follows a
-  list line. One instance is an argument for the cheap fix; a rate is an argument for the check.
+**MEASURED 2026-08-27:** ten headings in the vault have no blank line above them, and **exactly one
+follows a list line**. That is one instance, not a rate — and it is the vault this tool was
+developed against, which is shaped by what was being stretched at the time.
+
+**REASONED, NOT MEASURED:** that Obsidian renders the swallowed line as a heading. It follows from
+CommonMark's lazy-continuation rule and from the author having written it as a heading and expected
+a card. Until somebody looks in reading view, it is an inference.
+
+---
+
+_What this document once listed as measurements to go and do is in the beads the query at the top
+lists. Removals are in `git log --follow -p docs/findings/PARSER-DISAGREEMENTS.md`._

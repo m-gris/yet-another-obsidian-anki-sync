@@ -191,55 +191,28 @@ the reason a `<` inside a deletion cannot break it.
 - Report, never repair. Repair belongs to a formatter.
 - Miss rather than over-report; a false refusal costs more than a missed one.
 
-**Not decided, and each is Marc's:**
+**Settled by building it**, and the reasoning for each sits at
+`parser/ObsidianSyntax.scala`'s maths node rather than here, because that is where a later reader
+meets it:
 
-1. **Whether the identity path may see the maths.** Three candidates, and they are not
-   equivalent. (a) The node participates in `extractText`, extracting to the raw TeX including
-   delimiters — keys stay byte-identical, nothing moves, no migration, at the cost of making
-   identity depend on a rendering decision that this codebase severs everywhere else and paid to
-   sever. (b) The node does not participate — accept the re-key, make it visible in the golden,
-   adopt it by hand as a stated migration. (c) Something at the type level makes the choice
-   unrepresentable rather than remembered; no shape for this has been proposed.
-2. **Whether `\\` and `_` are this feature's problem at all.** Capturing the TeX raw fixes both,
-   because the inline parsers never run on it. But that is a side effect of the fix rather than
-   its purpose, and it means the two corruptions are closed by row 5's remedy and not by the
+- **The identity path DOES see the maths.** The node is a `TextContainer`, so `extractText` yields
+  the TeX body. The alternative — invisible to extraction, copied from the comment node — was
+  tried and **cost a card key**: `# Notation (Given 2 sets, $A$ and $B$)` keyed on
+  `notation (given 2 sets, and )`, letters gone rather than merely dollars, so two headings
+  differing only in their maths collapsed onto one key. The parser's tests pin that they stay
+  distinct.
+- **Inline as well as display.** `$…$` ships with the scanning rules — an opening `$` not followed
+  by whitespace, a closing one not preceded by whitespace nor followed by a digit. Display-only
+  would have left live content broken.
+- **Both are inlines**, not blocks. Display maths as a span in a paragraph renders correctly and
+  costs two fewer exhaustive matches.
+
+**Still open, and Marc's:**
+
+1. **Whether `\\` and `_` are this feature's problem at all.** Capturing the TeX raw fixes both,
+   because the inline parsers never run on it — but that is a side effect of the fix rather than
+   its purpose, and it means the two corruptions are closed by row 5's remedy rather than by the
    family-wide check `PARSER-DISAGREEMENTS.md` proposes. Which document owns them is open.
-3. **Display-only first, or inline too.** `$$` alone is unambiguous and needs no guards. `$…$`
-   needs the scanning rules — escaped `\$`, an opening `$` not followed by whitespace, a closing
-   `$` not followed by a digit — which are the well-tested part of pandoc's `tex_math_dollars`
-   and of `remark-math`. Inline maths already exists in the vault (`CLOZE-REDESIGN.md` names
-   `$B^A$`), so display-only leaves live content broken.
-4. **Whether display maths is a `Block` or an `Inline`.** A span in a paragraph is far cheaper and
-   renders correctly (`<p>\[…\]</p>` is legal). A block is more honest about what display maths
-   is, and forces two more exhaustive matches to answer.
-
----
-
-## What must be measured
-
-- **Does Obsidian's own renderer agree that `\\` is already broken?** The corruption measured
-  above is this tool's parse. If Obsidian shows the multi-line block correctly, the two parsers
-  disagree and it is a family member; if Obsidian is equally broken, the vault has been carrying
-  broken maths and the fix is an improvement rather than a repair. One look in reading view.
-- **How much maths is in the vault, and where.** In prose only, or in headings too? The heading
-  count is the size of the re-keying cost, and it is the number decision 1 turns on. Read-only —
-  a grep, and an `inspect` run.
-- **Whether the vault uses maths packages Anki does not load.** The Anki half is now settled by
-  reading the shipped config, above: no `mhchem`, no `physics`, and `textmacros` explicitly
-  removed, so `\text{}` takes a narrower grammar than Obsidian allows. The open half is the vault
-  half — whether any note reaches for them. A grep.
-- **Whether `\[\begin{align}…\end{align}\]` typesets under Anki's MathJax, or whether `aligned` is
-  required.** This is the only candidate found so far for a translation of the TeX BODY rather than
-  of its delimiters, and it decides whether "delimiters only" survives as the shape of the feature.
-  One hand-made card.
-- **Whether MathJax typesets TeX whose braces arrived as `&#123;` and `&#125;`.** It should: a
-  browser decodes character references while parsing the field's HTML, so MathJax reads the
-  decoded text and `content/AsHtml.scala` already argues that post-decoding the emitted field is
-  character-for-character what pass-through would have produced. But that argument was made about
-  DISPLAY of ordinary prose, where a stray brace is a glyph, and here a brace is grammar — a
-  wrong one silently changes what the TeX means rather than how it looks. It sits beside the
-  question that file leaves open for the same reason, that neither can be settled without
-  contacting a live collection. The same hand-made card answers both.
 
 ---
 
