@@ -1,12 +1,30 @@
 # Redesigning cloze
 
+> **STATUS — 2026-08-30.** Beads carry the live status (`bd list`, prefix `oas`); this is the
+> summary for a reader who arrived at the document rather than at the tracker.
+>
+> **BUILT** — the `==<<text>>==` syntax, so a bare `==highlight==` is emphasis and makes no card ·
+> `^blockid` as a production in the grammar rather than prose that reaches the card face · a card
+> identified by the block it sits in, encoded `src::{id}::/b/{anchor}` · a cloze card from any
+> block, with no heading needed.
+>
+> **OPEN** — what an unlabelled highlight is keyed by (`oas-9yz.1`, waiting on recovery tier 3,
+> `oas-4ti`) · block identifiers inside Obsidian callouts fail the strict parse (`oas-yom`) · the
+> `%%card%%` uniqueness objection (`oas-9yz.3`) · the git replay, M1 (`oas-nmg`).
+>
+> **WITHDRAWN** — identity by matching old text against new · a key projected onto the labels in a
+> block. Both are kept below with the reasoning that killed them.
+
 _Named `ANCHORS-BELOW-A-HEADING.md` until 2026-08-27. That named one mechanism inside it —
 attaching a card to something smaller than a heading — while the document is about cloze as a
 whole: what text a card shows, how it is packaged into Anki, what identifies it, and what has been
 ruled out. Renamed with `git mv`, so the history is intact._
 
-_Written 2026-08-27, from a design conversation between Marc and Claude. Nothing here is built.
-Claims marked VERIFIED were established by running something; everything else is reasoning, and
+_Written 2026-08-27, from a design conversation between Marc and Claude. It opened with "nothing
+here is built" until 2026-08-30, by which time four of its decisions had shipped — see the status
+block above, which exists because prose does not update itself._
+
+_Claims marked VERIFIED were established by running something; everything else is reasoning, and
 says so. It follows this repository's convention of opening with the answer rather than the
 three-layer form, because its siblings — `EVOLVABILITY.md`, `PIPELINE-DESIGN.md` — do._
 
@@ -28,8 +46,10 @@ rigid shape — and it is currently the most rigid thing in the system: the mark
 **heading**, and the whole section body becomes one card's text, so every gap in a five-paragraph
 section shows all five paragraphs. Fixing that means letting a card hang off something **smaller
 than a heading**, which turns out not to be a syntax problem but an **identity** problem: what
-names a paragraph, such that the card survives you editing the sentence it is about? Obsidian's own
-block references are eliminated — VERIFIED, they print on the card face. An invented author-typed
+names a paragraph, such that the card survives you editing the sentence it is about? ~~Obsidian's
+own block references are eliminated — VERIFIED, they print on the card face.~~ **They are the
+answer, adopted 2026-08-29** — that elimination rested on a defect in this tool being mistaken for
+a property of the syntax; see the section below. An invented author-typed
 anchor was proposed and has an unanswered objection. Two candidates remain, both Marc's: the cloze
 **label** is already an author-supplied stable identifier, and a **similarity fingerprint traced
 across git commits** can migrate a binding whose key has moved. They are complementary rather than
@@ -80,7 +100,31 @@ much as **narrow**._
 
 ## What has been eliminated, and on what evidence
 
-### Obsidian block references (`^blockid`) — ELIMINATED
+### Obsidian block references (`^blockid`) — ELIMINATED 2026-08-27, ADOPTED 2026-08-29
+
+> **THIS SECTION ELIMINATED THE MECHANISM THAT IS NOW THE ANSWER**, and how that happened is worth
+> more than the conclusion was.
+>
+> **The first finding was a DEFECT MISTAKEN FOR A PROPERTY.** "A block id prints on the card face"
+> was true, and it was a bug in this tool rather than a fact about `^blockid`: nothing in the
+> parser had a production for it, so it fell through as prose. Marc's ruling, 2026-08-29 — *there
+> is a grammar of Obsidian and this tool should model it, not paper over the places it did not* —
+> made the repair a production rather than a string stripped on the way out. A block id now lowers
+> to nothing at all, so no renderer can print one and the defect is unrepresentable rather than
+> fixed.
+>
+> **The second finding was never about the mechanism.** Callouts failing the strict parse blocks
+> the note they are in, whatever anchors anyone chooses. Still open: `oas-yom`.
+>
+> **What separated them was Marc's question**, asked after this section had been read back to him:
+> *"I said could we **use** `^blockid` — not should the tool **write** it."* The unstated
+> assumption was that a surrogate key must be written by whoever needs it, and this tool has never
+> written to the vault. It does not have to: the **author** writes the anchor, Obsidian generates
+> one with a keystroke, and a cloze block without one is refused — the same contract a heading
+> already has, where declaring the marker is how you ask for the card.
+>
+> _The reasoning below is kept unedited. It was sound on its evidence; the evidence was
+> incomplete._
 
 The obvious candidate, and Marc's vault is full of them (`[[Modern Mathematics#^Z4YC85FV]]`, with
 `obsidian-copy-block-link` installed). Obsidian generates them, they survive edits to the block,
@@ -100,7 +144,11 @@ because CommonMark reads `[!note]` as a shortcut reference link. It is silent to
 that note has no frontmatter `id`; giving it one, which is exactly what somebody does when they
 want its annotations to become cards, is what makes the failure appear.
 
-_Both findings are recorded as open items 20 and 21 in `docs/history/IN-FLIGHT.md`._
+_The first finding is **fixed** — `parser/ObsidianSyntax.scala` carries the production and
+`content/Lower.scala` drops the node. The second is **open** as `oas-yom`. Both were open items 20
+and 21 in the markdown tracker that beads replaced on 2026-08-30; the archive at
+`docs/history/IN-FLIGHT.md` holds their original wording and is not where to look for their
+status._
 
 ### A plain content hash — ELIMINATED, and instructively
 
@@ -387,7 +435,17 @@ when it is not. As Marc put it: one should not fight indiscipline.
 
 ---
 
-## The precondition nobody has met
+## The precondition, met on 2026-08-29
+
+> **MET, AND STILL NOT ENOUGH — for a different reason, and one with an end.** Marc put the vault
+> under git the same day this was read back to him. `git rev-parse` now succeeds and the
+> repository has **zero commits**, so M1 still cannot run: a replay needs history, and there is
+> none yet. That is a waiting period rather than a decision, and it ends with the first commit —
+> which is why the measurement is now an ordinary open item, `oas-nmg`, rather than a blocked one.
+>
+> Candidate B is unblocked on the same terms.
+>
+> _The original, unedited:_
 
 **The vault is not under git.** VERIFIED 2026-08-27: `git rev-parse` fails in
 `/Users/marc/📖-obsidian-anki-srs-📖/`.
@@ -458,12 +516,16 @@ only thing per-group gives up.
 - **position** breaks the moment a paragraph is inserted above it;
 - **a content hash** breaks the moment the sentence is edited — which is the very thing the card is
   about;
-- **Obsidian's own block reference, `^abc123`, is eliminated** — VERIFIED by execution: it reaches
-  the card face. See *What has been eliminated* above.
+- ~~**Obsidian's own block reference, `^abc123`, is eliminated**~~ — **WITHDRAWN 2026-08-29. This
+  is what names a paragraph**, and the list above is the reason it had to be something the author
+  writes rather than something the tool derives: position and content are both unstable, and no
+  amount of cleverness makes a derived name survive the edit the card is about. See the section
+  above for how the elimination came to be wrong.
 
-Two candidates remain, both described above: a similarity fingerprint traced across git commits,
-which requires the vault to be a git repository and it is not; or an invisible marker written into
-the source.
+~~Two candidates remain~~ — **and neither is needed for this.** A similarity fingerprint traced
+across git commits belongs to REPAIR rather than to naming (`oas-4ti`), and an invisible marker
+written into the source was only ever an attempt to store a surrogate the tool would have had to
+write. `^blockid` is a surrogate the AUTHOR writes, which is what dissolved the problem.
 
 ### How per-paragraph is actually unblocked
 
@@ -517,8 +579,12 @@ single group**. Whoever picks this up should re-measure before assuming that sti
 
 **Decided:**
 
-- `^blockid` is out. It reaches the card face.
+- ~~`^blockid` is out. It reaches the card face.~~ **REVERSED 2026-08-29: `^blockid` is IN, and is
+  what names a block.** Reaching the card face was a defect in this tool, repaired by giving the
+  grammar a production for it. The author writes the anchor; a cloze block without one is refused.
 - A plain content hash is out. Avalanche is the wrong property.
+- **The `==<<text>>==` syntax**, decided and shipped 2026-08-28: a bare `==highlight==` is
+  emphasis and makes no card, so an author can see which of their highlights are cards.
 - The scope of a sub-heading card is the **block**. Sentences and lines are not things the parser
   can see.
 - Fuzzy matching belongs in **repair**, never in a key — the standing ruling holds, and candidate B
@@ -531,7 +597,14 @@ single group**. Whoever picks this up should re-measure before assuming that sti
 2. **Unlabelled highlights** — refused, keyed by their text with the honest consequence that
    editing the text retires the card, or something else? _Note that the current documentation
    already claims the second and it demonstrably does not happen: the planner has no cloze
-   awareness at all, so no orphan is ever produced for a retired group._
-3. **Whether the vault goes under git**, which gates candidate B and M1 alike.
+   awareness at all, so no orphan is ever produced for a retired group._ **Still open: `oas-9yz.1`,
+   waiting on recovery tier 3 (`oas-4ti`), and the false docstring is `oas-9yz.2`.**
+3. ~~**Whether the vault goes under git**, which gates candidate B and M1 alike.~~ **DONE
+   2026-08-29 — Marc put the vault under git.** It has no commits yet, so M1 still cannot run, but
+   that ends with the first commit rather than with a decision: `oas-nmg`.
 4. **The `%%card%%` uniqueness objection** — answerable by refusing per note rather than per run,
-   but unanswered.
+   but unanswered. **`oas-9yz.3`.**
+
+**Decided since, and not in the lists above** — sibling burying is required, so a card is packaged
+one Anki note per block rather than one per group; and the cloze card that needs no heading is
+built, keyed by its block. Both are in the status block at the top.
