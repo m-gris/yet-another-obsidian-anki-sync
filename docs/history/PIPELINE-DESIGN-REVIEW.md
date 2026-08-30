@@ -27,7 +27,7 @@ Everything below was checked against the source. Where I say VERIFIED I opened t
 293	"  sync --migrate-note-types ..."
 ```
 
-**Why it matters.** For the `framework` note that produced the 34.5 seconds, that remedy does not work. `plan/Retyping.scala:165-177` asks the **policy first** — under `Defer` the verdict is `DeferredByPolicy` and *no shapes are read at all* (the docstring at `:159-163` says so and defends it as load-bearing). Ask with `--migrate-note-types` and `refusalFor` (`:187-197`) fires `TemplateCountDiffers`, because `IN-FLIGHT.md:179-185` records this note as `Obsidian Basic (and reversed card)` (2 templates) → `Obsidian Concept-Descriptor` (3) — "the GROWTH direction," which the gate refuses and `docs/EVOLVABILITY.md:49` marks UNMEASURED pending M4.
+**Why it matters.** For the `framework` note that produced the 34.5 seconds, that remedy does not work. `plan/Retyping.scala:165-177` asks the **policy first** — under `Defer` the verdict is `DeferredByPolicy` and *no shapes are read at all* (the docstring at `:159-163` says so and defends it as load-bearing). Ask with `--migrate-note-types` and `refusalFor` (`:187-197`) fires `TemplateCountDiffers`, because `IN-FLIGHT.md:179-185` records this note as `Obsidian Basic (and reversed card)` (2 templates) → `Obsidian Concept-Descriptor` (3) — "the GROWTH direction," which the gate refuses and `docs/findings/EVOLVABILITY.md:49` marks UNMEASURED pending M4.
 
 So the run tells the reader: *nothing was written; leaving them is safe; ask with `--migrate-note-types`.* Two of those three are misleading, and the document only found one. The reader who follows the printed remedy lands on `Report.retypePreview`'s "OF THE MOVES COUNTED ABOVE, 1 WILL NOT HAPPEN" and a *different* reassurance at `:344-345` — which is where the 34.5 seconds actually come from.
 
@@ -81,17 +81,17 @@ Counterexample: `==1|a== ==b==` → 1, 2. Remove the label → 1, 2. Nothing mov
 
 **The worked example.** §2 says: *"The author follows the tool's own advice (`extract/Extractor.scala:298-299` literally suggests `==1|$t==`) and writes `==2|a==`."* Two problems. (a) The tool's advice is `==1|…==`, and following it *literally* in that example is free: `==1|a== ==b==` → a=1, b=2, unchanged. The rotation requires the author to pick `2`, which the tool never suggested. (b) `extract/Extractor.scala:298-299` is `AmbiguousClozeDeletion`'s message, which fires **only for two unlabelled highlights with identical text** — a case the example (`a`, `b`) does not trigger. The citation does not support the sentence it is attached to.
 
-**Why it matters.** This list is the load-bearing justification for the census (step 1) and for calling the drift wider than `docs/EVOLVABILITY.md:81-89` states. The census is still justified — the *real* rule makes the case better, not worse — but the document as written hands the owner a claim he can falsify in four lines of markdown.
+**Why it matters.** This list is the load-bearing justification for the census (step 1) and for calling the drift wider than `docs/findings/EVOLVABILITY.md:81-89` states. The census is still justified — the *real* rule makes the case better, not worse — but the document as written hands the owner a claim he can falsify in four lines of markdown.
 
-**Fix.** State the actual invariant and derive the triggers from it: *an unlabelled group's ordinal is the k-th positive integer no label claims, where k is its rank in first-appearance order among unlabelled groups. Any edit that changes either that rank or the label set can move it; an edit that changes neither cannot.* Then note the real sting: **labelling a group with the number it already holds is free, and the tool shows that number nowhere** — which is exactly what the census fixes, and needs no engineered example. Cite `docs/CARD-MODEL.md:344,346` for the labelling advice, not the refusal message.
+**Fix.** State the actual invariant and derive the triggers from it: *an unlabelled group's ordinal is the k-th positive integer no label claims, where k is its rank in first-appearance order among unlabelled groups. Any edit that changes either that rank or the label set can move it; an edit that changes neither cannot.* Then note the real sting: **labelling a group with the number it already holds is free, and the tool shows that number nowhere** — which is exactly what the census fixes, and needs no engineered example. Cite `docs/reference/CARD-MODEL.md:344,346` for the labelling advice, not the refusal message.
 
 ---
 
 ### F6. "§4C's costs are all *adoption* costs" is false, and the cost it omits is the one that kills the proposed anchor. **[claim not established + cost understated]**
 
-**Where.** §3, front end: *"This is not `docs/EVOLVABILITY.md` §4C's deferred per-heading anchor. §4C's costs are all *adoption* costs… That deferral does not bind here."*
+**Where.** §3, front end: *"This is not `docs/findings/EVOLVABILITY.md` §4C's deferred per-heading anchor. §4C's costs are all *adoption* costs… That deferral does not bind here."*
 
-`docs/EVOLVABILITY.md:204` lists five costs before it reaches adoption: three coordinated strip sites; **"copy-paste of a section becomes a duplicate-key *whole-run refusal* (`plan/Planner.scala:239-248,286`), which the current scheme also suffers but far more rarely"**; the retirement of `REQUIREMENTS.md:110`; doing nothing for ancestor headings; and retiring `underAFailedSection` if the anchor replaces path structure. Only the last sentence is about adoption.
+`docs/findings/EVOLVABILITY.md:204` lists five costs before it reaches adoption: three coordinated strip sites; **"copy-paste of a section becomes a duplicate-key *whole-run refusal* (`plan/Planner.scala:239-248,286`), which the current scheme also suffers but far more rarely"**; the retirement of `REQUIREMENTS.md:110`; doing nothing for ancestor headings; and retiring `underAFailedSection` if the anchor replaces path structure. Only the last sentence is about adoption.
 
 **Why the omitted one is fatal to the argument.** The document kills `^blockid` partly because *"their per-file uniqueness — on which `(noteId, Block(id))` being a key entirely depends — is unverified."* An author-typed name has **no** uniqueness mechanism at all. Duplicate a paragraph in Obsidian — the single most common operation on a literature note — and you have two `%%card cloze: function-as-graph%%` markers, one key, and per `model/CardKey.scala:123-125` **the whole run refuses until a name is changed.** Obsidian at least *generates* block ids; a human copying a paragraph reproduces the anchor verbatim. The document applies a uniqueness standard to `^blockid` that its own preferred mechanism fails harder.
 
@@ -101,11 +101,11 @@ Counterexample: `==1|a== ==b==` → 1, 2. Remove the label → 1, 2. Nothing mov
 
 ### F7. The requirements cost is cited to the wrong line, and the real one is a reversal of a ratified decision. **[cost understated]**
 
-§3 offers as an "honest cost" that `docs/REQUIREMENTS.md:110` — *"the marker count in the markdown is zero, and stays zero regardless of card count"* — must be restated to *"the tool writes nothing into the markdown; what a card is anchored to, the author writes."*
+§3 offers as an "honest cost" that `docs/reference/REQUIREMENTS.md:110` — *"the marker count in the markdown is zero, and stays zero regardless of card count"* — must be restated to *"the tool writes nothing into the markdown; what a card is anchored to, the author writes."*
 
-That restatement is not a concession; it is a paraphrase of what requirement 10 already says. The actual cost is one line up, at `docs/REQUIREMENTS.md:106-108`: requirement 10 **superseded** an in-file write-once identifier, and replaced it with *"The key is **derived** from text already present — `(frontmatter id, heading path)`."* A block anchor name is not text already present. It is a token whose only purpose is identity, typed by the author — which is precisely the option that was superseded, and the "the author writes it, not the tool" defence is precisely the argument the superseded position made (`:106`, "only that one fails *visibly*").
+That restatement is not a concession; it is a paraphrase of what requirement 10 already says. The actual cost is one line up, at `docs/reference/REQUIREMENTS.md:106-108`: requirement 10 **superseded** an in-file write-once identifier, and replaced it with *"The key is **derived** from text already present — `(frontmatter id, heading path)`."* A block anchor name is not text already present. It is a token whose only purpose is identity, typed by the author — which is precisely the option that was superseded, and the "the author writes it, not the tool" defence is precisely the argument the superseded position made (`:106`, "only that one fails *visibly*").
 
-**Fix.** Name it as what it is: a **partial revival of the superseded in-file identifier**, scoped to block-anchored cards, requiring an amendment to requirement 10 with a date and a reason — not a restatement of its consequence sentence. And note that `docs/EVOLVABILITY.md:204` already recorded this retirement as a cost of option C, so the document is paying option C's price while telling the reader §4C "does not bind here."
+**Fix.** Name it as what it is: a **partial revival of the superseded in-file identifier**, scoped to block-anchored cards, requiring an amendment to requirement 10 with a date and a reason — not a restatement of its consequence sentence. And note that `docs/findings/EVOLVABILITY.md:204` already recorded this retirement as a cost of option C, so the document is paying option C's price while telling the reader §4C "does not bind here."
 
 ---
 
@@ -125,7 +125,7 @@ Three things this glosses:
 
 ### F9. Converting an existing cloze section into block clozes destroys its review history, and the document's own "no adoption event" argument does not cover it. **[cost understated]**
 
-§3 argues: *"A paragraph has no card today. No live key, no adoption event, no orphan."* True for a paragraph that never carried a card. False for the migration the sniper invites: a one-paragraph `#flashcard/cloze` section moved to `%%card cloze: …%%` produces a **byte-identical `Text` field under a new key** — `AsText`/`AsHtml` render the same single block either way — so the planner sees an orphan plus a historyless create (`docs/EVOLVABILITY.md:55`). The exact-field pairing that would catch it (§4A) is not built (`docs/EVOLVABILITY.md:194`: *"IN-FLIGHT.md:174-176 claims tier 2 ('exact fields') is built; it is not"*).
+§3 argues: *"A paragraph has no card today. No live key, no adoption event, no orphan."* True for a paragraph that never carried a card. False for the migration the sniper invites: a one-paragraph `#flashcard/cloze` section moved to `%%card cloze: …%%` produces a **byte-identical `Text` field under a new key** — `AsText`/`AsHtml` render the same single block either way — so the planner sees an orphan plus a historyless create (`docs/findings/EVOLVABILITY.md:55`). The exact-field pairing that would catch it (§4A) is not built (`docs/findings/EVOLVABILITY.md:194`: *"IN-FLIGHT.md:174-176 claims tier 2 ('exact fields') is built; it is not"*).
 
 **Fix.** Say it: *adopting a block anchor for content that already has a section-level cloze card orphans that card. Nothing detects the pairing today. The sniper is for new content until §4A ships.*
 
@@ -141,9 +141,9 @@ Nothing in §3 or §4 says what a `%%card cloze: x%%` inside a `#flashcard/cloze
 
 ### F11. Two ratified documents are confirmed to promise a safety net that does not exist, and nothing in the staging table fixes them. **[asked for and unanswered]**
 
-§2 establishes, correctly, that `model/CardSpec.scala:42-47` and `docs/CARD-MODEL.md:343` both promise a retired cloze group is *"flagged as an orphan, visible in the prune list,"* and that no such thing happens (I confirmed: `plan/Planner.scala:422-453` filters over `CardKey`s; nothing cloze-aware exists in `plan/`). §2 closes: *"Two ratified documents promise a safety net that is not there."*
+§2 establishes, correctly, that `model/CardSpec.scala:42-47` and `docs/reference/CARD-MODEL.md:343` both promise a retired cloze group is *"flagged as an orphan, visible in the prune list,"* and that no such thing happens (I confirmed: `plan/Planner.scala:422-453` filters over `CardKey`s; nothing cloze-aware exists in `plan/`). §2 closes: *"Two ratified documents promise a safety net that is not there."*
 
-Then §6's nine steps never correct them. `docs/EVOLVABILITY.md:293` ranks that correction as item **2** of the whole programme — *"Free, and they are actively misleading the next reader about the mechanism that protects history"* — in a document that the reviewed text itself cites (§7) for prose decay being the project's most-recorded failure mode.
+Then §6's nine steps never correct them. `docs/findings/EVOLVABILITY.md:293` ranks that correction as item **2** of the whole programme — *"Free, and they are actively misleading the next reader about the mechanism that protects history"* — in a document that the reviewed text itself cites (§7) for prose decay being the project's most-recorded failure mode.
 
 **Fix.** Add it to step 0. It is free, it writes nothing, and leaving a confirmed-false promise standing in two ratified documents while shipping a nine-step programme is the exact failure mode being diagnosed.
 
@@ -151,7 +151,7 @@ Then §6's nine steps never correct them. `docs/EVOLVABILITY.md:293` ranks that 
 
 ### F12. The project's own #1 priority is absent from the staging table, and §6 re-reads the governing fact in a way that licenses its absence. **[decision dodged]**
 
-§6 quotes `docs/EVOLVABILITY.md` §7 correctly (`:286`) and then draws a conclusion §7 does not: *"which means everything else should be sequenced by **what it unblocks**, not by urgency."*
+§6 quotes `docs/findings/EVOLVABILITY.md` §7 correctly (`:286`) and then draws a conclusion §7 does not: *"which means everything else should be sequenced by **what it unblocks**, not by urgency."*
 
 §7 does the opposite. Its item 1 is `[SAME-COST-WHENEVER]` and is nevertheless first, on urgency: *"Fix the retype-over-orphan stranding… **the only confirmed permanent removal of accumulated value in the system** (§3.1). Every day this exists is a day a stranded card can be created, and nothing will ever find it."* The reviewed document's table does not mention §3.1 at all.
 
@@ -241,7 +241,7 @@ The docstring (`:326-329`) reads: *"Adding a sixth variant will not fail this te
 
 §5: *"the same code serves both"* — step 2's observed-vs-wanted field print, and §4A's rename recovery.
 
-They share only a field-vector comparison. §4A's difficulty is elsewhere: it is a **search** over unmatched orphans confined to one frontmatter id, and `docs/EVOLVABILITY.md:194` states its governing constraint — *"it must speak only when exactly one candidate matches, and stay silent otherwise"* — plus the recorded weakening of the hash-based repair hint. Step 2 matches by key, has exactly one candidate by construction, and builds none of that.
+They share only a field-vector comparison. §4A's difficulty is elsewhere: it is a **search** over unmatched orphans confined to one frontmatter id, and `docs/findings/EVOLVABILITY.md:194` states its governing constraint — *"it must speak only when exactly one candidate matches, and stay silent otherwise"* — plus the recorded weakening of the hash-based repair hint. Step 2 matches by key, has exactly one candidate by construction, and builds none of that.
 
 **Fix.** *"It is not the same code as §4A; §4A's hard part is the candidate search and the exactly-one rule. What step 2 establishes is the smaller thing: that observed fields are worth fetching and printing."*
 
@@ -262,5 +262,5 @@ They share only a field-vector comparison. §4A's difficulty is elsewhere: it is
 ## Part 2 — Two smaller notes
 
 - **Marker discovery is new traversal work and is not costed.** `ObsidianComment` is a `Span` (`parser/ObsidianSyntax.scala:81`), so a block marker is found by scanning inlines of every block in every note — not by the heading-text regex `Marker.MarkerPattern` (`model/Marker.scala:393`) that finds markers today. Say so; "already parses as a node" reads as though discovery is free.
-- **`docs/CARD-MODEL.md:232-236` pins a test that step 7 must change.** *"A test asserts that extraction produces only heading anchors, so the day one produces a note anchor is a decision somebody made rather than a drift nobody noticed."* Adding `CardPath.Block` trips that guard by design; the staging table should name it so the implementer does not read a red test as breakage.
-- **`docs/CARD-MODEL.md:352`'s reserve is for a different construct.** The line reserves `==text==%%1%%` as a *group-label* syntax, rejected as verbose. Using it as prior blessing for a *card-anchor* carrier is a stretch worth one honest clause.
+- **`docs/reference/CARD-MODEL.md:232-236` pins a test that step 7 must change.** *"A test asserts that extraction produces only heading anchors, so the day one produces a note anchor is a decision somebody made rather than a drift nobody noticed."* Adding `CardPath.Block` trips that guard by design; the staging table should name it so the implementer does not read a red test as breakage.
+- **`docs/reference/CARD-MODEL.md:352`'s reserve is for a different construct.** The line reserves `==text==%%1%%` as a *group-label* syntax, rejected as verbose. Using it as prior blessing for a *card-anchor* carrier is a stretch worth one honest clause.

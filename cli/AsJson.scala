@@ -7,7 +7,7 @@ import obsidiananki.plan.{DecisionHandle, PendingRetype}
 /** WHAT A RUN DECIDED, FOR A PROGRAM RATHER THAN A PERSON.
   *
   * IT EXISTS BECAUSE THE ARCHITECTURE RULING SAID SO AND THE FIRST BUILD IGNORED IT.
-  * `docs/REVIEW-QUEUE.md` states that enumerating pending decisions must return "structured
+  * `docs/design/REVIEW-QUEUE.md` states that enumerating pending decisions must return "structured
   * data, not prose", on the grounds that the terminal is one consumer among several and the
   * Obsidian plugin is the one that matters. What was built on 2026-08-27 emitted prose only, so
   * the only way to act on a waiting change from anywhere but a terminal was to scrape the

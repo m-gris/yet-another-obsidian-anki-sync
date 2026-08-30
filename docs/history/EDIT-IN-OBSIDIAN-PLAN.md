@@ -3,7 +3,7 @@
 _Written 2026-08-27. **Delete this file when the work below has landed**, the way `IN-FLIGHT.md`
 says of itself._
 
-The design this executes is `docs/EDIT-IN-OBSIDIAN.md`. That document is the argument; this one
+The design this executes is `docs/design/EDIT-IN-OBSIDIAN.md`. That document is the argument; this one
 is the order of work and the state of it. Where the two disagree, the design doc is wrong and
 should be amended rather than worked around — three of its claims were already corrected on
 2026-08-27, and the corrections are recorded in it, dated, in place.

@@ -116,7 +116,7 @@ measured before building anything* below.
 
 The experiment above was run the same day it was named. **The answer is that a stranded card is
 ORPHANED, NOT DESTROYED — and `Tools > Check Database` destroys it later.** Full protocol and
-figures in `docs/EVOLVABILITY.md` § M4. What it changes here:
+figures in `docs/findings/EVOLVABILITY.md` § M4. What it changes here:
 
 - **The cost is exactly countable.** `getReviewsOfCards` returns the complete log for the doomed
   ordinals, *before* the retype. So row 2's third state can state a real price — *"this strands 2
@@ -188,7 +188,7 @@ being thrown away. Split the two and a terminal consumer, a plugin, and anything
 
 **There is precedent in this repository, deliberate and recent.** `locate/Locate.scala` exists so
 that an Anki add-on can *ask* the Scala tool where a card came from, rather than carrying a second
-implementation of the identity codec in Python — see `docs/EDIT-IN-OBSIDIAN.md`, which states the
+implementation of the identity codec in Python — see `docs/design/EDIT-IN-OBSIDIAN.md`, which states the
 reason: a copy of `TagCodec.canonical` in another language, held honest only by a test, is the
 defect class this project fights hardest. **The same argument applies here with more force**: an
 action that prunes a card must not exist twice.

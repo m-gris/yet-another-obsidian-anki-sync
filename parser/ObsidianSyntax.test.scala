@@ -389,7 +389,7 @@ class ObsidianSyntaxTest extends munit.FunSuite:
     * WHAT THIS SECTION USED TO SAY, AND WHY IT CHANGED. Until 2026-08-29 these were
     * characterisation tests asserting these same two corruptions INSIDE `$$…$$`, because `$`
     * was a delimiter nowhere and maths was read as prose — row 5 of
-    * `docs/PARSER-DISAGREEMENTS.md`, and the reason `docs/MATHS-ON-A-CARD.md` exists. They were
+    * `docs/findings/PARSER-DISAGREEMENTS.md`, and the reason `docs/findings/MATHS-ON-A-CARD.md` exists. They were
     * written to go red the day a maths parser landed, and they did.
     *
     * THEY ARE REPOINTED RATHER THAN DELETED BECAUSE THE CORRUPTION HAS NOT GONE ANYWHERE. It is

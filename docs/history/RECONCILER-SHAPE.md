@@ -54,7 +54,7 @@ This section proposed a `Relink(orphanKey, orphanNoteId, candidateKey, confidenc
 
 **Marc cut automatic rename detection from v0** on 2026-08-19, judging it a subsystem rather than a feature. With nothing to produce a proposal, the case had no owner, and it was removed from the code the same day. Note that the case as implemented never carried the `confidence` field this section specifies — it was written with three fields and the drift went unnoticed, which is its own small illustration of why a proposed shape is not a design document.
 
-An orphan is now **suspended** rather than left in rotation, so reconciling a rename by hand is lossless: the card keeps its full review history and restoring the heading restores the card. See *Deletion* and *Deliberately deferred* in [`docs/CARD-MODEL.md`](docs/CARD-MODEL.md), which is the ratified record and carries what was learned while exploring detection.
+An orphan is now **suspended** rather than left in rotation, so reconciling a rename by hand is lossless: the card keeps its full review history and restoring the heading restores the card. See *Deletion* and *Deliberately deferred* in [`docs/reference/CARD-MODEL.md`](docs/reference/CARD-MODEL.md), which is the ratified record and carries what was learned while exploring detection.
 
 ### 4. `Unflag` closes the orphan set's first hole
 

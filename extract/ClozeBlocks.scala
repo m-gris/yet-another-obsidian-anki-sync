@@ -7,7 +7,7 @@ import obsidiananki.parser.ObsidianSyntax
 /** ONE BLOCK THAT HOLDS CLOZE DELETIONS, AND THE NAME ITS AUTHOR GAVE IT.
   *
   * The unit a headingless cloze card is made of. Requested by Marc as *highlight a phrase
-  * anywhere and get a card — no heading needed*; see `docs/CLOZE-REDESIGN.md`.
+  * anywhere and get a card — no heading needed*; see `docs/design/CLOZE-REDESIGN.md`.
   *
   * THE ANCHOR IS OPTIONAL HERE AND REQUIRED BY THE CALLER, which is the same division
   * `Outline.read` makes: this function reports what a document holds, and refusing is a decision

@@ -383,7 +383,7 @@ class AsHtmlSuite extends munit.FunSuite:
     * putting a literal `}}` into a field that the cloze wrapper also uses — see the brace
     * argument in this file's header. A browser decodes the reference before MathJax reads the
     * text, so the maths still typesets; that half is reasoned and NOT yet measured against a
-    * live collection, and `docs/MATHS-ON-A-CARD.md` records it as owed.
+    * live collection, and `docs/findings/MATHS-ON-A-CARD.md` records it as owed.
     */
   test("braces in TeX are escaped, exactly as they are in prose") {
     assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathInline("""\text{Id}"""))))),

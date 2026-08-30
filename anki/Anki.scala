@@ -389,7 +389,7 @@ trait Anki[F[_]]:
     * `missing template` FOR THE WHOLE NOTE — not merely for the cards past the last template.
     * So the standing of a note's cards is readable ONLY BEFORE the move. Anything that prices a
     * narrowing must read first and move second; there is no reading it back afterwards to check.
-    * (`docs/EVOLVABILITY.md` § M4, measured 2026-08-27 in a throwaway profile.)
+    * (`docs/findings/EVOLVABILITY.md` § M4, measured 2026-08-27 in a throwaway profile.)
     *
     * TWO MEASURED WAYS OF ANSWERING WRONGLY, both of which return a plausible value rather
     * than failing. The AnkiConnect implementation deals with them differently, and the

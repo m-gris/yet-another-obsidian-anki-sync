@@ -256,7 +256,7 @@ Six so far. **Every one produced plausible output instead of failing.**
   never to a heading inside it. **The KIND is part of identity**, because `special-case-of:` and
   `# Special-Case-Of` were both live candidates for writing one relation, and bare names give two
   different cards one key — a duplicate identity, which refuses the whole run. Full reasoning in
-  `docs/CARD-MODEL.md` under *What a card can be anchored to*.
+  `docs/reference/CARD-MODEL.md` under *What a card can be anchored to*.
 - **A heading anchor encodes byte-for-byte as it always has.** Not aesthetics: the golden pins 55
   identity tags under `DO NOT REGENERATE THIS FILE`, so rewriting them by hand is indistinguishable
   from the blind regeneration it exists to catch. The other anchors use a leading empty token,
@@ -274,7 +274,7 @@ Six so far. **Every one produced plausible output instead of failing.**
   touches nothing else. This is the premise the entire never-delete design substitutes for
   deletion, and it had been asserted in five places and cited in none.
 
-Ruled by Marc. The reasoning is in the source and in `docs/CARD-MODEL.md`.
+Ruled by Marc. The reasoning is in the source and in `docs/reference/CARD-MODEL.md`.
 
 - **B1 tag encoding.** Percent-encode outside `[A-Za-z0-9.-]`. Anki tags are whitespace-delimited — a tag **cannot contain a space**, and 62 of 80 real headings do. `_` and `*` are search wildcards. `/` occurs inside real headings so it cannot double as the separator.
 - **B5 heading segment.** Extracted text, marker-stripped, NFC + case-folded + internal whitespace collapsed. Deliberate equalities: `**CAP**` == `CAP`, `Costs` == `costs`, `a  b` == `a b`. Whitespace collapses because a markdown *formatter* would otherwise silently orphan cards.

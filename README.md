@@ -639,7 +639,7 @@ _**Corrected 2026-08-27.** This said "The run reports what it suspended", and it
 that suspends a card prints `N flag as orphaned` — the word *suspend* is not in that line. Every
 run **afterwards** does say it, in the standing count of parked notes. So the run that takes cards
 out of your review queue is the quiet one, and the ones that change nothing are loud about it.
-Naming the suspension in the plan line is programme item 5 of `docs/EVOLVABILITY.md`; this sentence
+Naming the suspension in the plan line is programme item 5 of `docs/findings/EVOLVABILITY.md`; this sentence
 is corrected rather than left describing the intention._
 
 A separate `prune` command to delete flagged cards after you have read the list **is not built
@@ -863,7 +863,7 @@ Named here so their absence is not mistaken for a promise:
   location; it knows its own path; it already resolves the vault. A sibling to
   `install-note-types` would write the add-on into Anki's add-on directory fully configured, and
   check what it cannot set: that Advanced URI is *enabled* rather than merely present, and that
-  the note types are installed. The design is `docs/EDIT-IN-OBSIDIAN-PLAN.md`, Phase 6
+  the note types are installed. The design is `docs/history/EDIT-IN-OBSIDIAN-PLAN.md`, Phase 6
 - **any check that a collection belongs to the vault being synced.** See *One vault per Anki
   profile* above: the tool cannot tell one vault's notes from another's, so it cannot warn you.
   A `vault::` tag written beside `src::` would give it the means — tags are not hashed, so that
@@ -874,11 +874,11 @@ Named here so their absence is not mistaken for a promise:
 
 | File | What is in it |
 |---|---|
-| `docs/REQUIREMENTS.md` | what this must do and must not, with each claim marked as stated, verified or inferred |
-| `docs/CARD-MODEL.md` | the card model, markers and identity scheme in full |
-| `docs/LEARNING-MODEL.md` | the pedagogy the card shapes come from |
-| `docs/EDIT-IN-OBSIDIAN.md` | why Edit redirects to Obsidian, and where the identity tag gets decoded |
-| `docs/EDIT-IN-OBSIDIAN-PLAN.md` | what was built for it, what was measured, and what is left |
+| `docs/reference/REQUIREMENTS.md` | what this must do and must not, with each claim marked as stated, verified or inferred |
+| `docs/reference/CARD-MODEL.md` | the card model, markers and identity scheme in full |
+| `docs/reference/LEARNING-MODEL.md` | the pedagogy the card shapes come from |
+| `docs/design/EDIT-IN-OBSIDIAN.md` | why Edit redirects to Obsidian, and where the identity tag gets decoded |
+| `docs/history/EDIT-IN-OBSIDIAN-PLAN.md` | what was built for it, what was measured, and what is left |
 | `HANDOFF.md` | how the code is laid out, and the AnkiConnect behaviours it defends against |
 | `FIXTURES.md` | what every file in `dummy-vault/` and `hostile-vaults/` is for, and which are meant to fail |
 | `NOTE-TYPES-AND-CONTEXT-DESIGN.md` | why the note types are shaped as they are |

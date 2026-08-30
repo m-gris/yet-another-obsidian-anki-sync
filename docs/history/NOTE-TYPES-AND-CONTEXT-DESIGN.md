@@ -910,7 +910,7 @@ Named as deferred, so nobody treats any of them as an oversight:
   "no" above; reversible, Marc's to overrule.
 - **Migrating notes in profile `User 1`.** Out of scope entirely. The tool writes only to its
   own five types from now on; nothing in Marc's real collection is touched by any of this.
-- **Amending `docs/CARD-MODEL.md`.** Its §Lists still says progressive disclosure
+- **Amending `docs/reference/CARD-MODEL.md`.** Its §Lists still says progressive disclosure
   "cannot be expressed by one Anki note" and "requires generating N notes" — both false, and
   the second is the opposite of what is wanted. Its §"Known defect in the existing note type"
   and REQUIREMENTS.md §Accepted 3 may also be stale (§10 item 3). Document changes are Marc's

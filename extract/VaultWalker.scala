@@ -85,7 +85,7 @@ object DeckLevel:
   * A SET, BECAUSE MEMBERSHIP IS THE ONLY CHOICE. The parts nest in document order, so the order
   * they are named in carries no meaning and must not be expressible — see the note below.
   *
-  * RULED BY MARC, 2026-08-22 (`docs/REQUIREMENTS.md` item 11): folder path, file
+  * RULED BY MARC, 2026-08-22 (`docs/reference/REQUIREMENTS.md` item 11): folder path, file
   * name and heading path are COMPLEMENTARY segments of one deck path, each optional. How decks
   * are shaped is a way of thinking, not a correctness property, so the mechanism is exposed
   * rather than a preference embedded.

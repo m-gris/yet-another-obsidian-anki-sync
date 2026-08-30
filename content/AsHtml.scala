@@ -476,7 +476,7 @@ object Html:
     * imitation: `inner` is already a `Fragment`, so no author character can reach these
     * delimiters and split them. Braces inside the TeX are therefore `&#123;` in the stored
     * field. A browser decodes those while parsing, so MathJax reads the braces it needs —
-    * REASONED, and recorded as owed a measurement in `docs/MATHS-ON-A-CARD.md`.
+    * REASONED, and recorded as owed a measurement in `docs/findings/MATHS-ON-A-CARD.md`.
     */
   def mathInline(inner: Fragment): Fragment = s"""\\($inner\\)"""
 

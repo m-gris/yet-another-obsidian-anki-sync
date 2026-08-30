@@ -340,7 +340,7 @@ object Executor:
         // PRICED BEFORE ANYTHING IS WRITTEN, AND THAT ORDER IS A MEASURED CONSTRAINT RATHER
         // THAN A PREFERENCE. Once a note sits on a narrower note type, AnkiConnect's
         // `cardsInfo` fails for the WHOLE note, so what a narrowing would have cost cannot be
-        // read back afterwards. See `docs/EVOLVABILITY.md` § M4.
+        // read back afterwards. See `docs/findings/EVOLVABILITY.md` § M4.
         //
         // AND SET ASIDE THE SAME WAY A DEFERRAL IS, rather than being refused inside the
         // executor. A change nobody has answered for is not attempted, so it cannot fail, so it

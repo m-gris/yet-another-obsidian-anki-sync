@@ -76,7 +76,7 @@ enum Command:
       /** Answer on standard output as data, and send every word of prose to standard error.
         *
         * FOR A CALLER THAT IS A PROGRAM, and the Obsidian plugin is the one that matters.
-        * `docs/REVIEW-QUEUE.md` rules that enumerating pending decisions must return structured
+        * `docs/design/REVIEW-QUEUE.md` rules that enumerating pending decisions must return structured
         * data rather than prose, because the terminal is one consumer among several — and until
         * 2026-08-28 the only way to act on a waiting change from anywhere else was to scrape the
         * report, which is the coupling that ruling exists to prevent.

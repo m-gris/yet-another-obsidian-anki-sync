@@ -105,7 +105,7 @@ enum RetypeRefusal:
   *
   * NOT AN ERROR TYPE. Ruled by Marc 2026-08-27: narrowing a marker is a thing an author is
   * entitled to do knowingly, so this tool's job is to say what it costs and let him answer, not
-  * to withhold it. See `docs/REVIEW-QUEUE.md` § *Three stances on a refusal*, which records the
+  * to withhold it. See `docs/design/REVIEW-QUEUE.md` § *Three stances on a refusal*, which records the
   * weaker proposal — refusing only when the cards happen to hold reviews — and why it was
   * rejected: it keeps the tool forbidding and merely moves the threshold.
   *
@@ -113,7 +113,7 @@ enum RetypeRefusal:
   * note already holds is below the old template count and therefore below the new one.
   *
   * WHAT IT COSTS IS NOW KNOWN, AND THAT IS RECENT. Until 2026-08-27 the answer was genuinely
-  * unestablished and the refusal said so. It was then MEASURED (`docs/EVOLVABILITY.md` § M4):
+  * unestablished and the refusal said so. It was then MEASURED (`docs/findings/EVOLVABILITY.md` § M4):
   * the cards are NOT destroyed by the move. They survive it, unusable, and Anki's
   * `Tools > Check Database` destroys them at some later moment of the author's choosing — which
   * is why the sentence below states WHEN, not merely how many. A warning that said only "these
@@ -175,7 +175,7 @@ final case class RetypePrice(doomed: Vector[CardStanding]):
   * or the two can disagree across a vault edit and the author approves something other than
   * what they read.
   *
-  * NAMED FOR RETYPES ONLY, DELIBERATELY. `docs/REVIEW-QUEUE.md` describes four kinds of pending
+  * NAMED FOR RETYPES ONLY, DELIBERATELY. `docs/design/REVIEW-QUEUE.md` describes four kinds of pending
   * decision and this is the first to be built. A `PendingDecision` covering all four would be a
   * type designed against three cases nobody has written yet; the generalisation is cheap once a
   * second one exists and dishonest before then.
@@ -335,7 +335,7 @@ object Retyping:
     * READ BEFORE THE MOVE, NEVER AFTER, AND THAT IS A MEASURED CONSTRAINT RATHER THAN A
     * PREFERENCE. Once the note is on the narrower type, AnkiConnect's `cardsInfo` fails for the
     * WHOLE note rather than for the doomed cards alone, so there is no reading this back to
-    * check afterwards. See [[Anki.standingOf]] and `docs/EVOLVABILITY.md` § M4.
+    * check afterwards. See [[Anki.standingOf]] and `docs/findings/EVOLVABILITY.md` § M4.
     */
   def priceOf[F[_]: cats.Monad](
       anki: Anki[F],

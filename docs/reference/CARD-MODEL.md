@@ -309,7 +309,7 @@ is a failure — it is the only honest answer available when one layer is regene
 is not.
 
 The tool has no word for that state, which is why the two read differently in a report: one prints
-as *parked* and the other as *safe*. See `docs/EVOLVABILITY.md` for what each costs.
+as *parked* and the other as *safe*. See `docs/findings/EVOLVABILITY.md` for what each costs.
 
 **A heading anchor encodes exactly as it always has**, `{seg}/{seg}/…`, and that was a requirement
 rather than a nicety: `extract/golden/fixture-cards.txt` pins fifty-five identity tags and opens
@@ -369,7 +369,7 @@ The third is not closed and cannot be by this means: **a vault whose files have 
 > revisited.** So the paragraph below currently reads as a live, valid acceptance of a hazard whose
 > own stated precondition no longer holds: a mistimed run over a half-materialised vault now
 > empties the review queue rather than merely tagging it, and a `prune` command would make that
-> irreversible. `docs/EVOLVABILITY.md` §3.4 carries the full chain and programme item 6 carries the
+> irreversible. `docs/findings/EVOLVABILITY.md` §3.4 carries the full chain and programme item 6 carries the
 > candidate guard — refuse a run whose COMPLETE scan yields zero cards while the collection holds
 > some, which needs no proportion and therefore no unjustifiable number.
 

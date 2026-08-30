@@ -312,7 +312,7 @@ those references._
 
 _Marc asked for these to be kept warm rather than done now. They are small enough to lose and
 important enough not to, so they are named here rather than left inside a 56k-character document
-nobody re-reads. Both come out of `docs/EVOLVABILITY.md`, which carries the full reasoning._
+nobody re-reads. Both come out of `docs/findings/EVOLVABILITY.md`, which carries the full reasoning._
 
 18. **TWO DOCSTRINGS ON THE HISTORY-PROTECTING PATH SAY THE OPPOSITE OF WHAT THE CODE DOES.**
     Free to fix, actively misleading, and both sit on the mechanism that keeps review history
@@ -323,14 +323,14 @@ nobody re-reads. Both come out of `docs/EVOLVABILITY.md`, which carries the full
       yet." It is flatly false: `Anki.suspend` exists and `Executor` suspends every card of a
       flagged note. The single place where the code describes the action that removes a card
       from review describes an action it stopped performing.
-    - `model/CardSpec.scala:42-46`, echoed at `docs/CARD-MODEL.md:251`, promises that editing an
+    - `model/CardSpec.scala:42-46`, echoed at `docs/reference/CARD-MODEL.md:251`, promises that editing an
       unlabelled cloze deletion's text "retires the key: the card starts over and the old one is
       flagged as an orphan, visible in the prune list." **No such thing happens.** Orphan
       flagging works on `CardKey`s and there is one key per SECTION, not per cloze group — the
       planner has no cloze awareness at all. A retired cloze group produces no flag, no tag and
       no prune-list entry.
 
-19. **THE GIT-REPLAY MEASUREMENT (called M1 in `docs/EVOLVABILITY.md`) HAS NOT BEEN RUN, AND IT
+19. **THE GIT-REPLAY MEASUREMENT (called M1 in `docs/findings/EVOLVABILITY.md`) HAS NOT BEEN RUN, AND IT
     GATES THE IDENTITY DECISION.** Read-only, no Anki, no writes, roughly an afternoon: walk the
     vault's git history, run the extractor over each pair of trees, diff the key sets, and
     classify every key death — file deleted, file renamed, ancestor heading reworded, marked
@@ -416,11 +416,11 @@ not.**_
 ## OPEN — verified by the pipeline brainstorm, 2026-08-26
 
 _Three facts, each checked by running or reading rather than inferred, and each surviving the
-adversarial review at `docs/PIPELINE-DESIGN-REVIEW.md`. They are lifted out of that 38,000-character
+adversarial review at `docs/history/PIPELINE-DESIGN-REVIEW.md`. They are lifted out of that 38,000-character
 document because a finding nobody can find is a finding nobody acts on._
 
 20. ⚠️ **AN OBSIDIAN BLOCK REFERENCE PRINTS ON THE CARD FACE.** _This is also why `^blockid` is
-    eliminated as a card ANCHOR — see `docs/CLOZE-REDESIGN.md`._ VERIFIED BY EXECUTION through this
+    eliminated as a card ANCHOR — see `docs/design/CLOZE-REDESIGN.md`._ VERIFIED BY EXECUTION through this
     project's own parser: `The outermost layer is the ==epidermis==. ^abc123` renders as
     `<p>The outermost layer is the {{c1::epidermis}}. ^abc123</p>`.
 
@@ -604,7 +604,7 @@ document because a finding nobody can find is a finding nobody acts on._
     format is JSON with string keys — and that shape was carried inward instead of being parsed
     at the edge. Not a principle this repository lacks; a principle it applied on one side.
 
-    **Where the full diagnosis lives, and why that is not good enough.** `docs/PIPELINE-DESIGN.md`
+    **Where the full diagnosis lives, and why that is not good enough.** `docs/design/PIPELINE-DESIGN.md`
     surveys every site, and its back-end fact table was independently verified — nine of eleven
     rows opened and all nine accurate. But that document opens with a warning telling readers not
     to implement from it, because its RECOMMENDATION failed adversarial review. **A live problem
@@ -645,7 +645,7 @@ document because a finding nobody can find is a finding nobody acts on._
     on every run from the bulk `notesInfo` the observer already makes, and consumed by NOTHING in
     `plan/`. It holds what Anki currently believes — the values that would let the tool compare
     what a card IS against what the vault ASKS, which is the whole content of "what state is this
-    card in". Recorded twice already (`docs/EVOLVABILITY.md` §3.7, and item 23 above) and applied
+    card in". Recorded twice already (`docs/findings/EVOLVABILITY.md` §3.7, and item 23 above) and applied
     to neither.
 
 ---
@@ -766,7 +766,7 @@ document because a finding nobody can find is a finding nobody acts on._
 29. ⚠️ **THE TOOL MUST NOT FORBID A NOTE-TYPE SHRINK. IT MUST STATE THE COST AND LET THE AUTHOR
     DECIDE.** Ruled by Marc 2026-08-27, after the same refusal blocked him twice in one session.
     **Nothing is built.** The full reasoning, including the weaker proposal that was rejected on
-    the way to this one, is `docs/REVIEW-QUEUE.md` § *Three stances on a refusal*.
+    the way to this one, is `docs/design/REVIEW-QUEUE.md` § *Three stances on a refusal*.
 
     **The ruling in one line.** Changing your mind about your own cards is the AUTHOR's decision,
     made knowingly — not a privilege the tool grants once it judges the stakes low enough.
@@ -786,7 +786,7 @@ document because a finding nobody can find is a finding nobody acts on._
     applied without its cost shown, and it fails in the worse direction because it LOOKS informed.
 
     **So the sequence is fixed, and M4 is the critical path:**
-    1. Run **M4's shrinking half** (`docs/EVOLVABILITY.md`) — an hour in a throwaway profile.
+    1. Run **M4's shrinking half** (`docs/findings/EVOLVABILITY.md`) — an hour in a throwaway profile.
        `Check Database` afterwards is not optional: *orphaned* and *destroyed* look identical
        without it.
     2. Build the third state — *apply anyway, with the cost shown* — which is
@@ -1209,7 +1209,7 @@ section: a pointer to a document that does not mention the thing is worse than n
     _Marc also caught the method: asked why the design should contort around stock note types,
     Claude reached for a measurement of what his collection currently holds. That answers "does
     this bite today", not "what should the design be" — the same status-quo-for-status-bono error
-    recorded in `docs/CLOZE-REDESIGN.md`'s header. The principled answer needed no measurement._
+    recorded in `docs/design/CLOZE-REDESIGN.md`'s header. The principled answer needed no measurement._
 
 ---
 

@@ -51,7 +51,7 @@ _**Marker vocabulary note, added 2026-08-27.** This document nowhere names `cdd`
 2026-08-24 is how a concept-descriptor card is marked — `#flashcard/cdd/{1,2,3}way`, replacing
 `3way` and `3way/all`, which survive as aliases. Nor does it name `sequence`. The authoritative
 list is `model/Marker.scala`'s `Documented` table, which `--help` prints and which a test ties to
-the source; `docs/CARD-MODEL.md` carries a rendered copy. Nothing in this document's REASONING
+the source; `docs/reference/CARD-MODEL.md` carries a rendered copy. Nothing in this document's REASONING
 depends on the spelling, which is why only this note is added rather than the text being rewritten._
 
 **Deferred, not rejected.** The MOC and authored route; new-card position pushing, which rests on an assumption still untested; the typed-edge graph and its schema; structure cards; ordered-list progressive disclosure; deletion handling beyond flagging.

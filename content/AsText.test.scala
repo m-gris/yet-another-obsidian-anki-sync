@@ -144,7 +144,7 @@ class AsTextSuite extends munit.FunSuite:
     * text, so `# Notation (Given 2 sets, $A$ and $B$)` keys with its dollars in it today and
     * without them once maths is parsed. Holding them would mean writing the ONLY special case
     * into the one renderer whose uniformity is load-bearing, to keep a string still that
-    * nothing depends on. `docs/MATHS-ON-A-CARD.md` carries the argument.
+    * nothing depends on. `docs/findings/MATHS-ON-A-CARD.md` carries the argument.
     */
   test("maths renders as bare TeX, with no dollars — the same rule as a code span") {
     assertEquals(AsText.plain(Vector(Block.Paragraph(Vector(Inline.MathInline("B^A"))))), "B^A")
