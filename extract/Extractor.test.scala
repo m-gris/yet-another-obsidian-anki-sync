@@ -581,6 +581,31 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(paths(note), Vector("block '^fa1'"))
   }
 
+  test("rewriting a clozed block leaves its key untouched, so the card is updated not re-minted") {
+    val before   = extract("# B\n\n## Forearm\n\nThe ==<<radius>>== is a forearm bone. ^fa1\n")
+    val around   = extract("# B\n\n## Forearm\n\nThe ==<<radius>>== sits on the thumb side. ^fa1\n")
+    // The typo fix the design is really about: the edit lands INSIDE the deletion, which is where
+    // `oas-9yz.1` could still move the key when it settles what an unlabelled group is keyed by.
+    val inDelete = extract("# B\n\n## Forearm\n\nThe ==<<radius bone>>== is a forearm bone. ^fa1\n")
+
+    Vector(before, around, inDelete).foreach(n => assertEquals(n.failures, Vector.empty, s"${n.failures}"))
+    assertEquals(paths(before), Vector("block '^fa1'"))
+
+    Vector(around -> "prose around the deletion", inDelete -> "the deletion's own text").foreach {
+      case (edited, what) =>
+        assertNotEquals(
+          edited.specs.map(_.spec.fields),
+          before.specs.map(_.spec.fields),
+          s"editing $what changed nothing, so the key comparison below would prove nothing",
+        )
+        assertEquals(
+          edited.specs.map(_.key),
+          before.specs.map(_.key),
+          s"editing $what moved the key, so it orphans the card and restarts its history",
+        )
+    }
+  }
+
   /** THE BUNDLING THIS ENDS. Under a marked heading the card's text is the whole section, so a
     * section with three paragraphs shows all three whatever the highlight was in. Scoped to a
     * block, a card shows its own paragraph and nothing else.

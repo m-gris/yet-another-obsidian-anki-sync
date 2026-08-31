@@ -83,7 +83,7 @@ class CardKeyTest extends munit.FunSuite:
     * about that text invites.
     */
   test("a block card round-trips through its tag") {
-    val anchor = BlockAnchor.fromParsed("abc123").fold(e => fail(s"$e"), identity)
+    val anchor = BlockAnchor.read("abc123").fold(e => fail(s"$e"), identity)
     val k      = CardKey(id("n1"), CardPath.Block(anchor))
     assertEquals(encoded(k), "src::n1::/b/abc123")
     assertEquals(TagCodec.decode(encoded(k)), Right(k))
@@ -95,7 +95,7 @@ class CardKeyTest extends munit.FunSuite:
     * heading could have produced would file two different cards under one identity.
     */
   test("a block path cannot be confused with a heading path") {
-    val anchor = BlockAnchor.fromParsed("b").fold(e => fail(s"$e"), identity)
+    val anchor = BlockAnchor.read("b").fold(e => fail(s"$e"), identity)
     val block  = encoded(CardKey(id("n1"), CardPath.Block(anchor)))
     val heading = encoded(key("n1", "b"))
     assertNotEquals(block, heading, "a one-letter block anchor collided with a heading of the same name")
@@ -106,7 +106,7 @@ class CardKeyTest extends munit.FunSuite:
     * tag there and two identities here — which is how a card comes to be created twice.
     */
   test("an anchor is folded to lower case, because Anki folds tag case") {
-    val upper = BlockAnchor.fromParsed("ABC-123").fold(e => fail(s"$e"), identity)
+    val upper = BlockAnchor.read("ABC-123").fold(e => fail(s"$e"), identity)
     assertEquals(upper.value, "abc-123")
   }
 
@@ -114,9 +114,9 @@ class CardKeyTest extends munit.FunSuite:
     * cannot round-trip must fail here rather than name a card nothing can find again.
     */
   test("an anchor outside Obsidian's character set is refused") {
-    assert(BlockAnchor.fromParsed("a b").isLeft, "a space was accepted into an identity")
-    assert(BlockAnchor.fromParsed("a/b").isLeft, "a separator was accepted into an identity")
-    assert(BlockAnchor.fromParsed("").isLeft, "an empty anchor was accepted")
+    assert(BlockAnchor.read("a b").isLeft, "a space was accepted into an identity")
+    assert(BlockAnchor.read("a/b").isLeft, "a separator was accepted into an identity")
+    assert(BlockAnchor.read("").isLeft, "an empty anchor was accepted")
   }
 
   /** THE COLLISION THIS TYPE EXISTS TO PREVENT.

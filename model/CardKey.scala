@@ -455,7 +455,7 @@ object TagCodec:
       case Vector(NotAHeadingPath, BlockMark, rawAnchor) =>
         for
           text   <- decodeComponent(rawAnchor)
-          anchor <- BlockAnchor.fromDecoded(text)
+          anchor <- BlockAnchor.read(text)
         yield CardPath.Block(anchor)
 
       case Vector(NotAHeadingPath, PropertyMark, rawName) =>

@@ -91,5 +91,5 @@ object ClozeBlocks:
         // ever drift, the model is the one that must refuse. Reading the failure as "no anchor"
         // sends such a block to the caller's refusal, which tells the author, rather than
         // writing an identity the codec could not read back.
-        .flatMap(BlockAnchor.fromParsed(_).toOption)
+        .flatMap(BlockAnchor.read(_).toOption)
     case _ => None

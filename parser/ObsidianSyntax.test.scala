@@ -14,6 +14,38 @@ class ObsidianSyntaxTest extends munit.FunSuite:
   def parse(src: String): RootElement =
     parser.parse(src).fold(e => fail(s"parse failed: $e"), _.content)
 
+  /** A document that does not parse yields no block identifier, which is the answer this
+    * predicate wants — unlike [[parse]], which fails the test.
+    */
+  def blockIdOf(raw: String): Option[String] =
+    parser.parse(s"x ^$raw").toOption
+      .flatMap(_.content.collect { case b: BlockId => b.id }.headOption)
+
+  test("no character can enter a block identifier without being usable as an identity") {
+    // From space, not from '!': whitespace is the character whose admission would be worst — it
+    // parses, then fails identity validation, and the block is reported as having no anchor.
+    val domain = (' ' to '˿') ++ Seq('\t', '日', '中', '—', 'Ａ')
+
+    val recognised = domain.filter(c => blockIdOf(c.toString).isDefined)
+
+    // CONTAINMENT FIRST, and the exact alphabet second. Containment is the invariant that matters:
+    // narrowing the parser is legitimate and preserves it, and would otherwise abort the run here
+    // before the check below ever executed.
+    recognised.foreach { c =>
+      assert(
+        obsidiananki.model.BlockAnchor.read(c.toString).isRight,
+        s"^$c parses as a block identifier but cannot become an identity, so ClozeBlocks " +
+          "reports the block as anchor-less and tells the author to add the anchor they wrote",
+      )
+    }
+
+    assertEquals(
+      recognised.toSet,
+      (('a' to 'z') ++ ('A' to 'Z') ++ ('0' to '9') :+ '-').toSet,
+      "the parser's block-identifier alphabet moved",
+    )
+  }
+
   /** Depth-first collection of Section nodes, so heading paths can be asserted. */
   def sections(e: Element): List[Section] = e match
     case s: Section         => s :: s.content.flatMap(sections).toList
