@@ -42,6 +42,7 @@ class CardKeyTest extends munit.FunSuite:
       key("n1", "0", "1", "2"),
       key("n1", "p"),                       // the property mark, as an ordinary heading
       key("n1", "n"),                       // the note mark, likewise
+      key("n1", "b"),                       // and the block mark
       key("n1", "Cost / benefit"),          // a slash INSIDE a segment, percent-encoded
       key("n1", "  spaced  out  "),
       key("n1", "%20"),                     // text that looks like an escape already
@@ -57,8 +58,8 @@ class CardKeyTest extends munit.FunSuite:
   }
 
   test("a heading path still encodes exactly as it always did") {
-    // The golden file pins 55 of these and says DO NOT REGENERATE at the top. If this changes,
-    // every identity in every collection changes with it.
+    // The golden file pins every one of these and says DO NOT REGENERATE at the top. If this
+    // changes, every identity in every collection changes with it.
     assertEquals(encoded(key("fix-consistency", "consistency", "definition")),
                  "src::fix-consistency::consistency/definition")
     assertEquals(encoded(key("n1", "Cost / benefit")), "src::n1::cost%20%2f%20benefit")
@@ -180,17 +181,24 @@ class CardKeyTest extends munit.FunSuite:
     assertEquals(id("2026-08-18").value, "2026-08-18")
   }
 
-  // ------------------------------------------------------- B5: marker stripping ----
+  // ------------------------------------------------------------ marker stripping ----
 
-  test("B5 REGRESSION: the flashcard marker is stripped from a heading segment") {
-    assertEquals(seg("Definition #flashcard/3way").value, "definition")
-    assertEquals(seg("Cost #flashcard/3way/all").value, "cost")
-    assertEquals(seg("Anatomy of a long bone #flashcard/cloze").value, "anatomy of a long bone")
+  test("every marker the tool publishes is stripped from a heading segment, in full") {
+    // Driven off the published table rather than a hand-picked few, so a marker spelling the
+    // stripper cannot handle cannot be added without this failing. The longest tokens are four
+    // qualifiers deep and no example test reached them.
+    Marker.Documented.map(_._1).foreach { token =>
+      assertEquals(
+        HeadingSegment.fromExtractedText(s"Cost $token").map(_.value),
+        Right("cost"),
+        s"'$token' left residue in the key, so a heading marked this way is keyed BY ITS " +
+          "MARKER — retagging it would orphan the card and mint a duplicate",
+      )
+    }
   }
 
-  test("B5 REGRESSION: changing a marker does NOT change the key") {
-    // Retagging 3way -> 3way/all must not orphan the note and mint a duplicate.
-    assertEquals(seg("Cost #flashcard/3way").value, seg("Cost #flashcard/3way/all").value)
+  test("changing a marker does NOT change the key") {
+    assertEquals(seg("Cost #flashcard/cdd/2way").value, seg("Cost #flashcard/cdd/3way").value)
     assertEquals(seg("Term #flashcard/1way").value, seg("Term #flashcard/2way").value)
   }
 
@@ -200,11 +208,11 @@ class CardKeyTest extends munit.FunSuite:
     assert(HeadingSegment.fromExtractedText("").isLeft)
   }
 
-  /** B5 rules that a segment is the heading's EXTRACTED text. Extraction is Laika's job, so
+  /** A segment is the heading's EXTRACTED text. Extraction is Laika's job, so
     * this test drives the real parser rather than handing raw markdown to a function that
     * never sees it — which is what makes it evidence that the two layers compose.
     */
-  test("B5: formatting is not part of the key — a deliberate, documented equality") {
+  test("formatting is not part of the key — a deliberate, documented equality") {
     def segmentOf(headingLine: String): String =
       val doc = obsidiananki.parser.ObsidianSyntax.markupParser
         .parse(s"$headingLine\n\nBody.\n")
@@ -222,9 +230,9 @@ class CardKeyTest extends munit.FunSuite:
     assertEquals(segmentOf("## [[CAP]]"), segmentOf("## CAP"))
   }
 
-  // ------------------------------------------------------- B1: canonical form ----
+  // ------- canonical form ----
 
-  test("B1: case is folded — a deliberate, documented collision") {
+  test("case is folded — a deliberate, documented collision") {
     // Anki matches tags case-insensitively, so these ARE the same card. Recognising that
     // here is what stops it surfacing as a false orphan plus a false create, every run.
     assertEquals(seg("Costs").value, seg("costs").value)
@@ -234,49 +242,52 @@ class CardKeyTest extends munit.FunSuite:
   /** RULED. Whitespace is not significant. A markdown linter or formatter normalises a
     * stray double space routinely — markdownlint and prettier both do by default — so if
     * internal whitespace were part of the key, a FORMATTING PASS WOULD SILENTLY ORPHAN
-    * CARDS. Same reasoning as B5's extracted-text rule: the key must survive changes that
+    * CARDS. Same reasoning as the extracted-text rule: the key must survive changes that
     * alter only presentation.
     */
-  test("B1: internal whitespace is collapsed — a deliberate, documented equality") {
+  test("internal whitespace is collapsed — a deliberate, documented equality") {
     assertEquals(seg("Cost  /  benefit").value, seg("Cost / benefit").value)
     assertEquals(seg("a  b").value, seg("a b").value)
     assertEquals(seg("CAP\tTheorem").value, seg("CAP Theorem").value)
     assertEquals(encoded(key("n1", "a  b")), encoded(key("n1", "a b")))
+    assertEquals(seg("  Cost / benefit  ").value, seg("Cost / benefit").value,
+                 "whitespace at the ENDS changed the key — collapsing runs does not remove it, " +
+                 "so a formatter trimming a heading would orphan its card")
   }
 
-  test("B1: unicode is NFC-normalised so equal-looking headings are equal") {
+  test("unicode is NFC-normalised so equal-looking headings are equal") {
     val precomposed = "Café"  // e + combining acute
     val composed    = "Café"   // precomposed e-acute
     assertEquals(seg(precomposed).value, seg(composed).value)
   }
 
-  // ------------------------------------------------------- B1: the safe set ----
+  // ------- the safe set ----
 
-  test("B1: whitespace is encoded — a tag cannot contain a space") {
+  test("whitespace is encoded — a tag cannot contain a space") {
     val tag = encoded(key("n1", "CAP Theorem"))
     assert(!tag.contains(" "), s"tag contains a raw space and will be torn in two: $tag")
     assert(tag.contains("%20"), s"space not percent-encoded: $tag")
   }
 
-  test("B1: Anki search wildcards _ and * are encoded") {
+  test("Anki search wildcards _ and * are encoded") {
     val tag = encoded(key("n1", "a_b*c"))
     assert(!tag.contains("_"), s"raw _ is a single-char wildcard in tag search: $tag")
     assert(!tag.contains("*"), s"raw * is a multi-char wildcard in tag search: $tag")
   }
 
-  test("B1: a literal / inside a heading is encoded, so it cannot pose as the separator") {
+  test("a literal / inside a heading is encoded, so it cannot pose as the separator") {
     val tag = encoded(key("n1", "Cost / benefit"))
     assert(tag.contains("%2f"), s"literal slash not encoded: $tag")
   }
 
-  test("B1: the id and path separators are the only structural :: in the tag") {
+  test("the id and path separators are the only structural :: in the tag") {
     val tag = encoded(key("weird::id", "a::b"))
     assertEquals(tag.split("::", -1).length, 3, s"colons leaked into a component: $tag")
   }
 
-  // ------------------------------------------------------- B1: injectivity ----
+  // ------- injectivity ----
 
-  test("B1 THE MOTIVATING CASE: '## A/B' and '## A' > '### B' are DIFFERENT keys") {
+  test("THE MOTIVATING CASE: '## A/B' and '## A' > '### B' are DIFFERENT keys") {
     // Under an unencoded '/' join these two are byte-identical, and splitting a slashed
     // heading into two nested headings would silently rebind the new card to the old note.
     val flat   = encoded(key("n1", "A/B"))
@@ -288,6 +299,42 @@ class CardKeyTest extends munit.FunSuite:
     val cap    = encoded(key("fix-multi-topic", "Multi-Topic", "CAP Theorem", "Definition"))
     val quorum = encoded(key("fix-multi-topic", "Multi-Topic", "Quorum", "Definition"))
     assertNotEquals(cap, quorum)
+  }
+
+  /** THE ONE TEST IN THIS SUITE THAT TOUCHES A GLOBAL, and it must stay the only one: it swaps
+    * the JVM's default locale and restores it in a `finally`. Under a parallel runner this is a
+    * hazard.
+    *
+    * It earns that because the failure it guards is invisible any other way — two machines
+    * computing DIFFERENT identities for the same heading, so a vault synced on one and then the
+    * other orphans every card and mints replacements.
+    */
+  test("card identity does not follow the machine's locale") {
+    val saved = java.util.Locale.getDefault
+    try
+      java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr"))
+      assertEquals(
+        seg("INDEX").value,
+        "index",
+        "the ambient locale reached the key: Turkish folds I to a dotless i, so this machine " +
+          "and the next would disagree about which card a heading is",
+      )
+    finally java.util.Locale.setDefault(saved)
+  }
+
+  /** A TAG IS NOT TRUSTED TO ARRIVE CANONICAL. It can be typed by a person — `locate` takes one
+    * straight off the command line — or hand-edited in Anki's browser, and the Identity FIELD it
+    * now also lives in is not case-folded by Anki the way a tag is.
+    *
+    * Decoding without canonicalising yields a key that never equals the one the vault derives, so
+    * the tool reports a card as gone while it is sitting there, and a sync reads it as one orphan
+    * plus one create.
+    */
+  test("a tag decodes to the same key however the author spelled it") {
+    assertEquals(TagCodec.decode("src::n1::Coupling"), Right(key("n1", "coupling")))
+    assertEquals(TagCodec.decode("src::n1::CAP%20Theorem/Definition"),
+                 Right(key("n1", "cap theorem", "definition")))
+    assertEquals(TagCodec.decode("src::n1::/p/Special-Case-Of"), Right(prop("n1", "special-case-of")))
   }
 
   // ------------------------------------------------------- round trip ----
@@ -309,6 +356,10 @@ class CardKeyTest extends munit.FunSuite:
       "trailing spaces   ",
       "100% of the time",
       "a\tb",
+      // Stripping a marker can SPLICE a new one into existence: the match starts mid-word,
+      // and removing it joins "#flash" to "card x". A second strip on the way back would
+      // therefore mangle a name that was stored correctly.
+      "#flash#flashcardcard x",
     )
     nasty.foreach { s =>
       val k = key("n1", s)
@@ -328,10 +379,14 @@ class CardKeyTest extends munit.FunSuite:
 
   // ------------------------------------------------------- OwnedTag ----
 
-  test("only our three prefixes are owned; everything else belongs to the user") {
-    assert(OwnedTag.isOwned("src::n1::x"))
-    assert(OwnedTag.isOwned("sha::deadbeef"))
-    assert(OwnedTag.isOwned("orphaned::n1::x"))
+  test("every owned prefix is recognised, and everything else belongs to the user") {
+    // Derived from the set rather than listed again. The CASE half is the real guard: `isOwned`
+    // folds what it is handed and compares against the set as written, so a prefix added to the
+    // set in mixed case would never match anything.
+    OwnedTag.ownedPrefixes.foreach { p =>
+      assert(OwnedTag.isOwned(s"$p::x"), s"'$p' is in ownedPrefixes but isOwned refuses it")
+      assert(OwnedTag.isOwned(s"${p.toUpperCase}::x"), s"'$p' is not matched case-insensitively")
+    }
 
     // A person's own tags. Wiping these would be the clobbering bug in different clothes.
     assert(!OwnedTag.isOwned("leech"))

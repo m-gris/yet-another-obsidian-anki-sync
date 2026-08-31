@@ -63,4 +63,18 @@ object VaultTag:
     else if trimmed.contains("::") then
       Unusable(raw, "'::' is Anki's nesting separator — write '/' to nest an Obsidian tag")
 
-    else Carried(OwnedTag.vault(trimmed))
+    else Carried(namespaced(trimmed))
+
+  /** NAMESPACED RATHER THAN CARRIED VERBATIM, AND THAT IS NOT TIDINESS. A verbatim `scala` in
+    * Anki is indistinguishable from a `scala` somebody added by hand, so removing a tag deleted
+    * in the vault would mean deleting a tag this tool never wrote. Under a prefix it owns, the
+    * set is a pure function of the vault, and it can never touch a tag it did not write.
+    *
+    * THE HAZARD IS ANKI ITSELF, NOT THE AUTHOR, which is why discipline could not have replaced
+    * this. Anki adds `leech` on its own when a card lapses too often, and `marked` when a card is
+    * marked in the reviewer. Both land on notes this tool generated, and a verbatim sync that
+    * removed whatever the vault no longer named would delete Anki's own record of which cards are
+    * giving the author trouble — which can only be earned back by failing reviews again.
+    */
+  private def namespaced(nested: String): OwnedTag =
+    OwnedTag.unsafe(s"$Prefix::${nested.replace("/", "::").toLowerCase(java.util.Locale.ROOT)}")

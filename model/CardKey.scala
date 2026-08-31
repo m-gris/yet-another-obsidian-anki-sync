@@ -1,28 +1,27 @@
 package obsidiananki.model
 
 import cats.data.NonEmptyVector
+import cats.syntax.all.*
 
-/** Card identity: the key derived from the markdown, and its encoding into an Anki tag.
-  *
-  * The central design property of this tool is that NOTHING GENERATED IS EVER WRITTEN BACK
-  * INTO THE MARKDOWN. Identity is therefore *derived* from text already present — the
-  * frontmatter `id` and the chain of ancestor headings — and the *binding* to an Anki note
-  * is stored in Anki, as a tag. Anki is a derived artifact, so bookkeeping there costs
-  * nothing; that is precisely what makes it unacceptable in the source.
-  */
+/* Card identity: the key derived from the markdown, and its encoding into an Anki tag.
+ *
+ * NOTHING GENERATED IS EVER WRITTEN BACK INTO THE MARKDOWN, which is why identity is DERIVED
+ * from text already present — the frontmatter `id`, plus whichever node of the note the card
+ * hangs off — rather than minted and written down. The binding to an Anki note is held on the
+ * Anki side: in the `Identity` field, and as a `src::` tag on notes written before that field
+ * existed.
+ *
+ * WHY THE SOURCE AND NOT ANKI. Not because Anki is disposable — a collection is a JOIN of a
+ * derived layer, which this tool can recompute for nothing, and an accumulated one it can never
+ * recompute at all: interval, ease, due date, the review log. Bookkeeping is acceptable on the
+ * derived half. It is unacceptable in the vault because the vault is what a person writes.
+ */
 
-/** A note's `id:` frontmatter value. Non-empty by construction. */
+/** A note's `id:` frontmatter value. */
 opaque type NoteId = String
 
 object NoteId:
-  /** Reject blank ids loudly. `id:` is load-bearing — a note without one produces no cards,
-    * and a note with a blank one would produce cards under a key nothing can distinguish.
-    *
-    * The value is canonicalised at construction, so an id is already in the form that will
-    * be encoded, hashed and compared. Note this is a no-op for every id shape in the
-    * reference vault — they are lowercase alphanumerics and hyphens — which is exactly why
-    * `2026-08-18` must survive verbatim.
-    */
+  /** `id:` is load-bearing, so a blank one is refused rather than skipped. */
   def fromFrontmatter(raw: String): Either[KeyError, NoteId] =
     val canonical = TagCodec.canonical(raw)
     if canonical.isEmpty then Left(KeyError.BlankNoteId) else Right(canonical)
@@ -31,18 +30,15 @@ object NoteId:
 
 /** One segment of a heading path: the marked heading, or one of its ancestors.
   *
-  * RULED (B5): a segment is the heading's EXTRACTED TEXT with the `#flashcard/…` marker
-  * stripped — not the raw markdown source, and not the rendered HTML.
-  *
-  * The reason is stability under formatting edits: bolding a word in a heading must never
-  * orphan its card. The accepted cost is a deliberate equality — `## **CAP**` and `## CAP`
-  * are the SAME key. That is documented, not discovered.
+  * A segment is the heading's EXTRACTED TEXT with the `#flashcard/…` marker stripped — not the
+  * raw markdown source, and not the rendered HTML — so that bolding a word in a heading cannot
+  * orphan its card.
   */
 opaque type HeadingSegment = String
 
 object HeadingSegment:
-  /** Matches a `#flashcard` marker and any number of `/`-separated qualifiers, so that
-    * `/3way` and `/3way/all` are both removed in full.
+  /** Matches a `#flashcard` marker and any number of `/`-separated qualifiers, so that a short
+    * `cdd/2way` and a long `sequence/headers/recursive/bfs` are both removed in full.
     */
   private val Marker = """#flashcard(?:/[\w-]+)*""".r
 
@@ -51,27 +47,27 @@ object HeadingSegment:
     * A heading that consists ONLY of a marker, or only of markup that extracts to nothing,
     * has no segment to contribute and must fail rather than silently key as "".
     *
-    * STRIPPING THE MARKER IS NOT COSMETIC. The key must be marker-independent, or retagging
-    * a heading from `3way` to `3way/all` — an edit that changes only how many cards are
-    * generated — would change the key, orphaning the note and minting a duplicate.
+    * STRIPPING THE MARKER IS NOT COSMETIC: the key must survive retagging, which changes only
+    * how many cards a heading generates.
     */
   def fromExtractedText(raw: String): Either[KeyError, HeadingSegment] =
     val canonical = TagCodec.canonical(Marker.replaceAllIn(raw, ""))
     if canonical.isEmpty then Left(KeyError.EmptyHeadingSegment(raw)) else Right(canonical)
 
-  /** For values recovered from an existing tag, which are canonical already and must not be
-    * marker-stripped a second time.
+  /** NOT marker-stripped a second time, which is not the no-op it looks like: removing a marker
+    * from the middle of a heading can splice its leftovers into a new one, so a second strip can
+    * mangle a name that was stored correctly.
     */
   private[model] def fromDecoded(decoded: String): Either[KeyError, HeadingSegment] =
-    if decoded.isEmpty then Left(KeyError.EmptyHeadingSegment(decoded)) else Right(decoded)
+    val canonical = TagCodec.canonical(decoded)
+    if canonical.isEmpty then Left(KeyError.EmptyHeadingSegment(decoded)) else Right(canonical)
 
   extension (s: HeadingSegment) def value: String = s
 
 /** The chain of ancestor headings down to the marked one, outermost first.
   *
-  * Non-empty because a card always has at least the marked heading itself. This is what
-  * makes two identically-named facets under different ancestors distinguishable —
-  * `CAP Theorem / Definition` and `Quorum / Definition` rather than `Definition` twice.
+  * Non-empty because a card always has at least the marked heading itself — which is what tells
+  * two identically-named facets under different ancestors apart.
   */
 final case class HeadingPath(segments: NonEmptyVector[HeadingSegment]):
   def render: String = segments.toVector.map(_.value).mkString(" / ")
@@ -88,14 +84,13 @@ opaque type PropertyName = String
 
 object PropertyName:
 
-  /** Canonicalise, and refuse what canonicalises to nothing. */
+  /** Canonicalise, and refuse what canonicalises to nothing. Used for a name read out of
+    * frontmatter and for one recovered from a tag: unlike a heading segment, a property name
+    * carries no marker, so there is nothing a second pass could damage.
+    */
   def fromFrontmatter(raw: String): Either[KeyError, PropertyName] =
     val canonical = TagCodec.canonical(raw)
     if canonical.isEmpty then Left(KeyError.EmptyPropertyName(raw)) else Right(canonical)
-
-  /** For a name recovered from an existing tag, which is canonical already. */
-  private[model] def fromDecoded(decoded: String): Either[KeyError, PropertyName] =
-    if decoded.isEmpty then Left(KeyError.EmptyPropertyName(decoded)) else Right(decoded)
 
   extension (p: PropertyName) def value: String = p
 
@@ -114,16 +109,7 @@ object PropertyName:
   * A property belongs to the NOTE, never to a heading inside it — Obsidian has no per-heading
   * frontmatter — so `headings / property` is not a shape the domain has. Modelling the anchor as
   * a list of kinded segments would admit it, and every consumer would then need a rule for
-  * something that cannot occur. Three cases, no impossible fourth.
-  *
-  * ==Why the names must not collide==
-  *
-  * `special-case-of:` in the frontmatter and `# Special-Case-Of` in the body are two different
-  * cards that a bare-name path would give one key. That is not hypothetical: both spellings were
-  * on the table as ways of writing the same relation. One key for two cards is a duplicate, and
-  * a duplicate identity refuses the whole run — loudly, so nothing is corrupted, but the vault
-  * stops syncing until a name is changed. Distinguishing the KIND removes the collision by
-  * construction rather than by asking authors to avoid it.
+  * something that cannot occur. Every case below is a shape the domain has.
   */
 enum CardPath:
 
@@ -173,10 +159,9 @@ final case class CardKey(noteId: NoteId, path: CardPath)
 
 /** A tag this tool owns and may rewrite.
   *
-  * The tool owns EXACTLY the `src::`, `sha::` and `orphaned::` prefixes. Every other tag on
-  * a note belongs to the person using Anki — a leech marker, a custom study scope — and
-  * must be preserved untouched. Anki being a derived artifact makes bookkeeping there
-  * acceptable; it does not hand us the namespace.
+  * The tool owns exactly the prefixes listed in [[ownedPrefixes]] and no others. Every other tag
+  * on a note belongs to the person using Anki — a leech marker, a custom study scope — and must
+  * be preserved untouched. Being allowed to write to a collection does not hand us its namespace.
   *
   * This is a type rather than a bare String so that "write the tags" cannot quietly become
   * "write all the tags".
@@ -190,15 +175,9 @@ object OwnedTag:
 
   val ownedPrefixes: Set[String] = Set(SrcPrefix, ShaPrefix, OrphanedPrefix, VaultTag.Prefix)
 
-  /** True when a tag read back from Anki is one of ours. Everything else is untouchable.
+  /** True when a tag read back from Anki is one of ours; everything else is untouchable.
     *
-    * Matches on the FIRST `::`-separated component only, so `source::x` is not mistaken for
-    * `src::x` and a person's own `my::own::hierarchy` is left alone.
-    *
-    * CASE-INSENSITIVE, and that is not a nicety. Anki folds tag case, so `SRC::x` and
-    * `src::x` are THE SAME TAG in the collection. Comparing case-sensitively here would
-    * mean calling a tag foreign that Anki cannot distinguish from one of ours — we would
-    * promise to preserve something we were simultaneously overwriting.
+    * Case-insensitive: Anki cannot tell `SRC::x` from `src::x`.
     */
   def isOwned(tag: String): Boolean =
     ownedPrefixes.contains(
@@ -207,39 +186,14 @@ object OwnedTag:
 
   /** The content hash tag, used to decide "nothing to do" BEFORE any call is made.
     *
-    * Necessary because `updateNoteFields` has no early-out — it bumps the note's
-    * modification stamp even when the text is identical — so "zero changes on re-run"
-    * cannot be achieved by sending everything and letting Anki dedupe. Lowercase because
-    * Anki case-folds tags.
+    * `updateNoteFields` has no early-out, so "nothing to do" must be decided before the call.
+    * Lowercase because Anki case-folds tags.
     */
   def sha(hex: String): OwnedTag = s"$ShaPrefix::${hex.toLowerCase(java.util.Locale.ROOT)}"
 
-  /** Marks a note whose markdown source has disappeared. The sync never deletes; a separate
-    * explicit `prune` command lists these and removes them only when asked.
-    */
+  /** Marks a note whose markdown source has disappeared. */
   def orphaned(key: CardKey): OwnedTag =
     s"$OrphanedPrefix::${TagCodec.encode(key).value.stripPrefix(s"$SrcPrefix::")}"
-
-  /** An author's OWN tag, carried from a note's frontmatter into this tool's namespace.
-    *
-    * NAMESPACED RATHER THAN VERBATIM, AND THAT IS NOT TIDINESS. A verbatim `scala` in Anki is
-    * indistinguishable from a `scala` somebody added by hand, so removing a tag deleted in the
-    * vault would mean deleting a tag this tool never wrote. Under a prefix it owns, the set is a
-    * pure function of the vault: added when the author adds one, removed when they remove one,
-    * and it can never touch a tag it did not write.
-    *
-    * THE HAZARD IS ANKI ITSELF, NOT THE AUTHOR, which is why discipline could not have replaced
-    * this. Anki adds `leech` on its own when a card lapses too often, and `marked` when a card is
-    * marked in the reviewer. Both land on notes this tool generated. A verbatim sync that removed
-    * whatever the vault no longer named would delete Anki's own record of which cards are giving
-    * the author trouble — information that can only be earned back by failing reviews again.
-    *
-    * NESTING SURVIVES: Obsidian's `/` becomes Anki's `::`, so the author's tag tree appears in
-    * Anki's sidebar with its shape intact. See [[VaultTag.read]], which is the only caller and
-    * which decides what may be carried at all.
-    */
-  private[model] def vault(nested: String): OwnedTag =
-    s"${VaultTag.Prefix}::${nested.replace("/", "::").toLowerCase(java.util.Locale.ROOT)}"
 
   /** Escape hatch that bypasses every guarantee this type exists to provide.
     *
@@ -249,6 +203,9 @@ object OwnedTag:
     */
   def unsafeFromString(s: String): OwnedTag = s
 
+  /** For a tag this object has just built correctly. Separate from [[unsafeFromString]] so that
+    * grepping the escape hatch finds only the places that really bypassed the codec.
+    */
   private[model] def unsafe(s: String): OwnedTag = s
 
   extension (t: OwnedTag) def value: String = t
@@ -262,8 +219,8 @@ enum KeyError:
     */
   case EmptyPropertyName(raw: String)
 
-  /** A `^blockid` that is empty once trimmed. Cannot arise from the parser, whose production
-    * requires at least one character, but can from a tag hand-edited into that shape.
+  /** An empty `^blockid`. Cannot arise from the parser, whose production requires at least one
+    * character, but can from a tag hand-edited into that shape.
     */
   case EmptyBlockAnchor(raw: String)
 
@@ -274,32 +231,20 @@ enum KeyError:
 
 /** Encoding of a [[CardKey]] into the Anki tag that binds it to a note, and back.
   *
-  * RULED (B1). Anki tags are WHITESPACE-DELIMITED — a tag cannot contain a space — and 62
-  * of 80 headings in the reference vault contain one. A raw `src::{id}::{path}` tag is
-  * therefore torn into fragments on write and unfindable on read, silently. The encoding
-  * below is what makes the whole identity mechanism work.
+  * Anki tags are WHITESPACE-DELIMITED and most headings contain a space, so the encoding below
+  * is what makes the whole identity mechanism work.
   *
-  * The rules, all decided rather than inferred:
+  * WHY EACH CHARACTER IS EXCLUDED from the safe set, which is the part [[isSafe]] cannot say:
+  * whitespace splits a tag in two; `_` and `*` are WILDCARDS in Anki's tag search, so leaving
+  * either raw turns every exact lookup fuzzy; `/` occurs inside real headings, so it cannot also
+  * serve as the unencoded segment separator; `:` is Anki's own hierarchy separator.
   *
-  *   - PERCENT-ENCODE everything outside a declared ASCII safe set. The safe set excludes
-  *     whitespace; `_` and `*` (both are WILDCARDS in Anki's tag search, so leaving them
-  *     raw turns every exact lookup into a fuzzy one); `/` (it occurs inside real headings,
-  *     so it cannot also serve as the unencoded segment separator); and `:` (Anki's own
-  *     hierarchy separator).
-  *
-  *   - EQUALITY IS NFC + CASE-FOLDING, because Anki matches and unifies tags
-  *     case-insensitively and normalises on save. Canonicalising on the way IN means our
-  *     computed key already matches what Anki will store. The consequence is a deliberate
-  *     equality: two headings differing only in case are the SAME card. Documented, not
-  *     discovered.
-  *
-  *   - BASE64URL WAS REJECTED. It would make orphan lists unreadable in Anki's browser and
-  *     remove the ability to debug by eye — a real cost, since the orphan list is reviewed
-  *     by a human before anything is pruned.
-  *
-  *   - "PICK A RARER SEPARATOR" WAS REJECTED on evidence: no character is impossible in a
-  *     heading, and the fixture vault's `## Cost / benefit` already contains the obvious
-  *     candidate.
+  * TWO ALTERNATIVES REJECTED, and no test can rule out either, because neither exists to run.
+  * Base64url: a person reads the orphan list before anything is pruned, so a tag has to stay
+  * legible in Anki's browser. "Pick a rarer separator": no character is impossible in a heading,
+  * and the fixture vault's `## Cost / benefit` holds the obvious candidate. What IS pinned is the
+  * consequence — `CardKeyTest` asserts the encoded form literally, so any scheme that stops a
+  * heading's words showing through fails at once.
   */
 object TagCodec:
 
@@ -317,22 +262,17 @@ object TagCodec:
   private val FieldSep   = "::"
   private val SegmentSep = "/"
 
-  /** NFC-normalise, trim, and case-fold. Applied at CONSTRUCTION of [[NoteId]] and
-    * [[HeadingSegment]], so every value downstream is already canonical and encoding is a
-    * pure transport concern.
+  /** Applied at CONSTRUCTION of [[NoteId]] and [[HeadingSegment]], so encoding downstream is
+    * pure transport.
     *
-    * Case-folding is forced on us: Anki matches and unifies tags case-insensitively, so
-    * `## Costs` and `## costs` ARE the same card whether we like it or not. Folding here
-    * makes that a stated equality rather than a false orphan plus a false create on every
-    * run. Locale.ROOT because a Turkish locale would fold `I` to a dotless `ı`.
+    * THE EQUALITIES THIS CREATES ARE DELIBERATE, and each is pinned by a test. Case folds because
+    * Anki folds it — two spellings of one heading are one card in the collection whether we like
+    * it or not, so stating the equality here beats a false orphan and a false create on every
+    * run. Whitespace collapses because a markdown formatter normalises a stray double space as a
+    * matter of routine, markdownlint and prettier both by default, and a key that is not stable
+    * under formatting means A FORMATTING PASS SILENTLY ORPHANS CARDS.
     *
-    * WHITESPACE IS NOT SIGNIFICANT — it is trimmed at the ends and internal runs collapse
-    * to a single space, so `a  b` and `a b` are the SAME key. The reason is not tidiness: a
-    * markdown linter or formatter normalises a stray double space as a matter of routine
-    * (markdownlint and prettier both do, by default), so treating internal whitespace as
-    * significant would mean A FORMATTING PASS SILENTLY ORPHANS CARDS. That is the same
-    * argument that makes a segment extracted text rather than raw source — the key must be
-    * stable under changes that alter only presentation.
+    * `Locale.ROOT` because a Turkish locale folds `I` to a dotless `ı`.
     */
   def canonical(raw: String): String =
     java.text.Normalizer
@@ -375,16 +315,13 @@ object TagCodec:
   /** THE DISCRIMINATOR FOR A PATH THAT IS NOT A CHAIN OF HEADINGS, and the one invariant it
     * rests on, stated here because the encoding is unreadable without it.
     *
-    * A heading path encodes as `seg/seg/…` and EVERY SEGMENT IS NON-EMPTY: `HeadingSegment`
-    * refuses an empty value at construction and again at `fromDecoded`, and percent-encoding a
-    * non-empty string cannot produce an empty one. So a leading EMPTY token — a path beginning
-    * with the separator — is a shape no heading path can ever take, and is therefore free to
-    * mean something else. `TagCodecTest` pins that invariant directly rather than trusting it.
+    * Percent-encoding a non-empty segment cannot produce an empty one, so a leading EMPTY token
+    * is a shape no heading path can take — which leaves it free to mean something else.
     *
     * WHY NOT A PLAIN PREFIX ON EVERY PATH, which would be easier to read. Because `h/` in front
-    * of every heading path would rewrite the identity tag of every card that already exists, and
-    * the golden file that pins them is 498 lines with `DO NOT REGENERATE THIS FILE` at the top.
-    * Changing 55 identity lines by hand is indistinguishable, in a diff, from the blind
+    * of every heading path would rewrite the identity of every card that already exists, and
+    * `extract/golden/fixture-cards.txt` pins them all under `DO NOT REGENERATE THIS FILE`.
+    * Rewriting every identity line by hand is indistinguishable, in a diff, from the blind
     * regeneration that file exists to catch. Heading paths therefore encode byte-for-byte as
     * they always have, and the new kinds take a shape that was previously unreachable.
     */
@@ -417,11 +354,7 @@ object TagCodec:
         Vector(NotAHeadingPath, BlockMark, encodeComponent(anchor.value)).mkString(SegmentSep)
     OwnedTag.unsafe(s"${OwnedTag.SrcPrefix}$FieldSep$id$FieldSep$path")
 
-  /** Recover the key from a tag read back out of Anki.
-    *
-    * Left-anchored splitting is safe: `::` cannot survive [[encodeComponent]], so the first
-    * two occurrences are always the real structural separators.
-    */
+  /** Recover the key from a tag read back out of Anki. */
   def decode(tag: String): Either[KeyError, CardKey] =
     def malformed(reason: String) = KeyError.MalformedTag(tag, reason)
     tag.split(FieldSep, -1).toList match
@@ -438,12 +371,7 @@ object TagCodec:
 
   /** THE KIND IS DECIDED BY THE FIRST TOKEN AND NOTHING ELSE, which is what makes this total.
     *
-    * A non-empty first token is a heading segment, and therefore so is every token — there is no
-    * mixed path (see [[CardPath]]). An empty first token is the mark that the path is something
-    * else, and the token after it says which. An unrecognised mark is MALFORMED rather than
-    * quietly read as a heading: a tag this tool cannot place must never be filed as though it
-    * belonged somewhere, because a mis-filed card is updated in place and the card it really
-    * names is created again beside it.
+    * An unrecognised mark is MALFORMED rather than quietly read as a heading.
     */
   private def decodePath(
       rawPath: String,
@@ -461,7 +389,7 @@ object TagCodec:
       case Vector(NotAHeadingPath, PropertyMark, rawName) =>
         for
           name  <- decodeComponent(rawName)
-          value <- PropertyName.fromDecoded(name)
+          value <- PropertyName.fromFrontmatter(name)
         yield CardPath.Property(value)
 
       case tokens if tokens.headOption.contains(NotAHeadingPath) =>
@@ -469,13 +397,6 @@ object TagCodec:
 
       case tokens =>
         for
-          segments <- tokens.traverseEither(s => decodeComponent(s).flatMap(HeadingSegment.fromDecoded))
+          segments <- tokens.traverse(s => decodeComponent(s).flatMap(HeadingSegment.fromDecoded))
           nev      <- NonEmptyVector.fromVector(segments).toRight(malformed("empty heading path"))
         yield CardPath.Headings(HeadingPath(nev))
-
-  /** Local traverse, to avoid pulling a cats syntax import in for one call site. */
-  extension [A](v: Vector[A])
-    private def traverseEither[E, B](f: A => Either[E, B]): Either[E, Vector[B]] =
-      v.foldLeft[Either[E, Vector[B]]](Right(Vector.empty)) { (acc, a) =>
-        for { bs <- acc; b <- f(a) } yield bs :+ b
-      }
