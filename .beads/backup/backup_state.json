@@ -1,9 +1,9 @@
 {
-  "last_dolt_commit": "jfq9r2joq33eaitla0dfp97t2dmdte2n",
-  "timestamp": "2026-08-30T21:08:31.556869Z",
+  "last_dolt_commit": "402ntbhmlqevfafjtrk4qfvfptv0csuk",
+  "timestamp": "2026-08-31T09:02:41.53245Z",
   "counts": {
-    "issues": 53,
-    "events": 88,
+    "issues": 57,
+    "events": 92,
     "comments": 0,
     "dependencies": 5,
     "labels": 0,
