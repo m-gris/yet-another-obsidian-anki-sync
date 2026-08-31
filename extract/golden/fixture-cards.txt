@@ -22,7 +22,7 @@
 # Every emitted value is wrapped in U+27E6/U+27E7 brackets so that leading and trailing
 # whitespace is visible BY POSITION, and escaped so that an invisible character is visible
 # at all. Escaping is one-way: nothing ever unescapes this file.
-specs 57
+specs 58
 failures 2
 
 card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
@@ -151,6 +151,13 @@ card ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Bones › Cells that remodel bone⟧
   field ⟦Identity⟧ ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
+
+card ⟦src::fix-bones::/b/marrow-sites⟧
+  note ⟦Obsidian Cloze⟧
+  field ⟦Text⟧ ⟦<p>Red marrow makes blood cells and sits in {{c1::spongy}} bone, while the shaft's<br>{{c2::medullary cavity}} holds yellow marrow instead.</p>⟧
+  field ⟦Back Extra⟧ ⟦⟧
+  field ⟦Context⟧ ⟦Anatomy › Bones › Where marrow sits⟧
+  field ⟦Identity⟧ ⟦src::fix-bones::/b/marrow-sites⟧
 
 card ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%20heart⟧
   note ⟦Obsidian Cloze Sequence⟧

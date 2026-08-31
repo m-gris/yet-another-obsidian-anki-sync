@@ -87,18 +87,28 @@ class FixtureVaultTest extends munit.FunSuite:
   /** WHICH KINDS OF NODE THIS FIXTURE VAULT ANCHORS CARDS TO, asserted so that gaining a new one
     * is a decision somebody made rather than a drift nobody noticed.
     *
-    * [[CardPath]] admits three anchors — a chain of headings, a frontmatter property, and the note
-    * itself — and all three are now produced somewhere. **This vault exercises only headings**,
-    * which is a fact about these fixtures rather than about the tool: no fixture note declares a
-    * relation, and none is headingless with a marker. The other two anchors are covered by
-    * `VaultWalkerTest` and `EdgesTest`.
+    * [[CardPath]] admits four anchors — a chain of headings, a block, a frontmatter property and
+    * the note itself — and all four are now produced somewhere. **This vault exercises headings
+    * and blocks**, which is a fact about these fixtures rather than about the tool: no fixture note
+    * declares a relation, and none is headingless with a marker. The other two anchors are covered
+    * by `VaultWalkerTest` and `EdgesTest`.
     *
     * WHEN THIS TEST FAILS, IT HAS DONE ITS JOB. It means a fixture started producing an anchor it
     * did not before, which is exactly the moment to check that the golden was reviewed rather than
     * regenerated — the golden pins these cards by identity tag, and a new anchor kind is a new
     * tag shape. Widen the expectation deliberately; do not delete the test.
+    *
+    * WHAT EACH WIDENING COSTS. An admitted kind can no longer arrive by accident unnoticed: now
+    * that `block` is in the set, a `^blockid` added to a fixture while editing its prose would
+    * turn a paragraph into a card and this test would say nothing. `Golden.test.scala`'s spec
+    * count and the golden diff still catch it; this guard alone no longer does.
+    *
+    * A SET, NOT A SEQUENCE, because the order is an accident of `sortBy(_.relativePath)` and the
+    * walk order within a file. Comparing sequences would fail the day a fixture sorting earlier
+    * leads with a block — a false alarm on a tripwire whose whole value is that a failure means
+    * something.
     */
-  test("this fixture vault anchors every card at a heading, and at nothing else") {
+  test("this fixture vault anchors cards at headings and blocks, and at nothing else") {
     val index = VaultWalker.scan(loadVault(_.contains(collisionFixture)), deckRoot, DeckShape.FoldersOnly)
 
     val kinds = index.scan.specs.map(_.key.path).map {
@@ -106,10 +116,10 @@ class FixtureVaultTest extends munit.FunSuite:
       case CardPath.Block(_)    => "block"
       case CardPath.Property(_) => "property"
       case CardPath.Note        => "note"
-    }.distinct
+    }.toSet
 
     assert(kinds.nonEmpty, "no specs at all, so this test is proving nothing")
-    assertEquals(kinds, Vector("headings"), s"extraction now anchors cards at $kinds")
+    assertEquals(kinds, Set("headings", "block"), s"extraction now anchors cards at $kinds")
   }
 
   test("LAW on REAL specs: plan, apply, and the next plan is empty") {

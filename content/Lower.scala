@@ -301,7 +301,7 @@ object Lower:
     */
   private def blockV(b: ast.Block): Refused[Vector[Block]] = b match
     // ── constructors ────────────────────────────────────────────────────────────────
-    case ast.Paragraph(spans, _) => spansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
+    case ast.Paragraph(spans, _) => blockSpansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
 
     case ast.BulletList(items, _, _) =>
       items.toVector.traverse(bulletItemV).map(is => Vector(Block.Bullets(is)))
@@ -356,17 +356,17 @@ object Lower:
       // A loose list's item paragraph. `ListParsers.flattenItems` emits this when a list has
       // blank lines between items — a shape `dummy-vault` does not contain, which is why no
       // tree dump of the fixture could have revealed it and it had to be read out of the parser.
-      spansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
+      blockSpansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
 
     case ast.SpanSequence(spans, _) =>
       // `SpanSequence` is both a `Block` and a `Span`. This is its BLOCK position;
       // `ListParsers.flattenItems` emits one for a tight multi-block item's leading paragraph.
-      spansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
+      blockSpansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
 
     case ast.Header(_, spans, _) =>
       // A heading NESTED inside a blockquote or a list item. See the long note above: it
       // flattens rather than refusing because it renders today, and the level is lost.
-      spansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
+      blockSpansV(spans.toVector).map(is => Vector(Block.Paragraph(is)))
 
     case ast.QuotedBlock(blocks, _, _) =>
       // A BLOCKQUOTE or an Obsidian callout. `attribution` is declined — it is a span sequence
@@ -393,7 +393,7 @@ object Lower:
     case ast.EnumListItem(bs, _, _, _) => blocksV(bs.toVector).map(Item.apply)
 
   private def cellV(c: ast.Cell): Refused[Cell] = c.content.toVector match
-    case Vector(ast.Paragraph(spans, _)) => spansV(spans.toVector).map(Cell.apply)
+    case Vector(ast.Paragraph(spans, _)) => blockSpansV(spans.toVector).map(Cell.apply)
     case Vector()                        => ok(Cell(Vector.empty))
     case other =>
       refuse(
@@ -415,6 +415,30 @@ object Lower:
 
   private def spansV(ss: Vector[ast.Span]): Refused[Vector[Inline]] =
     ss.traverse(spanV).map(_.flatten)
+
+  /** A block's own spans, with trailing whitespace dropped.
+    *
+    * ONLY A `^blockid` PRODUCES ANY. The identifier lowers to nothing (see `BlockId` below) while
+    * the space the author typed in front of it stays behind in the preceding `Text` — the span
+    * parser starts at the caret and cannot reach backwards. Nowhere else does a block end in
+    * whitespace: a hard line break is its own node and is dropped as one.
+    *
+    * WHY IT IS WORTH REMOVING WHEN IT RENDERS AS NOTHING. HTML collapses it, so no card looks
+    * different — but it is part of the field value and therefore of the content hash, so leaving
+    * it in means the day an author deletes that one space the tool reports a change nobody made
+    * and rewrites the note.
+    *
+    * NOT IN [[spansV]], which also lowers NESTED spans: trimming there would eat a space that is
+    * content, between an emphasis and the word after it.
+    */
+  private def blockSpansV(ss: Vector[ast.Span]): Refused[Vector[Inline]] =
+    spansV(ss).map { is =>
+      is.lastOption match
+        case Some(Inline.Text(t)) =>
+          val trimmed = t.replaceAll("\\s+$", "")
+          if trimmed.isEmpty then is.init else is.init :+ Inline.Text(trimmed)
+        case _ => is
+    }
 
   /** One Laika span to ZERO, ONE or MANY of ours, on the same discipline as `blockV`. */
   private def spanV(s: ast.Span): Refused[Vector[Inline]] = s match

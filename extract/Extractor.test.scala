@@ -581,6 +581,19 @@ class ExtractorTest extends munit.FunSuite:
     assertEquals(paths(note), Vector("block '^fa1'"))
   }
 
+  test("the space before a ^blockid is not content, so removing it later reports no change") {
+    val spaced   = extract("# B\n\n## Forearm\n\nThe ==<<radius>>== is a bone. ^fa1\n")
+    val unspaced = extract("# B\n\n## Forearm\n\nThe ==<<radius>>== is a bone.^fa1\n")
+
+    assertEquals(paths(spaced), Vector("block '^fa1'"))
+    assertEquals(
+      spaced.specs.map(_.spec.fields),
+      unspaced.specs.map(_.spec.fields),
+      "the separator before the anchor reached the card, so it is in the content hash and " +
+        "deleting it would rewrite the note for no reason",
+    )
+  }
+
   test("rewriting a clozed block leaves its key untouched, so the card is updated not re-minted") {
     val before   = extract("# B\n\n## Forearm\n\nThe ==<<radius>>== is a forearm bone. ^fa1\n")
     val around   = extract("# B\n\n## Forearm\n\nThe ==<<radius>>== sits on the thumb side. ^fa1\n")

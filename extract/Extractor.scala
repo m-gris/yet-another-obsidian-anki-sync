@@ -735,7 +735,7 @@ object Extractor:
           // concept and stops there.
           //
           // AN EMPTY CHAIN IS THE ORDINARY RESULT FOR A `##` HEADING DIRECTLY UNDER AN H1 —
-          // five of the fixture vault's fifty-five cards. It is also what an ancestorless
+          // five of the fixture vault's cards. It is also what an ancestorless
           // heading produces, where the concept fell back to the file name: `dropRight` on an
           // empty vector is empty, so no branch is needed and none is written.
           //

@@ -590,7 +590,7 @@ class GoldenTest extends munit.FunSuite:
     assert(index.scan.specs.nonEmpty, "the live scan produced NO specs at all")
 
     // Against the LIVE scan, not the golden.
-    assertEquals(index.scan.specs.size, 57, "the fixture vault no longer produces 57 specs")
+    assertEquals(index.scan.specs.size, 58, "the fixture vault no longer produces 58 specs")
 
     // TWO expected failures now, and they are different KINDS of expected. The first is a table
     // with a concept column and no descriptor columns. The second belongs to
@@ -688,7 +688,7 @@ class GoldenTest extends munit.FunSuite:
     * reappeared; zero alone would pass if extraction stopped emitting cards. If either
     * genuinely moves, change the literal BY HAND and say here which fixture caused it.
     */
-  test("no card has an empty Context, and all fifty-seven carry a real breadcrumb") {
+  test("no card has an empty Context, and every card carries a real breadcrumb") {
     // Looked up BY NAME and FAILING when absent, never defaulting. A lookup with a fallback
     // would report "empty" for a card that has no Context field at all, and those are different
     // failures that must not collapse into one. (Positional until 2026-08-22 — see the test
@@ -702,7 +702,7 @@ class GoldenTest extends munit.FunSuite:
     val (empty, nonEmpty) = contexts.partition(_._2.isEmpty)
 
     assertEquals(empty.size, 0, s"a card lost its breadcrumb: ${empty.map(_._1)}")
-    assertEquals(nonEmpty.size, 57, "the number of cards carrying a real breadcrumb has changed")
+    assertEquals(nonEmpty.size, 58, "the number of cards carrying a real breadcrumb has changed")
 
     // THE FIVE THAT USED TO SAY NOTHING, NAMED AND ASSERTED POSITIVELY. This listed them as the
     // EMPTY ones until 2026-08-24; asserting they are now empty-free would be redundant with the
