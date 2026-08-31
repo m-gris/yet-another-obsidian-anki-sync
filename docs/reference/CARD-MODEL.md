@@ -180,8 +180,9 @@ The binding between a markdown card and its Anki note must survive editing, or e
 concept/descriptor cards   (frontmatter id, heading path)
 table cards                (frontmatter id, heading path, row concept, column header)
 cloze sections             (frontmatter id, heading path)
-typed-edge cards           (frontmatter id, property name)   [BUILT 2026-08-26]
-the note itself            (frontmatter id, nothing below it)     [shape settled, not yet produced]
+cloze blocks               (frontmatter id, block identifier)
+typed-edge cards           (frontmatter id, property name)
+the note itself            (frontmatter id, nothing below it)
 ```
 
 ### What a card can be anchored to
@@ -312,7 +313,7 @@ The tool has no word for that state, which is why the two read differently in a 
 as *parked* and the other as *safe*. See `docs/findings/EVOLVABILITY.md` for what each costs.
 
 **A heading anchor encodes exactly as it always has**, `{seg}/{seg}/…`, and that was a requirement
-rather than a nicety: `extract/golden/fixture-cards.txt` pins fifty-five identity tags and opens
+rather than a nicety: `extract/golden/fixture-cards.txt` pins every identity tag the fixture vault produces and opens
 with `DO NOT REGENERATE THIS FILE`, so rewriting all of them by hand is indistinguishable, in a
 diff, from the blind regeneration it exists to catch. The other anchors therefore take a shape no
 heading anchor can produce — a **leading empty token**, `/p/{property}` and `/n` — which is
@@ -395,31 +396,30 @@ Moving a note between folders changes its deck. AnkiConnect's `changeDeck` handl
 
 ### Cloze
 
-`==highlight==` — Obsidian-native, renders as a highlight, and the convention across the Obsidian spaced-repetition ecosystem. Anki's `{{cN::…}}` is generated on the way out and never typed by hand.
+A cloze card blanks part of a passage. Write `==<<text>>==` — the brackets are what make it a card. A bare `==highlight==` is an ordinary Obsidian highlight and generates nothing, so you can see at a glance which of your highlights are cards. Anki's `{{cN::…}}` is generated on the way out and never typed by hand.
 
-**One `#flashcard/cloze` section produces one Anki cloze note** holding all its deletions. Adding a highlight therefore adds a *card* to an existing note rather than creating a new note, so the key never churns.
-
-**Cloze numbers must be assigned stably.** Anki numbers cloze cards `c1…cn` and schedules each independently; with positional numbering, deleting a middle deletion renumbers everything after it and **scheduling history moves between cards**. That failure is documented in Yanki's manual as a known hazard.
-
-_Amended 2026-08-19._ The marker table previously read "1 card per `==highlight==`", and numbering was to be keyed by the deletion's text alone. Both were wrong, and the reason is that **the design was missing explicit grouping**: a sentence may hold ten highlights forming three groups — say 3, 3 and 4 — and nothing could express that. Keying by text alone also had no answer for two identical highlights in one section, or for what happens to a card's history when a typo inside a deletion is fixed. Grouping dissolves all three.
-
-**Deletions are grouped, and grouping is optional.** A group id is written inside the highlight:
+**A cloze note is scoped to a block, not a section.** Any paragraph, list item, quoted block or table holding a deletion becomes one Anki note, provided the author has given it an Obsidian block identifier:
 
 ```markdown
-The shaft is the ==diaphysis==, and each end is an ==epiphysis==.   ← two groups of one
-A ==1|quorum== is a majority; two ==1|quorum== sets intersect.      ← one group of two
+The ==<<1|radius>>== and the ==<<2|ulna>>== are forearm bones. ^forearm
 ```
 
-- **`==text==` — its own group of one**, keyed by its own text. Convenient, and fragile: editing the text, even to fix a typo, retires the key. The card starts over and the old one is flagged as an orphan, visible in the prune list.
-- **`==N|text==` — part of group `N`**, keyed by the group. The text may then change freely and the card **keeps its review history**. A labelled group's `cN` *is* its label, so nothing the tool computes can move it.
+Two cards, siblings of one note. **Sibling burying is why the block and not the group is the unit**: Anki can keep siblings out of one session, so five gaps in a paragraph are not five encounters with the same sentence. It is also why a card shows its own block and nothing around it.
 
-**Labelling is how an author buys stability**, per highlight, for two characters — and the trade is visible in the source rather than hidden in the tool. Unlabelled groups take the lowest number no label has claimed, in order of first appearance.
+**A block with deletions and no `^blockid` is refused.** Nothing derived from a paragraph — its position, a hash of its text, the labels inside it — survives the edit that a card about that paragraph invites; and this tool never writes to the vault, so the name has to be the author's. Obsidian generates one with a keystroke. The refusal names both remedies: add the identifier, or put the deletions under a `#flashcard/cloze` heading.
 
-**Two *unlabelled* highlights with identical text in one section are an error.** They are separate groups by rule, identical in text, and distinguishable only by position — so they are refused, with the remedy named: label them. A positional tiebreak would reintroduce exactly the hazard this rule exists to avoid, in the case nobody would think to test.
+**A `#flashcard/cloze` heading is the other route**, keyed by its heading path rather than by a block, claiming every highlight in its section. Block scanning runs only where no marker claims the blocks, so the two never make the same card twice. A section under any other marker is left alone — its body belongs to that card.
 
-⚠️ **Known syntax constraint.** The `|` collides with a markdown table row: `| ==1|x== |` breaks the table. This is acceptable only because **cloze inside a table cell is not in the design** — tables are their own card kind. If cloze-in-tables is ever wanted, this syntax must be revisited rather than patched around.
+**Deletions are grouped, and grouping is optional.** One group makes one card.
 
-_Alternatives rejected: `==text==^1` (`^` is Obsidian's block-reference character), `{{c1::text}}` (foreign Anki syntax in the source), `==text==%%1%%` (verbose — kept in reserve, since Obsidian hides comments in reading view)._
+- `==<<text>>==` — its own group of one.
+- `==<<N|text>>==` — part of group `N`; highlights sharing a label are blanked together.
+
+**Ordinals.** A labelled group's `cN` is its label. Unlabelled groups take the lowest number no label has claimed, in order of first appearance — so adding a label anywhere renumbers the unlabelled groups around it, and Anki schedules by ordinal, not by text.
+
+**Two *unlabelled* highlights with identical text in one section are refused**, with the remedy named: label them. They are separate groups by rule, identical in text, and distinguishable only by position — and a positional tiebreak is the hazard the ordinal rule exists to avoid.
+
+⚠️ The `|` in a label collides with a markdown table row: `| ==<<1|x>>== |` breaks the table. Acceptable only because cloze inside a table cell is not in the design — tables are their own card kind.
 
 ### Tables
 
