@@ -1,4 +1,4 @@
-# What it would take for maths to reach a card
+# What it took for maths to reach a card
 
 > **Work on this document** — `bd list --all --spec docs/findings/MATHS-ON-A-CARD.md`
 >
@@ -27,25 +27,29 @@ out the five deliberate dispositions and the one accident, and locates maths in 
 
 ## The one-paragraph answer
 
-Obsidian renders `$…$` and `$$…$$` with MathJax; this tool has no notion of `$` at all, so the
-delimiters and the TeX arrive on the card as literal text. That much is already row 5. What the
-measurement adds is worse in one direction and better in another. Better: **almost all TeX
-survives verbatim**, so the common case is a pure delimiter problem — Anki wants `\(…\)` and
-`\[…\]`, not `$$`. Worse: **two constructs are silently corrupted before this tool ever sees
-them**, because the TeX goes through Laika's inline parsers like any other prose — `\\` collapses
-to `\`, destroying every multi-line `align`, and paired `_` is consumed as emphasis, so `x_1 + y_1`
-extracts as `x1 + y1`. And worst: **the obvious fix is itself a re-keying event.** A maths node
-shaped like `ObsidianComment` drops out of Laika's `extractText`, and a heading containing maths
-therefore changes key the day maths starts being parsed — an orphan plus a history-less
-replacement, for a card that was working. The feature and the loss are the same edit, and whether
-they can be separated is a question about the TYPE rather than about the renderer.
+**Maths reaches a card, since 2026-08-29.** `$…$` and `$$…$$` are captured by a span parser and
+re-emitted as `\(…\)` and `\[…\]`, which is what Anki reads. The measurement below is what the
+tool did BEFORE that, and the reasoning is kept because it is what chose the shape.
+
+Three things the measurement established, all of which still explain the design. Most TeX survives
+verbatim, so the common case was only ever a delimiter problem. Two constructs were silently
+corrupted before this tool saw them, because the TeX went through Laika's inline parsers like any
+other prose — `\\` collapsed to `\`, destroying every multi-line `align`, and paired `_` was
+consumed as emphasis, so `x_1 + y_1` extracted as `x1 + y1`. And the fix was itself a re-keying
+event: a heading containing maths changes key the day maths starts being parsed.
+
+That last one was accepted rather than routed around, and it is recorded as a one-time cost in
+`content/AsText.scala`. The alternative — a node that drops out of `extractText` entirely, keying
+the heading as `notation (given 2 sets,  and )` — was rejected, because it collapses two headings
+differing only in their maths onto one key. What shipped is a third shape: the TeX contributes to
+the key WITHOUT its dollars.
 
 ---
 
-## What the tool does today, measured
+## What the tool did before the maths parser, measured
 
 VERIFIED BY EXECUTION 2026-08-28, driving `ObsidianSyntax.markupParser` — the production parser,
-laika-core 1.3.2 with `GitHubFlavor` and this project's six span parsers — over each snippet and
+laika-core 1.3.2 with `GitHubFlavor` and this project's span parsers, of which there were then six and are now eight — over each snippet and
 dumping the tree.
 
 | source | parses to | `extractText` |
@@ -65,20 +69,21 @@ dumping the tree.
 
 2. **`\\` is eaten.** Markdown escapes ASCII punctuation, and `\` is ASCII punctuation, so `\\`
    is the escape for a literal backslash and arrives as one. `\\` is TeX's row separator inside
-   `align`, `gather`, `array` and `cases` — so **every multi-line maths block in the vault is
-   already corrupt before any of this tool's own code runs.** Nothing downstream can recover it;
+   `align`, `gather`, `array` and `cases` — so **every multi-line maths block in the vault was
+   corrupt before any of this tool's own code ran.** Nothing downstream can recover it;
    the second backslash is gone from the parse tree.
 
-3. **Paired `_` becomes emphasis, and the underscores vanish.** `x_1 + y_1` has two underscores,
+3. **Paired `_` became emphasis, and the underscores vanished.** `x_1 + y_1` has two underscores,
    so they pair: the span between them becomes `Emphasized` and both delimiters are consumed.
    `extractText` yields `x1 + y1`. Note the position-dependence, which is what makes this
    nastier than it first reads: in `$$x_1 + y_1 = z_1$$` the third `z_1` keeps its underscore,
-   having no partner. **Whether a subscript survives depends on how many other subscripts are in
-   the same paragraph.**
+   having no partner. **Whether a subscript survived depended on how many other subscripts were
+   in the same paragraph.** The maths parser closed both of these by keeping the TeX away from
+   Laika's inline parsers, which is what the next section argues for.
 
 ---
 
-## Why the obvious fix costs a card
+## Why the fix cost a card, and why that was accepted
 
 A maths node would follow the shape this project already uses for a construct that must not be
 re-parsed as markdown: `ObsidianComment` and `ObsidianEmbed` both declare `text: String` rather
@@ -101,14 +106,19 @@ plain `Text` rather than a node of its own.
 `Extractor` derives every non-table card's key from `HeadingSegment.fromExtractedText(
 section.header.extractText)`. So:
 
-- **today**, `## Notation (given 2 sets, $A$ and $B$)` keys as
-  `notation (given 2 sets, $a$ and $b$)` — corroborated by the `inspect` run recorded in
-  `PARSER-DISAGREEMENTS.md` row 5's evidence;
-- **the day a maths node lands**, the same heading keys as `notation (given 2 sets,  and )`.
+- **before the maths parser**, `## Notation (given 2 sets, $A$ and $B$)` keyed as
+  `notation (given 2 sets, $a$ and $b$)`;
+- **had the node dropped out of `extractText`** — the shape this section argues against — the same
+  heading would have keyed as `notation (given 2 sets,  and )`, collapsing two headings that differ
+  only in their maths onto one key;
+- **as shipped**, it keys as `notation (given 2 sets, a and b)`: the TeX contributes, the dollars
+  do not. Pinned by `parser/ObsidianSyntax.test.scala`.
 
 A changed key is not an updated card. It is an orphan — tagged, suspended, holding its review
 history and claimed by nothing — plus a brand-new card starting from zero. **Shipping maths
-rendering would, on that heading, cost the card it was meant to fix.**
+rendering cost, on that heading, the card it was meant to fix.** One card in the vault carried
+maths in its heading; the cost was accepted for the feature and is recorded as a one-time re-key
+in `content/AsText.scala`.
 
 DERIVED, not measured, and the distinction is worth keeping: the mechanism above is measured, but
 "a maths node would be built that way" is a design choice nobody has made yet. It is precisely the
@@ -116,16 +126,16 @@ choice this document exists to put in front of somebody.
 
 ---
 
-## Where it would fit
+## Where it landed
 
-Named as placement rather than as a plan, because the shape is not decided.
+Written as placement before it was built; this is where it went.
 
 | stage | what lands there |
 |---|---|
-| `parser/ObsidianSyntax.scala` | a seventh span parser, `.standalone` rather than `.recursive`, so the TeX is captured raw. `obsidianCommentParser` is the precedent — `("%%" ~> delimitedBy("%%"))` |
-| `content/Content.scala` | one constructor carrying a `String`, on `Block.Code`'s shape; §(G), §(H) and §(I) each gain a row |
-| `content/Lower.scala` | one arm, constructor to constructor |
-| `content/AsText.scala` | a decision — see below. Identity-adjacent: cloze grouping and refusal B6 read it |
+| `parser/ObsidianSyntax.scala` | one more span parser — seventh in the registration list, eighth overall — `.standalone` rather than `.recursive`, so the TeX is captured raw. `obsidianCommentParser` is the precedent — `("%%" ~> delimitedBy("%%"))` |
+| `content/Content.scala` | two constructors carrying a `String`, `MathInline` and `MathDisplay`, on `Block.Code`'s shape; §(G), §(H) and §(I) each gain a row |
+| `content/Lower.scala` | two arms, constructor to constructor |
+| `content/AsText.scala` | decided: the TeX contributes, the dollars do not. Identity-adjacent — cloze grouping and the empty-body refusal read it |
 | `content/AsHtml.scala` | `\(…\)` / `\[…\]`, emitted through a new constructor inside `Html`, on `Html.clozeDeletion`'s pattern — wrapper applied AFTER escaping |
 
 **Nothing in `model/`, `plan/`, `anki/` or `cli/`.** Maths is body content, not a card shape: no
@@ -133,7 +143,7 @@ new `CardSpec` case, no new marker, no new note type. The same reason a typed ed
 
 **Nothing in Anki, either — with one caveat that is new here.** VERIFIED BY READING 2026-08-28,
 from the config Anki actually ships: `_aqt/data/web/js/mathjax.js` in aqt 25.9.5, which is the
-version this machine runs (pinned `aqt==25.9.5` in the launcher's `uv.lock`), against MathJax
+version this machine ran when this was read, against MathJax
 3.2.2 bundled alongside it at `_aqt/data/web/js/vendor/mathjax`.
 
 | setting | shipped value | consequence |
@@ -144,7 +154,7 @@ version this machine runs (pinned `aqt==25.9.5` in the launcher's `uv.lock`), ag
 | `processEscapes` | `false` | `$` carries no meaning to Anki at all, escaped or not |
 | `packages` | `+noerrors`, `+mathtools`, **`−textmacros`** | AMS arrives in MathJax's default set. `mhchem` and `physics` are NOT loaded |
 
-Obsidian renders `$…$` with MathJax 3 as well, so the TeX body still needs no translation between
+Obsidian is understood to render `$…$` with MathJax 3 as well — reasoning, not measured; nobody has examined Obsidian's side — so the TeX body needs no translation between
 the two and the bulk of the transport problem is still which characters mark where the maths
 starts and stops.
 
@@ -162,10 +172,10 @@ which is precisely what the paragraph above claims is unnecessary. One card sett
 **BRACES ARE ALREADY ESCAPED, AND MATHS WOULD BE THE FIRST CONTENT THAT IS FULL OF THEM.**
 `Html.escape` maps `{` to `&#123;` and `}` to `&#125;` across all author text, so that a brace
 somebody typed can never be read as Anki's cloze syntax. `content/AsHtml.scala` argues that
-choice at length, and two of the facts it rests on are measurements maths would invalidate: that
-the `dummy-vault` notes contain ZERO braces, and that the golden file's only brace-bearing lines
-are the tool's own `{{cN::` wrappers. TeX is brace-dense — `\text{Id}`, `\frac{a}{b}`,
-`\begin{align}` — so the day maths ships, a brace-bearing field stops being the exception.
+choice at length, and it rested on the fixture vault holding almost no braces of its own. TeX is
+brace-dense — `\text{Id}`, `\frac{a}{b}`, `\begin{align}` — so once maths shipped, a
+brace-bearing field stopped being the exception. The fixture vault now carries a brace-dense note
+for exactly that reason.
 
 That does not make escaping wrong. It makes it load-bearing somewhere new, and it settles
 something the placement table above leaves open: **the TeX must be emitted through `Html.escape`
