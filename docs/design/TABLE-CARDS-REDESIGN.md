@@ -78,7 +78,7 @@ reproduce M5's flip half, already run on 2026-08-26; the round trip is the genui
 
 ## 3. One capped-width note type, not a family of fixed-width ones
 
-The obvious shape, and the one Marc proposed, is Scala's `Tuple2 … Tuple22`: a note type per
+The obvious shape is Scala's `Tuple2 … Tuple22`: a note type per
 arity, the arity read off the column count, and a refusal above the cap. Reading the arity off the
 table is right, and consistent with `model/Marker.scala`'s own argument that a marker must name
 only what the tool cannot see. Refusing above the cap is right too, and needs no new argument:
@@ -138,7 +138,7 @@ already fetched and already in the planner's hand when it decides update versus 
 > there in the first version.** Added later it cannot recover the placements already made without
 > it.
 
-The rule: **place each column into the slot whose stored header matches it**; new columns take
+The rule: **place each column into the slot whose FROZEN KEY matches it, never its displayed header**; new columns take
 free slots; fall back to position when there is no existing note, which is safe because there is
 no history to protect. Reordering then changes nothing, insertion changes nothing for existing
 columns, and the swap in §4 stops being representable rather than merely being detected.
@@ -196,7 +196,7 @@ note types whose use count is zero and touches no cards at all._
 
 ### 6.2 A renamed column header loses its card's history
 
-Placement matches stored headers against vault columns, so a rename matches nothing. The tool
+Placement matches frozen keys against vault columns, so a rename matches nothing. The tool
 cannot distinguish a rename from a deletion plus an addition, because both leave the vault in an
 identical state. The renamed column takes a free slot and starts from zero, and the old slot goes
 blank, feeding straight into §6.1.
@@ -204,7 +204,7 @@ blank, feeding straight into §6.1.
 **This is the cost `README.md` already declares and accepts** for renaming a marked heading, and it
 should be documented in the same terms rather than treated as a fresh defect.
 
-**Marc's proposal — infer the rename from what did not change — is already this repository's
+**Option A — infer the rename from what did not change — is already this repository's
 strongest recovery candidate**, and it is stronger for tables than for the case it was written
 for. `EVOLVABILITY.md` §4A, "exact non-`Context` field pairing, report-only", makes the reframe
 that matters: exact agreement on a byte-identical field is **evidence of the same class as the
