@@ -18,8 +18,9 @@ do._
 
 This tool parses with laika-core 1.3.2 and Obsidian parses with CommonMark, and they disagree
 about real markdown that real people write. Six such disagreements are known. Three of them are
-already loud — the tool refuses, or the parse fails outright. **Three are silent, and produce a
-card whose content the author never wrote.** The silent three cannot be closed by a refusal,
+already loud — the tool refuses, or the parse fails outright. Two more were closed on 2026-08-29.
+**One is still silent, and produces a card whose content the author never wrote.** A silent one
+cannot be closed by a refusal,
 because a refusal fires when a marked section FAILS TO BUILD and in these cases nothing fails:
 the card builds, or the card was never asked for, or the card is keyed under a heading that does
 not exist. What sees all three is a check over RAW SOURCE that asks a different question — *do
@@ -61,8 +62,8 @@ that posture.
 | 1 | a nested list item indented fewer than four columns | nests it | closes the list and opens a new one | **REFUSED**, by name, with line numbers — `SpecError.ListNestingUnreadable` |
 | 2 | a `#` heading on the line directly after a list line | reads a heading | absorbs it into the list item | **SILENT** — see `EVOLVABILITY.md` §3.11 |
 | 3 | an Obsidian callout, `> [!note]` | renders a callout | fails the WHOLE document: `unresolved link id reference: !note` | detected, but the message names Laika rather than the construct |
-| 4 | a block reference, `^abc123` | hides it | prints it on the card face | **SILENT** |
-| 5 | maths, `$…$` and `$$…$$` | renders it | prints the delimiters, and the TeX verbatim EXCEPT that `\\` collapses to `\` and paired `_` is eaten as emphasis | **SILENT** — and the only row whose REMEDY is itself a silent re-keying. See `MATHS-ON-A-CARD.md` |
+| 4 | a block reference, `^abc123` | hides it | hides it — a production in the grammar since 2026-08-29, lowering to nothing | **CLOSED** |
+| 5 | maths, `$…$` and `$$…$$` | renders it | captures it and re-emits `\(…\)` / `\[…\]`, which is what Anki reads — since 2026-08-29 | **CLOSED**. See `MATHS-ON-A-CARD.md` |
 | 6 | bracketed prose, `an index like [0]` | renders it | fails the whole document | refused loudly, and ruled an ACCEPTED trade |
 
 **EVIDENCE, per row.**

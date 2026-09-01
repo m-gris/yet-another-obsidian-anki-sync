@@ -6,9 +6,9 @@ answers it**, because what a document claims determines whether it can rot.
 
 | | claims | may it be stale? |
 |---|---|---|
-| **`reference/`** | how the tool works **now** | **No.** Staleness here is a defect — the code moved and the document did not. |
-| **`findings/`** | a **measured fact**, with the date it was measured | **No, and it cannot be.** A measurement is true of the moment it was taken. It can only be superseded by a newer one. |
-| **`design/`** | a **decision, or an open question** | **No, because it makes no claim that can go stale.** A design document records what was decided, what was rejected and what is still undecided — all historical facts. It says nothing about whether any of it is built, so there is nothing in it to fall behind the code. |
+| **`reference/`** | how the tool works **now** | It should not be, and it will be anyway — the code moves faster than the prose. This is the directory to check first. |
+| **`findings/`** | a **measured fact**, with the date it was measured and what was run | Say when a finding stops being true, and say what changed. A measurement worth keeping records the conditions it was taken under, not just the number. |
+| **`design/`** | a **decision, or an open question** | Less than the others, because it records what was decided and what was rejected rather than what is built. It still drifts where it strays into describing the code. |
 | **`history/`** | what somebody thought **at the time** | **It is stale by definition**, and that is the point. Kept for the reasoning, never for the instructions. |
 
 **`README.md`** at the repository root sits outside this scheme deliberately: it is the front
@@ -48,18 +48,17 @@ lies. Marc named it as double maintenance the moment he saw it._
 `history/` is the exception that earns a directory, because *superseded* is the one status that
 applies to a whole document at once.
 
-## What documents may not do
+## What keeps going wrong
 
-**Assert their own status, in prose or in a block.** `docs/design/CLOZE-REDESIGN.md` opened with
-"Nothing here is built" for three days after four of its decisions had shipped, and went on listing
-`^blockid` as *eliminated* while a block identifier was what identified a cloze card. Prose does
-not update itself, and neither does a summary. The line above is a query, which is why it is the
-only form allowed.
+**A document asserting its own status.** `docs/design/CLOZE-REDESIGN.md` opened with "Nothing here
+is built" for three days after four of its decisions had shipped, and went on listing `^blockid` as
+*eliminated* while a block identifier was what identified a cloze card. Prose does not update
+itself and neither does a summary, which is why the query line above is worth the trouble.
 
-**Confuse the state of the ARGUMENT with the state of the WORK.** *Undecided* is a fact about the
+**Confusing the state of the ARGUMENT with the state of the WORK.** *Undecided* is a fact about the
 argument and belongs here — it is what the document is for. *Unbuilt* is a fact about the work and
-belongs in a bead. The first cannot go stale; the second goes stale the moment somebody builds it.
+is better in a bead, because it goes stale the moment somebody builds it.
 
-**Be deleted when they stop being current.** They move to `history/`. A superseded document still
-holds the reasoning that produced what replaced it, and that reasoning is usually the expensive
-part.
+**Deleting a document that stopped being current.** Usually better moved to `history/`: the
+reasoning that produced what replaced it is normally the expensive part, and it is easy to
+underestimate what is lost. Not a rule — sometimes a document is simply spent.
