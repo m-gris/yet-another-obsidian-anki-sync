@@ -8,6 +8,8 @@
 {"created_at":"2026-08-31T20:52:41Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh","issue_id":"oas-ghh.11","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-08-31T20:52:42Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh","issue_id":"oas-ghh.12","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-08-31T20:52:37Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh","issue_id":"oas-ghh.2","metadata":"{}","type":"parent-child"}
+{"created_at":"2026-09-01T12:25:45Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh.2","issue_id":"oas-ghh.2.1","metadata":"{}","type":"parent-child"}
+{"created_at":"2026-09-01T12:25:45Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh.2","issue_id":"oas-ghh.2.2","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-08-31T20:52:38Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh","issue_id":"oas-ghh.3","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-08-31T20:52:38Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh","issue_id":"oas-ghh.4","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-08-31T20:52:39Z","created_by":"Marc GRIS","depends_on_id":"oas-ghh","issue_id":"oas-ghh.5","metadata":"{}","type":"parent-child"}
