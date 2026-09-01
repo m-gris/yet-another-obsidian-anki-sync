@@ -33,8 +33,9 @@ exist at all is the decision this document is for.
 
 ## What a parser disagreement is, and why it is its own category
 
-A card's identity is `(frontmatter id, heading path)`, derived from the note and stored in Anki
-as a `src::` tag. Nothing is written back into the markdown. Two consequences make markdown
+A card's identity is the frontmatter `id` plus whichever node of the note the card hangs off — a
+chain of headings, a block, a frontmatter property, or the note itself — derived from the note and
+held on the Anki side, in a field. Nothing generated is written back into the markdown. Two consequences make markdown
 parsing load-bearing in a way it would not otherwise be:
 
 - **What the tool thinks is a heading decides a card's identity.** A heading the tool does not
@@ -77,20 +78,21 @@ that posture.
 3. VERIFIED BY EXECUTION by an earlier session; recorded as oas-yom. All 125
    block-id definitions in `References/Modern Mathematics.md` sit inside callouts, and the file
    is silent today only because it carries no `id:` in its frontmatter.
-4. VERIFIED BY EXECUTION by an earlier session; recorded as oas-3lu.
-   `The outermost layer is the ==epidermis==. ^abc123` renders as
-   `<p>The outermost layer is the {{c1::epidermis}}. ^abc123</p>`.
-5. VERIFIED BY READING, and since 2026-08-28 ALSO BY EXECUTION. `parser/ObsidianSyntax.bundle`
-   registers six span parsers — embed, wikilink, task list, highlight, Obsidian comment, HTML
-   comment — and `$` is a delimiter in none of them, nor in Laika's `Markdown.spanParsers`, nor
-   in `GitHubFlavor`. The corruption half of the description was measured by driving the
-   PRODUCTION parser over each construct, and is now pinned in `parser/ObsidianSyntax.test.scala`
-   under the heading "maths: pinned, not supported" — five characterisation tests which are
-   expected to go red the day maths is parsed, that redness being the re-keying. The table of
-   what survives and what does not, and the argument that the remedy costs a card, are in
-   `MATHS-ON-A-CARD.md`. Earlier corroboration, still the only live-vault datum: an `inspect`
-   run over Marc's vault on 2026-08-27 emitted the card key
-   `notation (given 2 sets, $a$ and $b$)`, so the dollars reached the key verbatim.
+4. CLOSED 2026-08-29, when the block identifier became a production in the grammar and started
+   lowering to nothing — it can no longer reach a card face. Before that, verified by execution:
+   `The outermost layer is the ==epidermis==. ^abc123` rendered as
+   `<p>The outermost layer is the {{c1::epidermis}}. ^abc123</p>`. Recorded as `oas-3lu`.
+5. CLOSED 2026-08-29 by a `mathParser`. Before it, `parser/ObsidianSyntax.bundle` registered six
+   span parsers — embed, wikilink, task list, highlight, Obsidian comment, HTML comment — and `$`
+   was a delimiter in none of them, nor in Laika's `Markdown.spanParsers`, nor in `GitHubFlavor`;
+   it now registers eight, `mathParser` and `blockIdParser` among them. The corruption was
+   measured by driving the PRODUCTION parser over each construct, and the characterisation tests
+   written to go red the day maths was parsed did exactly that — the sections in
+   `parser/ObsidianSyntax.test.scala` now read "maths: recognised, captured raw". The table of
+   what survived, and why the remedy cost a card, are in `MATHS-ON-A-CARD.md`. The re-key it
+   predicted happened, to one heading in Marc's vault: `inspect` emitted
+   `notation (given 2 sets, $a$ and $b$)` on 2026-08-27 and the same heading keys without the
+   dollars today.
 6. VERIFIED. `parser/ObsidianSyntax.test.scala`, "bare bracketed prose FAILS loudly under strict
    parsing — the accepted trade". This row is the CONTROL for the table: the family is not
    uniformly silent, and strictness already handles part of it.
