@@ -59,11 +59,11 @@ in the beads the query above lists. What follows is the design as it stands.
 
 ## What names a block, and why nothing derived can
 
-A card is anchored at a **node** of a note. `CardPath` already has three cases — a chain of
-headings, a frontmatter property, the note itself — and each was cheap to add because each anchor
-had an obvious **name**: the heading text, the property name, nothing at all. The codec reserves
-room for a fourth (`model/CardKey.scala`, the leading-empty-token scheme), so adding `Block` costs
-almost nothing structurally.
+A card is anchored at a **node** of a note. When this was written `CardPath` had three cases — a
+chain of headings, a frontmatter property, the note itself — and each had been cheap to add
+because each anchor had an obvious **name**: the heading text, the property name, nothing at all.
+The codec had room for a fourth (`model/CardKey.scala`, the leading-empty-token scheme), so adding
+`Block` cost almost nothing structurally. It shipped 2026-08-29 and `CardPath` now has four.
 
 What it costs is a name. A paragraph does not have one. And a card whose anchor moves is a card
 that detaches from its review history — the same failure `EVOLVABILITY.md` §4 calls the system's
@@ -153,9 +153,14 @@ the orphan to the card that replaced it. The honest word is **disconnected, and 
 tool helps** — never *fragile*, which this document used repeatedly before Marc corrected it on
 2026-08-29.
 
+_That is true of a key that moves. A cloze GROUP inside a block is not such a case, and this
+section originally implied it was: the key is the block's anchor, so editing a phrase does not move
+it, and no orphan is produced. What moves is the group's ORDINAL inside the note — see below._
+
 **So the missing piece is recovery, not naming**, and it is already designed. `oas-4ti` records
-recovery tiers 3 and 4 — matching a broken identity by SIMILAR content — with tiers 1 and 2, exact
-hash and exact fields, already built. The long comment at `plan/Planner.scala`'s `identityErrorFor`
+recovery by SIMILAR content as the designed next tier. What is built today is the exact-hash
+match: `Planner.byRecordedHash` finds the vault card matching a note whose identity is unreadable.
+Matching on similar content is not built, and `plan/Planner.scala` says so where it would go. The long comment at `plan/Planner.scala`'s `identityErrorFor`
 carries the constraint that makes it safe: a suggestion may only ever NAME a candidate, because a
 wrong rebind moves review history onto the wrong card, silently and irreversibly.
 
@@ -166,15 +171,22 @@ rule permits. **Similarity never decides.**
 
 ### What a later reader must not assume
 
-**That an unlabelled cloze is stable.** A block whose clozes carry no `N|` label re-keys when their
-text changes: the card is orphaned and suspended, its review history intact, and nothing yet offers
-to reconnect it to the card that replaced it. That reconnection is `oas-4ti`, and labelling is how
-an author buys stability in the meantime.
+**That an unlabelled cloze is stable, or that labelling makes it so.** Unlabelled groups take the
+lowest number no label has claimed, in order of first appearance, and Anki schedules by that
+number. So editing the phrases in a block can renumber the groups around them, and the cards then
+swap content while the note's key never moves — indistinguishable from a typo fix, and reported
+nowhere.
+
+**Adding a label is one of the triggers, not the remedy.** Given `==<<a>>== ==<<b>>==`, a is c1 and
+b is c2; write `==<<2|a>>==` and the label set becomes `{2}`, so a takes c2 and b takes c1. That is
+the tool's own printed advice causing the harm it is offered against. `oas-h9a` carries the full
+trigger set, and no remedy is settled — which is why this section says what NOT to assume rather
+than what to do.
 
 ---
 
 _This document holds the current design. Every decision's argument, and the alternatives rejected
 on the way to it, are in the beads the query at the top lists — moved there on 2026-08-30 when this
-document was cut from 598 lines to a third of that. Everything ever removed is in
+document was cut from 597 lines to under a third of that. Everything ever removed is in
 `git log --follow -p docs/design/CLOZE-REDESIGN.md`, each removal attached to the commit that
 explains it._
