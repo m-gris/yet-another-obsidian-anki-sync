@@ -48,17 +48,18 @@ found by looking things up from the markdown. That enumeration has nothing to fi
 no vault is recorded anywhere.
 
 **Until that is fixed, give each vault its own Anki profile.** It is not a rule the design
-believes in — it is a defect with a known fix, written up as item 42 in `docs/history/IN-FLIGHT.md`: a `Vault`
-field written beside the identity, holding the vault directory's name, so the enumeration has
-something to filter on. The same entry covers making decks read `Obsidian::<vault>::…`, which is
-what makes two vaults legible in one collection rather than merely possible.
+believes in — it is a defect with a known fix, tracked as `oas-ecu`: a field written beside the
+identity holding the vault's absolute path, whose leaf is what a run matches on, so a vault that
+MOVES keeps its cards while a whole path would lose them all. The leaf also becomes a deck level,
+so decks read `Obsidian::<vault>::…` and two vaults are legible in one collection rather than
+merely possible.
 
 ## What you need
 
 - **Anki**, running, with the **AnkiConnect** add-on installed (it listens on
   `http://localhost:8765`). The tool never launches Anki and never switches your profile for
   you — it checks that the profile you named is the one already open, and refuses otherwise.
-- **A JVM 17** on your `PATH`, to run it.
+- **A JVM** on your `PATH`, to run it. Nothing in the build pins a version; 17 is what this has been run on.
 - **[scala-cli](https://scala-cli.virtuslab.org)** and **[just](https://just.systems)**, to
   build it.
 
@@ -723,7 +724,7 @@ _**Corrected 2026-08-27.** This said "The run reports what it suspended", and it
 that suspends a card prints `N flag as orphaned` — the word *suspend* is not in that line. Every
 run **afterwards** does say it, in the standing count of parked notes. So the run that takes cards
 out of your review queue is the quiet one, and the ones that change nothing are loud about it.
-Naming the suspension in the plan line is programme item 5 of `docs/findings/EVOLVABILITY.md`; this sentence
+Naming the suspension in the plan line is `oas-64r`; this sentence
 is corrected rather than left describing the intention._
 
 A separate `prune` command to delete flagged cards after you have read the list **is not built
@@ -835,9 +836,9 @@ Named here so their absence is not mistaken for a promise:
   the note types are installed. The design is `docs/history/EDIT-IN-OBSIDIAN-PLAN.md`, Phase 6
 - **any check that a collection belongs to the vault being synced.** See *One vault per Anki
   profile* above: the tool cannot tell one vault's notes from another's, so it cannot warn you.
-  A `vault::` tag written beside `src::` would give it the means — tags are not hashed, so that
-  would re-key nothing and move no golden — but notes already synced carry no such tag, and
-  adopting them needs an action the plan model does not have
+  The design is `oas-ecu` — a field holding the vault's absolute path, matched on its leaf — and
+  it re-keys nothing, because a field beside the identity is not part of it. What it needs is an
+  action for adopting notes already synced without one, which the plan model does not have
 
 ## Reading further
 
