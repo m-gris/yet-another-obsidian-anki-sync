@@ -17,7 +17,7 @@ TLDR / Summary / Full form, following its siblings — `EVOLVABILITY.md`,
 
 Four different things in this tool end the same way: **the vault and the collection disagree, the
 tool will not resolve it alone, and it tells you in a line of a report you scroll past.** An orphan
-waits for a `prune` that does not exist; a refused shrink waits for you to do it by hand in Anki; a
+waits for a `prune` that does not exist; a priced shrink waits for you to approve it; a
 card retired by narrowing waits for nothing at all; a note left behind by `--no-migrate-note-types`
 waits for you to drop the flag. Each is a *pending decision with a cost you cannot see* — you are
 never shown how many reviews the card has. The proposal is to make that category first-class: the
@@ -47,9 +47,9 @@ Point 3 is what makes it a queue rather than a report. A build failure is not a 
 nothing is waiting, and fixing the markdown resolves it. A parked orphan is: a card with months of
 review history sits suspended, and no edit to the vault will free it.
 
-**The tool currently has no word for this.** Each member is reported in its own vocabulary — one as
-a count, one as a *failure*, one not at all — so they read as four unrelated problems rather than
-one category with four instances.
+**The tool has no word for this.** Each member is reported in its own vocabulary — one as a count,
+one as a priced decision, one not at all — so they read as four unrelated problems rather than one
+category with four instances.
 
 ---
 
@@ -58,16 +58,20 @@ one category with four instances.
 | what happened | what waits | what could be done about it |
 |---|---|---|
 | a heading was deleted or reworded | the note is tagged `orphaned::` and every card suspended | **prune** · **keep** · **relink** to a heading that exists |
-| a marker narrowed across note types — `cdd/3way` → `2way` | nothing; the run reports a *failure* and the note stays put | **apply anyway**, told what it costs · **skip** · **restore the marker** |
+| a marker narrowed across note types — `cdd/3way` → `2way` | the run prices it and holds it, naming the change by a short code | **apply anyway** with `--approve`, told what it costs · **skip** · **restore the marker** |
 | a marker narrowed inside the `cdd` family | a blank-fronted card keeps its history, invisible, and Anki's *Empty Cards* will offer to delete it | **flag** it · **prune** it · **restore the marker** |
 | `--no-migrate-note-types` was passed | the note stays on a shape its own marker no longer asks for | **move** it · **leave** it |
 
 **Live counts on Marc's collection, VERIFIED 2026-08-27:** six parked orphans; two notes whose
 shrink is refused, both with zero reviews on every card. The orphan count was three the day before.
 
-**Row 3 is not built** — see oas-jco, where flagging such a card is decided and
-unbuilt. **Row 2's third state does not exist**: today the answer is refuse, permanently, and the
-report tells you to do it by hand in Anki instead.
+**Row 2 shipped on 2026-08-27.** The run prices the change — how many cards, how many reviews
+they carry — prints a short code beside it, and applies it only when that code is named with
+`--approve`. One code per change; there is deliberately no flag that approves them all.
+
+**Row 3 is not built** — see `oas-jco`, where flagging such a card is decided and unbuilt. That
+bead also now records that its premise was wrong: a blank-fronted card DOES come up in review, so
+a flag alone will not keep it out of your way.
 
 ---
 
@@ -82,7 +86,7 @@ When the vault asks for a change that might cost review history, three stances a
 
 | | stance | who decides | status |
 |---|---|---|---|
-| **(a)** | **refuse on SHAPE** — any shrink refused, whatever is at stake | the tool | what it does today |
+| **(a)** | **refuse on SHAPE** — any shrink refused, whatever is at stake | the tool | what it did until 2026-08-27 |
 | **(b)** | **refuse on EVIDENCE** — refuse only when the cards actually hold reviews | the tool, at a better threshold | **PROPOSED BY CLAUDE, REJECTED BY MARC** |
 | **(c)** | **never refuse — state the cost, let the author choose** | the author | **RULED** |
 
@@ -164,9 +168,9 @@ being thrown away. Split the two and a terminal consumer, a plugin, and anything
 
 **There is precedent in this repository, deliberate and recent.** `locate/Locate.scala` exists so
 that an Anki add-on can *ask* the Scala tool where a card came from, rather than carrying a second
-implementation of the identity codec in Python — see `docs/design/EDIT-IN-OBSIDIAN.md`, which states the
-reason: a copy of `TagCodec.canonical` in another language, held honest only by a test, is the
-defect class this project fights hardest. **The same argument applies here with more force**: an
+implementation of the identity codec in Python. Its own docstring states the reason: a copy of
+`TagCodec.canonical` and of heading-text extraction in another language, held honest only by a
+test, is the defect class this project fights hardest. **The same argument applies here with more force**: an
 action that prunes a card must not exist twice.
 
 **What that implies about the boundary.** Enumeration returns data, not prose — the report's
