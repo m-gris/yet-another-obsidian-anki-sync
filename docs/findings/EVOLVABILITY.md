@@ -6,7 +6,7 @@
 > outstanding. **This document records measurements and the reasoning around them, never
 > progress** — a status kept in two places goes stale in one of them.
 
-*Written 2026-08-25, from a read-only pass over the repository and the installed AnkiConnect add-on. Anki was not running, so **no live probe was performed in this pass**. Every claim about Anki's behaviour is labelled **VERIFIED** (read in source I cite, or recorded as a live measurement I recovered and cite) or **UNVERIFIED** (asserted in this repo with no citation, or never measured at all). Two of the system's most load-bearing beliefs turn out to sit in the second column.*
+*Written 2026-08-25, from a read-only pass over the repository and the installed AnkiConnect add-on; Anki was not running, so nothing was probed live that day. **Measurements taken between 2026-08-25 and 2026-08-27 have been folded in since, and each carries its own date** — §2's rows and §6 in particular. Every claim about Anki's behaviour is labelled **VERIFIED** (read in source I cite, or recorded as a live measurement I recovered and cite) or **UNVERIFIED** (asserted in this repo with no citation, or never measured at all). Two of the system's most load-bearing beliefs turn out to sit in the second column.*
 
 ---
 
@@ -30,7 +30,7 @@
 > exercise that produced it._
 
 
-**Nothing in this system destroys review history, and almost nothing in it lets you keep review history attached to a card you have reworded.** Those are two different facts, and only the second one governs what the system is like to use. Of the twenty-one operations the tool can perform, none deletes — `anki/Anki.scala` declares no `deleteNote`, no `deleteCards`, no `deleteModel` (VERIFIED, enumerated: `anki/Anki.scala:158,161,172,175,197,221,236,253,261,269,271,273,279,319,327,329,337,339,341,361,370`). Tags are additive and subtractive within the tool's own three prefixes; field updates and deck moves never touch a card row; suspension is reversible and automatic. The binding is a tag, and **a tag is cheap to rewrite forever** — which means re-keying a collection of five thousand cards costs the same *per card* as re-keying eighteen, and costs *no history at all*. Almost every hazard in this system costs the **findability of a binding** rather than the accumulated value behind it — but findability IS the value, once the collection is past the size at which anybody reconciles by hand. §4 of this document states the consequence and this paragraph originally did not: a detached history is “technically preserved and practically abandoned, which is a slower version of losing it”. Renaming a marked heading detaches one card; renaming an H1 or any ancestor detaches every card beneath it; changing a card’s TYPE is refused outright in every case except within the `cdd/` family. Those are the ordinary gestures of revising your own notes — which is what learning looks like — so **revision, not deletion, is this system’s cost centre.** With that said, the structural finding stands and it does matter: **the accumulated layer is exposed in exactly two places, and neither of them is identity.** (a) Operations that change a note's *card set* — retyping across template counts, flipping a gate field so a card's front renders blank, and unlabelled cloze ordinal drift — because scheduling hangs off `(note, ordinal)` and all three move ordinals under a note whose key never changed. (b) A human acting on a state the tool created and never reported — `Tools > Empty Cards` today, `prune` tomorrow. Everything else is a re-binding problem, and re-binding is exactly what this design made cheap on purpose. **There is one confirmed exception, live today**, and it is a defect rather than a design consequence: a note that was orphaned and comes back on a *different note type* is retyped, has its `orphaned::` tag dropped by that write, and is **never unsuspended** — leaving a card with its full review history permanently out of rotation and invisible to every report (§3.1). That is the only path I can trace end to end in which accumulated value is permanently removed from use by this tool's own writes.
+**Nothing in this system destroys review history, and almost nothing in it lets you keep review history attached to a card you have reworded.** Those are two different facts, and only the second one governs what the system is like to use. None of the operations the tool can perform deletes — `anki/Anki.scala` declares no `deleteNote`, no `deleteCards`, no `deleteModel` (VERIFIED, enumerated: `anki/Anki.scala:158,161,172,175,197,221,236,253,261,269,271,273,279,319,327,329,337,339,341,361,370`). Tags are additive and subtractive within the tool's own three prefixes; field updates and deck moves never touch a card row; suspension is reversible and automatic. The binding is a tag, and **a tag is cheap to rewrite forever** — which means re-keying a collection of five thousand cards costs the same *per card* as re-keying eighteen, and costs *no history at all*. Almost every hazard in this system costs the **findability of a binding** rather than the accumulated value behind it — but findability IS the value, once the collection is past the size at which anybody reconciles by hand. §4 of this document states the consequence and this paragraph originally did not: a detached history is “technically preserved and practically abandoned, which is a slower version of losing it”. Renaming a marked heading detaches one card; renaming an H1 or any ancestor detaches every card beneath it; changing a card’s TYPE is refused outright in every case except within the `cdd/` family. Those are the ordinary gestures of revising your own notes — which is what learning looks like — so **revision, not deletion, is this system’s cost centre.** With that said, the structural finding stands and it does matter: **the accumulated layer is exposed in exactly two places, and neither of them is identity.** (a) Operations that change a note's *card set* — retyping across template counts, flipping a gate field so a card's front renders blank, and unlabelled cloze ordinal drift — because scheduling hangs off `(note, ordinal)` and all three move ordinals under a note whose key never changed. (b) A human acting on a state the tool created and never reported — `Tools > Empty Cards` today, `prune` tomorrow. Everything else is a re-binding problem, and re-binding is exactly what this design made cheap on purpose. **One confirmed exception was found, and fixed the same day this was written** (§3.1): a note that was orphaned and came back on a *different note type* was retyped, had its `orphaned::` tag dropped by that write, and was never unsuspended — leaving a card with its full review history permanently out of rotation and invisible to every report. It was the only path traceable end to end in which accumulated value was permanently removed from use by this tool's own writes. The planner now emits the `Unflag` that branch had argued itself out of, and the ordering is pinned by a test.
 
 ---
 
@@ -42,7 +42,7 @@ Scheduling lives on **cards**. Cards are generated by **(note, template ordinal)
 
 | Operation | Verdict | Mechanism | Evidence |
 |---|---|---|---|
-| The nine read operations | PRESERVES | No write. `cardsOf` is served from `notesInfo`'s own `cards` array and `deckOf` from `getDecks`, so `cardsInfo` — the batch-poisoning action — is never called | VERIFIED, `anki/AnkiConnectClient.scala:199-234` |
+| The read operations | PRESERVES | No write. `cardsOf` is served from `notesInfo`'s own `cards` array and `deckOf` from `getDecks`, so `cardsInfo` — the batch-poisoning action — is reached from one place only, `Anki.standingOf`, which prices a narrowing. §7 of this document says the same | VERIFIED, `anki/AnkiConnectClient.scala` |
 | `addNote` | PRESERVES | Nothing existing is touched. `allowDuplicate: true` is deliberate: the tool owns identity through `src::`, and Anki's first-field checksum would otherwise refuse every concept's *second* descriptor | VERIFIED, `anki/AnkiConnectClient.scala:243-266`; HANDOFF.md:166 |
 | `addTags` / `removeTags` | PRESERVES | Note-level; no card row touched. Ownership is matched on the first `::` component only, case-insensitively, so Anki's own `leech` is never in scope | VERIFIED, `model/CardKey.scala:94-114` |
 | `updateNoteFields` | PRESERVES cards | Implemented over AnkiConnect's `updateNote` action with **no** `tags` key — the only one of three options that can neither drop nor replace tags. Not AnkiConnect's own `updateNoteFields` action, which silently discards its `tags` parameter | VERIFIED, `anki/AnkiConnectClient.scala:268-280`; HANDOFF.md:110-136 |
@@ -58,7 +58,7 @@ Scheduling lives on **cards**. Cards are generated by **(note, template ordinal)
 | Setting or clearing a card **flag** | PRESERVES | **MEASURED 2026-08-26.** `flags` is not in the add-on's guarded-key list, so it needs no bypass; setting it to 7 and back to 0 left `type`, `queue`, `interval`, `factor`, `reps`, `lapses` and `due` identical both times, and `flag:7` finds the card. The raw-`setattr` worry recorded elsewhere does not bite here — the scheduler does not read this column. |
 | `Flag` (tag, then suspend) | PRESERVES | Tag first so an interruption leaves a tagged card *in* rotation rather than a suspended card nothing explains. Per-card suspension, because a three-field note has three cards | VERIFIED, `plan/Executor.scala:355-365` |
 | `Unflag` (unsuspend, then clear tag) | PRESERVES data; **overwrites a human decision** | The mirror ordering is right. But it unsuspends *every* card of the returning note unconditionally, and the project's own settled ruling says the tool "cannot tell its own suspension from Marc's" | VERIFIED, `plan/Executor.scala:372-374`; docs/history/IN-FLIGHT.md ("Rulings that are settled") |
-| **`Retype` applied to a note that is currently flagged as an orphan** | **STRANDS** | See §3.1. The card keeps its full history, keeps `queue` (i.e. stays suspended — MEASURED, `RECONCILER-SHAPE.md:43`), loses its `orphaned::` tag by the same write, and is never unsuspended | VERIFIED chain: `plan/Planner.scala:305-312,322-337,348-349`; `plan/Executor.scala:331-339` |
+| **`Retype` applied to a note that is currently flagged as an orphan** | **PRESERVES**, since 2026-08-25 | It stranded the card until then — kept, suspended, its `orphaned::` tag dropped by the same write, never unsuspended. The planner now emits an `Unflag` alongside the move, and it goes first. See §3.1 | `plan/Planner.scala`, `isFlaggedOrphan`; ordering pinned by `plan/Retyping.test.scala`, "a move over a flagged note plans an `Unflag` as well, and the `Unflag` comes first" |
 | Text edit that moves an **unlabelled cloze ordinal** | **DESTROYS (attribution)** — vault side VERIFIED, Anki side UNMEASURED | An unlabelled group takes the lowest number no label has claimed, in order of first appearance. Inserting one `==highlight==` earlier renumbers every later unlabelled group. The section's key never moves, so this plans as an ordinary `Update` | VERIFIED vault side, `extract/Cloze.scala:200-230`, `:28-34` ("stable only while the set of deletions is stable"); `model/CardSpec.scala:51-54` ("a number that moved between runs would move review history between cards"). **UNVERIFIED**: that Anki's existing cloze cards keep their ordinals through a `Text` rewrite and are simply re-pointed at new content is established nowhere in this repository |
 | Narrowing a gate field (`cdd/3way`→`cdd/2way`, `table/2way`→`table/1way`) | Tool side PRESERVES; **creates a destroyable state** | Same note type, gate field flipped, plans as an ordinary `Update`. The affected card's front then renders empty. "Anki keeps them and says 'The front of this card is blank' until Tools → Empty Cards is run", which **deletes** them | Tool side VERIFIED, `model/Marker.scala:276-284`. Anki side **UNVERIFIED — repo-asserted only**, at that same docstring and docs/history/IN-FLIGHT.md:138-140. No add-on line, no source line, no probe |
 | Heading rename / ancestor rename / `id:` change | PRESERVES, but **detaches** | New key → old note tagged `orphaned::` and suspended, new historyless card created alongside. Nothing is lost; the binding is | VERIFIED, `model/CardKey.scala:76-80`; `extract/Extractor.scala:143,150,158`; `plan/Executor.scala:363-365` |
@@ -75,7 +75,7 @@ Scheduling lives on **cards**. Cards are generated by **(note, template ordinal)
 
 Ranked by *irreplaceable history at risk × silence*. "Live today" means reachable at eighteen cards; "at scale" means the mechanism exists but only bites when the collection is large.
 
-### 3.1 Retype over a returning orphan strands a card, permanently and silently — **live today**
+### 3.1 Retype over a returning orphan stranded a card, permanently and silently — **FIXED 2026-08-25**
 
 The only path I can trace in which this tool permanently removes accumulated value from use.
 
@@ -386,7 +386,7 @@ One thing the restatement does **not** license: a sidecar being off-limits. It i
 
 ## 6. What has been measured
 
-**Anki was not running during this brainstorm. Nothing below marked as needing a collection was probed.** Every UNMEASURED row in §2 stays unmeasured, and every conclusion resting on one is provisional — specifically §2's `changeDeck` and `suspend`/`unsuspend` rows, §3.2's Anki half, §3.3's Anki half, and §3.8 in both directions.
+**Anki was not running during the original brainstorm, and nothing below marked as needing a collection was probed that day. Several were measured afterwards — see the dated rows in §2 and §6.** Every row still marked UNMEASURED stays unmeasured, and every conclusion resting on one is provisional — specifically §2's `changeDeck` and `suspend`/`unsuspend` rows, §3.2's Anki half, §3.3's Anki half, and §3.8 in both directions.
 
 **M3 — ~~Does unsuspend restore interval, ease, due date and the review log?~~ RUN 2026-08-25, and it holds.** See §2's `suspend`/`unsuspend` row and §3.6. It was the highest load-bearing-ness per minute on this list and nobody had proposed it; it cost five minutes.
 
@@ -452,6 +452,24 @@ taken in — with the two commands that re-read them.
 reddens on an add-on update, the `__init__.py` line numbers still live in a dozen scattered
 comments, and nothing compares the recorded version against the installed one at run time. See
 §3.10, which stays open for exactly that reason. _Original entry follows._
+---
+
+## 7. What is cheap now and expensive later
+
+_The programme that stood here — sixteen ordered items and five unrun measurements — became beads
+on 2026-08-30. The argument that ordered it is kept, because five other files cite this section for
+it and it exists nowhere else._
+
+**Exactly one class of work is free now and pricier later: work that touches stored data** — how a
+key is derived, how a tag is formatted, what shape the note types are. Everything else —
+measurements, reports, guards, bug fixes, new commands — costs the same whenever it is done.
+Sorting by that, rather than by how alarming each item sounds, is the whole of the ordering
+argument.
+
+_The premise is that the collection is small, and it was written on 2026-08-25 when it held tens of
+notes. The argument weakens as the collection grows, which is itself the reason to act on the first
+class early._
+
 ---
 
 ## 8. What we decided not to do
