@@ -33,9 +33,10 @@ An Anki add-on that intercepts **Edit Current** and, for a note this tool create
 source note in Obsidian instead of Anki's note editor. For every other note in the collection —
 which for Marc is the majority — the behaviour is exactly what it is today.
 
-The discriminator is free: every note this tool creates carries an identity tag beginning
-`src::` (the tag that binds a markdown card to its Anki note; see `model/CardKey.scala`). A note
-without one is not ours and is handed straight to the real editor.
+The discriminator is free: every note this tool creates carries its identity in an `Identity`
+field, whose value begins `src::` — and notes written before that field existed carry the same
+value in a tag, which is still read for them. A note with neither is not ours and is handed
+straight to the real editor.
 
 **Scope, decided:** the reviewer's Edit only. Anki's **Browse** window has its own editor,
 reached by a different path, and it is deliberately left alone — editing a note in the browser
@@ -166,7 +167,7 @@ dismissible warning.
 
 ---
 
-## 4. Where the tag gets decoded — the actual design question
+## 4. Where the identity gets decoded — the actual design question
 
 The add-on is Python running inside Anki's process. No Java Virtual Machine, no `TagCodec`, no
 `CardKey`. So a Python decoder is **a second implementation of card identity**: the `::` split
@@ -197,7 +198,8 @@ compound:
 
 ### Option C — a `locate` subcommand; the add-on shells out — **CHOSEN, CONDITIONALLY**
 
-`obsidian-anki-sync locate --tag src::… --vault-path …` prints the URI. `TagCodec.decode`
+`obsidian-anki-sync locate src::… --vault-path …` prints the URI — the identity is a positional
+argument, not an option. `TagCodec.decode`
 remains the single implementation of card identity, permanently. There is **no cross-language
 agreement surface at all**, which is the whole argument.
 
@@ -245,7 +247,7 @@ command works perfectly in a terminal — the classic shape where a feature is "
 user and fine for the developer". **The add-on must take an absolute path from its own
 configuration**, and should say which path it tried when the executable is not there.
 
-**The command is invoked with an argv list, never a shell string.** A `src::` tag is data: it
+**The command is invoked with an argv list, never a shell string.** An identity value is data: it
 carries `::`, `%` escapes and whatever an author put in a heading. `TagCodec`'s safe set
 excludes whitespace and Anki's wildcards, so a well-formed tag is inert — but the add-on may be
 handed a hand-edited one, and a decoder is exactly the component that must not assume its input
@@ -258,7 +260,7 @@ Alternatives surveyed and declined:
 | **JPype** (JVM in Anki's process, via JNI) | Needs a native wheel built against Anki's exact CPython ABI, shipped per platform inside the add-on; a JVM fault takes Anki down with it. |
 | **Py4J** (separate JVM over a socket) | Client is pure Python, which is a real advantage — but it means a long-lived JVM gateway beside Anki, with lifecycle and a port, to evaluate one string function. |
 | **native-image shared library + `ctypes`** | Tightest possible: no process spawn. More build ceremony than this needs. Kept on the shelf if subprocess latency disappoints. |
-| **Change the tag format so a schema tool owns it** | Costs the human-readable tag, which `model/CardKey.scala` rejected explicitly ("base64url was rejected: it would make orphan lists unreadable in Anki's browser"), and re-keys every card in the collection. |
+| **Change the tag format so a schema tool owns it** | Costs the human-readable identity, which `model/CardKey.scala` rejected explicitly — a person reads the orphan list before anything is pruned, so the value has to stay legible in Anki's browser — and re-keys every card in the collection. |
 
 ---
 
@@ -319,7 +321,7 @@ forty lines.
 
 ### The vault is not in the tag
 
-**Nothing in a `src::` tag says which vault the card came from.** The tag is
+**Nothing in a card's identity says which vault it came from.** The value is
 `(frontmatter id, card path)` and stops there. Advanced URI needs `vault=<name>`.
 
 So the vault name comes from add-on configuration — one vault, typed once. With a single vault
@@ -415,7 +417,9 @@ arm is already there to fill in.
 
 ### New Python, for the add-on
 
-Typed under `pyright --strict`.
+**SUPERSEDED by `addon/obsidian_edit/core.py`, which is real code and has its own tests.** The
+sketch below is kept for the reasoning; two of its three names changed on the way, and the third
+case's behaviour changed with them. **Read the file, not this block.**
 
 ```python
 Verdict = NotOurs | Locatable(uri) | Unreadable(tag, reason)
@@ -423,8 +427,11 @@ Verdict = NotOurs | Locatable(uri) | Unreadable(tag, reason)
 
 - `NotOurs` → delegate to the real `EditCurrent`. **This is the case that must never break**: it
   is every note in the collection this tool did not create.
-- `Locatable` → open the URI.
-- `Unreadable` → say so and delegate. Never guess.
+- `Locatable` → open the URI. _Shipped as `Open`, and it carries a second field: a caveat about
+  the card you just opened, shown alongside. Not a failure — the URI works._
+- `Unreadable` → say so and delegate. Never guess. _Shipped as `Explain`, and it opens Anki's own
+  editor as well as saying why, on the reasoning that a keypress which does nothing is
+  indistinguishable from a broken add-on._
 
 Two things the types should make unrepresentable: opening without a decided verdict, and a
 verdict that neither opens nor delegates — the shape where pressing `e` does nothing at all.
@@ -447,7 +454,7 @@ configuration, spawning the subprocess, handing off to `editcurrent.EditCurrent`
 already states this compromise in `Main.withChosenVault` — *"note what that leaves untested,
 rather than implying otherwise"* — and the same sentence belongs on the add-on's entry point.
 
-**The one case that must never break is the one with no test:** a note carrying no `src::` tag
+**The one case that must never break is the one with no test:** a note carrying no identity
 must reach Anki's own editor untouched. That is every note in the collection this tool did not
 create. The verdict function can be tested; the delegation cannot, and so it wants the smallest
 possible body — ideally a single call, with nothing between it and `editcurrent.EditCurrent`
