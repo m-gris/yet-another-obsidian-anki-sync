@@ -241,7 +241,7 @@ enum Marker:
     * representation REFACTOR, where a refusal becoming a card would have been a silent
     * behaviour change nobody asked for. Here it is the whole point of the slice.
     *
-    * A NAME COLLISION, STATED ONCE. `REQUIREMENTS.md:160,173,178` already uses "sequence" for
+    * A NAME COLLISION, STATED ONCE. `docs/reference/REQUIREMENTS.md` already uses "sequence" for
     * the AUTHORED ROUTE — the order in which new cards are introduced ACROSS cards. That is a
     * different layer from this one, which orders items INSIDE a single card. Both are unbuilt
     * as far as that document is concerned; this one is being built here.

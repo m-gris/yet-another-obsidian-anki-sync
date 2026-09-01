@@ -113,7 +113,7 @@ object EdgeSchema:
     *
     * ONE HEADING IN ONE NOTE, found by scanning rather than configured by a path, because a path
     * would be a setting and this is a note like any other — one the author can rename, move, and
-    * link to. Two notes carrying it is refused where the scan happens, not here.
+    * link to. Each note declares for itself, so two notes carrying the heading is ordinary rather than a clash.
     */
   val Heading: String = "properties-to-flashcards"
 

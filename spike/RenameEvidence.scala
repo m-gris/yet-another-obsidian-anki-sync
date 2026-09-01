@@ -24,7 +24,8 @@ import obsidiananki.model.HeadingSegment
   * `docs/findings/EVOLVABILITY.md` §4A makes the reframe this file depends on: **exact agreement on a
   * byte-identical field is evidence of the same class as the content hash, not a similarity
   * score.** There is no threshold here, no distance, and no number anybody has to justify — which
-  * is the ground on which the proportional orphan guard was rejected (`docs/reference/CARD-MODEL.md:214`).
+  * is the ground on which the proportional orphan guard was rejected (`docs/reference/CARD-MODEL.md`,
+  * §Deletion: "the proportion is a number nobody can justify").
   * Two values either are the same bytes or they are not.
   *
   * ==Why the table gives better evidence than a heading ever could==
@@ -165,7 +166,7 @@ object RenameEvidence:
     *
     * NO PROPORTION IS COMPUTED AND NONE SHOULD BE. "Nine of twelve rows agree" is a similarity
     * score wearing a fraction's clothes, and choosing where to cut it is the number nobody can
-    * justify that `docs/reference/CARD-MODEL.md:214` already rejected. One dissenting row means the columns
+    * justify that `docs/reference/CARD-MODEL.md` §Deletion already rejected. One dissenting row means the columns
     * hold different content, and that is a fact rather than a weak signal.
     */
   def survey(rows: Vector[RowEvidence]): Vector[Finding] =

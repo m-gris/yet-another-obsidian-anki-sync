@@ -297,10 +297,9 @@ enum SyncAction:
   // should be implemented or guarded, not deleted. That rule protects a design still on the
   // way in. Cut is not ahead — nothing in v0 will ever produce this, so it had no owner.
   //
-  // The reconciliation it was for now happens by hand. That is lossless once an orphan is
-  // SUSPENDED rather than merely tagged — which is the ruling of 2026-08-19 and is NOT YET
-  // BUILT: `Flag` still only writes a tag, so an orphaned card remains in the daily review
-  // rotation today. Nothing is deleted either way, so no history is lost meanwhile. What was
+  // The reconciliation it was for now happens by hand. That is lossless because an orphan is
+  // SUSPENDED as well as tagged, so its card leaves the review queue with its scheduling intact
+  // and nothing is deleted either way. What was
   // learned while
   // exploring detection is recorded in the design document under "Deliberately deferred" —
   // notably that candidates are confined to the cards sharing one note id, and that the

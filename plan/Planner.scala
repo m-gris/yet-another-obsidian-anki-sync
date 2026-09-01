@@ -167,11 +167,12 @@ object Planner:
 
   /** Build the note a `Create` will write.
     *
-    * BOTH OWNED TAGS ARE PRESENT FROM THE MOMENT THE NOTE EXISTS, which is why this is a
-    * function rather than a create-then-tag sequence. `NewNote` requires a non-empty tag
-    * vector precisely so that a note without its `src::` identity cannot be constructed: such
-    * a note is not merely unmatched but UNENUMERABLE — invisible to the key lookup, the
-    * reconciler and prune, permanently, with no later call able to find it and repair it.
+    * IDENTITY AND HASH ARE PRESENT FROM THE MOMENT THE NOTE EXISTS, which is why this is a
+    * function rather than a create-then-tag sequence. A note created without its identity is not
+    * merely unmatched but UNENUMERABLE — invisible to the key lookup and to the reconciler,
+    * permanently, with no later call able to find it and repair it. Since 2026-08-29 that
+    * identity travels in a FIELD, written by the same `addNote` call, so what the non-empty tag
+    * vector now carries is the content hash.
     *
     * The `sha::` hash goes on at creation for the same reason it is written last on update:
     * a note whose content is written without its hash would be rewritten on the next run,

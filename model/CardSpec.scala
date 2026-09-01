@@ -288,7 +288,7 @@ object CardSpec:
       case TwoField(_, _, _, TwoFieldDirections.Both, _)    => Marker.NoteTypes.BasicAndReversed
       case ThreeField(_, _, _, _, _, _, _)                  => Marker.NoteTypes.ConceptDescriptor
       case Cloze(_, _, _, _)                                => Marker.NoteTypes.Cloze
-      // The row card is a plain Basic: concept on the front, all descriptors on the back.
+      // The row card is a plain Basic holding two renderings of one table — see `blanked` and `filled` below.
       case TableRow(_, _, _, _)                             => Marker.NoteTypes.Basic
       case Sequence(_, _, _, _, _)                          => Marker.NoteTypes.ClozeSequence
 

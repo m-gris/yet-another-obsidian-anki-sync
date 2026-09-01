@@ -6,38 +6,38 @@ _How markdown becomes Anki cards: what is marked, what is generated, and how ide
 
 ## TLDR
 
-Headings marked under one `#flashcard/` root become Anki notes — `1way` and `2way` for a heading and its body, `cdd/1way`, `cdd/2way` and `cdd/3way` for a concept, an aspect of it and that aspect's value, `sequence` for a list revealed one item at a time, `3way` for concept–descriptor–description, plus `cloze` and `table`; unmarked headings generate nothing, at any depth.
+A heading marked under one `#flashcard/` root becomes an Anki note, at any depth; unmarked headings generate nothing. `--help` lists every marker, from a table a test ties to the source. Three other routes need no marked heading at all: a marker in a note's frontmatter makes the whole note a card, a block holding `==<<cloze>>==` deletions becomes one wherever it sits, and a relation declared in frontmatter becomes one too.
 
 A card's concept comes from its note title or nearest ancestor heading, its descriptor from the marked heading, and its description from that section's body — a shape no existing bridge can express, because they all match lines rather than positions in the document tree.
 
-Identity is derived from `(frontmatter id, heading path)` and stored as a tag inside Anki rather than written into the notes, so nothing generated ever enters the markdown, at any card count.
+Identity is derived from the frontmatter `id` plus whichever node of the note the card hangs off, and is held in a field on the Anki note rather than written into the markdown.
 
 Decks mirror folder paths and carry filing only — never learning order, which comes from tags and new-card position instead.
 
-The MOC, the authored route, the typed-edge graph, structure cards and ordered-list disclosure are all deferred until the basic path is in daily use.
+The MOC, the authored route and the typed-edge graph itself are deferred until the basic path is in daily use. A relation already becomes a card; nothing yet traverses or queries the graph those relations describe.
 
 ---
 ## Summary
 
 Every existing Obsidian→Anki bridge matches lines with regular expressions and has no notion of a line's position in the document tree. That is why none can express a heading naming a concept with the sections beneath it as its descriptors — and it is the only honest justification for building rather than adopting.
 
-**Marking is explicit and namespaced.** A heading at any depth opts in with `#flashcard/1way`, `/2way`, `/3way`, `/3way/all`, `/cloze` or `/table`; unmarked headings generate nothing, so ordinary prose sections stay ordinary. The numbering means different things in the two families: `1way` and `2way` count retrieval directions over a heading-and-body card, while `3way` counts *fields* and defaults to two directions. Silent card creation is the failure mode worth designing against.
+**Marking is explicit and namespaced.** A heading at any depth opts in under `#flashcard/`; unmarked headings generate nothing, so ordinary prose sections stay ordinary. The numbering means different things in the two families: `1way` and `2way` count retrieval directions over a heading-and-body card, while the `cdd` family counts *fields* and defaults to two directions. Silent card creation is the failure mode worth designing against.
 
-**The card shape** is Concept–Descriptor–Description with three possible directions: recall the concept given the other two, recall the description given concept and descriptor, and — only with `#flashcard/3way/all` — recall the descriptor given concept and description. The Anki note type for this already exists with exactly those three templates; making the third optional needs only a conditional field, not a new type. Its templates carry a defect worth fixing: all three render the answer on both sides of the divider, so the prompt is never visible on the answer side.
+**The card shape** is Concept–Descriptor–Description with three possible directions: recall the concept given the other two, recall the description given concept and descriptor, and — only with `#flashcard/3way/all` — recall the descriptor given concept and description. The Anki note type for this already exists with exactly those three templates, and the third is made optional by a conditional field rather than a second type. It carries more than the three named fields: gates selecting how many directions a marker asks for, the on-card breadcrumb, a label for what kind of thing a table's concept is, and the card's identity.
 
 **The concept comes from the note's H1 or filename**, or the nearest ancestor heading in multi-topic files. The description is the whole section body — prose, lists, formulae — which is why headings beat an inline one-line form, and which leaves the `::` family unused entirely, so no delimiter ever competes with Dataview inline fields.
 
-**Identity is derived, not written.** The key is `(frontmatter id, anchor)`, where an anchor names WHICH NODE OF THE NOTE the card hangs off — built from text already present. _Widened 2026-08-25 from `(frontmatter id, heading path)`; see **What a card can be anchored to** below._ The binding to an Anki note is stored *in Anki*, as a `src::` tag, because a derived artifact can carry bookkeeping that a source file should not. Nothing generated enters the markdown, and the marker count stays at zero regardless of how many cards a note holds. The sync never deletes: absent cards are suspended in place and flagged, and an explicit `prune` command removes them once reviewed, because an undetected rename is indistinguishable from a deletion. A local sidecar is a cache, rebuildable from those tags. Renaming a heading breaks its key: the old card is suspended and reported with its review history intact, and pairing it with the renamed one is done by hand — automatic rename detection is **not built**. _Amended 2026-08-19._
+**Identity is derived, not written.** The key is `(frontmatter id, anchor)`, where an anchor names WHICH NODE OF THE NOTE the card hangs off — built from text already present. _Widened 2026-08-25 from `(frontmatter id, heading path)`; see **What a card can be anchored to** below._ The binding to an Anki note is held on the Anki side, in an `Identity` field — and, on notes written before that field existed, in a `src::` tag still read for them. A heading card writes nothing into the markdown at any card count; a cloze block is the exception, needing one author-written `^blockid` per block. The sync never deletes: absent cards are suspended in place and flagged, and removing them is a separate explicit act, because an undetected rename is indistinguishable from a deletion. A local sidecar is a cache, rebuildable from what Anki holds. Renaming a heading breaks its key: the old card is suspended and reported with its review history intact, and pairing it with the renamed one is done by hand — automatic rename detection is **not built**. _Amended 2026-08-19._
 
 **Decks mirror folder paths** under a root prefix, with the file deliberately *not* a deck level; otherwise every concept becomes its own two-card deck. Decks are filing only. Study scope comes from filtered decks over tags, and introduction order from new-card position — conflating the three is what sank the earlier design.
 
-**Cloze** uses `==highlight==`, converted to Anki syntax on the way out. One section yields one note, so adding a highlight adds a card rather than churning the key. Deletions are **grouped**, optionally and explicitly: `==text==` is its own group of one keyed by its text, while `==N|text==` joins group `N` and is keyed by the group — so its text may be edited freely and the card keeps its history. Labelling is how an author buys stability, per highlight; two *unlabelled* highlights with identical text are refused, because only position could tell them apart and positional numbering is what silently moves scheduling history between cards.
+**Cloze** is written `==<<text>>==` — the brackets are what make a card, so a bare `==highlight==` stays ordinary emphasis — and is converted to Anki syntax on the way out. A cloze note is scoped to a **block**, not a section, and a block holding deletions with no `^blockid` is refused rather than given an identity that will not hold; a `#flashcard/cloze` heading is a second route, claiming its whole section. Deletions are **grouped**, optionally: `==<<N|text>>==` joins group `N`, and unlabelled groups take the lowest unclaimed number in order of first appearance — so adding a label anywhere renumbers the unlabelled groups around it. Two *unlabelled* highlights with identical text are refused, because only position could tell them apart.
 
 **Tables** are concept–descriptor–description triples written compactly: first cell the concept, column header the descriptor, cell the description. Each row also yields a synthesis card carrying all descriptors together, since a benefit divorced from its cost is trivia. Because both axes are named, tables produce the most robust keys in the design.
 
 **Unordered lists** are covered by plain multi-cloze. **Ordered lists** with progressive disclosure cannot be expressed by a single Anki note and are deferred.
 
-Also deferred, and not rejected: the MOC and authored route, new-card position pushing, the typed-edge graph, structure cards, and automatic deletion (sync flags; an explicit `prune` command deletes).
+Also deferred, and not rejected: the MOC and authored route, new-card position pushing, the typed-edge graph, structure cards, and automatic deletion — the sync only flags and suspends, and the command that would remove a flagged note is unbuilt.
 
 ---
 ## Full
@@ -69,8 +69,10 @@ one-card concept-descriptor shape, `cdd/1way`, did not appear in the ratified mo
 | `#flashcard/sequence` | heading, a list | 1 — items revealed one at a time, on one schedule | Cloze Sequence |
 | `#flashcard/table` | per row and column | n pair cards + 1 row card | mixed |
 
-`table` takes the same direction suffixes (`table/1way`, `/2way`, `/3way`) and a scope suffix
-(`/cells`, `/rows`); `--help` lists all eighteen spellings.
+`table` takes direction suffixes (`table/1way`, `/2way`, `/3way`) and a scope suffix (`/cells`,
+`/rows`), and the two do not combine freely: `table/{n}way/cells` exists, `table/rows` exists, and
+`table/{n}way/rows` deliberately does not — with no cell cards there is nothing for a direction to
+apply to, so the spelling would name a choice that changes nothing. `--help` lists every spelling.
 
 **`3way` and `3way/all` remain as ALIASES** of `cdd/2way` and `cdd/3way` — the same values, so
 rewriting a vault's markers changes no key, no note type and no field, and syncs nothing.
@@ -113,7 +115,7 @@ The numbering, however, means different things in each family — worth stating 
 
 So markers are not freely swappable. Retagging `## Definition` as `#flashcard/2way` produces a card whose front is the bare word "Definition" — nonsense. The choice is coupled to how the heading was named, which matters more once there are two hundred of them.
 
-Everything lives under one `#flashcard/` root, so `#flashcard` finds every card in the vault and the tag pane groups them by kind. Opt-in rather than opt-out: silent card creation is the failure mode worth avoiding, and an unmarked heading doing nothing is easy to reason about.
+Every MARKER lives under one `#flashcard/` root, so the tag pane groups marked headings by kind. It does not find every card: a cloze block is scanned in an unmarked section and a relation is declared under its own heading, so neither carries a `#flashcard` tag anywhere. Opt-in rather than opt-out: silent card creation is the failure mode worth avoiding, and an unmarked heading doing nothing is easy to reason about.
 
 ### The two-field family
 
@@ -143,17 +145,15 @@ Concept, Descriptor and Description — three fields, three possible directions,
 | 2 | concept + descriptor | **description** | yes |
 | 3 | concept + description | **descriptor** | only with `#flashcard/3way/all` |
 
-The Anki note type for this already exists (`3 way Concept-Descriptor` — resolve **by name**; note-type ids are collection-local, so hardcoding one breaks the moment a profile is duplicated) with exactly these three templates in this order. Making the third optional needs no new note type — add a field (`ThreeWay`) and wrap Card 3's *front* in `{{#ThreeWay}}…{{/ThreeWay}}`. Anki generates a card only when its front renders non-empty, which is how the stock "Basic (optional reversed card)" works.
+The Anki note type is `Obsidian Concept-Descriptor` — resolved **by name**, because note-type ids are collection-local and hardcoding one breaks the moment a profile is duplicated — with exactly these three templates in this order. The third is optional without a second note type: a `ThreeWay` field gates Card 3's *front*, and Anki generates a card only when its front renders non-empty, which is how the stock "Basic (optional reversed card)" works.
 
 > **THIS DEFECT NO LONGER EXISTS. Verified 2026-08-27** by reading `Obsidian Concept-Descriptor`
 > out of the live collection: all three FRONTS carry a `class="blank"` marker where their own
 > answer would go, and all three BACKS render the whole triple. The paragraph below described the
 > HAND-MADE note type this tool inherited; the note types it now installs from
-> `resources/note-types/` are idiomatic. `NOTE-TYPES-AND-CONTEXT-DESIGN.md` recorded a reader
+> `resources/note-types/` are idiomatic. `docs/history/NOTE-TYPES-AND-CONTEXT-DESIGN.md` recorded a reader
 > reaching the same conclusion and being unable to say which document was current — so it is said
-> here, with what was read. _Original entry follows._
-
-**Known defect in the existing note type.** All three templates currently render the answer field on both sides of the divider, so the prompt never appears on the answer side and self-grading is impossible. The fix is the idiomatic `{{FrontSide}}<hr id=answer>{{Answer}}`.
+> here, with what was read.
 
 ### Where the concept comes from
 
@@ -260,11 +260,10 @@ advance what the tool can see by looking, since it holds the whole vault at that
 property of the VAULT and not of a note, so adding a third answer months later breaks two cards
 that were fine, and the run that does it says so.
 
-**The note-itself anchor is admitted by the type and produced by nothing yet.** Identity is the
-most expensive thing in this system to change once review history has accumulated, and the
-cheapest while a collection is nearly empty, so its shape was settled ahead of the behaviour that
-fills it. A test asserts that extraction produces only heading anchors, so the day one produces a
-note anchor is a decision somebody made rather than a drift nobody noticed.
+**The note-itself anchor was admitted by the type a day before anything produced one**, on
+purpose: identity is the most expensive thing in this system to change once review history has
+accumulated and the cheapest while a collection is nearly empty. A note carrying a marker in its
+frontmatter and no heading it could have fallen off now produces one, and a test pins that.
 
 **The heading *path*, not the heading text.** The path is the chain of ancestor headings down to the marked one, joined — `CAP Theorem/Definition`, not `Definition`.
 
@@ -298,8 +297,7 @@ one**, and the `src::` tag is what joins them.
 
 So "bookkeeping there costs nothing" is true of the first row and false of the second, and every
 hard decision in this system sits on the seam. **What is NOT weakened is the invariant beside it:
-the tool never writes the vault.** That one is structural — nothing in `extract/`, `plan/`,
-`anki/` or `cli/` opens a vault file for writing — and it is not what this correction is about.
+the tool never writes the vault.** That one is structural — no production source opens a vault file for writing — and it is not what this correction is about.
 
 **Two rulings that read as unrelated are the same ruling seen twice.** An orphan is the case where
 the derived side says *gone* and the accumulated side says *but I hold value*, so the tool suspends
@@ -316,10 +314,10 @@ as *parked* and the other as *safe*. See `docs/findings/EVOLVABILITY.md` for wha
 rather than a nicety: `extract/golden/fixture-cards.txt` pins every identity tag the fixture vault produces and opens
 with `DO NOT REGENERATE THIS FILE`, so rewriting all of them by hand is indistinguishable, in a
 diff, from the blind regeneration it exists to catch. The other anchors therefore take a shape no
-heading anchor can produce — a **leading empty token**, `/p/{property}` and `/n` — which is
+heading anchor can produce — a **leading empty token**, then `/p/{property}`, `/n` or `/b/{anchor}` — which is
 unambiguous because a heading segment is refused when empty both at construction and when decoded,
 so percent-encoding one can never yield an empty string. That invariant is pinned by a test rather
-than trusted, including against headings named `p` and `n` and one containing a slash.
+than trusted, including against headings named `p`, `n` and `b`, and one containing a slash.
 
 **The tag must be encoded, and this is not optional.** _Amended 2026-08-19._ The naive form above cannot work: **Anki tags are whitespace-delimited**, and most headings in a real vault contain spaces — `src::x::CAP Theorem/Definition` silently becomes *two* tags. (Corroboration: the one leftover note in the `POC-test` profile is tagged `Obsidian_to_Anki`; the dead plugin hit the same wall and solved it with an underscore.)
 
@@ -347,7 +345,7 @@ _Amended 2026-08-19. This previously ended "so it surfaces as a relink prompt". 
 
 ### Deletion
 
-**Decided 2026-08-18. Extended 2026-08-19.** The sync itself never deletes. A section that disappears from the markdown leaves its Anki note in place, **suspended** and tagged `orphaned::`, and the run reports what it suspended. A separate, explicit `prune` command lists those notes and deletes them only when asked.
+**Decided 2026-08-18. Extended 2026-08-19.** The sync itself never deletes. A section that disappears from the markdown leaves its Anki note in place, **suspended** and tagged `orphaned::`, and the run reports what it suspended. Removing such a note is a separate, explicit act, done only after the list has been seen. The command for it is unbuilt.
 
 **Suspension, not relocation.** _Decided 2026-08-19._ A tag alone was too quiet: the card stayed in the daily review rotation, so a card whose source heading no longer exists went on being asked, and the only sign was a tag nobody reads. Suspension is Anki's own mechanism for exactly this — the card keeps its deck, its interval and its whole scheduling state, and simply leaves the queue until unsuspended. Moving orphans into a holding deck was considered and rejected: decks mirror **folders** while the identity tag encodes the **heading path**, so once a heading is gone the original folder is not recomputable and the card's current deck is the only surviving record of it. Any mirrored path would be a copy of that record, going stale the moment folders are reorganised.
 
@@ -370,13 +368,13 @@ The third is not closed and cannot be by this means: **a vault whose files have 
 > revisited.** So the paragraph below currently reads as a live, valid acceptance of a hazard whose
 > own stated precondition no longer holds: a mistimed run over a half-materialised vault now
 > empties the review queue rather than merely tagging it, and a `prune` command would make that
-> irreversible. `docs/findings/EVOLVABILITY.md` §3.4 carries the full chain and programme item 6 carries the
+> irreversible. `docs/findings/EVOLVABILITY.md` §3.4 carries the full chain, and bead `oas-oyg` carries the
 > candidate guard — refuse a run whose COMPLETE scan yields zero cards while the collection holds
 > some, which needs no proportion and therefore no unjustifiable number.
 
 It is accepted for v0 because the damage is self-repairing: flagging is reversible, and the next run over a complete vault clears the flags. It stops being cheap the moment flagged cards are also **suspended** — a mistimed sync would then empty the review queue until the next correct run. Revisit before or alongside that work; the candidates considered and not taken were refusing when the vault yields zero cards while the collection holds some, and refusing above some proportion of the collection going orphan at once. The second was rejected on the grounds that the proportion is a number nobody can justify.
 
-It costs the reconciler nothing: `Flag` is already one of the `SyncAction` cases, and `prune` is a separate command reading those tags.
+It costs the reconciler nothing: `Flag` is already one of the `SyncAction` cases, and removal is a separate act reading those tags.
 
 ### Decks
 
@@ -437,7 +435,7 @@ A table row is a set of concept–descriptor–description triples written compa
 - column header → **Descriptor**
 - cell → **Description**
 
-Plus one **row card** per row: concept on the front, all descriptors on the back, as a Basic note. This is the card that preserves the relation — a benefit divorced from its cost is trivia, and the contrast is the point. Emit it only when a row carries **two or more** descriptors; below that it merely duplicates the pair card.
+Plus one **row card** per row, as a Basic note: the row rendered as a table with its values blanked on the front, and the same table filled in on the back, so the answer replaces the question rather than appearing beneath it. This is the card that preserves the relation — a benefit divorced from its cost is trivia, and the contrast is the point. Emit it only when a row carries **two or more** descriptors; below that it merely duplicates the pair card.
 
 **Tables give the most robust keys in the design**, because both axes are named. Reordering rows or columns leaves keys intact. Adding a column adds cards without disturbing existing ones. Editing a cell's value updates a card in place.
 
@@ -448,44 +446,53 @@ Plus one **row card** per row: concept on the front, all descriptors on the back
 > **SHIPPED, CONTRADICTING THE SENTENCE BELOW. Amended 2026-08-27.** `#flashcard/sequence` exists,
 > has its own note type (`Obsidian Cloze Sequence`, **one** template), a fixture, and a section in
 > `README.md` describing it as *"one card, whose items reveal one at a time, on one schedule"*.
-> `NOTE-TYPES-AND-CONTEXT-DESIGN.md` argued that generating N notes was "the opposite of what is
+> `docs/history/NOTE-TYPES-AND-CONTEXT-DESIGN.md` argued that generating N notes was "the opposite of what is
 > wanted", and the built shape agrees with it. The sentence below is left in place because its
 > REASONING about what one Anki note can express is what led to the cloze-sequence design; it is
-> the conclusion that was overtaken. _Original follows._
+> the conclusion that was overtaken.
 
-**Ordered** — sequence is the knowledge, and progressive disclosure (each card revealing prior items and hiding the rest) **cannot be expressed by one Anki note**: a cloze note has a single text, and its cards differ only in which deletion is hidden. True progressive disclosure requires generating N notes, one per step — which is what the Cloze Overlapper add-on does.
-
-Deferred. Revisit only when a list appears where sequence genuinely matters and the plain form demonstrably fails.
+**Ordered** — `#flashcard/sequence` makes one note whose items reveal one at a time on one
+schedule. The reasoning that got there is worth keeping: progressive disclosure in the strict sense
+— each card revealing prior items and hiding the rest — cannot be expressed by one Anki note, since
+a cloze note has one text and its cards differ only in which deletion is hidden. Generating N notes
+was rejected, and what shipped reveals within a single note instead.
 
 ### Deliberately deferred
 
 Not rejected — out of scope until the basic path is in daily use:
 
 - **MOC parsing and the authored route**, and therefore new-card position pushing
-- **The emergent typed-edge graph** (`kind-of`, `part-of`) and anything derived from it
+- **The typed-edge GRAPH** (`kind-of`, `part-of`) and anything derived from it. A relation already
+  becomes a card — see *Cards made from a relation* — but nothing builds, traverses or queries the
+  graph those relations describe, and *Structure cards* below is the thing that would be derived
+  from it
 - **Structure cards** generated from the map
-- **Ordered-list progressive disclosure**
-- **Automatic deletion.** Sync only ever suspends and flags; a separate explicit `prune` command removes flagged notes after the list has been reviewed — see *Deletion*
+- **Automatic deletion.** Sync only ever suspends and flags; removing a flagged note is a separate explicit act, and the command for it is unbuilt — see *Deletion*
 - **Automatic rename detection.** _Cut 2026-08-19, having been assumed by earlier drafts of this document._ Judged a subsystem rather than a feature: the approaches explored were note-id scoping, deterministic analysis of the vault's git history, a language model reading those diffs, similarity ranking into review buckets, Anki-side evidence, author-maintained per-heading identifiers, an explicit `relink` command, and the interaction and safety questions around confirming a match. Two findings worth keeping: the key's `(frontmatter id, heading path)` shape means candidates are confined to the **cards sharing one note id**, never a collection-wide search; and the vault's git history is the *input* to any semantic approach rather than an alternative to it, since a renamed heading is a one-line diff — a record of the edit, not an inference from two strings. Until it exists, a rename is reconciled by hand, which suspension makes lossless
 
 ### v0
 
-_Corrected 2026-08-19. The earlier pseudocode looped over markdown and did `findNotes(tag=key) → update, else addNote`. That is **structurally incapable of detecting an orphan**, because an orphan is a key present in Anki and absent from markdown — invisible to a markdown-driven loop. Since orphan detection is what the flag-then-prune ruling rests on, the shape has to be a diff of two sets, not a lookup per card._
+The shape is a **diff of two sets**, not a lookup per card. A markdown-driven loop —
+`findNotes(key) → update, else addNote` — is structurally incapable of detecting an orphan, because
+an orphan is a key present in Anki and absent from markdown, which such a loop never visits. Orphan
+detection is what the flag-then-suspend ruling rests on, so the shape follows from it.
 
 ```
 desired  = scan the vault            → Map[CardKey, CardSpec]
-observed = findNotes("tag:src::*")   → one query, then batched notesInfo
-                                     → Map[CardKey, ObservedNote]
+observed = one query for every note this   → then batched notesInfo
+           tool owns, by field or legacy tag   → Map[CardKey, ObservedNote]
 
 diff:  in desired, not observed   → Create
-       in both, content differs   → Update
-       in both, deck differs      → Move
+       in both, content differs   → Update      (a deck move is a CHANGE inside one)
+       in both, note type differs → Retype      (deferred unless asked — history may cost)
        in observed, not desired   → Flag        (never delete — see Deletion)
+       previously flagged, back   → Unflag
+       legacy tag, no field       → CarryIdentity
 ```
 
 Two details the shape depends on:
 
-- **Tags go inline on `addNote`.** Creating and then tagging is two calls, and an interruption between them leaves a note with no `src::` tag — not merely unmatched but *unenumerable*, invisible to lookup, reconciler and prune forever.
-- **`updateNoteFields` has no early-out** — it bumps `mod`/`usn` even when the text is identical. So "zero changes on re-run" has to be decided *before* the call, by carrying a second `sha::<hex>` tag over a canonical serialisation of (notetype, fields). That is free, since the bulk `notesInfo` already returns tags.
+- **Identity goes inline on `addNote`.** Creating and then writing it is two calls, and an interruption between them leaves a note nothing can find — not merely unmatched but *unenumerable*, invisible to lookup and reconciler forever.
+- **`updateNoteFields` has no early-out** — it bumps `mod`/`usn` even when the text is identical. So "zero changes on re-run" has to be decided *before* the call, by carrying a `sha::<hex>` tag over a canonical serialisation of (notetype, fields), with the identity field excluded from the hash. That is free, since the bulk `notesInfo` already returns tags.
 
 Nothing else. If a MOC parser appears before a single card has been reviewed, the scope has been lost.
