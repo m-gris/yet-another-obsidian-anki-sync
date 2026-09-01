@@ -1,5 +1,11 @@
 # Learning Model
 
+> **Work on this document** — `bd list --all --spec docs/reference/LEARNING-MODEL.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding.
+> **This document records the pedagogy the tool serves, never progress** — a status kept in
+> two places goes stale in one of them.
+
 *The pedagogical reasoning behind this spaced-repetition setup. Deliberately tool-agnostic — if Obsidian, Anki, and markdown were all replaced tomorrow, everything below would still hold.*
 
 > **Provenance of the citations.** Every study named here — Bransford & Johnson, Ausubel, Rohrer & Taylor, Kornell & Bjork, Sweller, the method of loci, and SuperMemo's rules — was recalled by the assistant and has **not been independently checked**. [REQUIREMENTS.md](./REQUIREMENTS.md) marks the evidence class of every claim; this document did not, which let recalled literature read as established fact. The direction of each finding is standard and widely reported; specific figures, dates and experimental details should be verified before being quoted anywhere that matters.

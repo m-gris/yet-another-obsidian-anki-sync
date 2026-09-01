@@ -1,5 +1,11 @@
 # Card Model
 
+> **Work on this document** — `bd list --all --spec docs/reference/CARD-MODEL.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding.
+> **This document describes the card model as it stands, never progress** — a status kept in
+> two places goes stale in one of them.
+
 _How markdown becomes Anki cards: what is marked, what is generated, and how identity survives editing. Requirements and their evidence live in [REQUIREMENTS.md](./REQUIREMENTS.md); the pedagogy behind them in [LEARNING-MODEL.md](./LEARNING-MODEL.md)._
 
 ---

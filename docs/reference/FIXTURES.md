@@ -1,5 +1,11 @@
 # Fixture manifest
 
+> **Work on this document** — `bd list --all --spec docs/reference/FIXTURES.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding.
+> **This document says what each fixture is for, never progress** — a status kept in two
+> places goes stale in one of them.
+
 This file is the declared intent of the test corpus: for every fixture note, which
 specific case it exists to prove. It is the defence against the failure mode where a
 fixture that quietly carries the only instance of a case gets deleted later as
@@ -14,13 +20,13 @@ Obsidian body syntax.
 ⚠️ **It is NOT wholly a happy path, and this paragraph used to claim it was.** _Amended
 2026-08-21, from a run of `inspect --vault-path dummy-vault` rather than from memory._ Two
 of its twelve notes are deliberate traps that a well-meaning tidy-up would silently retire,
-so the vault as it stands **cannot be synced at all** — the run reports 12 files, 55 notes,
+so the vault as it stands **cannot be synced at all** — the run reports 12 files, 58 notes,
 **2 expected failures** and **3 deliberate duplicate keys**, and exits 2:
 
 - `Patterns/Shallow-Nesting.md` — its two-space list indentation IS the fixture. Re-indent
   it to four spaces and the refusal stops firing, this file's expected failure disappears,
   and the test that counts the vault's failures goes green while proving nothing.
-- `Patterns/Table-Edge-Cases.md` — its repeated `Retry` row mints two cards with **the same
+- `Patterns/Table-Edge-Cases.md` — its repeated `Retry` row mints three cards with **the same
   identity**, on purpose. Duplicate identities are fatal by design, so nothing is planned
   and nothing is written. To exercise the write path, copy the vault WITHOUT this file
   rather than editing it.
@@ -31,7 +37,7 @@ there, because this is exactly the kind of file someone deletes for looking brok
 **`hostile-vaults/`** is not a vault. It is a directory of self-contained mini-vaults,
 one per case, each of which is a **regression test against silent corruption**. They are
 not examples of good authoring, and nothing in them should be copied into a real vault.
-Each hostile note states in its own prose that it is a fixture and what the correct
+Every hostile note but the empty one states in its own prose that it is a fixture and what the correct
 behaviour is, so that a reader who opens the file without this manifest is not misled.
 
 They live *outside* `dummy-vault/` for a structural reason, not a tidiness one: a vault
@@ -60,23 +66,24 @@ A heading opts in by carrying a marker: `#flashcard/1way`, `/2way`, `/3way`, `/3
 the seven cases are `Marker.fromToken` in `model/Marker.scala`, read 2026-08-21.) Unmarked
 headings generate nothing but still contribute to the path.
 A card's identity key is `(frontmatter id, heading path)`, where the heading path is the
-chain of ancestor headings joined with `/`. Decks mirror the **folder** path; the file is
+chain of ancestor headings, held as a list of segments. Decks mirror the **folder** path; the file is
 not a deck level.
 
 ## `dummy-vault/` — the positive corpus, two deliberate failures included
 
 Expected decks: `Anatomy`, `Patterns`, `Patterns::Nested::Deep`, `System-Design` — confirmed
-by an `inspect` run on 2026-08-21, which also reports the per-deck counts 14 / 21 / 2 / 18.
+by an `inspect` run, which prints them under the `Obsidian::` root and reports the per-deck
+counts 17 / 21 / 2 / 18.
 
 All twelve notes are listed. _Three were missing from this table until 2026-08-21:
 `Anatomy/Body-Shapes.md`, `Anatomy/Sequences.md` and `Patterns/Shallow-Nesting.md`._
 
 | File | `id:` | Markers | The case it exists to prove |
 | --- | --- | --- | --- |
-| `Anatomy/Body-Shapes.md` | `fix-body-shapes` | 2 × `2way`, 3 × `cloze`, 1 × `table` | **The body-CONTENT corpus: one section per construct a card body may hold** — a bullet list, a fenced code block, a table, a plain-prose cloze, a labelled-group cloze, and a cloze whose body is several blocks. Its own prose gives the reason: until 2026-08-20 four of those reached Anki as *nothing at all*, with the card created and looking correct, so the note exists to make that visible in the fixture and not only in a unit test. Two further sole instances live here. (a) The card that motivated the `Context` field — `## Cranial bones and their sutures` yields `Frontal` / `Anterior border`, which on the concept-descriptor note type's second template is the whole question and cannot be answered without knowing whether "Frontal" is a bone, a lobe or a cortex; the worked example is at `extract/CardContext.scala`. (b) `## Bones of the hand, in two parts` is the only cloze section in the corpus whose body is **more than one block**, so it is the only fixture that reaches the separator joining one block to the next. |
+| `Anatomy/Body-Shapes.md` | `fix-body-shapes` | 4 × `2way`, 3 × `cloze`, 1 × `table` | **The body-CONTENT corpus: one section per construct a card body may hold** — a bullet list, a fenced code block, a table, a plain-prose cloze, a labelled-group cloze, and a cloze whose body is several blocks. Its own prose gives the reason: until 2026-08-20 four of those reached Anki as *nothing at all*, with the card created and looking correct, so the note exists to make that visible in the fixture and not only in a unit test. Two further sole instances live here. (a) The card that motivated the `Context` field — `## Cranial bones and their sutures` yields `Frontal` / `Anterior border`, which on the concept-descriptor note type's second template is the whole question and cannot be answered without knowing whether "Frontal" is a bone, a lobe or a cortex; the worked example is at `extract/CardContext.scala`. (b) `## Bones of the hand, in two parts` is the only cloze section in the corpus whose body is **more than one block**, so it is the only fixture that reaches the separator joining one block to the next. |
 | `Anatomy/Bones.md` | `fix-bones` | 2 × `cloze`, 1 × block cloze | The first of the two notes outside the `System-Design` / `Patterns` trees. Proves (a) several `==<<…>>==` deletions inside one card body, (b) a second top-level folder becoming a second deck root, (c) **a block cloze no marker asked for** — `## Where marrow sits` carries no marker and its paragraph is a card anyway, keyed by the `^marrow-sites` its author wrote. Without (c) the vault contained no `^blockid` at all and the golden pinned no block-anchored card, so a whole shipped card kind had no end-to-end coverage. Its subject matter is deliberately not distributed systems: the tool must not be coupled to one domain. |
 | `Anatomy/Sequences.md` | `fix-sequences` | 1 × `sequence` | The **only `#flashcard/sequence` note in the whole corpus** — one card whose list items are revealed one at a time, on one schedule. It also demonstrates the shape that *works*, and the demonstration is the point: everything in the body that is not a list item is printed on the QUESTION side, so a lead-in line is a gift and a sentence written after the list is a spoiler. That inversion is not refused by the tool, only documented (`model/Marker.scala`, `case Sequence`), which is why a fixture has to carry it. |
-| `Patterns/Messaging.md` | `fix-messaging` | 1 × `table` | Heading text containing the path-join character: `## Cost / benefit`. Probes whether `/` inside a segment is escaped before the heading path is joined. Also the only **well-formed** table card — three columns, one concept plus two descriptors — against which `Table-Edge-Cases.md` is the degenerate contrast. The `/` must not be tidied away. This one section is nine cards, which makes it the file that shows the blast radius of open item 1 in `HANDOFF.md`: one refusal inside a `/table` section orphans every card that table produced. |
+| `Patterns/Messaging.md` | `fix-messaging` | 1 × `table` | Heading text containing the path-join character: `## Cost / benefit`. Probes whether `/` inside a segment is escaped before the heading path is joined. Also a **well-formed** table card — three columns, one concept plus two descriptors — against which `Table-Edge-Cases.md` is the degenerate contrast. The `/` must not be tidied away. This one section is nine cards, which makes it the file that shows the blast radius of a refusal inside a table: one refusal inside a `/table` section orphans every card that table produced. |
 | `Patterns/Nested/Deep/Quorums.md` | `fix-quorums` | 2 × `1way` | The **only deep-folder note**. Proves the deck mirrors the full folder chain (`Patterns::Nested::Deep`) and that the file name does *not* become a deck level. |
 | `Patterns/Shallow-Nesting.md` | `fix-shallow-nesting` | 1 × `1way` | ⚠️ **A DELIBERATE FAILURE. DO NOT RE-INDENT IT.** Its nested list items are indented two spaces, which CommonMark and Obsidian read as nesting and this tool's parser reads as the start of a NEW list — so the card would say something the note does not. The note exists to exercise the refusal END TO END: a real file on disk, through the scan, to a failure carrying the file's own line numbers (`inspect` names lines 26 and 28 of this file). Re-indenting to four spaces makes the check stop firing, removes this file's expected failure, and turns the test that counts the vault's failures green while proving nothing. Nothing about the input is exotic — Prettier, web clippers and any editor configured for two-space indentation all produce it. |
 | `Patterns/Table-Edge-Cases.md` | `fix-table-edges` | 3 × `table` | Degenerate but legal tables, one per section, each isolating one variable: a concept column with no descriptor columns; two rows sharing a concept; exactly one descriptor column. ⚠️ **THE SECOND AND THIRD OF THOSE ARE TRAPS, NOT OVERSIGHTS.** The `## Concept column only` section is one of the vault's two expected failures — `inspect` reports "has a concept column but no descriptor columns, so it yields no cards". The repeated `Retry` row mints **three duplicate card keys** (the row card, and both of its pair cards), which is fatal by design and is why `sync` cannot write `dummy-vault` at all. Do not deduplicate the rows and do not add a descriptor column: copy the vault without this file instead. |
@@ -104,7 +111,7 @@ All twelve notes are listed. _Three were missing from this table until 2026-08-2
 
 ## Coverage
 
-**Marker variants in `dummy-vault/`.** `1way` (7), `2way` (5), `3way` (10), `3way/all` (1),
+**Marker variants in `dummy-vault/`.** `1way` (7), `2way` (7), `3way` (10), `3way/all` (1),
 `cloze` (5), `table` (5), `sequence` (1). _Re-counted 2026-08-21 by grepping the vault; four
 of these numbers were stale, and `sequence` was absent._ Every one of the seven variants
 `Marker.fromToken` accepts has at least one positive fixture.

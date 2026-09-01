@@ -1,5 +1,11 @@
 # What Anki and AnkiConnect actually do, as measured
 
+> **Work on this document** — `bd list --all --spec docs/findings/ANKICONNECT-BEHAVIOUR.md`
+>
+> Closed means built or measured, and the closing reason says what was found; open means
+> outstanding. **This document records measurements, never progress** — a status kept in two
+> places goes stale in one of them.
+
 _Written 2026-08-28. Every claim here was established by running something against a live
 collection or by reading the installed add-on's own source, and each one says which. It follows
 this repository's convention of opening with the answer rather than the three-layer TLDR /

@@ -1,5 +1,11 @@
 # Requirements
 
+> **Work on this document** — `bd list --all --spec docs/reference/REQUIREMENTS.md`
+>
+> Closed means built, and the closing reason says what shipped; open means outstanding.
+> **This document records what the tool must do and why, never progress** — a status kept in
+> two places goes stale in one of them.
+
 _What this spaced-repetition setup must do, what it must not, and what remains undecided. The reasoning behind the pedagogical claims lives in [LEARNING-MODEL.md](./LEARNING-MODEL.md)._
 
 ---
