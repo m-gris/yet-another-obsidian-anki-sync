@@ -27,8 +27,9 @@ since by something these read-only calls cannot account for.
 _Amended 2026-08-21 (second amendment). This paragraph previously said no agent had ever run
 `install-note-types` against a live collection._
 
-What is still NOT done: nobody has reviewed a card produced by one of these note types on a
-screen.
+Marc reviewed real cards on 2026-08-22 and asked for two changes, both of which shipped: the
+breadcrumb at the same size as the material being reviewed rather than shrunk, and Anki's own deck
+name shown beside it.
 
 ---
 
@@ -293,24 +294,31 @@ non-empty `Context`, the first of them reading `Messaging Patterns › Cost / be
 _Amended 2026-08-21. This paragraph previously said "Populating the field is a separate slice;
 nothing writes it yet."_
 
-`Context` is **last** on every type for three reasons: Anki's Sort Field defaults to field 1,
-and a breadcrumb there would fill the Browse list; `modelFieldAdd` appends; and appending
-keeps every existing field position stable.
+`Context` sits **after the content fields** on every type, for three reasons: Anki's Sort Field
+defaults to field 1, and a breadcrumb there would fill the Browse list; `modelFieldAdd` appends;
+and appending keeps every existing field position stable. It was last when it was added; the
+fields that have arrived since — the gates, `Reveal`, `ConceptLabel`, and `Identity`, which is
+last on all five today — were appended for the same reason and sit after it. The authoritative
+order is `Marker.FieldOrder`, which a test ties to the manifests.
 
 ### The snippet
 
 One line, byte-identical everywhere it appears:
 
 ```html
-{{#Context}}<div class="context">{{Context}}</div>{{/Context}}
+<div class="context"><span class="deck">{{Deck}}</span>{{#Context}}<span class="sep"> › </span>{{Context}}{{/Context}}</div>
 ```
 
 It goes on the **question** side, and reaches the answer side through `{{FrontSide}}` — except
 on `Obsidian Cloze`, whose back template does not use `{{FrontSide}}`, so there it is written
 twice.
 
-The `{{#Context}}` wrapper means an empty `Context` emits no `<div>`, and therefore no rule and
-no margin, on cards whose chain is empty.
+The `<div>` and the deck render unconditionally; the `{{#Context}}` section guards only the
+separator and the heading chain, so a card whose chain is empty still shows which deck it is
+filed in. _It was the whole line that used to be conditional. That changed on 2026-08-22 when the
+deck was added, and it is why the gate test was strengthened at the same time: with the line
+always rendering, anything placed outside the note type's own conditional section would generate
+an extra card for every note of that type._
 
 Two placement rules that are not cosmetic:
 
@@ -325,10 +333,11 @@ Two placement rules that are not cosmetic:
    **2** cards each, and the single note with `ThreeWay` set has 3. So the snippet where it
    actually sits — inside the wrapper, see
    `templates/card-3-recall-descriptor.front.html` — does not generate a third card, which is
-   the check this paragraph used to ask for. The other half is still **unmeasured**: that
-   placing the snippet OUTSIDE the wrapper WOULD generate that third card is a prediction from
-   Anki's card-generation rule, not an observation — measuring it means writing a deliberately
-   mis-placed template into a collection, which nobody has done.
+   the check this paragraph used to ask for. That placing it OUTSIDE the wrapper would generate
+   that third card remains a prediction from Anki's card-generation rule rather than an
+   observation, and it will stay one: `anki/NoteTypeAssets.test.scala` now asserts that the third
+   card's front begins and ends with the gate, so the mis-placement cannot reach a collection to
+   be measured.
 2. **On `cloze-sequence` the snippet is a new first line, above `<h4>{{Title}}</h4>` and
    outside `<div id="text">`.** That front template hides every `#text li` and the stylesheet
    dims `#text` to `opacity: 0.5`; context is the frame, not dimmed answer.
@@ -337,7 +346,7 @@ Two placement rules that are not cosmetic:
 
 ```css
 .context {
-  font-size: 0.6em;
+  font-size: 1em;
   line-height: 1.35;
   color: #8a8a8a;
   text-align: left;
@@ -353,14 +362,18 @@ Two placement rules that are not cosmetic:
 
 Three independent signals, because any one alone is weak on a phone screen: `text-align: left`
 against the card's centred text (a *centred* breadcrumb above a centred prompt reads as a
-title, i.e. as part of the question); 0.6em mid-grey for subordination; and a hairline rule
-lighter than `<hr id=answer>`.
+title, i.e. as part of the question); mid-grey for subordination; and a hairline rule lighter
+than `<hr id=answer>`.
 
-Two things about this block that are **not verified**: whether 0.6em is legible on a phone
-(it is an educated starting point, not a measurement), and whether the night-mode class is
-`.nightMode`, `.night_mode`, or both on the Anki versions Marc reviews with. Both selectors
-are written. One data point in favour of `.nightMode`: Anki's own stock `Cloze` stylesheet, as
-captured on 2026-08-21, uses `.nightMode .cloze`.
+_The size was 0.6em until 2026-08-22, when Marc reviewed real cards and asked for the breadcrumb
+at full size — shrinking it had made it hard to read rather than merely subordinate. Colour and
+rule carry the subordination on their own._
+
+One thing here is still **not verified**: whether the night-mode class is `.nightMode`,
+`.night_mode`, or both on the Anki versions Marc reviews with. Both selectors are written in all
+five stylesheets. One data point in favour of `.nightMode`: Anki's own stock `Cloze` stylesheet,
+as captured on 2026-08-21, uses `.nightMode .cloze`. One look at a card in dark mode retires the
+duplicate.
 
 ### One deliberate omission, and its limit
 
