@@ -6,9 +6,9 @@
 > **This document records the pedagogy the tool serves, never progress** — a status kept in
 > two places goes stale in one of them.
 
-*The pedagogical reasoning behind this spaced-repetition setup. Deliberately tool-agnostic — if Obsidian, Anki, and markdown were all replaced tomorrow, everything below would still hold.*
+*The pedagogical reasoning behind this spaced-repetition setup. The pedagogy is tool-agnostic — if Obsidian, Anki and markdown were all replaced tomorrow, the arguments would still hold. The last section is not: it names what this tool's note types and Anki's own settings do about one of them.*
 
-> **Provenance of the citations.** Every study named here — Bransford & Johnson, Ausubel, Rohrer & Taylor, Kornell & Bjork, Sweller, the method of loci, and SuperMemo's rules — was recalled by the assistant and has **not been independently checked**. [REQUIREMENTS.md](./REQUIREMENTS.md) marks the evidence class of every claim; this document did not, which let recalled literature read as established fact. The direction of each finding is standard and widely reported; specific figures, dates and experimental details should be verified before being quoted anywhere that matters.
+> **Provenance of the citations.** Every study named here — Bransford & Johnson, Ausubel, Rohrer & Taylor, Kornell & Bjork, the method of loci, and SuperMemo's rules — was recalled by the assistant and has **not been independently checked**. [REQUIREMENTS.md](./REQUIREMENTS.md) marks the evidence class of every claim; this document did not, which let recalled literature read as established fact. The direction of each finding is standard and widely reported; specific figures, dates and experimental details should be verified before being quoted anywhere that matters.
 
 ---
 
@@ -118,23 +118,27 @@ Conflating them produces the standard rebuttal ("shuffling is better, the algori
 
 ### Siblings must not share a session
 
-A fact asked several ways produces several cards, and each card's answer is visible on its siblings' prompts. A three-way concept-descriptor card is the clearest case: every card shows two of the three fields and asks for the third, so each answer is printed on the front of both the others. Meeting two of them in one sitting makes the second a recognition test rather than a recall one — the same failure mode as a content card met before its concept is understood, and just as invisible from the inside.
+A fact asked several ways produces several cards, and each card's answer is visible on its siblings' prompts. A concept-descriptor note asked all three ways is the clearest case: each card shows two of the three fields and asks for the third, so each answer is printed on the fronts of the others. Asked two ways — the default — there are two such cards rather than three. Meeting two of them in one sitting makes the second a recognition test rather than a recall one — the same failure mode as a content card met before its concept is understood, and just as invisible from the inside.
 
 This is an **interference** claim, not an ordering one. It concerns the several askings of a single fact, not the sequence of distinct concepts, and it applies at introduction, in review and mid-learning alike.
 
-*Realised on 2026-08-27 by Anki's three burying settings — new, review and interday learning siblings — which defer a sibling by a day and re-defer it on each encounter. It is the smallest available step toward the ordering programme above: nothing is authored, computed or written, and it is a checkbox rather than a mechanism.*
+*Partly realised on 2026-08-27 by Anki's three burying settings — new, review and interday learning siblings — which defer a sibling by a day and re-defer it on each encounter. It is the smallest available step toward the ordering programme above: nothing is authored, computed or written, and it is a checkbox rather than a mechanism.*
 
 ### Ending the blocked phase
 
-A block graduates when **every** card in it is past a one-week review horizon.
+_None of this is built, and the whole area — controlling Anki's own scheduling — is secondary and
+for later. The shape below is a sketch, and the week is an arbitrary starting value chosen for its
+order of magnitude rather than measured._
+
+A block would graduate when **every** card in it is past a review horizon of roughly a week.
 
 - **Every, not average.** A weak card must not hide behind strong ones; the measure is the minimum over the block.
-- **Why a week.** A card scheduled more than seven days out has survived successful recalls *with gaps*, which is evidence of more than session-local comfort — the caveat above, addressed directly.
-- **Configurable.** The horizon is a knob, not a constant.
+- **Why about a week.** A card scheduled more than a few days out has survived successful recalls *with gaps*, which is evidence of more than session-local comfort — the caveat above, addressed directly. The argument is for *some* gap; seven days is a placeholder, not a finding.
+- **Configurable.** The horizon would be a knob, not a constant — which is the other reason not to argue about the number now.
 
 Three refinements:
 
-1. **Latch it.** A lapse drops a mature card's interval back below the horizon, which would silently un-graduate the block and cause oscillation. Once a block has passed, it stays passed.
+1. **Latch it.** A lapse drops a mature card's interval back below the horizon, which would silently un-graduate the block and cause oscillation. So once a block has passed it would stay passed.
 2. **Define membership against un-introduced cards.** If a block still holds cards never seen, the rule is either trivially satisfied by the introduced subset or never satisfiable, depending on how membership is counted. The intended reading is: all cards introduced, *and* all past the horizon.
 3. **Treat a stalled block as a signal.** One pathological card can hold a block indefinitely — and such a card is usually badly written rather than genuinely hard. "This block has not graduated in three weeks" is useful information about card quality, and should surface rather than be worked around.
 
