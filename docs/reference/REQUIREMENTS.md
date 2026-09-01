@@ -8,17 +8,17 @@ _What this spaced-repetition setup must do, what it must not, and what remains u
 
 Author in nvim, review in Anki — a stated asymmetry that makes Anki a preference satisfied rather than a compromise.
 
-Cards live inside the documents that explain them: a heading marked under the `#flashcard/` root — `1way`, `2way`, `3way`, `3way/all`, `cloze` or `table` — becomes an Anki note, and unmarked headings generate nothing.
+Cards live inside the documents that explain them: a heading marked under the `#flashcard/` root becomes an Anki note, and unmarked headings generate nothing. `--help` lists every marker the tool accepts, from a table a test ties to the source.
 
-Card identity is **derived** from `(frontmatter id, heading path)` and stored as a tag inside Anki, so nothing generated is ever written into the markdown — superseding the earlier decision to accept an in-file identifier.
+Card identity is **derived** from text already in the note and held on the Anki side, so nothing generated is ever written into the markdown — superseding the earlier decision to accept an in-file identifier.
 
-⚠️ That key has no room for a vault, so **one vault per Anki profile** — and nothing enforces it. Syncing a second vault into a collection flags and suspends the first vault's whole card set.
+The key records no vault, so a collection cannot yet tell one vault's cards from another's. **Ruled 2026-09-01:** the note carries its vault's absolute path in a field, and the leaf of that path is what a run matches on — so moving the vault does not orphan the collection. The leaf also becomes a deck level, for legibility rather than for correctness.
 
 A survey of all 92 Obsidian spaced-repetition plugins found that **none generates concept–descriptor cards**, and that Obsidian_to_Anki — the only bridge that could carry a custom note type — is dead and delisted. Hence a standalone sync tool, decided over an Obsidian plugin.
 
-How things look and how they are filed are options to compose, not decisions the tool makes for you; identity, history and refusing-rather-than-guessing are not, because an option to be silently wrong is a defect with a switch on it.
+How things are filed is an option to compose, not a decision the tool makes for you; identity, history, refusing-rather-than-guessing, and what a card shows beside its prompt are not, because an option to be silently wrong is a defect with a switch on it.
 
-Deferred, not rejected: the MOC and authored route, new-card position pushing, the typed-edge graph, structure cards, and ordered-list disclosure.
+Deferred, not rejected: the MOC and authored route, and new-card position pushing.
 
 ---
 
@@ -26,37 +26,34 @@ Deferred, not rejected: the MOC and authored route, new-card position pushing, t
 
 Every requirement carries an evidence class — **stated**, **verified**, **unratified**, or **derived** — because an earlier round of machine-generated documents had several assertions absorbed as settled preferences without anyone confirming them. That failure recurred during this session and is annotated wherever it happened.
 
-**Accepted.** Authoring happens in nvim; reviewing in a GUI is fine. Cards live inside the documents they come from rather than in a parallel representation. A concept–descriptor–description note type exists and works, with three retrieval directions of which two are default. New material enters sequentially and reviews interleave. Scheduling is delegated to FSRS. Files stay plain text, locally owned and version-controlled. Metadata in the notes is a cost to minimise rather than a veto — and in the event, the design needs none: identity is derived from text already present, with the binding stored in Anki, which is a derived artifact and can carry bookkeeping the source should not.
+**Accepted.** Authoring happens in nvim; reviewing in a GUI is fine. Cards live inside the documents they come from rather than in a parallel representation. A concept–descriptor–description note type exists and works, with three retrieval directions of which two are default. New material enters sequentially and reviews interleave. Scheduling is delegated to FSRS. Files stay plain text, locally owned and version-controlled. Metadata in the notes is a cost to minimise rather than a veto — and in the event, the design needs none: identity is derived from text already present, with the binding held on the Anki side, which can carry bookkeeping the source should not.
 
-**Composability — stated 2026-08-22.** Presentation and organisation are options the reviewer composes into a personal setup; correctness is not. Identity, review history, and refusing rather than guessing are rigid, because being wrong there costs data and an option to be silently wrong is a defect with a switch on it. Deck shape, what appears on a card, and which lens you review through are soft, because there is no single right way to organise knowledge. Where a decision is presentational, the mechanism is exposed rather than a preference embedded — and the failure to watch for is defending a taste as though it were an invariant.
+**Composability — stated 2026-08-22.** Presentation and organisation are options the reviewer composes into a personal setup; correctness is not. Identity, review history, and refusing rather than guessing are rigid, because being wrong there costs data and an option to be silently wrong is a defect with a switch on it. Deck shape and which lens you review through are soft, because there is no single right way to organise knowledge. What a card DISPLAYS is not: it is whatever the card's own face does not already give away, which is a rule rather than a taste. Where a decision is presentational, the mechanism is exposed rather than a preference embedded — and the failure to watch for is defending a taste as though it were an invariant.
 
 **Rejected.** Automatic mastery gating with computed thresholds — though the *need* for gating is real and experienced, and only the mechanism is thrown out. Deck hierarchy as a lock, since a deck supplies a set rather than an order. "Master the high level before seeing details" in its strong form. Obsidian-only review. Generating cards from a parallel YAML file. And org-mode, whose format is better suited but whose review tooling is Emacs-resident.
 
 **The landscape, surveyed.** All 92 spaced-repetition plugins in Obsidian's registry were enumerated and read. None generates concept–descriptor cards. Obsidian_to_Anki, the only bridge able to carry a custom note type, was last pushed in June 2024, carries 274 open issues, and has been delisted. Yanki forces one file per card and four fixed types; Decks makes the heading itself the card front, colliding with headings used for document structure; obsidian-spaced-repetition has no learning steps and rewrites scheduling comments on every review; AOSR alone has sub-day intervals but writes tags into notes and runs a custom algorithm. RemNote has the card model natively but its data model is a rose tree, so documents do not survive it.
 
-**Decided.** A standalone sync tool rather than an Obsidian plugin. The card model, markers, identity scheme, deck mapping, cloze and table handling are specified in [CARD-MODEL.md](./CARD-MODEL.md).
+**Decided.** A standalone sync tool rather than an Obsidian plugin: the vault is markdown in a folder and AnkiConnect is an HTTP API, so nothing requires plugin hosting — and not hosting a plugin removes an entire class of abandonment risk, the one that killed Obsidian_to_Anki. The card model, markers, identity scheme, deck mapping, cloze and table handling are specified in [CARD-MODEL.md](./CARD-MODEL.md).
 
-**Deletion — decided 2026-08-18.** The sync only ever flags; a separate explicit `prune` command deletes flagged notes after the list has been reviewed. Delete-on-absence was rejected because an undetected heading rename would be indistinguishable from a deletion, silently destroying that card's scheduling history.
+**Deletion — decided 2026-08-18.** The sync only ever flags and suspends; deleting a flagged note is a separate explicit act, and the command for it is not built. Delete-on-absence was rejected because an undetected heading rename would be indistinguishable from a deletion, silently destroying that card's scheduling history.
 
-**⚠️ One vault per Anki profile — recorded 2026-08-27, and nothing enforces it.** The derived key
-records no vault, and there is nowhere else it could be recorded either, so the orphan search that
-sweeps the collection cannot be scoped to the vault being synced. Point the tool at a second vault
-while a profile already holds a first one and every card the first vault owns is flagged **and
-suspended**: recoverable, shown in the plan before anything is written, and still the worst thing
-this tool can do to a review history. It is a consequence of the identity scheme rather than a bug
-beside it, so it sits under _Constraints on any implementation_ below rather than under _Open_. The
-argument, and the cost of a fix, is `README.md`, "ONE VAULT PER ANKI PROFILE".
+**One collection cannot tell one vault's cards from another's.** The derived key records no
+vault, so the orphan search that sweeps a collection cannot be scoped to the vault being synced:
+point the tool at a second vault while a profile already holds a first, and the first vault's whole
+card set reads as deleted headings and is flagged and suspended. **Ruled 2026-09-01:** the vault
+absolute path is carried in a field on each note. Its LEAF is what a run matches on, so moving the
+vault keeps the match while a whole path would break it; the leaf also becomes a deck level, so
+`Obsidian::<vault>::…` reads apart in the deck tree — legibility, not the discriminator, since a
+filtered deck can relocate a card and the field cannot. Two vaults whose paths end in the same leaf
+are refused by name. The long-form argument, and what a fix costs, is `README.md`, "ONE VAULT PER
+ANKI PROFILE".
 
-_**Marker vocabulary note, added 2026-08-27.** This document nowhere names `cdd`, which since
-2026-08-24 is how a concept-descriptor card is marked — `#flashcard/cdd/{1,2,3}way`, replacing
-`3way` and `3way/all`, which survive as aliases. Nor does it name `sequence`. The authoritative
-list is `model/Marker.scala`'s `Documented` table, which `--help` prints and which a test ties to
-the source; `docs/reference/CARD-MODEL.md` carries a rendered copy. Nothing in this document's REASONING
-depends on the spelling, which is why only this note is added rather than the text being rewritten._
+**Deferred, not rejected.** The MOC and authored route, and new-card position pushing, which rests
+on an assumption still untested.
 
-**Deferred, not rejected.** The MOC and authored route; new-card position pushing, which rests on an assumption still untested; the typed-edge graph and its schema; structure cards; ordered-list progressive disclosure; deletion handling beyond flagging.
-
-**Open.** What becomes of the superseded documents in `../poc-obsidian-vault/`. _(Resolved 2026-08-18: the `::` family is **not** used at all — every card kind, including plain one- and two-way cards, is marked by a heading tag, so no delimiter is in play.)_
+**Open.** What becomes of the superseded design documents that preceded this one. They still assert
+conclusions rejected here, and the path this document gives for them no longer resolves.
 
 ---
 
@@ -64,7 +61,7 @@ depends on the spelling, which is why only this note is added rather than the te
 
 ### Provenance, and why it is marked
 
-An earlier round of design documents in `../poc-obsidian-vault/` was largely machine-generated. Several of its assertions were subsequently treated as settled preferences when they had never been ratified by anyone. To prevent that recurring, every requirement below carries its evidence class:
+An earlier round of design documents, which preceded this repository and are no longer beside it, was largely machine-generated. Several of its assertions were subsequently treated as settled preferences when they had never been ratified by anyone. To prevent that recurring, every requirement below carries its evidence class:
 
 | Mark             | Meaning                                                                     |
 | ---------------- | --------------------------------------------------------------------------- |
@@ -89,13 +86,11 @@ _Superseded 2026-08-18._ This previously read "indentation should be simultaneou
 
 **3. A concept–descriptor–description card shape, generating multiple retrieval paths.** **[verified]**
 
-The note type exists and works: three fields, three card templates testing different directions of recall. Its existence constrains tool choice — see _Rejected_.
+The note type exists and works: three card templates testing different directions of recall. Its existence constrains tool choice — see _Rejected_.
 
-_**No longer true — verified 2026-08-27** against the live `Obsidian Concept-Descriptor`: every
-front blanks its own answer and every back shows the full triple. This described the hand-made note
-type, not the ones installed from `resources/note-types/`. Original text follows._
-
-_Known defect:_ all three templates currently render the answer field on both sides of the divider, so the prompt is not visible on the answer side. Idiomatic form places the question side above the divider and the answer below.
+It carries more than the three named fields — gates selecting how many directions a marker asks
+for, the breadcrumb, and the card's identity — which is how one note type serves every
+concept-descriptor marker rather than needing a second type per direction.
 
 **4. Sequential introduction, interleaved review.** **[stated]** **[derived]**
 
@@ -105,7 +100,8 @@ New material enters in dependency order, one region at a time; once introduced, 
 
 The skeleton — what sits under what — is cheap, memorizable early, and makes later facts land somewhere.
 
-_Deferred._ Nothing implements it, and nothing will until the basic card path is in daily use. It depends on the MOC, which is itself deferred.
+_Built._ A heading can ask for a card made from its own subheadings, revealed one at a time. It
+turned out not to need the MOC at all.
 
 **6. Scheduling is delegated to FSRS.** **[unratified]**
 
@@ -127,13 +123,19 @@ _Corrected 2026-08-18._ This previously read "no scheduling metadata in the note
 
 _Superseded 2026-08-18._ This previously accepted an in-file write-once identifier, on the argument that every alternative fails and only that one fails _visibly_. That reasoning was sound given the options then known, but a better one exists.
 
-The key is **derived** from text already present — `(frontmatter id, heading path)` — the ancestor chain, since a bare heading name is not unique within a file — extended with row and column for tables — and the **binding** to an Anki note is stored in Anki as a `src::` tag. Anki is a derived artifact, so bookkeeping there costs nothing; that is precisely what makes it unacceptable in the source. A local sidecar is a rebuildable cache, not an oracle.
+The key is **derived** from text already present: the frontmatter `id`, plus whichever node of the
+note the card hangs off — a chain of ancestor headings, a frontmatter property, one block, or the
+note itself. A table card extends the heading path with the row's own first cell and the column's
+header, both as text, so reordering a table changes nothing while renaming either retires that
+card. The **binding** to an Anki note is held on the Anki side, in a field. Bookkeeping is
+acceptable there and unacceptable in the source, because the source is what a person writes. A
+local sidecar is a rebuildable cache, not an oracle.
 
 The marker count in the markdown is therefore zero, and stays zero regardless of card count. This is only possible because the note shape is committed to — general-purpose tools cannot assume it, which is why every one of them mints and writes an identifier instead.
 
 Full treatment, including failure modes, in [CARD-MODEL.md](./CARD-MODEL.md).
 
-**11. Presentation and organisation are COMPOSABLE OPTIONS; correctness is not.** **[stated]** _Added 2026-08-22._
+**11. Organisation is a COMPOSABLE OPTION; correctness is not — and presentation turned out to sit with correctness.** **[stated]** _Added 2026-08-22._
 
 There are many defensible ways to organise knowledge, and this tool must not pick one and call
 it the answer. The reviewer should be able to compose the features into a personal setup. Strong
@@ -145,9 +147,10 @@ The line runs between them like this:
 | Rigid — being wrong costs data | Soft — it is how you think |
 | --- | --- |
 | card identity and its binding to a note | how decks are shaped |
-| review history and scheduling | what appears on a card, and where |
-| refusing rather than guessing | which lens you review through |
-| no silent success | which markers you use, and how much you mark |
+| review history and scheduling | which lens you review through |
+| refusing rather than guessing | which markers you use, and how much you mark |
+| no silent success | |
+| what a card shows beside its prompt | |
 
 An option to be silently wrong is a defect with a switch on it, so nothing in the left column
 becomes configurable. Everything in the right column is a mechanism to be exposed rather than a
@@ -161,8 +164,11 @@ person is theirs to decide. The two also COMPOSE with the on-card breadcrumb rat
 competing with it: the deck decides what can be studied in isolation, the breadcrumb decides
 what can be read while answering, and either may be wanted without the other.
 
-The general failure to watch for is defending a taste as though it were an invariant. When a
-decision is presentational or organisational, build the mechanism and expose the choice.
+The general failure to watch for is defending a taste as though it were an invariant — and its
+mirror, made here on 2026-08-23. What a card DISPLAYS sat in the soft column until a configuration
+layer for it was built and then deleted: what a breadcrumb may show is not a preference, it is
+everything the card's own face does not already give away, which differs per card shape rather than
+per person. The line moves in both directions.
 
 ### Rejected
 
@@ -206,7 +212,13 @@ All 92 flashcard/spaced-repetition plugins in Obsidian's `community-plugins.json
 
 ### Architecture that follows
 
-> **Scope note, 2026-08-18.** Most of this section is **deferred**. The typed-edge graph, the authored route, and new-card position pushing are not in v0 and are not needed for a working card pipeline. What survives into v0 is narrow: decks mirror folder paths and carry filing only, and study scope comes from tags rather than the deck tree. The rest is recorded because the reasoning is sound and will be wanted later — not because it is being built.
+> **Scope note.** The authored route, new-card position pushing, and THE GRAPH ITSELF are still
+> deferred — nothing traverses or queries relations, and the audit-the-route-by-query described
+> below does not exist. What shipped 2026-08-26 is the edge SCHEMA, which turns a declared relation
+> into a card; that is a card-shaped edge, not a graph. Decks carry
+> filing only, and which parts of a card's location become deck levels is now a choice the
+> reviewer composes rather than a fixed rule; study scope comes from tags rather than the deck
+> tree. The rest is recorded because the reasoning is sound and will be wanted later.
 
 **Three orthogonal layers over one set of atomic notes.** Not competing implementations — different projections answering different questions:
 
@@ -219,8 +231,6 @@ All 92 flashcard/spaced-repetition plugins in Obsidian's `community-plugins.json
 Tags cannot do structural work: a unary tag loses the target of the relation. Conversely, orthogonal facets such as tier or stratum are naturally tag-shaped and were repeatedly lost when forced into the structural hierarchy.
 
 Neither the graph nor the route is authoritative over the other. A route that departs from the domain graph is a pedagogical choice, not an error. The graph can nonetheless _audit_ the route by query — concepts the route never visits, route steps whose prerequisites are scheduled later. **Detection, not enforcement:** Obsidian can encode typed edges but cannot check exhaustiveness or arity.
-
-⚠️ **Delimiter collision — _resolved 2026-08-18, no longer applies._** Dataview inline fields — the natural per-block mechanism for typed properties — use `::`, the same delimiter as the card syntax. `kind-of:: [[Consistency]]` becomes a flashcard the moment a two-way card regex is configured. The edge schema must resolve this.
 
 **Three independent levers in Anki**, which must not be conflated:
 
@@ -248,64 +258,42 @@ Requests for a general, subject-agnostic version recur on the Anki forums and ha
 - Reviews happen on both desktop and phone.
 - Fail fast, loud and clear; no defensive handling that hides a problem.
 - Detection over enforcement, since the encoding layer cannot type-check itself.
-- ⚠️ **ONE VAULT PER ANKI PROFILE, and nothing enforces it.** _Added 2026-08-27._ The identity
-  scheme of item 10 above derives a key from `(frontmatter id, heading path)` and stops there — it
-  has no room for a vault, and the deck root is a command-line flag rather than a property of the
-  collection. So the reconciler's orphan search, which must enumerate every note carrying a `src::`
-  tag in the open collection, cannot be scoped to one vault: there is nothing to scope it by. Sync
-  a second vault into a collection that already holds one and the first vault's entire card set
-  reads as deleted headings, so it is flagged **and suspended** — recoverable, and visible in the
-  printed plan beforehand, but the most destructive thing this tool can do. It falls out of the
-  identity scheme rather than being a separable defect, which is why it is recorded here as a
-  constraint. The argument in full, and what a fix would cost, is `README.md`, "ONE VAULT PER ANKI
-  PROFILE".
+- A card must say which vault it came from. _Ruled 2026-09-01._ The key records no vault, so the
+  orphan search cannot be scoped to the vault being synced, and syncing a second vault into a
+  collection flags and suspends the first vault's whole card set. Each note carries its vault's
+  absolute path in a field, and the LEAF of that path is what a run matches on — a moved vault
+  keeps its leaf, where matching on the whole path would read every card as foreign after one
+  `mv`. The leaf also becomes a deck level, for legibility; the field, not the deck, is what
+  answers whether a note belongs to the vault being synced. Two vaults whose paths end in the same
+  leaf are refused by name.
+
+  _Reverses part of a design settled 2026-08-30, which stored the leaf and recorded the path beside
+  it. Storing both writes one fact twice. Deriving the leaf keeps what that design was protecting —
+  a vault that is MOVED keeps its leaf, so the match survives — while leaving the path available to
+  say where notes came from. Renaming the vault directory defeats both designs equally._
 
 ### Unverified assumptions
 
 **The position-number mechanism.** The architecture above rests on the claim that pushing a position to Anki causes new-card introduction to follow the authored route. This has _not_ been tested. It is cheap to test against the existing vault, and it should be tested before anything is built on it — if new-card gathering and sorting do not behave as assumed, the route-feeds-sequence design changes.
 
-### Open decisions
+### Decisions
 
-1. ~~**CLI or Obsidian plugin?**~~ **Decided 2026-08-18: a standalone tool, not a plugin.** Authoring happens in nvim and reviewing in Anki, so Obsidian is infrastructure rather than an interface anyone lives in. The vault is markdown in a folder and AnkiConnect is an HTTP API; nothing requires plugin hosting. This also removes an entire class of plugin-abandonment risk — the one that just killed Obsidian_to_Anki.
-
-2. **The edge schema** — **PARTLY BUILT, 2026-08-25**, and it arrived through a door nobody planned.
+1. **The edge schema** — built 2026-08-26, and it arrived through a door nobody planned.
 
    It was deferred with the typed-edge graph on the grounds that neither was needed for v0. What
    revived it was not the graph: it was the observation that **a typed edge and a
    concept-descriptor card are the same shape**. `Function Space` / `special-case-of` / `HomSet`
    is subject-predicate-object, and a concept-descriptor card is three fields asked in one, two or
-   three directions. So an edge needs no note type of its own, no new card shape, and nothing
-   downstream of `CardSpec` — it inherits identity, hashing, decks, breadcrumbs, orphan handling
-   and the whole reconciler unchanged.
+   three directions. So an edge needs no note type of its own and nothing downstream of
+   `CardSpec`. The mechanism is in [CARD-MODEL.md](./CARD-MODEL.md).
 
-   **BUILT AND WIRED 2026-08-26.** `extract/EdgeSchema.scala` reads the declarations a note makes
-   for ITSELF, under a `# Properties-to-Flashcards` heading in its own body, and
-   `extract/Edges.scala` turns each declared property into a `ThreeField` card. Verified against
-   the live vault.
+   **The vocabulary lives in the vault, and that is a ruling rather than a convenience.** Heading
+   markers are universal — every vault that wants a two-way card writes the same token — so their
+   vocabulary is this tool's business and belongs in its source. Edge kinds are not:
+   `special-case-of` and `dual-of` are mathematics, another vault wants other words, and putting
+   them in Scala would make one person's domain vocabulary a matter for this repository's release
+   cycle. A vocabulary is a dictionary, and the dictionary belongs to whoever owns the words.
 
-   **Scope is per note, not per vault** — a relation is worth carrying in frontmatter for querying
-   and the graph whether or not you want to be drilled on it, and those are separate decisions.
-   **The right-hand side is marker syntax**, read by `Marker.parse`, so a rule and a heading share
-   one vocabulary rather than two that can drift.
-
-   **It lives in the vault, and that is a ruling rather than a convenience.** Heading markers are
-   universal — every vault that wants a two-way card writes the same token — so their vocabulary
-   is this tool's business and belongs in its source. Edge kinds are not: `special-case-of` and
-   `dual-of` are mathematics, another vault wants other words, and putting them in Scala would make
-   one person's domain vocabulary a matter for this repository's release cycle. This is a different
-   thing from the configuration that was tried and removed, which decided PRESENTATION and was
-   rightly ruled a rule rather than a setting. A vocabulary is a dictionary, and the dictionary
-   belongs to whoever owns the words.
-
-   The three questions this entry left open are answered, all three in favour of the option that
-   fails on a real condition rather than on a guess. The SUBJECT is the file name, carried as a
-   field rather than in the key, so renaming a note costs nothing. A wikilink's brackets come off
-   and an alias wins, because a card face is read rather than clicked. And `2way` is neither
-   trusted nor forbidden but CHECKED: the tool holds the whole vault, so it can see whether the
-   reverse question actually has several answers, and refuses only then.
-
-3. ~~**What defines a block's card set**~~ — **deferred** with the route and linearization.
-
-4. **Disposition of `../poc-obsidian-vault/`**, which still asserts conclusions rejected here. Still open.
-
-5. ~~**Which delimiter, if any, for plain two-way cards and cloze alongside the heading form.**~~ **Resolved 2026-08-18: none.** Every card kind — including plain one- and two-way cards — is marked by a heading tag under `#flashcard/`, so the `::` family is not used anywhere and no delimiter competes with Dataview inline fields.
+2. **Disposition of the superseded design documents that preceded this one.** They still assert
+   conclusions rejected here. Still open, and the path this document gave for them no longer
+   resolves.
