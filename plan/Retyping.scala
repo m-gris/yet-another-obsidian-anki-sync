@@ -247,8 +247,9 @@ enum RetypeVerdict:
     * refusing says this tool will not do it, whereas this says the author has not yet been
     * asked. Ruled by Marc 2026-08-27 — see [[RetypeDestroysCards]].
     *
-    * IT STILL BEHAVES AS A REFUSAL AT THE MOMENT, because the command that lets the author
-    * answer does not exist yet. The type is what changed here, not the run.
+    * THE AUTHOR ANSWERS IT WITH `--approve`, naming the one change by the short code the run
+    * printed beside it. [[Retyping.pendingOf]] turns this verdict and no other into a decision
+    * the author can answer, so nothing else is ever approvable.
     */
   case DestroysCards(loss: RetypeDestroysCards)
 

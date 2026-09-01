@@ -691,20 +691,26 @@ Going the other way — `cdd/3way` back to `cdd/2way`, or `2way` to `1way` — i
 needed, and the two cases behave differently.
 
 **Within the `cdd` family**, narrowing does *not* delete the card it retires. It stays, holding its
-review history, with nothing on its front, so it never comes up again. Anki's **Tools → Empty
-Cards** will offer to delete exactly those, so read that dialogue rather than confirming it.
+review history, with nothing on its front — and it does still come up in review, showing you Anki's
+own placeholder. Anki's **Tools → Empty Cards** will offer to delete exactly those, so read that
+dialogue rather than confirming it blind. Do not reach for Delete in the reviewer instead: that
+removes the whole NOTE, taking its healthy sibling cards and their review history with it.
 _Reporting and flagging such a card is decided and not yet built; see oas-jco._
 
-**Across note types** — anything that would leave a card on a note type with fewer templates than
-it needs — is **refused**, whatever flags you pass. Not out of caution about your files: nobody has
-measured what Anki does with a card whose template no longer exists, and the honest answer is that
-it might be kept, orphaned, or destroyed. The run tells you which notes it refused and why, and
-suggests doing it by hand in Anki's own *Change Note Type* dialogue, which shows you the mapping
-before it acts.
+**Across note types**, where the note type you are moving to has fewer templates than the note has
+cards, some card is left with no template to belong to. That is your decision to make, so the run
+does not take it for you and does not forbid it either: it prices the change — how many cards, and
+how many reviews they carry — prints a short code beside it, and does nothing until you name that
+code with `--approve`. One code per change; there is deliberately no flag that approves them all.
 
-That refusal runs **regardless of the flag above**. `--no-migrate-note-types` only decides whether
-moves that have already been judged safe are carried out; it cannot make an unmeasured one happen,
-and dropping it cannot either.
+What happens to such a card is measured rather than guessed. The move does not destroy it: it
+survives on the note, unusable, with nothing on its front, and Anki's *Tools → Check Database*
+destroys it at whatever later moment you run that. So the cost is real but it is not immediate,
+and a warning that said only "these cards will be lost" would be discovered to be wrong by
+somebody whose collection looked untouched for a fortnight.
+
+`--no-migrate-note-types` is a separate thing: it holds back note-type moves that were already
+judged safe. It has no bearing on the priced ones, which wait for `--approve` either way.
 
 ## Deletion, and orphans
 
