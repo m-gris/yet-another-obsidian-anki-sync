@@ -563,61 +563,139 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     }
   }
 
-  /** THE HIGHEST-CONSEQUENCE PLACEMENT IN ANY OF THESE TEMPLATES, and it had no test at all.
+  /** THE GATES THIS PROJECT'S NOTE TYPES ACTUALLY USE — FOUND, NOT NAMED.
     *
-    * ANKI GENERATES A CARD ONLY WHEN ITS FRONT RENDERS NON-EMPTY. `Obsidian
-    * Concept-Descriptor`'s third card exists only for notes that set `ThreeWay`, which is why
-    * its whole front is wrapped in `{{#ThreeWay}}…{{/ThreeWay}}`.
+    * A gate is a front that OPENS WITH A SECTION MARKER, with nothing before it. That is a
+    * structural property of the file, so a gate on a field nobody thought to mention here is
+    * still discovered — which is the whole difference from the predecessor of the two tests
+    * below. That one collected fronts containing the literal `{{#ThreeWay}}`, so it covered one
+    * of the two gates in the repository and the other, `{{^ValueOnly}}`, was named in a comment
+    * and checked by nothing.
     *
-    * Put the `{{#Context}}` block OUTSIDE that wrapper and the front renders the breadcrumb for
-    * every note that has a breadcrumb — which is nearly all of them. The front is then non-empty,
-    * Anki generates a third card that was never meant to exist, and it arrives with no review
-    * history. Moving one block by a few characters silently creates cards.
+    * OPENS-WITH, NOT WRAPPED-IN, AND THE WEAKNESS IS THE POINT. Discovering gates by "the whole
+    * front is inside one section" would make a template that lost its wrapper stop being a gate
+    * rather than fail — the defect would delete the check that catches it. Opening with a
+    * section is the cheap half; that the section covers everything is asserted, not assumed.
     *
-    * SPECIFIC RATHER THAN GENERAL, deliberately: this checks the one card-generating conditional
-    * this project uses. If another is ever introduced, this test does NOT cover it and must be
-    * extended — stated here because a test that looks general and is not is worse than one that
-    * admits its scope.
+    * COMPARED AGAINST THE RAW FRONT rather than the comment-stripped one, so that an HTML
+    * comment sitting before the gate reads as content outside it. That is the conservative
+    * direction: it can only produce a failure that a human then reads.
     */
-  test("on a conditional template, the Context block sits INSIDE the wrapper that gates the card") {
-    val gated = assets.flatMap { asset =>
-      asset.spec.templates.toVector.collect {
-        case (name, template) if template.front.contains(s"{{#${Marker.ThreeWayField}}}") =>
-          (asset.spec.name, name, template.front)
+  val gatedFronts: Vector[(CardGate, String)] =
+    assets.flatMap { asset =>
+      asset.spec.templates.toVector.flatMap { (templateName, template) =>
+        tagsIn(template.front).headOption
+          .filter(tag => template.front.trim.startsWith(tag.source))
+          .collect { case TemplateTag(_, TemplateReference(field, ReferenceRole.Section(state))) =>
+            CardGate(asset.spec.name, templateName, field, state) -> template.front
+          }
       }
     }
 
-    assert(gated.nonEmpty, "no gated template found — this test has stopped covering anything")
+  /** WHICH CARDS ARE OPT-IN, PINNED AS A CENSUS.
+    *
+    * A gate decides whether a card exists at all, so introducing, losing or inverting one is a
+    * change to what a user's collection contains. Asserting the whole list — rather than
+    * checking each gate the templates happen to have — makes all three of those a failure: a new
+    * gate has to be acknowledged here, a broken wrapper drops its template out of the discovered
+    * set, and a flipped `{{#}}`/`{{^}}` mismatches its polarity.
+    *
+    * THE POLARITIES ARE NOT INTERCHANGEABLE AND ONE OF THEM IS LOAD-BEARING BACKWARDS.
+    * `{{^ValueOnly}}` renders when the field is EMPTY, so a note that predates the field keeps
+    * its concept-recall card; written `{{#ValueOnly}}` every such card would render blank and
+    * Anki's Tools > Empty Cards would offer to delete cards holding real review history.
+    */
+  val declaredCardGates: Vector[CardGate] = Vector(
+    CardGate(
+      Marker.NoteTypes.ConceptDescriptor,
+      "Card 1: Descriptor+Description -> Concept",
+      Marker.ValueOnlyField,
+      FieldState.Absent,
+    ),
+    CardGate(
+      Marker.NoteTypes.ConceptDescriptor,
+      "Card 3: Concept+Description -> Descriptor",
+      Marker.ThreeWayField,
+      FieldState.Present,
+    ),
+  )
 
-    gated.foreach { (noteType, templateName, front) =>
-      val opensGate  = front.indexOf(s"{{#${Marker.ThreeWayField}}}")
-      val closesGate = front.indexOf(s"{{/${Marker.ThreeWayField}}}")
-      val context    = front.indexOf(s"{{#${Marker.ContextField}}}")
+  test("the note types gate exactly these cards, on exactly these fields, in exactly these senses") {
+    assertEquals(
+      gatedFronts.map(_._1),
+      declaredCardGates,
+      "the set of card-generating conditionals in the note types has changed; a gate decides " +
+        "whether a card exists at all, so this list is meant to be updated deliberately",
+    )
+  }
 
-      assert(context >= 0, s"'$noteType' template '$templateName' does not render the breadcrumb")
+  /** THE HIGHEST-CONSEQUENCE PLACEMENT IN ANY OF THESE TEMPLATES.
+    *
+    * ANKI GENERATES A CARD ONLY WHEN ITS FRONT RENDERS NON-EMPTY. `Obsidian
+    * Concept-Descriptor`'s third card exists only for notes that set `ThreeWay`, and its first
+    * card is suppressed for notes that set `ValueOnly`; that is why each of those fronts is
+    * wrapped whole in its section.
+    *
+    * Put the `{{#Context}}` block OUTSIDE the wrapper and the front renders the breadcrumb for
+    * every note that has one — which is nearly all of them. The front is then non-empty, Anki
+    * generates a card that was never meant to exist, and it arrives with no review history.
+    * Moving one block by a few characters silently creates cards.
+    *
+    * ASSERTED AS A WHOLE rather than per-element: NOTHING may render outside the gate. A single
+    * stray character out here — a heading, a rule, a breadcrumb that depends on no field — is
+    * enough. The breadcrumb renders `{{Deck}}`, which is never empty, so "the breadcrumb is
+    * outside the gate" and "this card is generated for every note" are the same sentence.
+    */
+  test("on a gated template, NOTHING renders outside the gate and the breadcrumb sits inside it") {
+    gatedFronts.foreach { (gate, front) =>
+      val tags     = tagsIn(front)
+      val closesAt = closingIndexOf(tags)
+
       assert(
-        context > opensGate && context < closesGate,
-        s"'$noteType' template '$templateName' renders the breadcrumb OUTSIDE " +
-          s"{{#${Marker.ThreeWayField}}}, so this card would be generated for every note that " +
-          "has a breadcrumb, whether or not it wants a third card",
+        closesAt >= 0,
+        s"'${gate.noteType}' template '${gate.template}' opens a section on ${gate.field} that " +
+          "is never closed",
       )
-
-      // THE PROPERTY THAT ACTUALLY MATTERS, asserted as a whole rather than per-element:
-      // NOTHING may render outside the gate. Anki generates a card whenever its front is
-      // non-empty, so a single stray character out here — a heading, a rule, a breadcrumb that
-      // does not depend on any field — generates a third card for every note of this type.
-      //
-      // Strengthened when the breadcrumb stopped being conditional. It renders `{{Deck}}`, which
-      // is never empty, so from that point on "the breadcrumb is outside the gate" and "this
-      // card is generated for every note" became the same sentence.
+      assertEquals(
+        tags(closesAt).reference.field,
+        gate.field,
+        s"'${gate.noteType}' template '${gate.template}' opens a section on ${gate.field} and " +
+          s"closes one on ${tags(closesAt).reference.field}",
+      )
+      assertEquals(
+        closesAt,
+        tags.size - 1,
+        s"'${gate.noteType}' template '${gate.template}' has ${tags.size - 1 - closesAt} tag(s) " +
+          s"after its ${gate.field} gate closes, which generates a card for every note: $front",
+      )
       assert(
-        front.trim.startsWith(s"{{#${Marker.ThreeWayField}}}") &&
-          front.trim.endsWith(s"{{/${Marker.ThreeWayField}}}"),
-        s"'$noteType' template '$templateName' has content outside its " +
-          s"{{#${Marker.ThreeWayField}}} gate, which generates a card for every note: $front",
+        front.trim.endsWith(tags(closesAt).source),
+        s"'${gate.noteType}' template '${gate.template}' has content after its ${gate.field} " +
+          s"gate closes, which generates a card for every note: $front",
+      )
+      assert(
+        fieldsIn(front).contains(Marker.ContextField),
+        s"'${gate.noteType}' template '${gate.template}' does not render the breadcrumb",
       )
     }
   }
+
+  /** Where the section the FIRST tag opens is closed, or `-1` if it never is.
+    *
+    * COUNTS NESTING RATHER THAN LOOKING FOR THE FIELD'S NAME, because a gated front nests other
+    * sections inside it — `{{#ConceptLabel}}` and `{{#Context}}` both — and the first close tag
+    * is therefore not the gate's own.
+    */
+  def closingIndexOf(tags: Vector[TemplateTag]): Int =
+    tags
+      .scanLeft(0) { (depth, tag) =>
+        tag.reference.role match
+          case ReferenceRole.Section(_)  => depth + 1
+          case ReferenceRole.SectionEnd  => depth - 1
+          case ReferenceRole.Rendered(_) => depth
+      }
+      .tail
+      .indexOf(0)
 
   // -------------------------------------------------- the decoder's strictness ----
 
