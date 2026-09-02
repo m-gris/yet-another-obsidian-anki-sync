@@ -131,8 +131,34 @@ def verdict_without_identity(
     therefore no URI to open. AND SO IS None: an answer of "nothing at all" is what sent an
     anomalous note silently to Anki's editor in the first place, so it is not a value this
     function is able to return.
+
+    THE PRECONDITION IS RE-ASKED HERE RATHER THAN TRUSTED, and it raises rather than answering.
+    Because the two arms are told apart by the field's PRESENCE, a note carrying a readable
+    identity would be answered with total confidence and be wrong: `NotOurs` for a note that is
+    plainly ours, or `Explain` about an empty field for one whose field is full. Neither of those
+    is a verdict anybody could act on, so there is nothing to return and the caller is told what
+    it broke instead. Asking `identity` itself, rather than re-deriving the test, is what keeps
+    the two functions from drifting apart about where an identity lives.
     """
-    raise NotImplementedError
+    found = identity(fields, tags)
+    if found is not None:
+        raise ValueError(
+            "verdict_without_identity answers only for a note `identity` could not answer for, "
+            f"and this note's identity reads {found!r}. Its two arms are told apart by whether "
+            f"the {IDENTITY_FIELD} field is PRESENT and never by what is in it, so every answer "
+            "it could give for this note is wrong."
+        )
+
+    if IDENTITY_FIELD not in fields:
+        return NotOurs()
+
+    return Explain(
+        message=(
+            f"This card is on one of this add-on's own note types, but its {IDENTITY_FIELD} "
+            "field is empty, so there is nothing here to find the note in your vault by. "
+            "Re-syncing the vault should fill it in."
+        )
+    )
 
 
 def command(binary: str, vault_path: str, tag: str, vault_name: str | None) -> list[str]:

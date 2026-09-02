@@ -169,6 +169,21 @@ class VerdictWithoutIdentityTest(unittest.TestCase):
         for fields, tags in self.NOT_OURS + self.OURS_BUT_EMPTY:
             self.assertIsNone(identity(fields, tags), (fields, tags))
 
+    def test_a_note_that_does_have_an_identity_is_refused_rather_than_answered(self) -> None:
+        """THE OTHER HALF OF THE TEST ABOVE, ENFORCED INSTEAD OF ASSUMED. The two arms are told
+        apart by whether the field is THERE, never by what is in it, so a note with a readable
+        identity would come back answered and wrong -- `NotOurs` for a note that is plainly ours,
+        or `Explain` about an empty field that is full. There is no verdict to give, so the
+        caller is told what it broke rather than handed one of those."""
+        for fields, tags in (
+            ({IDENTITY_FIELD: "src::n1::a/b"}, []),
+            ({IDENTITY_FIELD: "src::n1::a/b"}, ["src::n1::a/b"]),
+            ({"Front": "x"}, ["src::n1::a/b"]),
+        ):
+            with self.assertRaises(ValueError) as caught:
+                verdict_without_identity(fields, tags)
+            self.assertIn(IDENTITY_FIELD, str(caught.exception), (fields, tags))
+
 
 class CommandTest(unittest.TestCase):
     def test_arguments_are_a_vector_so_no_shell_can_see_them(self) -> None:
