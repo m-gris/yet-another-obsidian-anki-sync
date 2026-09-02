@@ -2,6 +2,70 @@ package obsidiananki.anki
 
 import obsidiananki.model.Marker
 
+/** WHETHER A SECTION RENDERS WHEN ITS FIELD HAS A VALUE OR WHEN IT HAS NONE.
+  *
+  * `{{#X}}` renders its body when `X` is non-empty; `{{^X}}` renders it when `X` is empty. THE
+  * TWO ARE NOT INTERCHANGEABLE AND THE DIFFERENCE IS DESTRUCTIVE, which is why this is a type
+  * and not a boolean nobody names. [[Marker.ValueOnlyField]] is inverted on purpose so that a
+  * note predating the field keeps its concept-recall card; written `{{#ValueOnly}}` instead,
+  * every such card would render blank and Anki's Tools > Empty Cards would offer to DELETE
+  * cards holding real review history.
+  */
+enum FieldState:
+  case Present
+  case Absent
+
+/** WHAT ANKI DOES WITH ONE `{{…}}` TAG, as distinct from WHICH FIELD it names.
+  *
+  * THE FIELD NAME IS HOISTED OUT OF THIS ENUM AND INTO [[TemplateReference]] because every tag
+  * in Anki's template syntax names exactly one field — a fact worth stating in the type rather
+  * than repeating as a parameter on each case.
+  */
+enum ReferenceRole:
+  /** `{{Front}}`, `{{cloze:Text}}`, `{{text:cloze:Text}}` — the field's value is RENDERED.
+    *
+    * `filters` IS THE CHAIN IN SOURCE ORDER AND IS PART OF THE IDENTITY OF THE REFERENCE, which
+    * is the whole reason this parameter exists. Until it did, `{{cloze:Text}}` and `{{Text}}`
+    * were the same value to every test that consumed a reference, so the `cloze:` filter could
+    * be dropped from the `Obsidian Cloze` templates and the suite would stay green — while the
+    * card rendered the raw `{{c1::…}}` markup instead of a deletion. A test that cannot see a
+    * difference is indistinguishable from one that has checked it.
+    */
+  case Rendered(filters: Vector[String])
+
+  /** `{{#Field}}` or `{{^Field}}` — opens a section whose body renders conditionally. */
+  case Section(rendersWhenFieldIs: FieldState)
+
+  /** `{{/Field}}` — closes the nearest open section on that field. */
+  case SectionEnd
+
+/** ONE TAG'S MEANING: the field it names, and what Anki does with it. */
+final case class TemplateReference(field: String, role: ReferenceRole)
+
+/** One tag AS IT OCCURS IN A TEMPLATE: its meaning, plus the exact text it was written as.
+  *
+  * `source` IS KEPT RATHER THAN RECONSTRUCTED so that a structural check can compare against the
+  * template's own text. Reconstructing `{{#ThreeWay}}` from the parsed form would silently
+  * "correct" a tag written with stray whitespace, and a check that asserts nothing sits outside
+  * a gate would then be comparing against text that is not in the file.
+  */
+final case class TemplateTag(source: String, reference: TemplateReference)
+
+/** A TEMPLATE FRONT WHOSE WHOLE CONTENT SITS INSIDE ONE CONDITIONAL SECTION — so whether Anki
+  * generates that card at all is decided by one field.
+  *
+  * ANKI GENERATES A CARD ONLY WHEN ITS FRONT RENDERS NON-EMPTY. That is the mechanism this
+  * project uses to make a card opt-in, and it is the highest-consequence structure in any of
+  * these templates: a character moved out of the wrapper mints cards for every note of the
+  * type, and a polarity flipped the wrong way retires cards that carry review history.
+  */
+final case class CardGate(
+    noteType: String,
+    template: String,
+    field: String,
+    rendersWhenFieldIs: FieldState,
+)
+
 /** THE CONTRACT BETWEEN THE REPOSITORY'S NOTE TYPE DEFINITIONS AND THE SCALA THAT WRITES TO
   * THEM.
   *
@@ -162,20 +226,85 @@ class NoteTypeAssetsTest extends munit.FunSuite:
 
   // -------------------------------------------------- templates versus fields ----
 
-  /** Everything Anki treats as a field reference in a template, normalised to a bare name.
+  /** Every `{{…}}` tag in a template, IN ORDER and carrying the text it was written as.
     *
-    * `{{Front}}` plain, `{{#Context}}` / `{{^X}}` / `{{/Context}}` section markers, and
-    * `{{cloze:Text}}` / `{{text:X}}` filters — the field is the segment after the LAST colon,
-    * because filters chain (`{{text:cloze:Field}}`).
+    * ORDER AND SOURCE ARE WHY THIS EXISTS ALONGSIDE [[referencesIn]], which throws both away.
+    * The card-gate tests below have to know which section opens FIRST and whether its matching
+    * close is the LAST thing on the front — questions a set of references cannot answer.
+    *
+    * COMMENTS ARE STRIPPED FIRST, for the reason [[withoutHtmlComments]] gives.
     */
-  def referencesIn(template: String): Set[String] =
+  def tagsIn(template: String): Vector[TemplateTag] =
     """\{\{([^}]*)\}\}""".r
       .findAllMatchIn(withoutHtmlComments(template))
-      .map(_.group(1))
-      .map(_.dropWhile(c => c == '#' || c == '^' || c == '/'))
-      .map(ref => ref.split(':').lastOption.getOrElse(ref))
-      .map(_.trim)
-      .toSet
+      .map(found => TemplateTag(found.matched, referenceOf(found.group(1).trim, found.matched)))
+      .toVector
+
+  /** Classify what sits between one tag's braces.
+    *
+    * REFUSES WHAT IT CANNOT CLASSIFY RATHER THAN NORMALISING IT. The predecessor of this
+    * function stripped the leading `#^/` and kept the segment after the last colon, so every
+    * malformed tag became a plausible bare field name — and `{{cloze:Text}}` became the same
+    * value as `{{Text}}`. Both are the failure this project is built against: a wrong answer
+    * that looks like a right one.
+    *
+    * THROWS RATHER THAN CALLING munit's `fail`, so that the refusal is a property of the parser
+    * and not of the suite it happens to live in — which is what lets a test assert the refusal
+    * by its type rather than by matching on a message.
+    */
+  private def referenceOf(body: String, source: String): TemplateReference =
+    body.headOption match
+      case None      => refuse(s"'$source' is a tag with nothing in it")
+      case Some('#') => section(body.tail, source, ReferenceRole.Section(FieldState.Present))
+      case Some('^') => section(body.tail, source, ReferenceRole.Section(FieldState.Absent))
+      case Some('/') => section(body.tail, source, ReferenceRole.SectionEnd)
+      case Some(_) =>
+        // `-1` KEEPS TRAILING EMPTY SEGMENTS, which Java's default `split` discards — so
+        // `{{cloze:}}` would otherwise parse as a bare reference to a field called `cloze`.
+        val segments = body.split(":", -1).toVector.map(_.trim)
+        if segments.exists(_.isEmpty) then refuse(s"'$source' has an empty filter or field name")
+        else TemplateReference(segments.last, ReferenceRole.Rendered(segments.init))
+
+  /** A section marker, once its `#`, `^` or `/` has been taken off.
+    *
+    * ANKI PUTS NO FILTERS ON A SECTION MARKER — `{{#cloze:Text}}` is not a thing — so a colon
+    * here is a template nobody can have tested, and is refused rather than read as a field name
+    * with a colon in it.
+    */
+  private def section(name: String, source: String, role: ReferenceRole): TemplateReference =
+    val trimmed = name.trim
+    if trimmed.isEmpty then refuse(s"'$source' opens or closes a section on no field at all")
+    else if trimmed.exists(_ == ':') then
+      refuse(s"'$source' puts a filter on a section marker, which Anki does not support")
+    else if "#^/".contains(trimmed.head) then refuse(s"'$source' stacks two section markers")
+    else TemplateReference(trimmed, role)
+
+  /** Refuse a tag outright. Named so that every refusal above reads as one thing. */
+  private def refuse(why: String): Nothing =
+    throw new IllegalArgumentException(s"$why — this is not a template Anki can render")
+
+  /** Everything Anki treats as a field reference in a template, DEDUPLICATED BUT NOT FLATTENED.
+    *
+    * `{{Front}}` plain, `{{#Context}}` / `{{^X}}` / `{{/Context}}` section markers, and
+    * `{{cloze:Text}}` / `{{text:cloze:Text}}` filter chains — the field is the segment after the
+    * LAST colon, because filters chain.
+    *
+    * THE FILTERS AND THE SECTION POLARITY STAY IN THE VALUE, which is the difference from what
+    * this returned before. A `Set[String]` made `{{cloze:Text}}` and `{{Text}}` the same
+    * element, so no test that consumed this could see a dropped `cloze:` filter — and none did.
+    * Use [[fieldsIn]] where only the NAMES matter.
+    */
+  def referencesIn(template: String): Set[TemplateReference] =
+    tagsIn(template).map(_.reference).toSet
+
+  /** The field NAMES a template mentions, in any tag position.
+    *
+    * SECTION MARKERS COUNT AS MENTIONS, and that is deliberate rather than sloppy: `SameShape`
+    * and `Reveal` are never rendered — they exist only to be tested by `{{^SameShape}}` and
+    * `{{#Reveal}}` — so a rule that only counted rendered references would call two live fields
+    * unused.
+    */
+  def fieldsIn(template: String): Set[String] = referencesIn(template).map(_.field)
 
   /** Strip `<!-- … -->` BEFORE looking for field references.
     *
@@ -210,7 +339,7 @@ class NoteTypeAssetsTest extends munit.FunSuite:
       val declared = asset.spec.fields.toVector.toSet
       asset.spec.templates.toVector.foreach { (templateName, template) =>
         Vector("front" -> template.front, "back" -> template.back).foreach { (side, text) =>
-          val unknown = referencesIn(text) -- declared -- ankiSpecialReferences
+          val unknown = fieldsIn(text) -- declared -- ankiSpecialReferences
           assertEquals(
             unknown,
             Set.empty[String],
@@ -231,7 +360,7 @@ class NoteTypeAssetsTest extends munit.FunSuite:
   test("every field a note type declares is referred to by at least one of its templates") {
     assets.foreach { asset =>
       val referenced = asset.spec.templates.toVector.flatMap { (_, template) =>
-        referencesIn(template.front) ++ referencesIn(template.back)
+        fieldsIn(template.front) ++ fieldsIn(template.back)
       }.toSet
       // ONE FIELD IS EXEMPT, AND IT IS EXEMPT ON PURPOSE RATHER THAN BY OVERSIGHT.
       //
@@ -276,10 +405,114 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     * a future edit to the helper would otherwise reopen it silently.
     */
   test("a field referred to only inside an HTML comment counts as unreferenced") {
-    assertEquals(referencesIn("<!-- {{Context}} -->"), Set.empty[String])
-    assertEquals(referencesIn("<!-- {{Context}} -->{{Front}}"), Set("Front"))
+    assertEquals(fieldsIn("<!-- {{Context}} -->"), Set.empty[String])
+    assertEquals(fieldsIn("<!-- {{Context}} -->{{Front}}"), Set("Front"))
     // A multi-line comment, since that is what a disabled block actually looks like.
-    assertEquals(referencesIn("<!--\n  <div>{{Context}}</div>\n-->{{Front}}"), Set("Front"))
+    assertEquals(fieldsIn("<!--\n  <div>{{Context}}</div>\n-->{{Front}}"), Set("Front"))
+  }
+
+  /** A FILTERED REFERENCE IS NOT THE SAME REFERENCE AS A BARE ONE, and nothing asserted that.
+    *
+    * `referencesIn` used to return the segment after the last colon and nothing else, so
+    * `{{cloze:Text}}` and `{{Text}}` were one value. Every test that consumed it — including the
+    * two directions above — was therefore blind to a `cloze:` filter being deleted from a
+    * template, which turns a cloze card into one that displays the raw `{{c1::…}}` markup.
+    *
+    * PINS THE PARSER RATHER THAN ANY ASSET, like the HTML-comment test above it and for the same
+    * reason: the hole was in the CHECK, so an asset-side test would not have closed it.
+    */
+  test("a filtered reference, a bare one and a section marker are three different references") {
+    val bare = TemplateReference("Text", ReferenceRole.Rendered(Vector.empty))
+    assertEquals(referencesIn("{{Text}}"), Set(bare))
+    assertEquals(
+      referencesIn("{{cloze:Text}}"),
+      Set(TemplateReference("Text", ReferenceRole.Rendered(Vector("cloze")))),
+    )
+    assertNotEquals(referencesIn("{{cloze:Text}}"), referencesIn("{{Text}}"))
+
+    // Filters CHAIN, in source order, and the field is the last segment.
+    assertEquals(
+      referencesIn("{{text:cloze:Text}}"),
+      Set(TemplateReference("Text", ReferenceRole.Rendered(Vector("text", "cloze")))),
+    )
+
+    // A section marker names the same field and is not a rendering of it; the two POLARITIES
+    // are likewise distinct, because `{{#X}}` and `{{^X}}` select opposite sets of notes.
+    assertEquals(
+      referencesIn("{{#Context}}"),
+      Set(TemplateReference("Context", ReferenceRole.Section(FieldState.Present))),
+    )
+    assertEquals(
+      referencesIn("{{^Context}}"),
+      Set(TemplateReference("Context", ReferenceRole.Section(FieldState.Absent))),
+    )
+    assertEquals(referencesIn("{{/Context}}"), Set(TemplateReference("Context", ReferenceRole.SectionEnd)))
+    assertEquals(referencesIn("{{#Context}}{{^Context}}{{/Context}}{{Context}}").size, 4)
+
+    // A field name may contain a space — `Back Extra` is one of Anki's own stock field names.
+    assertEquals(fieldsIn("{{Back Extra}}"), Set("Back Extra"))
+  }
+
+  /** A TAG THIS PARSER CANNOT CLASSIFY IS REFUSED, never read as a plausible field name.
+    *
+    * The consequence of guessing is the one this whole suite exists to prevent: a template
+    * referring to a field that does not exist renders nothing and reports nothing, and a check
+    * that quietly turned the malformed tag into a name that happens to be declared would call
+    * that template correct.
+    */
+  test("a malformed tag is refused rather than normalised into a field name") {
+    Vector("{{}}", "{{#}}", "{{/}}", "{{cloze:}}", "{{:Text}}", "{{#cloze:Text}}", "{{##Text}}")
+      .foreach { malformed =>
+        intercept[IllegalArgumentException](referencesIn(malformed))
+      }
+  }
+
+  /** THE `cloze:` FILTER IS WHAT MAKES A CLOZE CARD A CLOZE CARD, and it appears on exactly the
+    * note types that declare `isCloze`.
+    *
+    * WITHOUT THE FILTER, on a cloze note type, the card shows the literal `{{c1::answer}}`
+    * source text: the note is stored correctly, the card is generated, and it displays the
+    * answer it was supposed to hide. Nothing errors.
+    *
+    * THE OTHER DIRECTION IS THE ONE THIS PROJECT HAS ALREADY BEEN BITTEN BY. `Obsidian Cloze
+    * Sequence` has "Cloze" in its name, defines `.cloze` and `.hidden-cloze` in its stylesheet
+    * and calls its hidden items clozes — and it is NOT a cloze note type (`isCloze: false`). It
+    * renders `{{Text}}`, a plain reference, and a well-meaning edit "fixing" that to
+    * `{{cloze:Text}}` would break every card it has. Every available heuristic — the name, the
+    * CSS, the vocabulary — gets this one exactly backwards, so the manifest is the only
+    * authority and this test is written against it.
+    *
+    * BOTH SIDES, not just the front. The front without the filter generates nothing usable; the
+    * back without it shows the deletion markup beside the answer.
+    */
+  test("the cloze filter is used by exactly the note types that declare isCloze, on both sides") {
+    val ClozeFilter = "cloze"
+    assets.foreach { asset =>
+      asset.spec.templates.toVector.foreach { (templateName, template) =>
+        Vector("front" -> template.front, "back" -> template.back).foreach { (side, text) =>
+          val clozed = referencesIn(text).collect {
+            case TemplateReference(field, ReferenceRole.Rendered(filters))
+                if filters.contains(ClozeFilter) =>
+              field
+          }
+          if asset.spec.isCloze then
+            assert(
+              clozed.nonEmpty,
+              s"'${asset.spec.name}' declares isCloze and its template '$templateName' ($side) " +
+                s"renders no field through the $ClozeFilter filter, so the card would show the " +
+                "literal {{c1::…}} markup instead of a deletion",
+            )
+          else
+            assertEquals(
+              clozed,
+              Set.empty[String],
+              s"'${asset.spec.name}' does NOT declare isCloze, yet its template '$templateName' " +
+                s"($side) puts the $ClozeFilter filter on ${clozed.mkString(", ")} — on a " +
+                "non-cloze note type that filter renders nothing at all",
+            )
+        }
+      }
+    }
   }
 
   /** EVERY TEMPLATE'S FRONT, not merely one of them.
@@ -297,7 +530,7 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     assets.foreach { asset =>
       asset.spec.templates.toVector.foreach { (templateName, template) =>
         assert(
-          referencesIn(template.front).contains(Marker.ContextField),
+          fieldsIn(template.front).contains(Marker.ContextField),
           s"'${asset.spec.name}' template '$templateName' does not render " +
             s"${Marker.ContextField} on its front, so that card shows no breadcrumb",
         )
