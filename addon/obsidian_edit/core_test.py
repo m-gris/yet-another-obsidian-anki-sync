@@ -146,6 +146,29 @@ class VerdictWithoutIdentityTest(unittest.TestCase):
         for jargon in ("none", "null", "traceback", "exception"):
             self.assertNotIn(jargon, verdict.message.lower(), verdict.message)
 
+    def test_the_explanation_recommends_no_repair_because_there_is_none_to_recommend(self) -> None:
+        """THE ADVICE IS EXCLUDED, NOT MERELY ABSENT, and the shape test above cannot tell those
+        two apart -- a confidently false sentence satisfies every assertion it makes. This test
+        is where the ruling lives.
+
+        The sentence used to end "Re-syncing the vault should fill it in". That is false, and it
+        is dangerous. The search that enumerates every note this tool owns is
+        `"Identity:src::*" or "tag:src::*"`, and a note whose field is empty and which carries no
+        legacy tag matches NEITHER half -- so a sync cannot see the note, and therefore cannot
+        fill anything in. What a sync CAN do with a note it cannot see is read it as a note that
+        does not exist and create it over again, leaving a duplicate while the broken note keeps
+        the review history. A repair that does not exist is worse advice than no advice.
+        """
+        verdict = verdict_without_identity({IDENTITY_FIELD: ""}, [])
+        assert isinstance(verdict, Explain)
+        lowered = verdict.message.lower()
+        # One substring covers "sync", "re-sync", "resync" and every inflection of the three.
+        self.assertNotIn("sync", lowered, verdict.message)
+        # Markers of instruction rather than banned vocabulary: an observation reaches for none
+        # of these, and a repair the person is being sent off to perform reaches for one.
+        for advice in ("should", "try", "fix"):
+            self.assertNotIn(advice, lowered, verdict.message)
+
     def test_a_tag_that_merely_looks_similar_changes_nothing(self) -> None:
         """`source::` and `srcfoo::` belong to somebody else, `SRCX::` only starts like ours, and
         `orphaned::` is this tool's own mark on a card it has DISOWNED. None of them is an

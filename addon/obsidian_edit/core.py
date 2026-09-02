@@ -5,9 +5,21 @@ at all. This module is the other half of that split: every judgement the add-on 
 function of strings and lives here, where it can be driven directly. What is left in the shell
 is registering a dialog, reading configuration and starting a process.
 
-THE ONE CASE THAT MUST NEVER BREAK IS THE ONE WITH NO TEST: a note carrying no `src::` tag has
-to reach Anki's own editor untouched. That is every note in the collection this tool did not
-create. `source_tag` is what decides it, and it is the first thing this module does.
+THE ONE CASE THAT MUST NEVER BREAK is a note on a note type this tool does not own reaching
+Anki's own editor untouched AND IN SILENCE, which is nearly every note in a real collection.
+`identity` is asked first and `verdict_without_identity` decides it, and what it decides on is
+whether the note carries an `Identity` FIELD AT ALL.
+
+NOT ON WHETHER IT CARRIES A `src::` TAG. An earlier version of this paragraph said that, and it
+was wrong twice over. A note whose field is present and empty carries no tag either, and it is
+the one note here that must be SPOKEN to rather than passed over in silence. And a migrated
+collection's own notes carry no tag at all: `SyncAction.CarryIdentity` in `plan/Planner.scala`
+deletes the legacy tag in the same action that writes the field, so "carries no `src::` tag" now
+describes much of the population this tool DID create.
+
+That paragraph also called this case untested, which it no longer is: the decision is covered by
+`VerdictWithoutIdentityTest`. What has no test is the wiring that delivers it, and `__init__.py`
+says so about itself.
 """
 
 from __future__ import annotations
@@ -30,7 +42,18 @@ IDENTITY_FIELD = "Identity"
 
 @dataclass(frozen=True)
 class NotOurs:
-    """No `src::` tag. Hand the note to Anki's editor and do nothing else."""
+    """NO `Identity` FIELD ON THE NOTE AT ALL, which means a note type this tool does not own.
+    Hand the note to Anki's editor and do nothing else.
+
+    THIS IS NOT THE SAME AS "NO IDENTITY", and the difference is the whole of
+    `verdict_without_identity`. A note that HAS the field with nothing in it also yields no
+    identity, and it gets `Explain` instead, because only a type this tool created declares the
+    field in the first place.
+
+    THE LINE THAT USED TO STAND HERE SAID "no `src::` tag", which such a note satisfies word for
+    word while getting the other verdict -- and which, since `SyncAction.CarryIdentity` began
+    deleting the legacy tag as it writes the field, is also true of notes this tool DID create.
+    """
 
 
 @dataclass(frozen=True)
@@ -139,6 +162,20 @@ def verdict_without_identity(
     is a verdict anybody could act on, so there is nothing to return and the caller is told what
     it broke instead. Asking `identity` itself, rather than re-deriving the test, is what keeps
     the two functions from drifting apart about where an identity lives.
+
+    THE EXPLANATION STATES WHAT WAS SEEN AND RECOMMENDS NOTHING, and the missing advice is
+    excluded rather than merely absent. It first read "Re-syncing the vault should fill it in",
+    which is false and worse than useless. `CardSearch.everythingOwned` in `model/CardSearch.scala`
+    enumerates this tool's notes as `"Identity:src::*" or "tag:src::*"`, and a note with an empty
+    field and no legacy tag matches NEITHER half -- so a sync cannot see such a note at all, let
+    alone fill its field in. What that note does look like to a sync is a note that DOES NOT
+    EXIST, which is precisely the input that makes the tool create it again; the same file says
+    so, and calls duplicating a collection the worst outcome available here. Following that
+    sentence could therefore produce a fresh note while the broken one keeps the review history.
+
+    NO REPAIR IS KNOWN FROM HERE, and that is filed as its own bug rather than guessed at in a
+    tooltip (`oas-x9i`). A test pins the absence of advice, so that the next reader who finds
+    this sentence unhelpfully bare cannot helpfully complete it.
     """
     found = identity(fields, tags)
     if found is not None:
@@ -155,8 +192,8 @@ def verdict_without_identity(
     return Explain(
         message=(
             f"This card is on one of this add-on's own note types, but its {IDENTITY_FIELD} "
-            "field is empty, so there is nothing here to find the note in your vault by. "
-            "Re-syncing the vault should fill it in."
+            "field is empty, so there is nothing here that can trace it back to a note in "
+            "your vault."
         )
     )
 
