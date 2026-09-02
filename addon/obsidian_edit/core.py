@@ -107,6 +107,34 @@ def source_tag(tags: Sequence[str]) -> str | None:
     return None
 
 
+def verdict_without_identity(
+    fields: Mapping[str, str], tags: Sequence[str]
+) -> NotOurs | Explain:
+    """What to do with a note that yielded no identity, which is not one situation but two.
+
+    REACHED ONLY AFTER `identity` HAS RETURNED None. It is handed the same two arguments rather
+    than a summary of what that call already saw, so that the two functions cannot drift into
+    disagreeing about where an identity lives.
+
+    WHETHER THE `Identity` FIELD IS PRESENT IS THE WHOLE QUESTION, and its content is not. All
+    five note types this tool owns declare that field, and the tool is ruled never to write to a
+    type it did not create. So a note that HAS the field is one of ours with something missing,
+    and a note that LACKS it was made in Anki and was never in the vault.
+
+    ONLY THE FIRST OF THOSE IS WORTH WORDS. The second is the overwhelming majority of any real
+    collection, and pressing Edit on one of those cards SHOULD open Anki's editor with nothing
+    said -- that is the right answer, not a fault being swallowed. Explaining on both was tried
+    and rejected for exactly that: it puts a message on every card the person ever made by hand
+    in order to serve the rare one.
+
+    `Open` IS ABSENT FROM THE RETURN TYPE because no identity means no argument for `locate` and
+    therefore no URI to open. AND SO IS None: an answer of "nothing at all" is what sent an
+    anomalous note silently to Anki's editor in the first place, so it is not a value this
+    function is able to return.
+    """
+    raise NotImplementedError
+
+
 def command(binary: str, vault_path: str, tag: str, vault_name: str | None) -> list[str]:
     """The `locate` invocation, as a list rather than a string.
 

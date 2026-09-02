@@ -3,13 +3,14 @@
     python3 -m unittest discover -s addon/obsidian_edit -p '*_test.py'
 """
 
+import dataclasses
 import unittest
 
 from core import (
-    identity,DRILL_PREFIX, JAVA_HINT, Explain, NotOurs, Open, command,
+    identity,DRILL_PREFIX, IDENTITY_FIELD, JAVA_HINT, Explain, NotOurs, Open, command,
                   drill_deck_name, drill_search, drill_search_for_id, environment,
                   interpret, is_drill_deck,
-                  missing_java, source_tag)
+                  missing_java, source_tag, verdict_without_identity)
 
 
 class SourceTagTest(unittest.TestCase):
@@ -72,6 +73,101 @@ class IdentityTest(unittest.TestCase):
 
     def test_a_note_this_tool_never_touched_has_neither(self) -> None:
         self.assertIsNone(identity({"Front": "x"}, ["leech"]))
+
+
+class VerdictWithoutIdentityTest(unittest.TestCase):
+    """The choice between saying nothing and saying something, once no identity has been found.
+
+    THE REPORTED BUG IS THE SECOND HALF OF THIS. Pressing Edit on a card whose note is on one of
+    this tool's own note types, with its `Identity` field empty, opened Anki's editor and said
+    nothing -- so the person saw a keypress behave as though the add-on were not installed.
+
+    THE FIRST HALF IS WHY THE OBVIOUS FIX IS WRONG. Most cards in a collection were typed into
+    Anki and were never in the vault; on those, opening Anki's editor in silence is the correct
+    answer. Explaining on every identity-less note was tried and rejected: it would put a message
+    on nearly every card in the collection to serve the rare one that is genuinely broken.
+    """
+
+    #: Notes on a note type this tool does not own: NO `Identity` KEY AT ALL. The tags are ones a
+    #: person or another add-on writes -- plus `orphaned::`, which this tool does write, to cards
+    #: it has disowned.
+    NOT_OURS = (
+        ({}, []),
+        ({"Front": "Bonjour", "Back": "Hello"}, []),
+        ({"Front": "x"}, ["leech", "marked"]),
+        ({"Front": "x"}, ["my::own::hierarchy"]),
+        ({"Front": "x"}, ["orphaned::abc::intro"]),
+    )
+
+    #: Notes on a type this tool DOES own -- the field is declared, so it is there -- carrying no
+    #: identity in it, and no legacy `src::` tag to fall back on either.
+    OURS_BUT_EMPTY = (
+        ({"Identity": ""}, []),
+        ({"Identity": "", "Front": "x", "Back": "y"}, ["leech"]),
+        ({"Identity": " "}, []),
+        ({"Identity": "   \t "}, ["marked"]),
+        ({"Identity": "\n"}, ["orphaned::abc::intro"]),
+    )
+
+    def test_a_note_type_this_tool_does_not_own_is_handed_over_in_silence(self) -> None:
+        """THE COMMON CASE, AND THE ONE THAT MUST NOT REGRESS INTO NOISE. Whatever tags such a
+        note carries, the absence of the field settles it: this is a card the person made in
+        Anki, and Anki's editor is where they asked to go."""
+        for fields, tags in self.NOT_OURS:
+            self.assertEqual(verdict_without_identity(fields, tags), NotOurs(), (fields, tags))
+
+    def test_an_empty_identity_field_is_the_anomaly_worth_explaining(self) -> None:
+        """Only a note type this tool created declares the field, so a note that HAS it and has
+        nothing in it is one of ours missing something it should have -- which is a fault, and
+        the person is the only one who can do anything about it."""
+        for fields, tags in self.OURS_BUT_EMPTY:
+            self.assertIsInstance(
+                verdict_without_identity(fields, tags), Explain, (fields, tags))
+
+    def test_whitespace_is_the_same_situation_as_empty(self) -> None:
+        """`identity` strips before deciding, so a field holding a stray space that survived an
+        edit is not a different fault from one holding nothing. Two verdicts that differed here
+        would mean two messages for one situation."""
+        blank = verdict_without_identity({"Identity": ""}, [])
+        for whitespace in ("   ", "\t", "\n  \n"):
+            self.assertEqual(verdict_without_identity({"Identity": whitespace}, []), blank,
+                             repr(whitespace))
+
+    def test_the_explanation_is_a_sentence_someone_can_act_on(self) -> None:
+        """Asserted on shape rather than wording, so the sentence stays free to improve: it has
+        to name the field, because that is the thing the person can go and look at in Anki's own
+        editor, and it must not report the fault in the vocabulary of the code."""
+        verdict = verdict_without_identity({"Identity": ""}, [])
+        assert isinstance(verdict, Explain)
+        self.assertTrue(verdict.message.strip(), "an empty message is a keypress that did nothing")
+        self.assertIn(IDENTITY_FIELD, verdict.message)
+        self.assertTrue(verdict.message.rstrip().endswith("."), verdict.message)
+        self.assertGreaterEqual(len(verdict.message.split()), 5, verdict.message)
+        for jargon in ("none", "null", "traceback", "exception"):
+            self.assertNotIn(jargon, verdict.message.lower(), verdict.message)
+
+    def test_a_tag_that_merely_looks_similar_changes_nothing(self) -> None:
+        """`source::` and `srcfoo::` belong to somebody else, `SRCX::` only starts like ours, and
+        `orphaned::` is this tool's own mark on a card it has DISOWNED. None of them is an
+        identity, so none of them moves a note from one arm of this decision to the other: the
+        field is the whole of it."""
+        lookalikes = ["source::abc", "srcfoo::abc", "orphaned::abc::intro", "SRCX::abc"]
+        self.assertEqual(verdict_without_identity({"Front": "x"}, lookalikes), NotOurs())
+        self.assertIsInstance(verdict_without_identity({"Identity": ""}, lookalikes), Explain)
+
+    def test_silence_carries_nothing_to_say(self) -> None:
+        """THE REJECTED DESIGN, WRITTEN DOWN. `NotOurs` gains no message: a sentence attached to
+        every note type this tool does not own is noise on nearly every card in the collection.
+        The silence is the answer here, not a blank waiting to be filled in."""
+        self.assertEqual(dataclasses.fields(NotOurs), ())
+        self.assertEqual(NotOurs(), NotOurs())
+
+    def test_every_case_here_is_one_identity_really_cannot_answer(self) -> None:
+        """This decision lives entirely in the shadow of `identity` returning None -- the shell
+        reaches it nowhere else. A fixture carrying a readable identity would be pinning a branch
+        that never runs, and would pin it green."""
+        for fields, tags in self.NOT_OURS + self.OURS_BUT_EMPTY:
+            self.assertIsNone(identity(fields, tags), (fields, tags))
 
 
 class CommandTest(unittest.TestCase):
