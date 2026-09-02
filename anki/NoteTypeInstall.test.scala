@@ -212,6 +212,7 @@ class NoteTypeInstallTest extends munit.FunSuite:
       extra.fields.toVector,
       extra.templates.toVector.toMap,
       basic.spec.styling,
+      basic.spec.isCloze,
     )
     assertEquals(
       drift,
@@ -227,6 +228,7 @@ class NoteTypeInstallTest extends munit.FunSuite:
         basic.spec.fields.toVector,
         basic.spec.templates.toVector.toMap,
         basic.spec.styling,
+        basic.spec.isCloze,
       ),
       Vector.empty,
     )
