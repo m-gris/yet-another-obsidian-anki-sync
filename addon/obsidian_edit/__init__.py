@@ -20,9 +20,12 @@ it is thin: every judgement lives in `core.py`, which is a pure function of stri
 tested. What is left here is reading configuration, starting a process, and handing the result
 to one of three branches. `cli/Main.scala` makes the same admission about its own shell.
 
-THE BRANCH THAT MATTERS MOST IS THE ONE THAT CANNOT BE TESTED AT ALL: a note with no `src::`
-tag must reach Anki's editor untouched. It is every note this tool did not create. It is kept
-to a single call with nothing between it and `EditCurrent` that could fail.
+THE BRANCH THAT MATTERS MOST IS THE ONE THAT CANNOT BE TESTED AT ALL: a note on a note type
+this tool does not own must reach Anki's editor untouched, and in silence. It is every note this
+tool did not create, which is nearly every note in a real collection. Which notes those are is
+decided in `core.py`, where it is tested; all that is left here is that the verdict `NotOurs`
+reaches `EditCurrent` past two `isinstance` calls and nothing else -- no message, no subprocess,
+nothing that has a failure mode.
 """
 
 from __future__ import annotations
@@ -115,11 +118,18 @@ def edit_current(main_window: Any) -> Any:
     # before carries only the tag. `core.identity` prefers the field and falls back, which is
     # correct in every one of those states and needs no flag day.
     note = card.note()
-    tag = core.identity(dict(note.items()), note.tags)
+    fields = dict(note.items())
+    tag = core.identity(fields, note.tags)
     if tag is None:
-        return _delegate(main_window)
-
-    verdict = _locate(tag)
+        # THE FIELDS ARE KEPT RATHER THAN DISCARDED, because "no identity" is two situations and
+        # only the fields tell them apart. A note with no `Identity` field at all was made in
+        # Anki and was never in the vault; one that HAS the field and nothing in it is on a type
+        # this tool owns and is missing something. `core.verdict_without_identity` makes that
+        # call, and it cannot raise on this branch: its precondition is exactly the `tag is None`
+        # that got us here.
+        verdict: core.Verdict = core.verdict_without_identity(fields, note.tags)
+    else:
+        verdict = _locate(tag)
 
     if isinstance(verdict, core.Open):
         if verdict.caveat:
@@ -137,6 +147,10 @@ def edit_current(main_window: Any) -> Any:
         tooltip(verdict.message, period=8000)
         return _delegate(main_window)
 
+    # `core.NotOurs`, and it lands here BY FALLING PAST BOTH TESTS ABOVE rather than by being
+    # caught earlier. That is the branch taken by nearly every card in a real collection, and
+    # what stands between it and Anki's editor is two `isinstance` calls and nothing else --
+    # no tooltip, no subprocess, nothing with a failure mode.
     return _delegate(main_window)
 
 
