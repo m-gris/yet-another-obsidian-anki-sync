@@ -2005,3 +2005,248 @@ class ExtractorTest extends munit.FunSuite:
     val spans = Extractor.spansWithoutMarker(header("# $A$ and $B$ #flashcard/2way").content.toVector)
     assertEquals(spans.collect { case m: ObsidianSyntax.MathInline => m.tex }, Vector("A", "B"))
   }
+
+  // ══════════ a heading this tool does not read as a heading (oas-30t) ════
+  //
+  // A `#` heading written at the start of the line DIRECTLY AFTER a list line, with no blank line
+  // between them, is absorbed by laika-core 1.3.2 into the open list item and parsed there as a
+  // nested `ast.Header`. The section builder lifts only TOP-LEVEL headers into `Section`s, so it
+  // never becomes one — while CommonMark, which is what Obsidian follows, closes the list and
+  // reads a heading. `extract/ListIndent.scala` carries the measurement, and
+  // `extract/UnreadHeadings.test.scala` pins the detection itself; these tests pin what the
+  // EXTRACTOR does about it. Every consequence below reported `failures: 0` and exit 0 before
+  // this section existed.
+  //
+  // EVERY CASE HERE DIFFERS FROM ITS CONTROL BY ONE BLANK LINE, which is the whole experiment: a
+  // test that ever passes for some other reason passes its control too, and the pair stops being
+  // informative.
+
+  private def misfiled(note: ExtractedNote): Vector[String] = note.failures.collect {
+    case BuildFailure.KeyMisfiledInFile(_, _, reason) => reason
+  }
+
+  private def unreadHeading(note: ExtractedNote): Vector[String] = note.failures.collect {
+    case BuildFailure.HeadingUnreadInFile(_, _, reason) => reason
+  }
+
+  /** Consequence 1 of 4: the swallowed heading carried the marker, so its card is never created.
+    *
+    * It is the ONLY marked heading in the note, so before this check the note produced nothing at
+    * all and said nothing at all.
+    */
+  test("swallowed heading: a marked heading absorbed by a list makes no card, and says so") {
+    val note = extract(
+      """|# Scale
+         |
+         |- users
+         |- data size
+         |# 5 Questions #flashcard/sequence
+         |- How does data move ?
+         |- Where is data stored ?
+         |""".stripMargin
+    )
+    assertEquals(note.specs, Vector.empty)
+    assert(misfiled(note).exists(_.contains("5 Questions")), s"not named: ${note.failures}")
+  }
+
+  test("swallowed heading CONTROL: with the blank line the same note builds its card") {
+    val note = extract(
+      """|# Scale
+         |
+         |- users
+         |- data size
+         |
+         |# 5 Questions #flashcard/sequence
+         |
+         |- How does data move ?
+         |- Where is data stored ?
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("5 questions"))
+    assertEquals(note.failures, Vector.empty)
+  }
+
+  /** Consequences 2 and 4 of 4, which arrive together on one card. The swallowed heading's own
+    * text becomes CONTENT of the card above it — marker and all, since nothing here reads the
+    * line as a heading — and the list items written UNDER it rejoin the list above it, because
+    * one `BulletList` spans the whole run. So the card above answers with a four-item list the
+    * note does not contain, two of whose items were written under a different heading.
+    *
+    * The refusal is what this asserts: no card is built, so there is no face for any of it to
+    * reach.
+    */
+  test("swallowed heading: the card above is refused rather than shipped with the text below it") {
+    val note = extract(
+      """|# Scale #flashcard/sequence
+         |
+         |- users
+         |- data size
+         |# 5 Questions
+         |- How does data move ?
+         |- Where is data stored ?
+         |""".stripMargin
+    )
+    assertEquals(note.specs, Vector.empty)
+    assert(misfiled(note).exists(_.contains("5 Questions")), s"not named: ${note.failures}")
+  }
+
+  /** Consequence 3 of 4, AND THE EXPENSIVE ONE. The swallowed heading is unmarked and a marked
+    * heading BELOW it survives — so the card builds perfectly and is merely filed under the wrong
+    * parent. Nothing fails, which is why no per-card refusal could ever reach it.
+    *
+    * `# Alpha` / list / `# Beta` / `## Gamma #flashcard/1way` keys as `alpha / gamma` without the
+    * blank line and `beta / gamma` with it. A heading path is half a card's identity, so adding
+    * the blank line later orphans the note and mints a history-less replacement.
+    */
+  test("swallowed heading: a card that would be filed under the WRONG PARENT is refused") {
+    val note = extract(
+      """|# Alpha
+         |
+         |- an item
+         |# Beta
+         |
+         |## Gamma #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(
+      paths(note),
+      Vector.empty,
+      "a mis-keyed card was built: the heading path is half the card's identity",
+    )
+    assert(misfiled(note).exists(_.contains("Beta")), s"not named: ${note.failures}")
+  }
+
+  /** The control that shows what the key WOULD have been, so the test above is a claim about
+    * identity rather than about card count.
+    */
+  test("swallowed heading CONTROL: with the blank line the card is filed under Beta") {
+    val note = extract(
+      """|# Alpha
+         |
+         |- an item
+         |
+         |# Beta
+         |
+         |## Gamma #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("beta / gamma"))
+  }
+
+  /** THE BLAST RADIUS IS THE NOTE, and it has to be: every heading below the swallowed one is
+    * re-parented, so this tool cannot enumerate which keys the note owns. Sheltering less would
+    * let orphan inference read a correctly-keyed live card as deleted — and an orphan is tagged
+    * and SUSPENDED.
+    */
+  test("swallowed heading: the failure shelters the WHOLE NOTE from orphan inference") {
+    val note = extract("# Alpha\n\n- an item\n# Beta\n\n## Gamma #flashcard/1way\n\nThe answer.\n")
+    assertEquals(
+      note.failures.map(_.shelters),
+      Vector(obsidiananki.plan.OrphanShelter.WholeNote(NoteId.fromFrontmatter("n1").toOption.get)),
+    )
+  }
+
+  // ── THE MILDER CASE: REPORTED, AND THE NOTE'S CARDS ARE STILL WRITTEN ────────────
+  //
+  // A heading INDENTED inside a list item parses to the same tree shape as a swallowed one — an
+  // `ast.Header` inside a `BulletListItem` — and CommonMark puts it inside the item as well. The
+  // two readings agree about where it sits, so no card below it is filed differently and the
+  // only thing lost is the card that heading would have made. Refusing the note over that would
+  // cost the author every card in it to save one.
+
+  test("an indented heading is reported, and the note's other cards are still built") {
+    val note = extract(
+      """|# Alpha
+         |
+         |- an item
+         |  # indented under the item
+         |- another item
+         |
+         |## Beta #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("alpha / beta"))
+    assert(
+      unreadHeading(note).exists(_.contains("indented under the item")),
+      s"the heading nobody will get a card for was passed over: ${note.failures}",
+    )
+  }
+
+  // ── THE FALSE POSITIVES THIS MUST NOT HAVE ──────────────────────────────────────
+  //
+  // `docs/findings/PARSER-DISAGREEMENTS.md` rules that this family must MISS rather than
+  // OVER-REPORT: "an author refused for no reason learns to distrust every refusal this tool
+  // makes." Each case below either produces no unlifted heading at all or produces one both
+  // parsers place identically, so there is nothing to report and nothing to refuse.
+
+  test("no false positive: a heading directly after a PARAGRAPH is read correctly by both") {
+    val note = extract(
+      """|# Alpha
+         |
+         |prose with no blank line after it
+         |## Beta #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("alpha / beta"))
+    assertEquals(note.failures, Vector.empty)
+  }
+
+  test("no false positive: a heading written inside a blockquote does not disturb the note") {
+    val note = extract(
+      """|# Alpha
+         |
+         |> # A quoted heading
+         |> quoted body
+         |
+         |## Beta #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("alpha / beta"))
+    assertEquals(note.failures, Vector.empty)
+  }
+
+  test("no false positive: a `#` line inside a fenced code block is not a heading at all") {
+    val note = extract(
+      """|# Alpha
+         |
+         |- an item
+         |
+         |```markdown
+         |- a list line
+         |# not a heading
+         |```
+         |
+         |## Beta #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("alpha / beta"))
+    assertEquals(note.failures, Vector.empty)
+  }
+
+  test("no false positive: a frontmatter-style tag line after a list is not a heading to Obsidian") {
+    val note = extract(
+      """|# Alpha
+         |
+         |- an item
+         |#flashcard/sequence
+         |
+         |## Beta #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("alpha / beta"))
+    assertEquals(note.failures, Vector.empty)
+  }

@@ -411,20 +411,46 @@ object Extractor:
       case container: BlockContainer => container.content.foreach(walk(_, ancestors, ancestorTitles))
       case _                         => ()
 
-    root.content.foreach(walk(_, Vector.empty, Vector.empty))
+    // ── THE FILE'S HEADING TREE, CHECKED BEFORE A SINGLE KEY IS DERIVED FROM IT ───────────────
+    //
+    // A heading this tool does not read as a heading contributes no segment, so the headings
+    // below it can key under ITS parent instead — a card that builds perfectly and is filed
+    // wrong. Nothing downstream can catch that, because nothing about it fails; the only place to
+    // stop it is before the walk that derives the keys. See [[UnreadHeadings]].
+    //
+    // REPORTED WHICHEVER IT IS, WITHHELD ONLY FOR ONE OF THEM, AND THIS IS WHERE THAT IS DECIDED.
+    // The type reports a FACT — [[UnreadHeading.commonMarkPlacesItElsewhere]], whether the other
+    // reading puts the heading somewhere else in the outline — and the decision taken here is what
+    // to do about it: NOTHING KEYED BY THIS NOTE'S HEADINGS MAY BE WRITTEN when it does. Those
+    // keys are perfectly derivable and WRONG, and working out which of them are unaffected would
+    // mean reconstructing the outline the author meant, which is a guess this project does not
+    // make — so the tool declines to say what this file's cards are rather than saying it and
+    // being plausibly wrong. A heading indented inside a list item is placed identically by both
+    // readings, costs its own card and moves nothing else, so refusing the note over that one
+    // would cost an author every card in the file to save one.
+    //
+    // THE WALK IS SKIPPED RATHER THAN RUN AND DISCARDED, which is why this is a branch and not a
+    // filter over the result. Running it would compute a full set of keys nobody may act on, and
+    // the next person to read this would have to work out why they are thrown away.
+    val unread = UnreadHeadings.in(root, body, bodyFirstLine)
+    unread.foreach(u => failures += UnreadHeadings.failure(u, noteId, filePath))
 
-    // THE NOTE'S OWN BODY, OUTSIDE ANY HEADING — the blocks before the first one, and the whole
-    // of a note that has no headings at all.
-    //
-    // WALKED SEPARATELY BECAUSE `walk` CANNOT SEE THEM. It descends through sections and ignores
-    // anything else, so a paragraph at the top level reaches its `case _ => ()` and produces
-    // nothing. That was invisible until this feature: before it, a block outside a marked
-    // heading was never going to make a card anyway.
-    //
-    // AND IT IS THE MOST LITERAL READING OF WHAT WAS ASKED FOR. "Highlight a phrase anywhere and
-    // get a card" includes a note with no headings, which is exactly the note somebody writes
-    // when they did not want to think about structure at all.
-    clozeBlockCards(root.content.filterNot(_.isInstanceOf[Section]), Vector.empty)
+    if !unread.exists(_.commonMarkPlacesItElsewhere) then
+      root.content.foreach(walk(_, Vector.empty, Vector.empty))
+
+      // THE NOTE'S OWN BODY, OUTSIDE ANY HEADING — the blocks before the first one, and the whole
+      // of a note that has no headings at all.
+      //
+      // WALKED SEPARATELY BECAUSE `walk` CANNOT SEE THEM. It descends through sections and ignores
+      // anything else, so a paragraph at the top level reaches its `case _ => ()` and produces
+      // nothing. That was invisible until this feature: before it, a block outside a marked
+      // heading was never going to make a card anyway.
+      //
+      // AND IT IS THE MOST LITERAL READING OF WHAT WAS ASKED FOR. "Highlight a phrase anywhere and
+      // get a card" includes a note with no headings, which is exactly the note somebody writes
+      // when they did not want to think about structure at all.
+      clozeBlockCards(root.content.filterNot(_.isInstanceOf[Section]), Vector.empty)
+
     ExtractedNote(specs.result(), failures.result())
 
   private def describe(e: SpecError): String = e match

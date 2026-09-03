@@ -1261,3 +1261,124 @@ class VaultWalkerTest extends munit.FunSuite:
            "prose was counted as a heading")
     assert(hasNoHeadings(root()), "an empty document has no headings")
   }
+
+  // ────────────── a heading this tool does not read as a heading ──────────────
+  //
+  // The vault-level half of the disagreement pinned in `Extractor.test.scala` and
+  // `UnreadHeadings.test.scala`: a `#` heading on the line directly after a list line, which
+  // Obsidian reads as a heading and laika-core 1.3.2 absorbs into the open list item. Row 2 of
+  // the table in `docs/findings/PARSER-DISAGREEMENTS.md`; the finding is oas-30t.
+  //
+  // WHAT IS TESTED HERE AND NOWHERE ELSE is the classification this file does BEFORE the
+  // extractor is reached. `hasMarkedHeading` and `hasNoHeadings` are both computed from the tree
+  // that lost the heading, so a note whose only heading was swallowed is sorted into the wrong
+  // bin — and every message that follows from that bin is about a document nobody read.
+
+  /** THE CONTRADICTORY SECOND MESSAGE, SUPPRESSED — the same shape as the near-miss guard beside
+    * `markerNotOnHeading`, and for the same reason.
+    *
+    * `hasMarkedHeading` walks `Section`s, and a swallowed heading never became one, so the marker
+    * ON that heading is invisible to it. A note whose frontmatter also names `flashcard` therefore
+    * drew BOTH the accurate report — this tool did not read your heading — and "no HEADING carries
+    * a marker", which is false and sends the author off to move a marker that is already exactly
+    * where it belongs.
+    */
+  test("a swallowed heading is reported ONCE, without the false 'no heading carries a marker'") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n" +
+          "# Scale\n\n- users\n# Questions #flashcard/1way\n- how\n")
+    )
+    assertEquals(index.scan.specs, Vector.empty, s"a card was built: ${index.scan.specs}")
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "the author was told to move a marker that is already on a heading",
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.KeyMisfiledInFile(_, _, r) => r.contains("Questions") },
+      Vector(true),
+      s"expected exactly one report naming the heading: ${index.scan.failures}",
+    )
+  }
+
+  /** WHAT THE SCAN OWES SUCH A FILE, BEYOND REFUSING ITS CARDS. Its heading tree is not the one
+    * its author wrote, so the keys it owns cannot be enumerated — which is what
+    * `OrphanShelter.WholeNote` is for. Without it, declining to build the file's cards would make
+    * every Anki note it has ever produced look DELETED, and an inferred orphan is tagged and
+    * SUSPENDED: live cards with real review history out of the review queue over one blank line.
+    *
+    * NOT `PartialScan`, though. This file is understood well enough to say which note it belongs
+    * to; the rest of the vault keeps its orphan inference. Degrading the whole scan is reserved
+    * for frontmatter nobody could read.
+    */
+  test("a note with a swallowed heading is sheltered, and the rest of the vault is not") {
+    val index = scan(
+      "N.md"  -> note("n1", "# Scale #flashcard/1way\n\n- data size\n# 5 Questions\n- how\n"),
+      "Ok.md" -> note("n2", "# B\n\ny\n\n## Two #flashcard/1way\n\nBody.\n"),
+    )
+    assertEquals(index.scan.specs.map(_.key.noteId.value), Vector("n2"))
+    assertEquals(index.scan.suppressedNoteIds.map(_.value), Set("n1"))
+    assert(index.scan.canInferOrphans, "one misread file cost the whole vault its orphan inference")
+  }
+
+  /** THE SECOND DOOR, OPEN FOR ITS OWN REASON. `hasNoHeadings` walks `BlockContainer`s and Laika's
+    * `BulletList` is a `ListContainer`, so a heading swallowed INTO a list item is invisible to
+    * that predicate too: the note reports as having NO headings at all, takes the whole-note
+    * branch, and a frontmatter marker builds a card there — out of the very outline this tool has
+    * just established it misread, with the swallowed heading's own marker text as body content.
+    */
+  test("the whole-note card a frontmatter marker would build is withheld too") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n2\ntags:\n  - flashcard/1way\n---\n\n" +
+          "- ten thousand requests\n# Latency\n- one millisecond\n")
+    )
+    assertEquals(index.scan.specs, Vector.empty, s"a card was built: ${index.scan.specs}")
+    assert(
+      index.scan.failures.exists {
+        case BuildFailure.KeyMisfiledInFile(_, _, r) => r.contains("Latency")
+        case _                                       => false
+      },
+      s"the file was refused without being told why: ${index.scan.failures}",
+    )
+  }
+
+  /** AND THE OTHER MESSAGE THE SAME MISREADING PRODUCES. A structure marker on a note this tool
+    * believes has no headings is told there is nothing to reveal — which is true of the tree and
+    * false of the file, since the heading it would have revealed is the swallowed one.
+    */
+  test("a note whose only heading was swallowed is not told it has no headings") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/sequence/headers\n---\n\n" +
+          "- users\n# Questions\n- how\n")
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, _) => f },
+      Vector.empty,
+      "an author who wrote a heading was told their note has none",
+    )
+  }
+
+  /** THE MILDER CASE COSTS THE NOTE NOTHING, and that separation is the point of the two
+    * severities. This note's heading is INDENTED inside a list item, where CommonMark puts it as
+    * well — so no key in the file is wrong, and the whole-note card its frontmatter marker asks
+    * for is written exactly as it would have been. What the author gains is being told that the
+    * heading they wrote makes no card of its own.
+    */
+  test("an indented heading is reported without costing the note its whole-note card") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n" +
+          "- alpha\n  # indented under the item\n- beta\n")
+    )
+    assertEquals(index.scan.specs.size, 1, s"the note's card was withheld: ${index.scan.failures}")
+    assert(
+      index.scan.failures.exists {
+        case BuildFailure.HeadingUnreadInFile(_, _, r) => r.contains("indented under the item")
+        case _                                         => false
+      },
+      s"the heading nobody will get a card for was passed over: ${index.scan.failures}",
+    )
+  }
