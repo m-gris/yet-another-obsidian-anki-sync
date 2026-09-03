@@ -17,17 +17,28 @@ do._
 ## The one-paragraph answer
 
 This tool parses with laika-core 1.3.2 and Obsidian parses with CommonMark, and they disagree
-about real markdown that real people write. Six such disagreements are known. Three of them are
-already loud — the tool refuses, or the parse fails outright. Two more were closed on 2026-08-29.
-**One is still silent, and produces a card whose content the author never wrote.** A silent one
-cannot be closed by a refusal,
-because a refusal fires when a marked section FAILS TO BUILD and in these cases nothing fails:
-the card builds, or the card was never asked for, or the card is keyed under a heading that does
-not exist. What sees all three is a check over RAW SOURCE that asks a different question — *do
-Obsidian and this tool agree about what this line is?* — which is what `extract/ListIndent.scala`
-already is, for exactly one rule out of six. Whether that check ships as more rules in
-`ListIndent`, as a `lint` command, or as a block inside `inspect` is open; whether it should
-exist at all is the decision this document is for.
+about real markdown that real people write. Six such disagreements are known, and **none of them
+is silent any more.** Three are loud because the tool refuses or the parse fails outright; two
+were closed on 2026-08-29 by giving the parser the productions it lacked; and the last — row 2,
+the heading a list swallows — was closed on 2026-09-03 by a check of its own.
+
+A silent one cannot be closed by a refusal attached to a card, because such a refusal fires when
+a marked section FAILS TO BUILD and in these cases nothing fails: the card builds, or the card
+was never asked for, or the card is keyed under a heading that does not exist. What sees all
+three is a check asking a different question — *do Obsidian and this tool agree about what this
+line is?* — and it turned out to want TWO checks rather than one, because that question has two
+halves living in different places. `extract/ListIndent.scala` reads RAW SOURCE, because
+indentation is consumed by the parser and is gone by the time a tree exists.
+`extract/UnreadHeadings.scala` reads the PARSE TREE, because whether this tool ended up TREATING
+a heading as a heading is not a fact the source can be asked. Neither is the `lint` subcommand
+weighed below; both run inside the extractor, where the answer can still stop a card being keyed.
+
+> **WITHDRAWN 2026-09-03, and left standing above rather than deleted** because much of what
+> follows rests on it. This paragraph used to say that what sees the family is *a check over RAW
+> SOURCE*, on the strength of the only instance that then existed. That is right for row 1 and
+> wrong for row 2 — the argument is under "what writing the second one taught", below. What
+> survives the correction is the shared property: such a check reads something OTHER than the
+> marked section that failed to build.
 
 ---
 
@@ -61,7 +72,7 @@ that posture.
 | # | The disagreement | What Obsidian does | What this tool does | Status |
 |---|---|---|---|---|
 | 1 | a nested list item indented fewer than four columns | nests it | closes the list and opens a new one | **REFUSED**, by name, with line numbers — `SpecError.ListNestingUnreadable` |
-| 2 | a `#` heading on the line directly after a list line | reads a heading | absorbs it into the list item | **SILENT** — see `EVOLVABILITY.md` §3.11 |
+| 2 | a `#` heading on the line directly after a list line | reads a heading | absorbs it into the list item | **CLOSED** 2026-09-03. The note is refused whole — `BuildFailure.KeyMisfiledInFile` |
 | 3 | an Obsidian callout, `> [!note]` | renders a callout | fails the WHOLE document: `unresolved link id reference: !note` | detected, but the message names Laika rather than the construct |
 | 4 | a block reference, `^abc123` | hides it | hides it — a production in the grammar since 2026-08-29, lowering to nothing | **CLOSED** |
 | 5 | maths, `$…$` and `$$…$$` | renders it | captures it and re-emits `\(…\)` / `\[…\]`, which is what Anki reads — since 2026-08-29 | **CLOSED**. See `MATHS-ON-A-CARD.md` |
@@ -74,7 +85,40 @@ that posture.
    `dummy-vault/Patterns/Shallow-Nesting.md` carries it end to end as a deliberate failure.
 2. VERIFIED BY EXECUTION 2026-08-27, over pairs of vaults differing by exactly one blank line.
    Full account, including the three variants and the live instance in Marc's vault, at
-   `EVOLVABILITY.md` §3.11.
+   `EVOLVABILITY.md` §3.11. CLOSED 2026-09-03 by `extract/UnreadHeadings.scala`, which reports
+   every heading the section rewrite did not lift into a `Section` — so it closes all three
+   variants, the MIS-KEYED one included, rather than only the two that lose a card.
+
+   A FOURTH CONSEQUENCE WAS MEASURED WHILE CLOSING IT, and it is not in the three variants above:
+   the list lines BELOW the swallowed heading rejoin the list ABOVE it, because one list spans the
+   whole run. The card that absorbed the heading therefore also absorbs the items written under
+   it and answers with a list the note does not contain — `# Latency`, written with one item
+   above and one below, renders
+   `<li><p>ten thousand requests</p><p>Latency</p></li><li>one millisecond</li>`.
+
+   THREE FURTHER CAUSES OF AN UNREAD HEADING FELL OUT OF ASKING THE TREE, for nothing: the same
+   absorption through a list item's LAZY CONTINUATION line, which `ListIndent` records as a known
+   miss; the same absorption by an open BLOCKQUOTE, measured 2026-09-03 and not previously
+   recorded anywhere; and a heading INDENTED inside a list item, which is a different animal — see
+   the severity note below.
+
+   ITS ONE MEASURED FALSE POSITIVE IS EXCLUDED BY NAME AND PINNED: laika reads `#tag` — no space
+   after the hashes — as a heading and CommonMark does not, so a tag on its own line after a list
+   line arrives looking identical to the defect. Reporting it would be worse than noise, because
+   the remedy this check offers is a blank line above the heading, and following it there would
+   make laika lift the tag into a real section — inserting a heading the author never wrote into
+   the path of every card below it.
+
+   **THE ROW IS TWO FACTS, AND THEY ARE NOT WORTH THE SAME.** A heading this tool cannot read
+   costs the card that heading would have made. A heading that would have been TOP-LEVEL in the
+   other reading also re-parents every heading below it, which is the expensive one, because those
+   cards build perfectly and are merely filed wrong. The second holds only when the author wrote
+   the `#` in the first column, where CommonMark ends the list or the quote above it; a heading
+   deliberately indented inside a list item is placed identically by both parsers and moves
+   nothing. So the two get different answers — the milder is reported and the note's cards are
+   written as usual, the severe withholds every card in the note — and the distinction is carried
+   in the type, `extract/UnreadHeadings.scala`'s `UnreadHeading`, rather than in a branch each
+   consumer repeats.
 3. VERIFIED BY EXECUTION by an earlier session; recorded as oas-yom. All 125
    block-id definitions in `References/Modern Mathematics.md` sit inside callouts, and the file
    is silent today only because it carries no `id:` in its frontmatter.
@@ -118,7 +162,13 @@ there is no failure to hang a refusal on and no key to attach one to.
 
 **This is the whole argument for a separate check.** A refusal answers *did this card fail?* The
 question that sees the family is *did the two parsers read this file the same way?* — and that
-one is answerable from raw source, before any card exists.
+one is answerable before any card exists.
+
+> _Amended 2026-09-03. The sentence above ended "answerable from raw source, before any card
+> exists", and for row 2 the raw source is the wrong artefact to ask — see the section below.
+> The heading of this section is also narrower than it reads: what row 2 could not be closed by
+> is a refusal attached to a CARD KEY. `BuildFailure.KeyMisfiledInFile` is a refusal scoped to
+> the NOTE, and that is what closed it._
 
 ---
 
@@ -135,16 +185,34 @@ the status column reads as arbitrary until the pairs are visible.
 
 | pair | rows | what the parser does | why the status follows |
 |---|---|---|---|
-| **recognised as the WRONG structure** | 1, 2 | both parsers see a construct and disagree about which one | the parse SUCCEEDS, so there is nothing to fail on. Row 1 is loud ONLY because `extract/ListIndent.scala` reads raw source; row 2 has no such check and is therefore silent |
+| **recognised as the WRONG structure** | 1, 2 | both parsers see a construct and disagree about which one | the parse SUCCEEDS, so there is nothing to fail on. Each is loud only because a check was written for it: row 1 by `extract/ListIndent.scala` over raw source, row 2 by `extract/UnreadHeadings.scala` over the parse tree |
 | **recognised, then unresolvable** | 3, 6 | markdown reads a shortcut link reference and nothing defines it | strict mode reports it. Both fail the WHOLE document with the same Laika sentence, which is exactly why row 3 names Laika instead of naming a callout |
 | **not recognised at all** | 4, 5 | no rule matches, so the characters remain text | text is always valid, so there is no error to report. It becomes card CONTENT |
 
 Read this way the table proves the argument above, and proves it twice over.
 
-**ROW 1 IS THE PROOF BY CONSTRUCTION.** It is the only loud member of its pair, and the only
-difference between it and row 2 is that somebody wrote a raw-source check for it. The remedy
-proposed below is therefore not speculative: one instance of it is already in the tree, already
-shipping, and already the reason one row of this table reads differently from its twin.
+**ROW 1 WAS THE PROOF BY CONSTRUCTION**, and it has since been joined rather than left alone.
+When this was written it was the only loud member of its pair, and the only difference between it
+and row 2 was that somebody had written a check for it — which was the argument that the remedy
+proposed below was not speculative. Row 2 now has one too, so the pair is loud on both sides and
+the proof has become an example.
+
+**WHAT WRITING THE SECOND ONE TAUGHT, and it is not what this document predicted.** The remedy is
+described throughout as *a check over RAW SOURCE*, generalised from the single instance that
+existed at the time. That is right for row 1 and wrong for row 2. Indentation has to be read from
+source because the parser consumes it; but *did this tool treat the line as a heading?* is a
+question about the tool's own reading, and the parse tree answers it outright while a source scan
+can only re-derive it — needing fence tracking, a second definition of what a heading is, and a
+rule per cause. Asking the tree instead caught three further causes nobody had enumerated.
+**The shared property is that the check reads something OTHER than the marked section that failed
+to build; which of the two artefacts it reads is decided per row.**
+
+**AND ONE THING THE TREE STILL CANNOT ANSWER, which is why row 2's check reads a little of both.**
+Whether the author wrote the heading at column zero — the fact that separates a heading a list
+SWALLOWED from one the author INDENTED inside a list item — leaves no trace in the tree at all:
+the two produce byte-identical shapes. So the tree says *this tool did not read your heading* and
+the source says *you wrote it as a top-level heading*, and it takes both to know what the
+disagreement costs.
 
 **ROWS 4 AND 5 ARE THE PROOF BY IMPOSSIBILITY**, and this is the part worth stating carefully,
 because the tempting version of it is wrong. It is tempting to say markdown has no syntax errors
@@ -283,6 +351,16 @@ Candidates, not a recommendation:
 - A refusal alone is structurally insufficient for this family — established above by
   measurement, not by argument.
 
+_Row 2 shipped on 2026-09-03 as `extract/UnreadHeadings.scala`, which settles part of what
+follows. The alternatives are left in place rather than deleted, so that what was chosen over
+what stays visible. What it settles: it is a second CHECK and not a subsystem (item 1); it runs
+inside the extractor rather than as a lint command (item 2); and it ships narrow rather than
+waiting for the whole family (item 4) — though not on the terms item 4 anticipated, since the
+expensive variant is the one it closes first rather than the one it leaves open. What it does not
+settle is item 3, which is still open and now has evidence on both sides: rows 1 and 2 turned out
+to need DIFFERENT artefacts to read, so "one check or two" was answered by the constructs rather
+than chosen._
+
 **Not decided, and each is Marc's:**
 
 1. **Whether this earns a subsystem at all.** One instance exists in the vault today. The
@@ -307,6 +385,30 @@ developed against, which is shaped by what was being stretched at the time.
 **REASONED, NOT MEASURED:** that Obsidian renders the swallowed line as a heading. It follows from
 CommonMark's lazy-continuation rule and from the author having written it as a heading and expected
 a card. Until somebody looks in reading view, it is an inference.
+
+**STILL AN INFERENCE ON 2026-09-03**, after the row was closed, and worth saying plainly because a
+shipped check reads as a settled question. Nobody has yet opened one of these files in Obsidian's
+reading view. Everything the check knows about Obsidian's half of the disagreement is read off
+CommonMark; everything it knows about this tool's half is measured.
+
+**MEASURED 2026-09-03, while closing the row**, each by parsing the input with the production
+parser and printing the tree:
+
+- A heading at column zero directly below a QUOTED line is absorbed into the `QuotedBlock`,
+  exactly as one below a list line is absorbed into the list item. Not previously recorded.
+- A heading INDENTED inside a list item produces the same tree shape as a swallowed one — a
+  heading nested in the list item — at two and at three columns of indent. This is what makes the
+  tree alone unable to tell the two apart.
+- `#flashcard/sequence` on its own line is parsed as a HEADING by laika-core 1.3.2. The test that
+  established this was written expecting the opposite and failed.
+
+**REASONED, NOT MEASURED, IN THE NEW WORK:** that column zero is the right discriminator for "would
+Obsidian have made this a top-level heading". What CommonMark actually says is that a line ends the
+enclosing container when it is indented less than that container's content column, so a heading
+indented one column inside a two-column list item is top-level to Obsidian and is treated here as
+the milder case. That is a deliberate under-report, in the direction this document rules the family
+must fail in, and nobody has measured how often it occurs — the honest answer is that no instance
+of it has ever been seen.
 
 ---
 

@@ -1,6 +1,6 @@
 package obsidiananki.extract
 
-import laika.ast.{Header, RootElement}
+import laika.ast.{Header, QuotedBlock, RootElement, Section}
 import obsidiananki.model.NoteId
 import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef}
 
@@ -153,9 +153,54 @@ object UnreadHeadings:
 
   /** Every heading the AUTHOR wrote that this tool did not read as one, in document order.
     *
-    * ══ STUBBED IN THIS COMMIT ══ so that the tests pinning the defect compile and FAIL rather
-    * than failing to build, which would say nothing about which behaviour is missing. The
-    * implementation is the commit that follows this one; nothing calls this yet.
+    * EMPTY IS THE ORDINARY ANSWER, not a lookup that failed: almost every note ever parsed by
+    * this tool yields nothing here, which is what makes a non-empty answer worth stopping for.
+    *
+    * ==The four questions, in the order they are asked==
+    *
+    * The order is load-bearing twice over, so it is written out rather than left to be read off
+    * the code:
+    *
+    *   1. DID SOME `Section` LIFT THIS HEADING? If so there is nothing to say about it. Compared
+    *      by REFERENCE, for the reason under "what was rejected" above rather than anything about
+    *      repeated headings — `==` passes every test in this suite, because Laika stamps
+    *      `Styles("section")` onto a header it lifts and not onto one it does not, so a lifted
+    *      heading and an unlifted one are never equal as values however identical their text.
+    *      That stamp is exactly the undocumented side effect this file declines to rest on. `eq`
+    *      asks whether this IS the object a `Section` holds, which is what the question means and
+    *      cannot drift.
+    *   2. IS THE LINE A TAG? Dropped if so — see [[obsidianReadsATagHere]] for the harm reporting
+    *      it would do. Asked BEFORE the column test, because a tag line sits at column zero and
+    *      would otherwise be classified as the severe case.
+    *   3. IS THE HEADING'S `#` IN THE FIRST COLUMN? Then CommonMark ends the list or the quote
+    *      above it and reads a top-level heading, and the two readings disagree about the whole
+    *      outline.
+    *   4. ONLY THEN, IS IT INSIDE A QUOTE? Dropped if so. This is last, and putting it earlier is
+    *      the bug it exists to avoid: a heading at column zero directly below a quoted line is
+    *      absorbed INTO the `QuotedBlock` — measured against laika-core 1.3.2 — so a check that
+    *      dropped everything inside a quote would file that one as agreement and miss it.
+    *
+    * ==Why the line is looked up for EVERY heading and not only the unlifted ones==
+    *
+    * `LineIndex` carries a CURSOR, so a lookup answers with the first matching line at or after
+    * the previous answer. Asking it about every heading in document order is what keeps those
+    * answers aligned with the document: skipping the lifted ones would let a heading that shares
+    * its text with an ordinary heading EARLIER in the file match that earlier line, conclude the
+    * author wrote this one at column zero, and refuse a note over a heading that misfiles
+    * nothing. Pinned by "a heading sharing its text with an earlier one is not promoted".
+    *
+    * IT BUILDS ITS OWN INDEX rather than sharing the extractor's, and for the same reason: that
+    * cursor belongs to the walk which reports each card's position, and lending it to a second
+    * traversal would silently move every position reported afterwards. The cost is one pass over
+    * the lines of one file.
+    *
+    * ==Why Laika's own traversal rather than a walk written here==
+    *
+    * `Element.collect` descends every case-class field of every node, so it reaches containers
+    * this project's other walks do not: `Extractor.walk` and `hasNoHeadings` both descend
+    * `BlockContainer`, and Laika's `BulletList` is a `ListContainer` — which is precisely why a
+    * heading swallowed INTO a list item is invisible to both of them. A walk written here by hand
+    * would have had to know that, and the next container would catch it out again.
     *
     * @param body
     *   the note's RAW SOURCE, frontmatter already removed, and NOT optional. Two questions here
@@ -167,7 +212,66 @@ object UnreadHeadings:
     *   editor shows rather than one counted from the end of the frontmatter.
     */
   def in(root: RootElement, body: String, bodyFirstLine: Int): Vector[UnreadHeading] =
-    Vector.empty
+    val lifted = root.collect { case section: Section => section.header }
+    val quoted = root.collect { case quote: QuotedBlock => quote }.flatMap(_.collect { case h: Header => h })
+    val lines  = LineIndex(body, bodyFirstLine)
+
+    root
+      .collect { case heading: Header => heading }
+      .flatMap { heading =>
+        // FIRST, BEFORE ANY OF THE TESTS BELOW SHORT-CIRCUIT IT, because the cursor must advance
+        // for every heading in the document and not only for the ones that survive the filters.
+        val column0 = lines.lineOf(heading.extractText)
+
+        if lifted.exists(_ eq heading) then None
+        else if obsidianReadsATagHere(body, heading) then None
+        else if column0 > 0 then Some(UnreadHeading.EveryHeadingBelowMisfiled(heading, column0))
+        else if quoted.exists(_ eq heading) then None
+        else Some(UnreadHeading.NoCardOfItsOwn(heading))
+      }
+      .toVector
+
+  /** Would Obsidian read this heading's source line as a TAG rather than as a heading?
+    *
+    * THE ONE PLACE THE TWO PARSERS DISAGREE IN THE OTHER DIRECTION, and it has to be excluded or
+    * this check refuses well-formed notes and gives harmful advice while doing it. CommonMark —
+    * so Obsidian — requires a space after the `#` characters, and laika-core 1.3.2 does not, so
+    * `#flashcard/sequence` written on its own line is a TAG to the author and a HEADING to this
+    * tool's parser. Written straight after a list line it is then absorbed into the list, arrives
+    * here as an unlifted `Header` at column zero, and looks exactly like the severe case.
+    *
+    * NOTHING IS LOST WHEN THAT HAPPENS, which is why it is dropped rather than reported. The tag
+    * lowers to text and prints as the tag the author typed, which is what Obsidian shows too. The
+    * two readings agree about the OUTCOME even though they disagree about the construct.
+    *
+    * REPORTING IT WOULD BE WORSE THAN NOISE. The remedy this check offers is a blank line above
+    * the heading, and following it here would make Laika lift the tag into a real section —
+    * inserting a heading the author never wrote into the path of every card below it. An author
+    * refused for no reason learns to distrust every refusal; one who is refused and then given
+    * advice that breaks their file learns something worse.
+    *
+    * A POSITIVE EXCLUSION RATHER THAN A POSITIVE ADMISSION, deliberately. It drops only headings
+    * whose source line can be SHOWN to be a tag; a heading whose line cannot be found at all —
+    * because it is a setext heading, or because its text was rewritten on the way through the
+    * span parsers — stays reported. Getting that backwards would silence the whole check on any
+    * note whose headings this cannot locate, which is failing quiet rather than failing loud.
+    *
+    * LEADING WHITESPACE IS TOLERATED because CommonMark allows a heading up to three columns in
+    * and an author's tag line may be indented inside a list; the lookahead is what carries the
+    * decision, and it is unaffected by the indent.
+    */
+  private def obsidianReadsATagHere(body: String, heading: Header): Boolean =
+    val text = heading.extractText.trim
+    body.linesIterator.exists { line =>
+      TagLineLaikaReadsAsAHeading.findPrefixOf(line).isDefined &&
+      line.dropWhile(c => c == ' ' || c == '\t').dropWhile(_ == '#').trim == text
+    }
+
+  /** `#{1,6}` with NO space after it — Laika's heading, CommonMark's tag. The lookahead excludes
+    * a further `#` so that a run of seven or more, which is a heading to neither parser, cannot
+    * match by having its first six taken.
+    */
+  private val TagLineLaikaReadsAsAHeading = """^[ \t]*#{1,6}(?=[^\s#])""".r
 
   /** What an author reads about ONE such heading.
     *

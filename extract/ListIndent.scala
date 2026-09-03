@@ -80,13 +80,18 @@ package obsidiananki.extract
   *
   * Every one of the three reports `failures: 0`, `scan: complete`, and exits 0.
   *
-  * OUTCOME 3 IS THE ONE THAT COSTS REVIEW HISTORY, AND IT IS THE ONE NO REFUSAL CAN REACH.
-  * Nothing fails to build there — the card is well-formed and merely mis-keyed — so there is no
-  * `BuildFailure` to attach a refusal to. The heading path is half the card identity, so adding
-  * the blank line LATER (or letting a formatter add it) re-keys the card: the old note is
-  * orphaned and suspended, and a replacement is created with no review history. That is the
-  * failure this file's own opening paragraph promises to prevent, arriving through a door it
-  * does not watch.
+  * OUTCOME 3 IS THE ONE THAT COSTS REVIEW HISTORY, AND IT IS THE ONE NO PER-CARD REFUSAL CAN
+  * REACH. Nothing fails to build there — the card is well-formed and merely mis-keyed. The
+  * heading path is half the card identity, so adding the blank line LATER (or letting a formatter
+  * add it) re-keys the card: the old note is orphaned and suspended, and a replacement is created
+  * with no review history. That is the failure this file's own opening paragraph promises to
+  * prevent, arriving through a door it does not watch.
+  *
+  * _Amended 2026-09-03, when the outcome was closed. This paragraph read "AND IT IS THE ONE NO
+  * REFUSAL CAN REACH … so there is no `BuildFailure` to attach a refusal to", and that step does
+  * not follow. A `BuildFailure` does not require a build to have FAILED — `MarkerNotOnHeading`
+  * fires when nothing was built at all — and only `KeyKnown` is attached to a card at all. What
+  * outcome 3 needed was a refusal scoped to the NOTE, which `BuildFailure.KeyMisfiledInFile` is._
   *
   * WHY THE SCANNER CANNOT SEE IT AS WRITTEN. `isHeading` below matches `^#{1,6}(\s|$)`, and on a
   * match the loop does `heading = lineNumber; open = List.empty` — "A heading closes every open
@@ -98,10 +103,27 @@ package obsidiananki.extract
   * correctly — Laika's `headerOrParagraph` handles that case — and so does one after another
   * heading, or after a fence. It is specifically heading-after-LIST-ITEM.
   *
-  * NOT FIXED HERE. Widening this scanner would close outcomes 1 and 2 and NOT outcome 3, which
-  * needs something that runs before a card is keyed rather than when one fails to build. The
-  * options, and the argument between them, are `docs/findings/PARSER-DISAGREEMENTS.md`; the finding is
-  * oas-30t.
+  * NOT FIXED HERE, AND NOW FIXED ELSEWHERE — 2026-09-03. Widening this scanner would have closed
+  * outcomes 1 and 2 and NOT outcome 3, which needs something that runs before a card is keyed
+  * rather than when one fails to build. `extract/UnreadHeadings.scala` is that something: it asks
+  * the PARSE TREE which headings this tool ended up treating as headings, and a note holding one
+  * that the author wrote at column zero is refused whole. All three outcomes above are closed by
+  * it, outcome 3 included. The options weighed before choosing it are in
+  * `docs/findings/PARSER-DISAGREEMENTS.md`; the finding is oas-30t.
+  *
+  * THE TWO CHECKS ARE COMPLEMENTARY RATHER THAN ONE SUPERSEDING THE OTHER, and the division is
+  * worth stating because it is not the one this file's own reasoning predicted. This one reads
+  * SOURCE because indentation is consumed by the parser and is gone by the time a tree exists.
+  * That one reads the TREE because whether a heading was TREATED as a heading is not a fact the
+  * source holds — and it consults the source for exactly one thing the tree cannot hold, which is
+  * whether the author wrote the `#` in the first column.
+  *
+  * THE KNOWN MISS PINNED AT THE FOOT OF `ListIndent.test.scala` IS NOT CLOSED BY THAT, and does
+  * not need to be. A lazy continuation line at column zero still hides a SUB-ITEM from this
+  * scanner, because closing the list on a dedent is what keeps "prose between two lists" from
+  * being a false positive here. What that miss also used to hide — a HEADING swallowed after such
+  * a line — is now caught, since asking the parse tree needs to know nothing about lazy
+  * continuation.
   */
 object ListIndent:
 

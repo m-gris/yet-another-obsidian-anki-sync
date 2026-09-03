@@ -419,6 +419,35 @@ object VaultWalker:
         case Right((keys, split)) =>
           val body   = split.body
           val parsed = ObsidianSyntax.markupParser.parse(body)
+
+          // ── DOES THIS TOOL READ THIS NOTE'S HEADINGS THE WAY ITS AUTHOR WROTE THEM? ────────
+          //
+          // ASKED HERE BECAUSE HERE IS ABOVE EVERYTHING THAT CLASSIFIES THE NOTE. A `#` line
+          // swallowed by a list is not a parse ERROR — the parse succeeds, and what it succeeds
+          // at is a different document from the one the author wrote. So the questions asked
+          // below this line are answered about that different document: `hasMarkedHeading` cannot
+          // see a marker on a heading that is no longer a heading, and `hasNoHeadings` answers
+          // "none" for a note whose only heading was swallowed, because it descends
+          // `BlockContainer`s while Laika's `BulletList` is a `ListContainer`. Neither could be
+          // trusted to GATE this check, which is why the check does not go through them.
+          //
+          // A SECOND CALL TO THE SAME PURE FUNCTION, the first being inside
+          // `Extractor.fromDocument`, and that is not the duplication this codebase objects to.
+          // `Decks.fromRelativePath`'s docstring warns against two BODIES of a rule, which are
+          // free to drift; this is one function called twice on one document. What would remove
+          // even that is passing the answer down — rejected because the extractor is where a key
+          // is derived, so that is where the rule has to hold whoever calls it.
+          //
+          // AN UNPARSEABLE DOCUMENT ANSWERS "NONE", which is not a defensive default: there is no
+          // parse to disagree with the source, so no claim about this file's headings may be made
+          // in either direction. Such a file is already reported below, as `MarkerUnknowable` or
+          // as `KeyUnderivableInFile`.
+          val unreadHeadings: Vector[UnreadHeading] =
+            parsed.fold(
+              _ => Vector.empty,
+              doc => UnreadHeadings.in(doc.content, body, split.bodyFirstLine),
+            )
+
           // THREE STATES, NOT TWO. This was `parsed.fold(_ => false, …)` until 2026-08-24,
           // which answered "no marker found" for a document that was never read — and the
           // report then said so to the author. See [[MarkedHeadings]].
@@ -570,6 +599,23 @@ object VaultWalker:
           // not carry that knowledge, so it was re-extracted with a partial function.
           def wholeNoteCard(marker: Marker, document: laika.ast.RootElement): Unit =
             identity match
+              // NOTHING BUILT FROM THIS NOTE'S BODY WHILE ITS OUTLINE IS IN DISPUTE. A whole-note
+              // card is not keyed by any heading, so it looks exempt — and it is not.
+              // `#flashcard/sequence/headers` on a whole note builds its card OUT OF the note's
+              // headings, so a swallowed one is an item silently missing from a card that
+              // otherwise looks complete; and the note reaches this branch at all only because
+              // `hasNoHeadings` could not see that heading either, so its body carries the
+              // heading's own marker text as content.
+              //
+              // SILENT HERE BECAUSE `Extractor.fromDocument` REPORTS IT, and that call is made
+              // for this same note further down whatever route brings it here. Reporting in both
+              // places would tell the author the same news twice.
+              //
+              // ONLY THE SEVERE CASE. A heading indented inside a list item leaves this card
+              // exactly as Obsidian renders it, so withholding it would take a card away for no
+              // gain — see [[UnreadHeading]].
+              case Some(Right(_)) if unreadHeadings.exists(_.withholdsTheNotesCards) => ()
+
               case Some(Right(noteId)) =>
                 val note = Extractor.fromWholeNote(
                   noteId,
@@ -607,7 +653,19 @@ object VaultWalker:
             // would not help. Measured against a throwaway vault on 2026-08-28: before this
             // guard, such a file drew both messages, the accurate one and then the misleading
             // one, in that order.
-            if !nearMissReported then
+            //
+            // SILENT FOR AN UNREAD HEADING TOO, FOR EXACTLY THE SAME REASON, and this arm is
+            // reachable rather than theoretical: `hasMarkedHeading` walks `Section`s, so a marker
+            // on a heading this tool did not read as a heading is invisible to it and the note
+            // arrives here classified `NoneMarked`. The message below would then tell an author
+            // whose marker is already on a heading to move it out of the frontmatter it is not
+            // in. The accurate message is raised by the extractor, which names the heading.
+            //
+            // BOTH SEVERITIES SUPPRESS IT, unlike the card-withholding above, and the asymmetry
+            // is deliberate: what is wrong here is the CLASSIFICATION, and a marker sitting on an
+            // indented heading is just as invisible to `hasMarkedHeading` as one on a swallowed
+            // heading. What differs between the two is what it costs, not what the tool can see.
+            if !nearMissReported && unreadHeadings.isEmpty then
               failures += BuildFailure.MarkerNotOnHeading(
                 file.relativePath,
                   "its frontmatter names 'flashcard' but no HEADING carries a marker, so it " +
@@ -662,12 +720,18 @@ object VaultWalker:
                     marker.wholeNoteReads match
                       case NoteMaterial.Prose => wholeNoteCard(marker, document)
                       case NoteMaterial.Structure =>
-                        failures += BuildFailure.MarkerNotOnHeading(
-                          file.relativePath,
-                          "its frontmatter asks for a card made from this note's HEADINGS, " +
-                            "and the note has none — so there is nothing to reveal. Write the " +
-                            "headings you meant to learn, or remove the marker",
-                        )
+                        // "AND THE NOTE HAS NONE" IS TRUE OF THE TREE AND FALSE OF THE FILE when
+                        // a heading went unread, since the heading this card would have revealed
+                        // is the one nobody read. Suppressed for the same reason as its sibling
+                        // above: the extractor's report names that heading, and this one would
+                        // send an author who wrote headings off to write some.
+                        if unreadHeadings.isEmpty then
+                          failures += BuildFailure.MarkerNotOnHeading(
+                            file.relativePath,
+                            "its frontmatter asks for a card made from this note's HEADINGS, " +
+                              "and the note has none — so there is nothing to reveal. Write the " +
+                              "headings you meant to learn, or remove the marker",
+                          )
                   case None => markerNotOnHeading()
 
               // NOTHING READ THE DOCUMENT, so no claim about its headings may be made in
