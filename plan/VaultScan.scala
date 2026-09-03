@@ -107,6 +107,63 @@ enum BuildFailure:
     */
   case KeyUnderivableInFile(noteId: NoteId, source: SourceRef, reason: String)
 
+  /** THE KEYS WERE DERIVED AND THEY ARE THE WRONG ONES. A heading in this file is not read as a
+    * heading by this tool, so the file's heading tree is not the one its author wrote and no key
+    * derived from that tree can be trusted.
+    *
+    * ITS OWN CASE, AND NOT [[KeyUnderivableInFile]], THOUGH THE TWO SHELTER THE SAME THING. That
+    * one says a key COULD NOT BE DERIVED. This one says keys were derived perfectly well and are
+    * filed under headings the author did not write — a state that is strictly worse, because
+    * nothing about it fails. Collapsing them would compile and pass every test; what would be
+    * lost is the reason. A later change letting `KeyUnderivableInFile` emit the specs it DID
+    * manage to build would be perfectly reasonable for the case it describes — a note that lost
+    * one heading still has good keys for the others — and would silently re-enable writing cards
+    * under keys this tool knows to be wrong.
+    *
+    * WHY THE BLAST RADIUS IS THE FILE, which departs from the per-heading scoping this codebase
+    * otherwise prefers — `SpecError.ListNestingUnreadable` refuses ONE card and lets its siblings
+    * sync. That refusal can be contained because a mis-indented list corrupts one section's
+    * CONTENT. An unread heading corrupts the file's STRUCTURE: it is missing from the tree every
+    * key in the file is derived from, and working out which of the remaining headings are
+    * unaffected would mean reconstructing the tree the author meant, which is a guess this
+    * project does not make.
+    *
+    * SHELTERING THE WHOLE NOTE IS THE OTHER HALF OF THAT DECISION AND IS NOT OPTIONAL. Refusing
+    * the file's cards without it would make every Anki note the file has already produced look
+    * DELETED, and an inferred orphan is tagged and SUSPENDED — live cards with real review
+    * history out of the review queue because of one missing blank line.
+    *
+    * Its id is good and its markdown parsed whenever this fires, since a heading had to be read
+    * before it could be found unlifted. See [[obsidiananki.extract.UnreadHeading]] for which
+    * headings do this and which merely cost their own card.
+    */
+  case KeyMisfiledInFile(noteId: NoteId, source: SourceRef, reason: String)
+
+  /** A HEADING IN THIS FILE IS NOT READ AS A HEADING BY THIS TOOL, and the only thing that costs
+    * is the card that heading would have made.
+    *
+    * ITS SIBLING [[KeyMisfiledInFile]] IS THE SAME OBSERVATION WITH A FAR LARGER BILL, and the
+    * two are separate cases because they ask different things of the author. There, every card in
+    * the file is withheld and the fix is urgent. Here the file's cards are written exactly as
+    * before: the heading is indented inside a list item, where CommonMark puts it too, so the two
+    * readings agree about the note's outline and no other key moves. Reporting both through one
+    * case would leave a reader unable to tell "you will get one fewer card" from "you will get
+    * none of them".
+    *
+    * WORTH REPORTING AT ALL BECAUSE THE INTENT IS LEGIBLE, which is the argument
+    * [[MarkerNotOnHeading]] makes for itself. Somebody wrote a heading; this tool makes no card
+    * from it and would otherwise say nothing, which is the silent-omission failure this design
+    * exists to prevent.
+    *
+    * IT SHELTERS THE WHOLE NOTE, WHICH IS THE LESS OBVIOUS HALF. Its cards are still written, so
+    * it looks as though there is nothing to shelter — and `MarkerNotOnHeading` sheltering nothing
+    * rests on the tool being able to see exactly what its file produces. That is the one thing it
+    * cannot see here: a heading it does not read is a card it cannot enumerate, so if that card
+    * already exists in Anki it would be inferred an orphan and SUSPENDED, for a heading the
+    * author never deleted.
+    */
+  case HeadingUnreadInFile(noteId: NoteId, source: SourceRef, reason: String)
+
   /** The frontmatter mentions `flashcard`, but no HEADING carries a marker — so no card is made.
     *
     * The shape this catches, seen on a real vault within minutes of it being set up: typing
@@ -253,6 +310,21 @@ enum BuildFailure:
     // No key to exclude, so the blast radius widens to the note: the smallest unit still
     // reasonable about.
     case KeyUnderivableInFile(noteId, _, _) => OrphanShelter.WholeNote(noteId)
+
+    // THE SAME SHELTER FOR THE OPPOSITE REASON, and writing it out rather than sharing the arm
+    // above is the point. There the keys could not be derived; here they were derived and are
+    // wrong, so the ones this file really owns cannot be enumerated at all. Both leave the note
+    // as the smallest unit still reasonable about — but a reader who saw one arm covering two
+    // cases would have to guess which argument it rested on.
+    case KeyMisfiledInFile(noteId, _, _) => OrphanShelter.WholeNote(noteId)
+
+    // AND THE SAME AGAIN FOR THE MILDER OBSERVATION, WHICH IS THE ONE WORTH PAUSING ON. This
+    // note's cards ARE written, so it reads like a case with nothing to shelter — the position
+    // `MarkerNotOnHeading` takes below, on the grounds that the tool can see exactly what its
+    // file produces. That is the one thing it cannot see here: a heading it does not read is a
+    // card it cannot enumerate, and if that card is already in Anki, inference would call it an
+    // orphan and SUSPEND it over a heading nobody deleted.
+    case HeadingUnreadInFile(noteId, _, _) => OrphanShelter.WholeNote(noteId)
 
     // NOTHING TO SHELTER — but for two different reasons, and the distinction matters enough
     // to write out. _The comment here used to say all of these were files with no usable `id`.

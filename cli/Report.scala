@@ -640,6 +640,20 @@ object Report:
       s"${source.describe}  ${key.path.render}: $reason"
     case BuildFailure.KeyUnderivableInFile(noteId, source, reason) =>
       s"${source.describe}  note '${noteId.value}': $reason (orphan checks suppressed for this note)"
+    // THE PARENTHETICAL SAYS WHAT WAS NOT DONE, and it differs from its neighbour above on
+    // purpose. There, one card failed to build. Here, cards WOULD have built and were withheld
+    // because they would have been filed under a heading path the author did not write — so the
+    // reader needs to know that the whole file is waiting on one line, and that nothing of theirs
+    // has been suspended in the meantime.
+    case BuildFailure.KeyMisfiledInFile(noteId, source, reason) =>
+      s"${source.describe}  note '${noteId.value}': $reason (NO CARDS FROM THIS FILE until that " +
+        "is fixed, and its existing Anki notes are left alone rather than flagged as orphans)"
+    // AND THIS ONE SAYS WHAT WAS STILL DONE, which is the whole difference between the two. A
+    // reader who cannot tell the milder report from the severe one reads every one of them as a
+    // refusal, and the severe one needs to be believed.
+    case BuildFailure.HeadingUnreadInFile(noteId, source, reason) =>
+      s"${source.describe}  note '${noteId.value}': $reason (this note's other cards are synced " +
+        "as usual, and its existing Anki notes are left alone rather than flagged as orphans)"
     case BuildFailure.MarkerNotOnHeading(file, reason) =>
       s"$file: $reason"
     case BuildFailure.MarkerMisspelled(file, reason) =>

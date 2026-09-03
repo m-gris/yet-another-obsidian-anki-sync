@@ -55,6 +55,40 @@ class VaultScanTest extends munit.FunSuite:
     )
   }
 
+  /** THE SAME SHELTER FOR THE OPPOSITE REASON, which is why it is asserted separately rather than
+    * folded into the test above. There, no key could be derived. Here every key WAS derived and
+    * they are the wrong ones, because a heading is missing from the tree they are derived from —
+    * so the keys the file really owns cannot be enumerated at all.
+    *
+    * WITHOUT THIS SHELTER THE REMEDY WOULD COST MORE THAN THE DEFECT. Declining to build the
+    * file's cards makes every Anki note it has already produced look DELETED, and an inferred
+    * orphan is tagged and SUSPENDED — live cards with real review history out of the review queue
+    * because of one missing blank line.
+    */
+  test("a file whose keys were derived from a misread heading tree shelters the whole note") {
+    assertEquals(
+      BuildFailure.KeyMisfiledInFile(noteId("n1"), ref, "a heading was not read as one").shelters,
+      OrphanShelter.WholeNote(noteId("n1")),
+    )
+  }
+
+  /** THE MILDER OF THE TWO SHELTERS THE SAME THING, and this is the less obvious of the pair. Its
+    * note's cards ARE written — the heading this tool could not read is one CommonMark also keeps
+    * where it is, so no other key moved — which makes it tempting to shelter nothing, as
+    * [[BuildFailure.MarkerNotOnHeading]] does on the grounds that the tool can see exactly what
+    * the file produces.
+    *
+    * That is the one thing it cannot see here. A heading it does not read is a card it cannot
+    * enumerate, so if that card already exists in Anki it would be inferred an orphan and
+    * SUSPENDED — for a heading the author never deleted.
+    */
+  test("a file holding a heading this tool cannot read shelters the whole note") {
+    assertEquals(
+      BuildFailure.HeadingUnreadInFile(noteId("n1"), ref, "a heading was not read as one").shelters,
+      OrphanShelter.WholeNote(noteId("n1")),
+    )
+  }
+
   /** BOTH OF THESE ARE FILES WITH NO USABLE ID, and a card's identity begins with the id — so
     * neither has ever produced an Anki note and neither owns a key inference could claim.
     * Sheltering nothing is a FINDING here, not an omission: it is why these two cases were
