@@ -139,8 +139,8 @@ enum BuildFailure:
     */
   case KeyMisfiledInFile(noteId: NoteId, source: SourceRef, reason: String)
 
-  /** A HEADING IN THIS FILE IS NOT READ AS A HEADING BY THIS TOOL, and the only thing that costs
-    * is the card that heading would have made.
+  /** A MARKED HEADING IN THIS FILE IS NOT READ AS A HEADING BY THIS TOOL, and the only thing that
+    * costs is the card that heading would have made.
     *
     * ITS SIBLING [[KeyMisfiledInFile]] IS THE SAME OBSERVATION WITH A FAR LARGER BILL, and the
     * two are separate cases because they ask different things of the author. There, every card in
@@ -151,16 +151,25 @@ enum BuildFailure:
     * none of them".
     *
     * WORTH REPORTING AT ALL BECAUSE THE INTENT IS LEGIBLE, which is the argument
-    * [[MarkerNotOnHeading]] makes for itself. Somebody wrote a heading; this tool makes no card
-    * from it and would otherwise say nothing, which is the silent-omission failure this design
-    * exists to prevent.
+    * [[MarkerNotOnHeading]] makes for itself, and here that intent is a MARKER. Somebody asked for
+    * a card in the one way this tool documents; the card will not arrive, and nothing else in the
+    * run mentions it, because the check that looks for marked headings walks the section tree this
+    * heading is missing from. That is the silent-omission failure the design exists to prevent.
+    *
+    * AN UNMARKED HEADING IN THE SAME POSITION RAISES NOTHING, and the restraint is as deliberate
+    * as the report. Both readings place it inside the list item, nobody asked for a card from it,
+    * and no card exists — so "this heading made no card" is the correct outcome for it, exactly as
+    * it is for every unmarked heading in the vault. Saying so would be ordinary behaviour dressed
+    * up as a failure. The decision, and the reasoning behind it, is at
+    * `extract/UnreadHeadings.scala`'s `failure`.
     *
     * IT SHELTERS THE WHOLE NOTE, WHICH IS THE LESS OBVIOUS HALF. Its cards are still written, so
     * it looks as though there is nothing to shelter — and `MarkerNotOnHeading` sheltering nothing
     * rests on the tool being able to see exactly what its file produces. That is the one thing it
-    * cannot see here: a heading it does not read is a card it cannot enumerate, so if that card
-    * already exists in Anki it would be inferred an orphan and SUSPENDED, for a heading the
-    * author never deleted.
+    * cannot see here: a MARKED heading it does not read is a card it cannot enumerate, so if that
+    * card already exists in Anki it would be inferred an orphan and SUSPENDED, for a heading the
+    * author never deleted. The unmarked case above needs no shelter for the same reason it needs
+    * no report — it has never produced a card for orphan inference to find.
     */
   case HeadingUnreadInFile(noteId: NoteId, source: SourceRef, reason: String)
 
