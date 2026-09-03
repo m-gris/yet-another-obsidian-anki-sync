@@ -611,10 +611,12 @@ object VaultWalker:
               // for this same note further down whatever route brings it here. Reporting in both
               // places would tell the author the same news twice.
               //
-              // ONLY THE SEVERE CASE. A heading indented inside a list item leaves this card
-              // exactly as Obsidian renders it, so withholding it would take a card away for no
-              // gain — see [[UnreadHeading]].
-              case Some(Right(_)) if unreadHeadings.exists(_.withholdsTheNotesCards) => ()
+              // ONLY WHERE THE TWO READINGS PLACE A HEADING DIFFERENTLY. A heading indented inside
+              // a list item is placed identically by both, so it leaves this card exactly as
+              // Obsidian renders it and withholding it would take a card away for no gain — see
+              // [[UnreadHeading.commonMarkPlacesItElsewhere]], which reports that fact and leaves
+              // this decision here.
+              case Some(Right(_)) if unreadHeadings.exists(_.commonMarkPlacesItElsewhere) => ()
 
               case Some(Right(noteId)) =>
                 val note = Extractor.fromWholeNote(

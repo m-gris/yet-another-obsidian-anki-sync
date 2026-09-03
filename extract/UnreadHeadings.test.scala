@@ -20,10 +20,10 @@ import obsidiananki.plan.{BuildFailure, OrphanShelter}
   * in what that COSTS, and the difference is large enough that one is a report and the other
   * refuses the note:
   *
-  *   - [[UnreadHeading.NoCardOfItsOwn]] — the heading is indented inside a list item, where
-  *     CommonMark puts it too. Both readings agree about where it sits, so nothing else in the
-  *     note moves; what is lost is a card for that heading alone.
-  *   - [[UnreadHeading.EveryHeadingBelowMisfiled]] — the heading is written at the START of its
+  *   - [[UnreadHeading.Site.IndentedInsideTheBlockAbove]] — the heading is indented inside a list
+  *     item, where CommonMark puts it too. Both readings agree about where it sits, so nothing
+  *     else in the note moves; what is lost is a card for that heading alone.
+  *   - [[UnreadHeading.Site.AtTheStartOfItsLine]] — the heading is written at the START of its
   *     line, where CommonMark closes the list or the quote above it and reads a top-level
   *     heading. This tool reads it as more of the line above, so the heading contributes no
   *     segment and every heading below re-parents onto ITS parent. The cards build perfectly and
@@ -52,9 +52,10 @@ class UnreadHeadingsTest extends munit.FunSuite:
     * checked only the text would pass just as happily for the wrong severity, which is the whole
     * distinction this file exists to draw.
     */
-  private def found(body: String): Vector[String] = unread(body).map {
-    case UnreadHeading.NoCardOfItsOwn(h)                  => s"no card of its own: ${h.extractText.trim}"
-    case UnreadHeading.EveryHeadingBelowMisfiled(h, line) => s"misfiles below (line $line): ${h.extractText.trim}"
+  private def found(body: String): Vector[String] = unread(body).map { u =>
+    u.written match
+      case UnreadHeading.Site.IndentedInsideTheBlockAbove => s"no card of its own: ${u.text}"
+      case UnreadHeading.Site.AtTheStartOfItsLine(line)   => s"misfiles below (line $line): ${u.text}"
   }
 
   // ══════════════════ the heading that re-parents everything below it ════
@@ -248,8 +249,9 @@ class UnreadHeadingsTest extends munit.FunSuite:
     val root = ObsidianSyntax.markupParser.parse(body).fold(e => fail(s"parse: $e"), _.content)
     assertEquals(
       UnreadHeadings.in(root, body, 7).map {
-        case UnreadHeading.EveryHeadingBelowMisfiled(_, line) => line
-        case UnreadHeading.NoCardOfItsOwn(_)                  => 0
+        _.written match
+          case UnreadHeading.Site.AtTheStartOfItsLine(line)   => line
+          case UnreadHeading.Site.IndentedInsideTheBlockAbove => 0
       },
       Vector(8),
     )
@@ -257,13 +259,13 @@ class UnreadHeadingsTest extends munit.FunSuite:
 
   // ═════════════════════════════════════════ what each one is worth ════
 
-  test("only the misfiling heading withholds the note's cards") {
+  test("only the heading written at the start of its line is placed elsewhere by CommonMark") {
     assertEquals(
-      unread("- alpha\n# Swallowed\n").map(_.withholdsTheNotesCards),
+      unread("- alpha\n# Swallowed\n").map(_.commonMarkPlacesItElsewhere),
       Vector(true),
     )
     assertEquals(
-      unread("- alpha\n  # Indented\n").map(_.withholdsTheNotesCards),
+      unread("- alpha\n  # Indented\n").map(_.commonMarkPlacesItElsewhere),
       Vector(false),
     )
   }

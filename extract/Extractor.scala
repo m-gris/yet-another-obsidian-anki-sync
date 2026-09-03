@@ -418,10 +418,16 @@ object Extractor:
     // wrong. Nothing downstream can catch that, because nothing about it fails; the only place to
     // stop it is before the walk that derives the keys. See [[UnreadHeadings]].
     //
-    // REPORTED WHICHEVER IT IS, WITHHELD ONLY FOR ONE OF THEM, and the type carries which — see
-    // [[UnreadHeading.withholdsTheNotesCards]]. A heading indented inside a list item costs its
-    // own card and moves nothing else, so refusing the note over it would cost an author every
-    // card in the file to save one.
+    // REPORTED WHICHEVER IT IS, WITHHELD ONLY FOR ONE OF THEM, AND THIS IS WHERE THAT IS DECIDED.
+    // The type reports a FACT — [[UnreadHeading.commonMarkPlacesItElsewhere]], whether the other
+    // reading puts the heading somewhere else in the outline — and the decision taken here is what
+    // to do about it: NOTHING KEYED BY THIS NOTE'S HEADINGS MAY BE WRITTEN when it does. Those
+    // keys are perfectly derivable and WRONG, and working out which of them are unaffected would
+    // mean reconstructing the outline the author meant, which is a guess this project does not
+    // make — so the tool declines to say what this file's cards are rather than saying it and
+    // being plausibly wrong. A heading indented inside a list item is placed identically by both
+    // readings, costs its own card and moves nothing else, so refusing the note over that one
+    // would cost an author every card in the file to save one.
     //
     // THE WALK IS SKIPPED RATHER THAN RUN AND DISCARDED, which is why this is a branch and not a
     // filter over the result. Running it would compute a full set of keys nobody may act on, and
@@ -429,7 +435,7 @@ object Extractor:
     val unread = UnreadHeadings.in(root, body, bodyFirstLine)
     unread.foreach(u => failures += UnreadHeadings.failure(u, noteId, filePath))
 
-    if !unread.exists(_.withholdsTheNotesCards) then
+    if !unread.exists(_.commonMarkPlacesItElsewhere) then
       root.content.foreach(walk(_, Vector.empty, Vector.empty))
 
       // THE NOTE'S OWN BODY, OUTSIDE ANY HEADING — the blocks before the first one, and the whole

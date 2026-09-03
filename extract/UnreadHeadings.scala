@@ -4,8 +4,8 @@ import laika.ast.{Header, QuotedBlock, RootElement, Section}
 import obsidiananki.model.NoteId
 import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef}
 
-/** A heading the author wrote that this tool does not read as a heading — and WHAT THAT COSTS,
-  * which is the whole reason this is a sum rather than a list of headings.
+/** A heading the author wrote that this tool does not read as a heading, and WHERE IN ITS LINE
+  * THE AUTHOR WROTE THE `#` — which is the whole reason this is more than a list of headings.
   *
   * ═══════════════════════════════════════════════════════════════════════════════════════════
   * WHY A HEADING NOBODY SEES IS A CARD-IDENTITY PROBLEM AND NOT A RENDERING ONE
@@ -26,70 +26,125 @@ import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef}
   * and creates replacements that have none.
   *
   * ═══════════════════════════════════════════════════════════════════════════════════════════
+  * WHY THE HEADING IS A FIELD AND ONLY THE PLACE IS A SUM
+  * ═══════════════════════════════════════════════════════════════════════════════════════════
+  *
+  * Whichever of the two this turns out to be, it is a `Header` the parser produced and that this
+  * tool did not lift into a `Section`. The `Header` is therefore not what varies, and carrying it
+  * in both arms of a sum bought nothing: the only thing a match on that sum could do with it was
+  * pull it straight back out again, which is what this type's `headingText` used to be — a match
+  * over two cases that returned the same expression from both.
+  *
+  * What varies is where in its line the author wrote the `#`, so that — and nothing else — is the
+  * sum. See [[UnreadHeading.Site]].
+  *
+  * IT ALSO PUTS THE LINE NUMBER WHERE THE LINE NUMBER IS KNOWN. A line is not a property of a
+  * heading's severity; it is the EVIDENCE that established one. The source lookup answers "the
+  * `#` is at the start of line N" or answers nothing, and [[Site.AtTheStartOfItsLine]] is the arm
+  * built from the first answer, so it holds what that lookup returned. Its sibling holds no line
+  * because no lookup produced one — see there for why looking harder is refused rather than
+  * merely unimplemented.
+  *
+  * ═══════════════════════════════════════════════════════════════════════════════════════════
   * WHY THE DISTINCTION LIVES IN THE TYPE AND NOT IN A BRANCH AT EACH CONSUMER
   * ═══════════════════════════════════════════════════════════════════════════════════════════
   *
-  * The two cost different things, so they earn different answers: the milder one is REPORTED and
-  * the note's cards are written as usual, the severe one WITHHOLDS every card in the note. A
-  * boolean parameter, or a severity read back off the message, would let a consumer take the
-  * severe path for the mild case — which refuses an author's whole note over a heading that cost
-  * them one card — or the mild path for the severe one, which writes cards under keys this tool
-  * already knows are wrong. Under `-Wconf:msg=exhaustive:e` a new consumer cannot fail to answer
-  * for both, and [[withholdsTheNotesCards]] means no consumer has to decide twice.
+  * The two place the heading differently, so they cost different things and earn different
+  * answers: the milder one is REPORTED and the note's cards are written as usual, the severe one
+  * costs the note every card in it. A boolean parameter, or a severity read back off the message,
+  * would let a consumer take the severe path for the mild case — which refuses an author's whole
+  * note over a heading that cost them one card — or the mild path for the severe one, which
+  * writes cards under keys this tool already knows are wrong. Under `-Wconf:msg=exhaustive:e` a
+  * new consumer that matches on [[Site]] cannot fail to answer for both, and
+  * [[commonMarkPlacesItElsewhere]] states the one consequence they differ on, so that no consumer
+  * derives it twice.
+  *
+  * @param heading
+  *   the `Header` node itself, kept rather than reduced to its text, because `explain` quotes the
+  *   author's words and `in` compares this node by REFERENCE against the headers `Section`s hold.
+  * @param written
+  *   where the author put the `#`, which is the only fact separating the two.
   */
-enum UnreadHeading:
-
-  /** THE HEADING IS INDENTED INSIDE A LIST ITEM, where CommonMark — so Obsidian — puts it too.
-    *
-    * Both readings agree about where this heading sits, so no other card in the note changes its
-    * key and nothing below it moves. What is lost is the card this heading would have made, and
-    * that alone.
-    *
-    * NO LINE NUMBER, AND THE ABSENCE IS THE EVIDENCE. Its sibling carries one because finding the
-    * heading's `#` in the FIRST COLUMN of some line is exactly what proves the severe case; a
-    * heading that was not found there is this one. Locating it anyway would take a second
-    * definition of "which lines are headings" — the drift `Extractor`'s own `LineIndex` comment
-    * warns against — so the message quotes the heading's text instead.
-    */
-  case NoCardOfItsOwn(heading: Header)
-
-  /** THE HEADING IS WRITTEN AT THE START OF ITS LINE, where CommonMark closes the list or the
-    * quote above it and reads a top-level heading. This tool reads it as more of the line above.
-    *
-    * So the two readings disagree about the note's whole OUTLINE, not merely about one heading:
-    * every heading below this one keys under a different parent in the two readings, and the card
-    * that swallowed it also absorbs the text — marker and all — and the list items the author
-    * wrote underneath it.
-    *
-    * @param line
-    *   the ORIGINAL FILE's line, 1-based, so it can be typed into a jump-to-line box. The same
-    *   contract as `ListIndent.Finding.line`, and it is not optional here: this case cannot be
-    *   built without having found the heading's line, because that is what establishes it.
-    */
-  case EveryHeadingBelowMisfiled(heading: Header, line: Int)
+final case class UnreadHeading(heading: Header, written: UnreadHeading.Site):
 
   /** The heading's text as the parser extracted it, marker and all, so a message can quote the
     * author's own words back rather than describing them.
     */
-  def headingText: String = this match
-    case NoCardOfItsOwn(h)               => h.extractText.trim
-    case EveryHeadingBelowMisfiled(h, _) => h.extractText.trim
+  def text: String = heading.extractText.trim
 
-  /** WHETHER THIS COSTS THE NOTE EVERY CARD IN IT — the one decision the two cases differ on,
-    * written once here so that no consumer restates it.
+  /** WHETHER COMMONMARK — SO OBSIDIAN — PUTS THIS HEADING SOMEWHERE ELSE IN THE NOTE'S OUTLINE
+    * than this tool puts it. The one consequence the two [[Site]]s differ on, derived here so
+    * that no consumer derives it twice.
     *
-    * TRUE MEANS NOTHING KEYED BY THIS NOTE'S HEADINGS MAY BE WRITTEN. The keys derived from the
-    * outline are derivable and WRONG, and choosing which of them are unaffected would mean
-    * reconstructing the outline the author meant — a guess this project does not make. So the
-    * tool declines to say what this file's cards are, rather than saying it and being plausibly
-    * wrong.
+    * AN OBSERVATION, AND DELIBERATELY NOT A DECISION. This replaced `withholdsTheNotesCards`, a
+    * `Boolean` answering "what should the planner do about this heading" — which fixed a planning
+    * policy inside the type that merely reports what the parsers did, and left the two
+    * inseparable: a consumer that wanted the fact got the policy with it, and a consumer that
+    * disagreed with the policy had no fact to appeal to. What FOLLOWS from a disputed outline is
+    * that every key in the note is derived from a heading tree the author did not write; deciding
+    * to withhold those cards rather than write them is `Extractor.fromDocument`'s call and is
+    * argued there.
+    *
+    * IT IS NOT A RESTATEMENT OF THE CASE NAMES, which is why it is worth writing down. It follows
+    * from CommonMark's container rule — a line indented less than the enclosing block's content
+    * column ends that block — and the first column is short of every content column there is.
     *
     * FALSE IS NOT "HARMLESS". A card the author expected is still missing, and that is still
     * reported; what it does not do is punish the rest of the note for it.
     */
-  def withholdsTheNotesCards: Boolean = this match
-    case NoCardOfItsOwn(_)               => false
-    case EveryHeadingBelowMisfiled(_, _) => true
+  def commonMarkPlacesItElsewhere: Boolean = written match
+    case UnreadHeading.Site.AtTheStartOfItsLine(_)      => true
+    case UnreadHeading.Site.IndentedInsideTheBlockAbove => false
+
+object UnreadHeading:
+
+  /** WHERE IN ITS LINE THE AUTHOR WROTE THE `#`, which is a fact the source holds and the parse
+    * tree does not.
+    *
+    * THE TREE COULD NOT HAVE BEEN ASKED. Both arms produce the byte-identical shape — an
+    * `ast.Header` nested inside a `BulletListItem`, measured against laika-core 1.3.2 at two and
+    * at three columns of indent — so nothing downstream of the parse can separate them. It is
+    * also the WHOLE of what separates them: everything either arm costs follows from it.
+    */
+  enum Site:
+
+    /** THE `#` IS IN THE FIRST COLUMN, where CommonMark — so Obsidian — closes the list or the
+      * quote above it and reads a TOP-LEVEL heading. This tool reads the same line as more of the
+      * block above.
+      *
+      * So the two readings disagree about the note's whole OUTLINE, not merely about one heading:
+      * every heading below this one keys under a different parent in the two readings, and the
+      * card that swallowed it also absorbs the text — marker and all — and the list items the
+      * author wrote underneath it.
+      *
+      * @param line
+      *   the ORIGINAL FILE's line, 1-based, so it can be typed into a jump-to-line box. The same
+      *   contract as `ListIndent.Finding.line`, and it is not optional here because it is not
+      *   decoration: the lookup that found the `#` in the first column is what builds this arm,
+      *   and this is the line that lookup returned.
+      */
+    case AtTheStartOfItsLine(line: Int)
+
+    /** THE `#` IS INDENTED INTO THE BLOCK ABOVE, far enough that CommonMark keeps that block open
+      * and puts the heading inside it too.
+      *
+      * Both readings agree about where this heading sits, so no other card in the note changes
+      * its key and nothing below it moves. What is lost is the card this heading would have made,
+      * and that alone.
+      *
+      * WHAT ACTUALLY PUTS A HEADING HERE is that the source does not show its `#` at the start of
+      * a line; every instance measured so far is a heading indented inside a list item, which is
+      * the case this is named for. Naming it after the measured cause rather than after the
+      * lookup's silence is deliberate — a case called "not found at the start of a line" would
+      * describe this file's machinery rather than the author's file.
+      *
+      * NO LINE NUMBER, AND LOOKING FOR ONE IS REFUSED RATHER THAN UNIMPLEMENTED. The lookup that
+      * gives its sibling a line asks whether the heading's text follows a `#` in the FIRST
+      * COLUMN, and an indented heading is by construction not there. Locating it anyway would
+      * take a second definition of "which lines are headings" — the drift `Extractor`'s own
+      * `LineIndex` comment warns against — so the message quotes the heading's text instead.
+      */
+    case IndentedInsideTheBlockAbove
 
 /** Finding the headings above, and saying what they mean.
   *
@@ -221,13 +276,27 @@ object UnreadHeadings:
       .flatMap { heading =>
         // FIRST, BEFORE ANY OF THE TESTS BELOW SHORT-CIRCUIT IT, because the cursor must advance
         // for every heading in the document and not only for the ones that survive the filters.
-        val column0 = lines.lineOf(heading.extractText)
+        //
+        // THE LOOKUP YIELDS EVIDENCE AND THE MATCH BELOW CLASSIFIES IT, which is why the sentinel
+        // `LineIndex.lineOf` answers with — 0, meaning "no such line" — is turned into an absent
+        // option here rather than carried further as a number that has to be remembered not to be
+        // a line. Nothing else in this function knows about the sentinel.
+        //
+        // ASKED EXACTLY ONCE PER HEADING, AND THE `val` IS WHAT GUARANTEES IT. `lineOf` advances a
+        // cursor, so a second call for the same heading would answer about a LATER line and drag
+        // every answer after it down the document.
+        val found             = lines.lineOf(heading.extractText)
+        val atTheStartOfALine = Option.when(found > 0)(found)
 
         if lifted.exists(_ eq heading) then None
         else if obsidianReadsATagHere(body, heading) then None
-        else if column0 > 0 then Some(UnreadHeading.EveryHeadingBelowMisfiled(heading, column0))
-        else if quoted.exists(_ eq heading) then None
-        else Some(UnreadHeading.NoCardOfItsOwn(heading))
+        else
+          atTheStartOfALine match
+            case Some(line) => Some(UnreadHeading(heading, UnreadHeading.Site.AtTheStartOfItsLine(line)))
+            // Asked ONLY once the source has failed to put the `#` in the first column, for the
+            // reason given as question 4 above.
+            case None if quoted.exists(_ eq heading) => None
+            case None => Some(UnreadHeading(heading, UnreadHeading.Site.IndentedInsideTheBlockAbove))
       }
       .toVector
 
@@ -298,9 +367,9 @@ object UnreadHeadings:
     * quote instead. Diagnosing which would mean re-reading the source, and this deliberately does
     * not.
     */
-  def explain(unread: UnreadHeading): String = unread match
-    case UnreadHeading.EveryHeadingBelowMisfiled(heading, _) =>
-      s"'${heading.extractText.trim}' is written as a heading at the start of its line and this " +
+  def explain(unread: UnreadHeading): String = unread.written match
+    case UnreadHeading.Site.AtTheStartOfItsLine(_) =>
+      s"'${unread.text}' is written as a heading at the start of its line and this " +
         "tool does not read it as one, so it makes no card of its own AND the headings below it " +
         "are filed under the wrong parent — a heading path is half a card's identity, so no card " +
         "in this note is written until this is fixed, and correcting the file later would re-key " +
@@ -309,8 +378,8 @@ object UnreadHeadings:
         "the two, and markdown then reads the heading as more of that list item; a quoted line " +
         "above it does the same. Put a blank line above the heading"
 
-    case UnreadHeading.NoCardOfItsOwn(heading) =>
-      s"'${heading.extractText.trim}' is written as a heading and this tool does not read it as " +
+    case UnreadHeading.Site.IndentedInsideTheBlockAbove =>
+      s"'${unread.text}' is written as a heading and this tool does not read it as " +
         "one, so it makes no card of its own. Nothing else in the note is affected: the heading " +
         "is indented inside a list item, and markdown reads it as part of that item whichever " +
         "way you look at it, so no other card changes. If you meant it as a heading of the note " +
@@ -331,9 +400,9 @@ object UnreadHeadings:
     * finding it in the first column is what made it severe, and an author fixes it by putting the
     * cursor there and pressing Return.
     */
-  def failure(unread: UnreadHeading, noteId: NoteId, filePath: String): BuildFailure = unread match
-    case u @ UnreadHeading.EveryHeadingBelowMisfiled(_, line) =>
-      BuildFailure.KeyMisfiledInFile(noteId, SourceRef(filePath, line, SourceKind.Heading), explain(u))
+  def failure(unread: UnreadHeading, noteId: NoteId, filePath: String): BuildFailure = unread.written match
+    case UnreadHeading.Site.AtTheStartOfItsLine(line) =>
+      BuildFailure.KeyMisfiledInFile(noteId, SourceRef(filePath, line, SourceKind.Heading), explain(unread))
 
-    case u @ UnreadHeading.NoCardOfItsOwn(_) =>
-      BuildFailure.HeadingUnreadInFile(noteId, SourceRef(filePath, 0, SourceKind.Heading), explain(u))
+    case UnreadHeading.Site.IndentedInsideTheBlockAbove =>
+      BuildFailure.HeadingUnreadInFile(noteId, SourceRef(filePath, 0, SourceKind.Heading), explain(unread))
