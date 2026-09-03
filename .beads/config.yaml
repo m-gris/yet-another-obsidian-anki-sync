@@ -36,6 +36,23 @@
 #     - ~/beads-planning  # Personal planning repo
 #     - ~/work-planning   # Work planning repo
 
+# SHARED SERVER, SET 2026-09-03 WHEN THIS PROJECT WAS CONSOLIDATED. Its `oas` database now lives
+# in `~/.beads/shared-server/dolt/` alongside every other project's, served by one `dolt sql-server`
+# on port 3308 rather than by a server of its own.
+#
+# THIS FLAG IS THE WHOLE MECHANISM, AND WITHOUT IT THE CONSOLIDATION SILENTLY UNDOES ITSELF. With
+# it, bd resolves the port from `~/.beads/shared-server/dolt-server.port` and this project's own
+# `.beads/dolt-server.port` becomes inert. Without it, bd defaults to per-project, AUTO-STARTS AN
+# EPHEMERAL SERVER ON A RANDOM PORT, and writes that port into the project's port file — after
+# which bd connects to a server holding no databases and reports `database "oas" not found`.
+#
+# THAT IS NOT HYPOTHETICAL. The `Obsidian` project was found in exactly that state on 2026-09-03:
+# its data had been moved into the shared server in March, its config was never told, and its port
+# file pointed at an auto-started empty server. Its tracker was unusable and nothing announced it.
+# `atomyst` was found one auto-start away from the same fate. Diagnosed with the web-app session,
+# which has carried this flag since March and whose port file has survived six months untouched.
+dolt.shared-server: true
+
 # JSONL backup (periodic export for off-machine recovery)
 #
 # SET EXPLICITLY ON 2026-08-30, NOT LEFT TO AUTO-DETECTION, because auto-detection had it
