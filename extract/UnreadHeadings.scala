@@ -1,7 +1,7 @@
 package obsidiananki.extract
 
 import laika.ast.{Header, QuotedBlock, RootElement, Section}
-import obsidiananki.model.NoteId
+import obsidiananki.model.{Marker, NoteId}
 import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef}
 
 /** A heading the author wrote that this tool does not read as a heading, and WHERE IN ITS LINE
@@ -50,8 +50,10 @@ import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef}
   * ═══════════════════════════════════════════════════════════════════════════════════════════
   *
   * The two place the heading differently, so they cost different things and earn different
-  * answers: the milder one is REPORTED and the note's cards are written as usual, the severe one
-  * costs the note every card in it. A boolean parameter, or a severity read back off the message,
+  * answers: the milder one is reported ONLY IF ITS HEADING WAS MARKED and the note's cards are
+  * written as usual either way, the severe one costs the note every card in it. That extra
+  * condition on the milder arm is argued at [[UnreadHeadings.failure]] and rests on
+  * [[carriesAMarker]]. A boolean parameter, or a severity read back off the message,
   * would let a consumer take the severe path for the mild case — which refuses an author's whole
   * note over a heading that cost them one card — or the mild path for the severe one, which
   * writes cards under keys this tool already knows are wrong. Under `-Wconf:msg=exhaustive:e` a
@@ -89,12 +91,39 @@ final case class UnreadHeading(heading: Header, written: UnreadHeading.Site):
     * from CommonMark's container rule — a line indented less than the enclosing block's content
     * column ends that block — and the first column is short of every content column there is.
     *
-    * FALSE IS NOT "HARMLESS". A card the author expected is still missing, and that is still
-    * reported; what it does not do is punish the rest of the note for it.
+    * FALSE IS NOT "HARMLESS", THOUGH IT IS OFTEN NOTHING AT ALL. Where the heading was MARKED, a
+    * card the author expected is still missing and that is still reported; what a false answer
+    * does not do is punish the rest of the note for it. Where the heading was not marked, nothing
+    * was expected and nothing is missing — see [[UnreadHeadings.failure]], which is where those
+    * two part company, and [[carriesAMarker]], which is what separates them.
     */
   def commonMarkPlacesItElsewhere: Boolean = written match
     case UnreadHeading.Site.AtTheStartOfItsLine(_)      => true
     case UnreadHeading.Site.IndentedInsideTheBlockAbove => false
+
+  /** WHETHER THE AUTHOR ASKED FOR A CARD ON THIS HEADING — whether its own text carries a
+    * `#flashcard/…` marker. The second observation this type offers, and like its neighbour above
+    * it is a FACT and not a decision: what follows from it is argued at [[UnreadHeadings.failure]].
+    *
+    * IT IS ANSWERABLE AT ALL BECAUSE THE MARKER SURVIVES THE PARSE, which is worth stating because
+    * the whole subject of this type is a heading the tool did not read. It did read it — as a
+    * `Header` nested somewhere no `Section` could lift it from — so the node is in the tree and its
+    * marker is ordinary text among its spans. Measured against laika-core 1.3.2 before this was
+    * written: a marker on a heading indented inside a list item comes back through `extractText`
+    * intact, including when the heading also holds a wikilink or a cloze highlight.
+    *
+    * THE SAME QUESTION `Extractor.hasMarkedHeading` ASKS OF A LIFTED HEADING, ASKED THROUGH THE
+    * SAME FUNCTION, so a heading this tool failed to read is judged marked or unmarked by exactly
+    * the rule that judges one it read. A second definition of "carries a marker" here is how the
+    * two would come to disagree, and a disagreement would mean a heading counted as marked for one
+    * purpose and unmarked for the other.
+    *
+    * AN UNRECOGNISED TOKEN COUNTS AS CARRYING ONE. `Marker.parse` answers `Left` for
+    * `#flashcard/2-way` — a card the author asked for and spelled wrong — and reading that as "no
+    * marker" would silence exactly the person who most needs telling, since a marker on a heading
+    * nobody read is a marker no other check in this tool will ever see either.
+    */
+  def carriesAMarker: Boolean = Marker.parse(text).fold(_ => true, _.isDefined)
 
 object UnreadHeading:
 
@@ -354,6 +383,11 @@ object UnreadHeadings:
     * callout is reported today as "unresolved link id reference: !note", which is Laika's
     * sentence about a shortcut reference link offered to somebody who typed a callout.
     *
+    * THE MILDER MESSAGE IS ONLY EVER SHOWN TO SOMEBODY WHO MARKED THE HEADING, which [[failure]]
+    * decides and argues. It is written to be true of that reader: it opens by saying the heading
+    * makes no card of its own, which is news to an author who asked for one and would have been
+    * an announcement of the obvious to anyone else.
+    *
     * THE TWO MESSAGES DO NOT SHARE A REMEDY, AND THAT IS THE SHARPEST EDGE IN THIS FILE. "Put a
     * blank line above the heading" is right for a heading a list swallowed and is a TRAP for one
     * the author indented on purpose: un-indenting THAT heading makes it a real one, which inserts
@@ -387,7 +421,8 @@ object UnreadHeadings:
         "line above it — but know that doing so files every card below it under a new heading, " +
         "which changes those cards' identity and re-keys them"
 
-  /** The failure the scan is told about, which is a DIFFERENT CASE for each severity.
+  /** The failure the scan is told about, IF THERE IS ONE — a DIFFERENT CASE for each severity,
+    * and for one of the two only when the heading was marked.
     *
     * WHY NOT ONE CASE CARRYING A SEVERITY. The two ask different things of the reader — one says
     * a card is missing, the other says every card in the file is withheld — and a report that
@@ -399,10 +434,56 @@ object UnreadHeadings:
     * which is what every other whole-note failure does; the severe case has a real line because
     * finding it in the first column is what made it severe, and an author fixes it by putting the
     * cursor there and pressing Return.
+    *
+    * ═══════════════════════════════════════════════════════════════════════════════════════════
+    * WHY AN UNMARKED INDENTED HEADING IS ANSWERED WITH `None`, AND WHY RESTORING THE REPORT WOULD
+    * BE A REGRESSION RATHER THAN A KINDNESS
+    * ═══════════════════════════════════════════════════════════════════════════════════════════
+    *
+    * Ruled by Marc, and the reasoning is written here because a later reader who does not have it
+    * will "helpfully" put the report back.
+    *
+    * THE MILD CASE IS AGREEMENT, NOT DISAGREEMENT. That is the whole argument. An indented heading
+    * sits inside its list item in BOTH readings — see
+    * [[UnreadHeading.commonMarkPlacesItElsewhere]], which answers false for it. Nothing is
+    * re-keyed, no other card moves, and no card this tool has already written is affected. So the
+    * only thing a report could tell the author is "I made no card from this heading" — which is
+    * the normal, correct outcome for every heading anybody ever wrote without a marker, in every
+    * note in the vault. It was not a finding; it was ordinary behaviour dressed up as a failure.
+    *
+    * A MARKED ONE IS THE OPPOSITE AND MUST KEEP ITS REPORT. The author asked for a card, will not
+    * get one, and NOTHING ELSE IN THE RUN SAYS SO — `Extractor.hasMarkedHeading` walks `Section`s,
+    * so this marker is invisible to it, and the note is classified as having no marked heading at
+    * all. That silent missing card is the failure this whole file exists to prevent, so the test
+    * is [[UnreadHeading.carriesAMarker]] and not, say, whether the heading has any text.
+    *
+    * THE SEVERE CASE IS REPORTED EITHER WAY, and the asymmetry is deliberate. That heading was
+    * absorbed whole, so a marker written on it is inside the swallowed text and the tool cannot
+    * always tell what was asked for; and what it costs — every heading below it filed under a
+    * parent the author never wrote, with live Anki notes re-keyed when the file is corrected — is
+    * owed to the author whatever that line asked for.
+    *
+    * IT IS THE REPORT THAT NARROWS AND NEVER THE DETECTION, which is the sharpest edge here.
+    * [[in]] still finds an unmarked indented heading, and `extract/VaultWalker.scala` needs it to:
+    * it reads the detected headings to hold back two messages that are wrong for such a note, one
+    * of them saying "no HEADING carries a marker" — advice that would send an author to move a
+    * marker already sitting where it belongs. Narrowing [[in]] instead would bring both back.
+    *
+    * AND THE SHELTER GOES WITH THE REPORT, WHICH IS SOUND HERE RATHER THAN MERELY TOLERABLE.
+    * `BuildFailure.HeadingUnreadInFile` shelters the whole note from orphan inference, on the
+    * grounds that a heading the tool cannot see is a card it cannot enumerate — and an
+    * unenumerated card that exists in Anki is inferred deleted, tagged and SUSPENDED. That
+    * argument needs a card to exist. An unmarked heading has never produced one, and this function
+    * knows that rather than assuming it, because it has just read the heading's own text and found
+    * no marker on it. So there is nothing of the note's left unenumerated and nothing for the
+    * shelter to protect.
     */
-  def failure(unread: UnreadHeading, noteId: NoteId, filePath: String): BuildFailure = unread.written match
-    case UnreadHeading.Site.AtTheStartOfItsLine(line) =>
-      BuildFailure.KeyMisfiledInFile(noteId, SourceRef(filePath, line, SourceKind.Heading), explain(unread))
+  def failure(unread: UnreadHeading, noteId: NoteId, filePath: String): Option[BuildFailure] =
+    unread.written match
+      case UnreadHeading.Site.AtTheStartOfItsLine(line) =>
+        Some(BuildFailure.KeyMisfiledInFile(noteId, SourceRef(filePath, line, SourceKind.Heading), explain(unread)))
 
-    case UnreadHeading.Site.IndentedInsideTheBlockAbove =>
-      BuildFailure.HeadingUnreadInFile(noteId, SourceRef(filePath, 0, SourceKind.Heading), explain(unread))
+      case UnreadHeading.Site.IndentedInsideTheBlockAbove if unread.carriesAMarker =>
+        Some(BuildFailure.HeadingUnreadInFile(noteId, SourceRef(filePath, 0, SourceKind.Heading), explain(unread)))
+
+      case UnreadHeading.Site.IndentedInsideTheBlockAbove => None

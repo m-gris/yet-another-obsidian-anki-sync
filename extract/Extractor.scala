@@ -418,9 +418,9 @@ object Extractor:
     // wrong. Nothing downstream can catch that, because nothing about it fails; the only place to
     // stop it is before the walk that derives the keys. See [[UnreadHeadings]].
     //
-    // REPORTED WHICHEVER IT IS, WITHHELD ONLY FOR ONE OF THEM, AND THIS IS WHERE THAT IS DECIDED.
-    // The type reports a FACT — [[UnreadHeading.commonMarkPlacesItElsewhere]], whether the other
-    // reading puts the heading somewhere else in the outline — and the decision taken here is what
+    // WITHHELD FOR ONE OF THEM, AND THIS IS WHERE THAT IS DECIDED. The type reports a FACT —
+    // [[UnreadHeading.commonMarkPlacesItElsewhere]], whether the other reading puts the heading
+    // somewhere else in the outline — and the decision taken here is what
     // to do about it: NOTHING KEYED BY THIS NOTE'S HEADINGS MAY BE WRITTEN when it does. Those
     // keys are perfectly derivable and WRONG, and working out which of them are unaffected would
     // mean reconstructing the outline the author meant, which is a guess this project does not
@@ -432,8 +432,15 @@ object Extractor:
     // THE WALK IS SKIPPED RATHER THAN RUN AND DISCARDED, which is why this is a branch and not a
     // filter over the result. Running it would compute a full set of keys nobody may act on, and
     // the next person to read this would have to work out why they are thrown away.
+    //
+    // NOT EVERY DETECTED HEADING EARNS A MESSAGE, WHICH IS WHY THIS IS A `flatMap` AND NOT A
+    // `foreach`. An indented heading carrying no marker is placed identically by both readings and
+    // was never asked to make a card, so there is nothing to tell the author; `UnreadHeadings`
+    // answers `None` for it and argues that there at `failure`. The vector itself is undiminished
+    // on purpose — the branch below, and `VaultWalker`'s two suppressions, still need every
+    // heading that was found.
     val unread = UnreadHeadings.in(root, body, bodyFirstLine)
-    unread.foreach(u => failures += UnreadHeadings.failure(u, noteId, filePath))
+    failures ++= unread.flatMap(UnreadHeadings.failure(_, noteId, filePath))
 
     if !unread.exists(_.commonMarkPlacesItElsewhere) then
       root.content.foreach(walk(_, Vector.empty, Vector.empty))
