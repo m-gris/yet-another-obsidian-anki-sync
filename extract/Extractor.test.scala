@@ -2150,15 +2150,46 @@ class ExtractorTest extends munit.FunSuite:
     )
   }
 
-  // ── THE MILDER CASE: REPORTED, AND THE NOTE'S CARDS ARE STILL WRITTEN ────────────
+  // ── THE MILDER CASE: REPORTED WHEN A CARD WAS ASKED FOR, AND THE NOTE'S CARDS ARE STILL
+  //    WRITTEN EITHER WAY ─────────────────────────────────────────────────────────
   //
   // A heading INDENTED inside a list item parses to the same tree shape as a swallowed one — an
   // `ast.Header` inside a `BulletListItem` — and CommonMark puts it inside the item as well. The
   // two readings agree about where it sits, so no card below it is filed differently and the
   // only thing lost is the card that heading would have made. Refusing the note over that would
   // cost the author every card in it to save one.
+  //
+  // AND BECAUSE THE TWO READINGS AGREE, THERE IS NOTHING TO SAY UNLESS THE HEADING WAS MARKED.
+  // "I made no card from this heading" is the right answer for every unmarked heading in the
+  // vault; saying it here made ordinary behaviour look like a failure. A MARKED one is the
+  // opposite — a card the author asked for that will not arrive, which nothing else reports.
 
-  test("an indented heading is reported, and the note's other cards are still built") {
+  test("an indented MARKED heading is reported, and the note's other cards are still built") {
+    val note = extract(
+      """|# Alpha
+         |
+         |- an item
+         |  # indented under the item #flashcard/1way
+         |- another item
+         |
+         |## Beta #flashcard/1way
+         |
+         |The answer.
+         |""".stripMargin
+    )
+    assertEquals(paths(note), Vector("alpha / beta"))
+    assert(
+      unreadHeading(note).exists(_.contains("indented under the item")),
+      s"the heading nobody will get a card for was passed over: ${note.failures}",
+    )
+  }
+
+  /** THE SAME NOTE WITH THE MARKER TAKEN OFF THE INDENTED HEADING, which is the whole of the
+    * difference. Nobody asked for a card here and nobody gets one, both parsers agree about where
+    * the heading sits, and no other card in the note moves — so there is no news, and the run
+    * must say nothing rather than report the tool behaving correctly.
+    */
+  test("an indented UNMARKED heading is not reported, because nothing went wrong") {
     val note = extract(
       """|# Alpha
          |
@@ -2172,10 +2203,7 @@ class ExtractorTest extends munit.FunSuite:
          |""".stripMargin
     )
     assertEquals(paths(note), Vector("alpha / beta"))
-    assert(
-      unreadHeading(note).exists(_.contains("indented under the item")),
-      s"the heading nobody will get a card for was passed over: ${note.failures}",
-    )
+    assertEquals(note.failures, Vector.empty, s"an ordinary unmarked heading was reported")
   }
 
   // ── THE FALSE POSITIVES THIS MUST NOT HAVE ──────────────────────────────────────

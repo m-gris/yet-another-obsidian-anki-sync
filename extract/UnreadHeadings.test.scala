@@ -22,7 +22,9 @@ import obsidiananki.plan.{BuildFailure, OrphanShelter}
   *
   *   - [[UnreadHeading.Site.IndentedInsideTheBlockAbove]] — the heading is indented inside a list
   *     item, where CommonMark puts it too. Both readings agree about where it sits, so nothing
-  *     else in the note moves; what is lost is a card for that heading alone.
+  *     else in the note moves; what is lost is a card for that heading alone, and only if one was
+  *     ever asked for. It is REPORTED ONLY WHEN THE HEADING ITSELF CARRIES A MARKER — see the
+  *     section "what the scan is told" below, and [[UnreadHeadings.failure]] for the argument.
   *   - [[UnreadHeading.Site.AtTheStartOfItsLine]] — the heading is written at the START of its
   *     line, where CommonMark closes the list or the quote above it and reads a top-level
   *     heading. This tool reads it as more of the line above, so the heading contributes no
@@ -270,6 +272,30 @@ class UnreadHeadingsTest extends munit.FunSuite:
     )
   }
 
+  /** THE MARKER SURVIVES INTO THE UNREAD HEADING'S TEXT, which is the fact the narrowing below
+    * rests on and the reason it is measured here rather than assumed. `extractText` flattens the
+    * heading's spans, and the marker is ordinary text among them however the rest of the heading
+    * is written — the wikilink case is in this list because a heading is not plain text and a
+    * flattening that dropped spans would take the marker with them.
+    *
+    * A TOKEN THIS TOOL DOES NOT RECOGNISE COUNTS AS CARRYING ONE. `#flashcard/2-way` is a card
+    * the author asked for and spelled wrong; treating it as "no marker" would silence exactly the
+    * person who most needs telling.
+    */
+  test("whether the heading carries a marker is readable off the heading this tool did not read") {
+    assertEquals(
+      Vector(
+        unread("- alpha\n  # Indented #flashcard/2way\n").map(_.carriesAMarker),
+        unread("- alpha\n  # Indented [[a link]] #flashcard/cloze\n").map(_.carriesAMarker),
+        unread("- alpha\n  # Indented #flashcard/2-way\n").map(_.carriesAMarker),
+        unread("- alpha\n  # Indented\n").map(_.carriesAMarker),
+        unread("- data size\n# Swallowed #flashcard/sequence\n").map(_.carriesAMarker),
+        unread("- data size\n# Swallowed\n").map(_.carriesAMarker),
+      ),
+      Vector(Vector(true), Vector(true), Vector(true), Vector(false), Vector(true), Vector(false)),
+    )
+  }
+
   // ══════════════════════════════════════════════════════════════ message ════
 
   private def only(body: String): UnreadHeading =
@@ -332,9 +358,26 @@ class UnreadHeadingsTest extends munit.FunSuite:
   test("the misfiling heading becomes a misfiled-key failure, at its own line") {
     assertEquals(
       UnreadHeadings.failure(only("- data size\n# Swallowed\n"), n1, "Note.md") match
-        case BuildFailure.KeyMisfiledInFile(id, source, _) => (id.value, source.file, source.line)
-        case other                                         => fail(s"wrong failure: $other"),
+        case Some(BuildFailure.KeyMisfiledInFile(id, source, _)) => (id.value, source.file, source.line)
+        case other                                               => fail(s"wrong failure: $other"),
       ("n1", "Note.md", 2),
+    )
+  }
+
+  /** THE SEVERE CASE IS REPORTED WHETHER OR NOT ITS HEADING CARRIES A MARKER, and that is not
+    * symmetry for its own sake. The heading was swallowed whole, marker and all, so the tool
+    * cannot always see whether one was written there; and what it costs — every heading below it
+    * filed under a parent the author never wrote — is owed to the author no matter what the
+    * swallowed line asked for. The unmarked body below is the one that would break if somebody
+    * later "simplified" both severities into one marker test.
+    */
+  test("the misfiling heading is reported with a marker on it and without one") {
+    assertEquals(
+      Vector(
+        UnreadHeadings.failure(only("- data size\n# Swallowed #flashcard/sequence\n"), n1, "Note.md"),
+        UnreadHeadings.failure(only("- data size\n# Swallowed\n"), n1, "Note.md"),
+      ).map(_.isDefined),
+      Vector(true, true),
     )
   }
 
@@ -342,13 +385,42 @@ class UnreadHeadingsTest extends munit.FunSuite:
     * omission: the line number exists only where it was needed to establish the severity, and an
     * indented heading was classified without one. `SourceRef` prints a bare file name for line 0,
     * and the message quotes the heading instead.
+    *
+    * THE HEADING HERE CARRIES A MARKER, WHICH IS NOW WHAT MAKES IT REPORTABLE AT ALL — see the
+    * test below for the untagged sibling, which is silent.
     */
   test("the indented heading becomes an unread-heading failure, with no line") {
     assertEquals(
-      UnreadHeadings.failure(only("- alpha\n  # Indented\n"), n1, "Note.md") match
-        case BuildFailure.HeadingUnreadInFile(id, source, _) => (id.value, source.file, source.line)
-        case other                                           => fail(s"wrong failure: $other"),
+      UnreadHeadings.failure(only("- alpha\n  # Indented #flashcard/2way\n"), n1, "Note.md") match
+        case Some(BuildFailure.HeadingUnreadInFile(id, source, _)) => (id.value, source.file, source.line)
+        case other                                                 => fail(s"wrong failure: $other"),
       ("n1", "Note.md", 0),
+    )
+  }
+
+  /** THE MILD CASE IS AGREEMENT, NOT DISAGREEMENT, SO AN UNTAGGED HEADING HERE IS NOT A FINDING.
+    * Both readings put this heading inside the list item. The only thing the report could say
+    * about it is "I made no card from this heading" — which is the correct, ordinary outcome for
+    * every heading anybody ever wrote without a marker, in every note. It was ordinary behaviour
+    * dressed up as a failure.
+    *
+    * DETECTED ALL THE SAME, WHICH IS THE HALF THIS TEST GUARDS BY CALLING `only`. `VaultWalker`
+    * reads the detected headings to suppress two messages that would otherwise be wrong — one of
+    * them telling an author whose marker is already on a heading to go and move it — so narrowing
+    * the DETECTION instead of the REPORT would bring both of those back.
+    */
+  test("an indented heading with no marker on it is detected and reported to nobody") {
+    assertEquals(UnreadHeadings.failure(only("- alpha\n  # Indented\n"), n1, "Note.md"), None)
+  }
+
+  /** A MARKER TOKEN THIS TOOL DOES NOT RECOGNISE IS STILL AN ASK, and silencing it would be the
+    * worst outcome of the three: the author both asked for a card and misspelled the asking, so
+    * nothing else in the run is going to mention this heading either.
+    */
+  test("an indented heading whose marker token is a near miss is still reported") {
+    assert(
+      UnreadHeadings.failure(only("- alpha\n  # Indented #flashcard/2-way\n"), n1, "Note.md").isDefined,
+      "a card the author asked for and spelled wrong went missing in silence",
     )
   }
 
@@ -357,13 +429,18 @@ class UnreadHeadingsTest extends munit.FunSuite:
     * tool cannot see is one whose card it cannot enumerate, and if that card exists in Anki
     * already it would be inferred an orphan and SUSPENDED. Sheltering says "I cannot tell you
     * what this note owns", which is exactly true of both.
+    *
+    * IT IS TRUE OF THE MILD CASE ONLY WHEN THE HEADING WAS MARKED, which is why this body has a
+    * marker on it and the one two tests above does not. A heading carrying no marker has never
+    * produced an Anki note, so there is nothing of this note's that the tool has failed to
+    * enumerate and nothing that orphan inference could wrongly retire.
     */
   test("both failures shelter the whole note from orphan inference") {
     assertEquals(
       Vector(
-        UnreadHeadings.failure(only("- data size\n# Swallowed\n"), n1, "Note.md").shelters,
-        UnreadHeadings.failure(only("- alpha\n  # Indented\n"), n1, "Note.md").shelters,
+        UnreadHeadings.failure(only("- data size\n# Swallowed\n"), n1, "Note.md").map(_.shelters),
+        UnreadHeadings.failure(only("- alpha\n  # Indented #flashcard/2way\n"), n1, "Note.md").map(_.shelters),
       ),
-      Vector(OrphanShelter.WholeNote(n1), OrphanShelter.WholeNote(n1)),
+      Vector(Some(OrphanShelter.WholeNote(n1)), Some(OrphanShelter.WholeNote(n1))),
     )
   }

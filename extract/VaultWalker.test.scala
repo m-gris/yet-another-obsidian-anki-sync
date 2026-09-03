@@ -1365,13 +1365,13 @@ class VaultWalkerTest extends munit.FunSuite:
     * severities. This note's heading is INDENTED inside a list item, where CommonMark puts it as
     * well — so no key in the file is wrong, and the whole-note card its frontmatter marker asks
     * for is written exactly as it would have been. What the author gains is being told that the
-    * heading they wrote makes no card of its own.
+    * heading they MARKED makes no card of its own.
     */
-  test("an indented heading is reported without costing the note its whole-note card") {
+  test("an indented marked heading is reported without costing the note its whole-note card") {
     val index = scan(
       "N.md" ->
         ("---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n" +
-          "- alpha\n  # indented under the item\n- beta\n")
+          "- alpha\n  # indented under the item #flashcard/2way\n- beta\n")
     )
     assertEquals(index.scan.specs.size, 1, s"the note's card was withheld: ${index.scan.failures}")
     assert(
@@ -1380,5 +1380,72 @@ class VaultWalkerTest extends munit.FunSuite:
         case _                                         => false
       },
       s"the heading nobody will get a card for was passed over: ${index.scan.failures}",
+    )
+  }
+
+  /** ══ THE UNTAGGED INDENTED HEADING, AND THE TWO MESSAGES ITS DETECTION STILL HAS TO SUPPRESS ══
+    *
+    * The three tests below are one experiment in three parts. Reporting an untagged indented
+    * heading was withdrawn because the two readings AGREE about it — but the walker uses the same
+    * detection to hold back two OTHER messages, and both of those remain wrong for exactly this
+    * note. So detection must keep finding the heading while the report stops mentioning it, and
+    * these pin the two halves apart: silence about the heading, and continued silence about the
+    * things the heading's presence disproves.
+    */
+  test("an indented unmarked heading costs the note nothing and is not mentioned") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n" +
+          "- alpha\n  # indented under the item\n- beta\n")
+    )
+    assertEquals(index.scan.specs.size, 1, s"the note's card was withheld: ${index.scan.failures}")
+    assertEquals(
+      index.scan.failures,
+      Vector.empty,
+      "a heading nobody marked, that both readings place identically, was reported as a problem",
+    )
+  }
+
+  /** SUPPRESSION ONE, STILL SUPPRESSED. `Extractor.hasMarkedHeading` walks `Section`s, so a marker
+    * on a heading this tool never read as a heading is invisible to it and the note is classified
+    * as having no marked heading at all. The message that classification earns says "no HEADING
+    * carries a marker" and sends the author to move a marker out of frontmatter — advice that is
+    * wrong here whether or not THIS heading is the marked one, because the tool has just admitted
+    * it cannot see every heading in the file.
+    *
+    * THE HEADING BELOW IS DELIBERATELY UNMARKED, because that is the case the narrowing could have
+    * broken: it is no longer reported, and if it had stopped being DETECTED as well this message
+    * would come back.
+    */
+  test("an untagged indented heading still holds back the 'no heading carries a marker' message") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/1way\n---\n\n" +
+          "# Real Heading\n\n- alpha\n  # indented under the item\n- beta\n")
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, r) => (f, r) },
+      Vector.empty,
+      "an author was sent to move a marker on the strength of headings this tool cannot all see",
+    )
+  }
+
+  /** SUPPRESSION TWO, STILL SUPPRESSED. A frontmatter marker that builds its card OUT OF the
+    * note's headings is told there is nothing to reveal when the note has none — true of the tree
+    * and false of the file, since `hasNoHeadings` descends `BlockContainer`s and Laika's
+    * `BulletList` is a `ListContainer`, so the indented heading is invisible to it too.
+    *
+    * UNMARKED AGAIN, FOR THE REASON GIVEN ABOVE.
+    */
+  test("an untagged indented heading still holds back the 'the note has none' message") {
+    val index = scan(
+      "N.md" ->
+        ("---\nid: n1\ntags:\n  - flashcard/sequence/headers\n---\n\n" +
+          "- alpha\n  # indented under the item\n- beta\n")
+    )
+    assertEquals(
+      index.scan.failures.collect { case BuildFailure.MarkerNotOnHeading(f, r) => (f, r) },
+      Vector.empty,
+      "an author who wrote a heading was told their note has none",
     )
   }
