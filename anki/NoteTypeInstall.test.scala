@@ -212,6 +212,7 @@ class NoteTypeInstallTest extends munit.FunSuite:
       extra.fields.toVector,
       extra.templates.toVector.toMap,
       basic.spec.styling,
+      basic.spec.isCloze,
     )
     assertEquals(
       drift,
@@ -227,9 +228,127 @@ class NoteTypeInstallTest extends munit.FunSuite:
         basic.spec.fields.toVector,
         basic.spec.templates.toVector.toMap,
         basic.spec.styling,
+        basic.spec.isCloze,
       ),
       Vector.empty,
     )
+  }
+
+  // -------------------------------------------------- the kind nobody was comparing ----
+
+  /** THE ONE PROPERTY THE SURVEY SENT AND NEVER READ BACK.
+    *
+    * `isCloze` is declared in every manifest and handed to `createModel`, and until now the
+    * comparison that decides whether a collection agrees with this repository looked at fields,
+    * template names, template bodies and the stylesheet — and not at the KIND. So a note type
+    * whose kind differed from the declaration passed the drift check in silence.
+    *
+    * THE FIXTURE IS THE FAILURE THAT MATTERS, not an arbitrary flip. `Obsidian Cloze` is the one
+    * type this repository declares CLOZE, and the content the extractor authors for it is
+    * `{{c1::…}}` text. Standing as a STANDARD type it accepts that text without complaint, stores
+    * it verbatim, and generates one card showing the braces — a plausible wrong answer with no
+    * error anywhere.
+    */
+  def clozeStandingAsStandard(): InMemoryAnki =
+    val declared = assetNamed(Marker.NoteTypes.Cloze).spec
+    InMemoryAnki(noteTypes = Map(declared.name -> declared.copy(isCloze = false)))
+
+  test("a note type whose KIND differs from the repository is reported as a difference") {
+    // Driven through the fake rather than through `driftBetween` directly, because the claim is
+    // that the live kind is RE-READ. A pure test over a value handed in would pass against a
+    // survey that never asked the collection.
+    val outcome = installInto(clozeStandingAsStandard())
+
+    val drift = outcome.before.collectFirst {
+      case NoteTypeStatus.Present(asset, d) if asset.spec.name == Marker.NoteTypes.Cloze => d
+    }.getOrElse(fail("Obsidian Cloze was not reported as present"))
+
+    assert(
+      drift.nonEmpty,
+      "a note type standing as the wrong KIND reported no difference at all",
+    )
+  }
+
+  test("a KIND difference keeps an install from reporting itself clean") {
+    assert(
+      !installInto(clozeStandingAsStandard()).isClean,
+      "a collection whose note type is the wrong kind reported itself clean",
+    )
+  }
+
+  /** THE MESSAGE IS THE HALF THAT DECIDES WHETHER THIS IS USEFUL OR MERELY NOISY.
+    *
+    * No AnkiConnect action changes a model's kind, so this difference stands on every run until
+    * a person acts in Anki. `InstallOutcome.isClean` goes false on any difference, which is
+    * correct — the collection and this repository disagree about something load-bearing — but it
+    * means the sentence has to carry its own remedy, or the run reports a permanent complaint
+    * nobody can answer.
+    *
+    * IT MUST ALSO SAY WHAT IT MEANS FOR A RETYPE, because that is the decision downstream of it:
+    * `plan/Retyping.scala` admits a move only when both note types are the same kind, and it
+    * reads both kinds LIVE — so a collection whose kind is not the declared one silently moves
+    * that gate, admitting or refusing moves on a premise this repository did not author.
+    */
+  test("the KIND difference says it cannot be repaired here, and what it means for a retype") {
+    val drift = installInto(clozeStandingAsStandard()).before.collectFirst {
+      case NoteTypeStatus.Present(asset, d) if asset.spec.name == Marker.NoteTypes.Cloze => d
+    }.getOrElse(fail("Obsidian Cloze was not reported as present")).map(_.describe).mkString("\n")
+
+    assert(drift.contains("cloze"), s"the declared kind is not named:\n$drift")
+    assert(drift.contains("standard"), s"the collection's kind is not named:\n$drift")
+    assert(
+      drift.contains("cannot") && drift.contains("repair"),
+      s"the message does not say the tool cannot repair this:\n$drift",
+    )
+    assert(drift.contains("retype"), s"the message says nothing about a retype:\n$drift")
+  }
+
+  /** REFUSING THE WHOLE NOTE TYPE, not merely declining to change its kind.
+    *
+    * The repository's templates for a cloze type are WRITTEN FOR ONE — `{{cloze:Text}}` — so
+    * writing them onto a standard type would report success and produce cards that render the
+    * wrong thing. That is the same argument that already refuses a note type whose template
+    * NAMES differ: a repair whose foundation is wrong reports success either way, and the only
+    * place that failure is ever visible is before the call.
+    */
+  test("a KIND difference refuses the whole note type rather than repairing round it") {
+    // The stylesheet differs too, so there is something a repair could otherwise reach for.
+    val declared   = assetNamed(Marker.NoteTypes.Cloze).spec
+    val collection = InMemoryAnki(noteTypes =
+      Map(declared.name -> declared.copy(isCloze = false, styling = "/* edited by a person */"))
+    )
+
+    val statuses = NoteTypeInstaller.survey[Result](collection, assets)
+      .fold(e => fail(s"survey failed: $e"), identity)
+    val plan = NoteTypeInstaller.planRepair(statuses)
+
+    assertEquals(
+      plan.actions.filter(_.noteType == Marker.NoteTypes.Cloze),
+      Vector.empty,
+      s"a repair was planned for a note type of the wrong kind: ${plan.actions.map(_.describe)}",
+    )
+    assertEquals(
+      plan.refusals.map(_.noteType),
+      Vector(Marker.NoteTypes.Cloze),
+      s"the wrong-kind note type was not refused: ${plan.refusals}",
+    )
+  }
+
+  /** BOTH DIRECTIONS, because only one of them is the direction anybody would guess.
+    *
+    * `Obsidian Cloze Sequence` is the note type every heuristic gets backwards — "Cloze" in its
+    * name, `.cloze` in its stylesheet, and NOT a cloze type. A collection holding it as a cloze
+    * type is the mistake a person makes by hand, and it must be reported just as loudly.
+    */
+  test("a note type standing as CLOZE where the repository declares standard is reported too") {
+    val declared = assetNamed(Marker.NoteTypes.ClozeSequence).spec
+    val anki = InMemoryAnki(noteTypes = Map(declared.name -> declared.copy(isCloze = true)))
+
+    val drift = installInto(anki).before.collectFirst {
+      case NoteTypeStatus.Present(asset, d) if asset.spec.name == Marker.NoteTypes.ClozeSequence => d
+    }.getOrElse(fail("Obsidian Cloze Sequence was not reported as present"))
+
+    assert(drift.nonEmpty, "a standard note type standing as cloze reported no difference")
   }
 
   /** Anki's own constraint: `createModel` is not an upsert. Modelled so that a caller which

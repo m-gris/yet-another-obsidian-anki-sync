@@ -215,15 +215,22 @@ object Report:
     val refused =
       if outcome.plan.refusals.isEmpty then Vector.empty
       else
+        // THE PARAGRAPH USED TO EXPLAIN ONE REFUSAL AND WAS PRINTED UNDER ALL OF THEM. It said
+        // that a note type whose TEMPLATE NAMES differ cannot be repaired and that the remedy is
+        // to rename the templates — which was the only refusal there was. A second one arrived
+        // (`NoteTypeDrift.ClozeKindDiffers`, which no action can close because Anki fixes a
+        // model's kind at creation), and renaming templates does nothing whatsoever for it. So
+        // the report stopped asserting a reason it cannot know: each refusal's own `reason` now
+        // carries why it cannot be repaired and what would close it, and what is left here is
+        // the part that is true of every refusal.
         Vector("", "REFUSED — these were left exactly as they are:") ++
           outcome.plan.refusals.map(r => s"  '${r.noteType}': ${r.reason}") ++
           Vector(
             "",
-            "A note type whose TEMPLATE NAMES do not match the repository cannot be repaired:",
-            "Anki updates templates by name and silently ignores names it does not know, so the",
-            "attempt would report success having changed nothing. Rename the templates in Anki to",
-            "match, or change the repository to match the collection — either way it is a choice",
-            "about which of the two is right, and only you can make it.",
+            "Nothing was written to any of these. Each line above says what cannot be repaired",
+            "and what would close it; re-running will report the same thing until somebody",
+            "decides which of the two — your collection or this repository — is right, and only",
+            "you can make that choice.",
           )
 
     val failures =

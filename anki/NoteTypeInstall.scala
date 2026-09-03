@@ -27,8 +27,10 @@ import cats.syntax.all.*
   * TWO SEPARATE QUESTIONS LIVE IN THIS FILE, and they are deliberately not the same function:
   *
   *   - [[NoteTypeInstaller.survey]] — the full comparison, five note types against the
-  *     repository, including template bodies and stylesheets. Read-only. It is what
-  *     `install-note-types` reports, and it costs three extra requests per note type.
+  *     repository, including template bodies, stylesheets and the CLOZE KIND. Read-only. It is
+  *     what `install-note-types` reports, and it costs four extra requests per note type. It
+  *     used to be three; the fourth is `noteTypeIsCloze`, added when a kind mismatch turned out
+  *     to be undetectable — see [[NoteTypeDrift.ClozeKindDiffers]].
   *   - [[NoteTypeInstaller.readiness]] — the narrow question `sync` asks before it writes
   *     anything: does every note type exist, and does each declare every field this tool is
   *     about to write? Read-only, and only `modelNames` plus one `modelFieldNames` per type.
@@ -52,6 +54,32 @@ enum TemplateSide:
   * a diff a human reads.
   */
 enum NoteTypeDrift:
+  /** The collection's copy is a CLOZE note type where the repository declares a standard one, or
+    * the other way round.
+    *
+    * THE ONLY DIFFERENCE HERE THAT NO REPAIR CAN EVER CLOSE, and that is a fact about Anki
+    * rather than a decision taken in this file: a model's kind is fixed when it is created and
+    * AnkiConnect offers no action that changes it. Every other case in this enum names something
+    * `modelFieldAdd`, `updateModelTemplates` or `updateModelStyling` could in principle write.
+    *
+    * IT IS COMPARED AT ALL BECAUSE IT WAS ALREADY BEING SENT AND NEVER READ BACK. `isCloze` is
+    * declared in every manifest and handed to `createModel`, so this repository has an opinion
+    * about it for all five note types; until this case existed nothing ever checked whether the
+    * collection shared that opinion, and a note type standing as the wrong kind was reported as
+    * "present, matches".
+    *
+    * WHAT GETTING IT WRONG COSTS, which is why it is worth a permanent complaint. This tool
+    * authors `{{c1::…}}` text for the one note type it declares CLOZE. A standard note type
+    * accepts that text, stores it verbatim and generates a single card with the braces on
+    * display — no error on write, no error on read, and a card that looks like a card. It is the
+    * shape of every defect this project has found.
+    *
+    * IT IS NOT INFERRED FROM ANYTHING, and [[NoteTypeManifest]] records the note type that makes
+    * every available heuristic get it backwards. Both sides of this comparison are read: the
+    * declared side from the manifest, the collection's side from [[Anki.noteTypeIsCloze]].
+    */
+  case ClozeKindDiffers(declared: Boolean, inCollection: Boolean)
+
   /** The field list differs — in membership, in order, or both.
     *
     * ORDER COUNTS AS A DIFFERENCE HERE and does not stop a sync. Anki's Sort Field defaults to
@@ -75,13 +103,44 @@ enum NoteTypeDrift:
 
   case StylingDiffers
 
+  /** WORDED AS A NOUN PHRASE — "a cloze note type" — because every use of it sits inside a
+    * sentence naming the two sides. `plan/Retyping.scala` spells the same distinction the same
+    * way for the same reason; the two are deliberately not shared, because one is about a
+    * collection disagreeing with this repository and the other about two note types disagreeing
+    * with each other, and a helper spanning both would be a shared spelling standing in for a
+    * shared meaning.
+    */
+  private def kindOf(isCloze: Boolean): String = if isCloze then "a cloze" else "a standard"
+
   def describe: String = this match
+    // IT CARRIES ITS OWN REMEDY, WHICH THE OTHER CASES DO NOT NEED TO. Any difference at all
+    // makes `InstallOutcome.isClean` false, and this is the one difference no run can ever
+    // close, so a message that only stated the fact would become a permanent complaint with
+    // nothing to do about it. What a person can act on has to travel with it.
+    case ClozeKindDiffers(declared, inCollection) =>
+      s"the cloze KIND differs: the repository declares ${kindOf(declared)} note type and the " +
+        s"collection holds ${kindOf(inCollection)} one. This tool cannot repair that — Anki " +
+        "fixes a note type's kind when it creates it and AnkiConnect has no action that changes " +
+        "it — and while the two disagree, a retype is decided from the collection's kind rather " +
+        "than from this declaration, so moves between note types are admitted or refused on a " +
+        "premise this repository did not author. Closing it means deciding which side is right: " +
+        "either the manifest under resources/note-types/ is wrong and should say what the " +
+        "collection holds, or the collection is, and Anki can only give a note type the other " +
+        "kind by creating a second one and moving the notes across (Browse > Notes > Change " +
+        "Note Type)"
     case FieldsDiffer(declared, inCollection) =>
       s"fields differ: repository has [${declared.mkString(", ")}], " +
         s"collection has [${inCollection.mkString(", ")}]"
+    // ITS REMEDY MOVED HERE FROM `cli/Report.scala` when the second unrepairable case arrived.
+    // That paragraph explained the template-name refusal and was printed under EVERY refusal, so
+    // a kind mismatch would have been answered with "rename the templates in Anki" — a remedy
+    // that does nothing at all for it. A refusal's reason belongs beside the refusal.
     case TemplateNamesDiffer(declared, inCollection) =>
       s"template names differ: repository has [${declared.mkString(", ")}], " +
-        s"collection has [${inCollection.mkString(", ")}]"
+        s"collection has [${inCollection.mkString(", ")}]. This tool cannot repair that: Anki " +
+        "updates templates by name and silently ignores a name it does not know, so the attempt " +
+        "would report success having changed nothing. Rename the templates in Anki to match, or " +
+        "change the repository to match the collection"
     case TemplateSideDiffers(templateName, side) =>
       s"template '$templateName': the ${side.toString.toLowerCase} side differs from the repository"
     case StylingDiffers =>
@@ -102,6 +161,20 @@ enum NoteTypeDrift:
     * what repairing it means cannot be postponed by accident.
     */
   def repair: DriftRepair = this match
+    // REFUSES THE WHOLE NOTE TYPE, and for a stronger reason than the one below it: there is no
+    // action to attempt in the first place, so a plan that quietly repaired this type's OTHER
+    // differences would report success over a foundation still known to be wrong. The
+    // repository's templates for a cloze type are written for one — `{{cloze:Text}}` — so
+    // writing them onto a standard type is a call that returns without error and leaves cards
+    // rendering the wrong thing.
+    //
+    // NOT `LeaveAlone`, AND THE DIFFERENCE IS THE WHOLE POINT OF THAT CASE. Choosing it would be
+    // a claim that doing nothing is CORRECT here, and would put the note type in the plan's
+    // `unchanged` list — so the run would print "REPAIR: nothing needed changing" about a note
+    // type that demonstrably differs. Doing nothing is not correct here; it is merely all that
+    // is possible, which is what a refusal says and `LeaveAlone` does not.
+    case d: ClozeKindDiffers => DriftRepair.RefuseWholeType(d.describe)
+
     // ONLY MISSING FIELDS ARE ADDED, and this is where "field ORDER is not repaired" actually
     // happens: a reordering leaves nothing to filter, so this yields an empty list and the note
     // type plans no action. Reordering somebody's fields changes their Browse columns and
@@ -297,11 +370,20 @@ enum RepairAction:
 
 /** A note type whose difference from the repository a repair CANNOT close.
   *
-  * Exactly one thing reaches this today, and it is the reason the type exists rather than being
-  * a bare error string: the template NAMES differ. AnkiConnect's `updateModelTemplates` resolves
-  * each template by name and skips names it does not recognise IN SILENCE, so attempting the
-  * repair would return success having changed nothing. Refusing in advance is the only way that
-  * failure is ever visible.
+  * TWO THINGS REACH THIS, and they are unrepairable in two different senses — which is why the
+  * `reason` is carried rather than reconstructed by whoever prints it. This sentence said
+  * "exactly one thing" until [[NoteTypeDrift.ClozeKindDiffers]] was added.
+  *
+  *   - The template NAMES differ. There IS an action, and it lies: AnkiConnect's
+  *     `updateModelTemplates` resolves each template by name and skips names it does not
+  *     recognise IN SILENCE, so attempting the repair would return success having changed
+  *     nothing. Refusing in advance is the only way that failure is ever visible.
+  *   - The cloze KIND differs. There is no action at all — Anki fixes a model's kind at
+  *     creation — so nothing can be attempted, truthfully or otherwise.
+  *
+  * BOTH REFUSE THE WHOLE NOTE TYPE rather than only their own part of it, because in both cases
+  * the differences a repair COULD close sit on a foundation known to be wrong, and closing them
+  * would report progress while leaving the note type as unusable as it was found.
   */
 final case class RepairRefused(noteType: String, reason: String)
 
@@ -388,7 +470,14 @@ object NoteTypeInstaller:
         fields    <- anki.fieldNames(spec.name)
         templates <- anki.noteTypeTemplates(spec.name)
         styling   <- anki.noteTypeStyling(spec.name)
-      yield NoteTypeStatus.Present(asset, driftBetween(spec, fields, templates, styling))
+        // THE FOURTH READ, AND THE ONE THAT COSTS THE MOST. The AnkiConnect interpreter answers
+        // this from `findModelsByName`, which returns Anki's whole internal note-type
+        // dictionary. It is paid here rather than skipped because the alternative is what this
+        // survey did until now: send `isCloze` on every create and never once ask whether the
+        // collection agrees. See [[NoteTypeDrift.ClozeKindDiffers]]. `readiness` — the question
+        // `sync` asks before every run — is deliberately NOT given this read.
+        isCloze <- anki.noteTypeIsCloze(spec.name)
+      yield NoteTypeStatus.Present(asset, driftBetween(spec, fields, templates, styling, isCloze))
 
   /** PURE, so every branch is drivable without a collection at all. */
   def driftBetween(
@@ -396,7 +485,15 @@ object NoteTypeInstaller:
       fields: Vector[String],
       templates: Map[String, CardTemplate],
       styling: String,
+      isCloze: Boolean,
   ): Vector[NoteTypeDrift] =
+    // REPORTED FIRST, because it is the difference the other four are read in the light of. A
+    // person told that a stylesheet and two templates differ, and only afterwards that the note
+    // type is not even the kind this repository declares, has read the list in the wrong order.
+    val kindDrift =
+      if spec.isCloze == isCloze then Vector.empty
+      else Vector(NoteTypeDrift.ClozeKindDiffers(spec.isCloze, isCloze))
+
     val fieldDrift =
       if spec.fields.toVector == fields then Vector.empty
       else Vector(NoteTypeDrift.FieldsDiffer(spec.fields.toVector, fields))
@@ -426,7 +523,7 @@ object NoteTypeInstaller:
     val stylingDrift =
       if styling == spec.styling then Vector.empty else Vector(NoteTypeDrift.StylingDiffers)
 
-    fieldDrift ++ nameDrift ++ bodyDrift ++ stylingDrift
+    kindDrift ++ fieldDrift ++ nameDrift ++ bodyDrift ++ stylingDrift
 
   /** Create every note type that is absent, and NOTHING else.
     *

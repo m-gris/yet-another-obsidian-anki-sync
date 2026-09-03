@@ -261,6 +261,14 @@ class NoteTypeRepairTest extends munit.FunSuite:
     // to know which repository template corresponds to which of the collection's.
     val names = NoteTypeDrift.TemplateNamesDiffer(Vector("Card 1"), Vector("Karte 1"))
     assertEquals(names.repair, DriftRepair.RefuseWholeType(names.describe))
+
+    // ALSO THE WHOLE NOTE TYPE, for a stronger reason: Anki fixes a model's kind when it creates
+    // it, so unlike every other case here there is no action to attempt at all. Repairing this
+    // type's stylesheet or templates would report progress over a foundation still wrong — and
+    // the templates in question are written for the kind the repository declares, so writing
+    // them onto the other kind is a call that succeeds and leaves cards rendering nonsense.
+    val kind = NoteTypeDrift.ClozeKindDiffers(declared = true, inCollection = false)
+    assertEquals(kind.repair, DriftRepair.RefuseWholeType(kind.describe))
   }
 
   /** NOTHING ANSWERS `LeaveAlone` TODAY, and this is what says so out loud.
@@ -271,7 +279,11 @@ class NoteTypeRepairTest extends munit.FunSuite:
     * was the new `LeaveAlone` a decision, or a way of not making one?
     */
   test("no difference this tool knows about is currently answered by doing nothing") {
+    // HAND-WRITTEN, SO IT CAN GO STALE, and that is a known cost of asking the question this
+    // way: a drift case added without a line here is simply not considered. `ClozeKindDiffers`
+    // was added on 2026-09-02 and appears below for exactly that reason.
     val everyKind = Vector(
+      NoteTypeDrift.ClozeKindDiffers(declared = true, inCollection = false),
       NoteTypeDrift.FieldsDiffer(Vector("A"), Vector("B")),
       NoteTypeDrift.TemplateNamesDiffer(Vector("Card 1"), Vector("Karte 1")),
       NoteTypeDrift.TemplateSideDiffers("Card 1", TemplateSide.Back),

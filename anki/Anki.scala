@@ -190,12 +190,19 @@ trait Anki[F[_]]:
 
   /** Whether Anki classes this note type as a CLOZE type.
     *
-    * NEEDED FOR EXACTLY ONE DECISION, and it is worth saying which so that nobody widens it:
-    * [[obsidiananki.plan.Retyping]] refuses to move a note between two note types unless both
-    * are cloze or neither is. A card's ORDINAL means a template index on a standard type and a
-    * cloze NUMBER on a cloze type, so moving a note across that boundary hands its cards
-    * ordinals the new type cannot generate — and what Anki then does with them is not
-    * established anywhere in this repository.
+    * NEEDED FOR TWO DECISIONS. It was one until 2026-09-02, and the second exists because the
+    * first was reasoning from a fact nobody had checked:
+    *
+    *   - [[obsidiananki.plan.Retyping]] refuses to move a note between two note types unless
+    *     both are cloze or neither is. A card's ORDINAL means a template index on a standard
+    *     type and a cloze NUMBER on a cloze type, so moving a note across that boundary hands
+    *     its cards ordinals the new type cannot generate — and what Anki then does with them is
+    *     not established anywhere in this repository.
+    *   - [[obsidiananki.anki.NoteTypeDrift.ClozeKindDiffers]] compares this answer against the
+    *     `isCloze` the repository DECLARES for the same note type. The gate above reads both of
+    *     its kinds from the collection, so its ordinal arithmetic is sound whatever the
+    *     manifests say — but the CONTENT of a move is authored from the declaration, and while
+    *     the two disagree that gate admits and refuses moves on a kind nobody wrote down.
     *
     * IT CANNOT BE INFERRED FROM THE NAME, THE STYLESHEET OR THE TEMPLATES, which is why it is
     * an operation rather than a heuristic. `Obsidian Cloze Sequence` has "Cloze" in its name,
