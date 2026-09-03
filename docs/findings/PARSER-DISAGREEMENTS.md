@@ -382,14 +382,22 @@ than chosen._
 follows a list line**. That is one instance, not a rate — and it is the vault this tool was
 developed against, which is shaped by what was being stretched at the time.
 
-**REASONED, NOT MEASURED:** that Obsidian renders the swallowed line as a heading. It follows from
-CommonMark's lazy-continuation rule and from the author having written it as a heading and expected
-a card. Until somebody looks in reading view, it is an inference.
+**~~REASONED, NOT MEASURED:~~ MEASURED 2026-09-03 — SETTLED, AND IT CONFIRMS THE INFERENCE.** Marc
+opened `System Design Interview Framework.md` in Obsidian's reading view and reports that
+**`5 Questions` renders as a heading**. So the two readings genuinely disagree about line 21:
+Obsidian closes the list and reads a heading, this tool absorbs the line into the list item.
 
-**STILL AN INFERENCE ON 2026-09-03**, after the row was closed, and worth saying plainly because a
-shipped check reads as a settled question. Nobody has yet opened one of these files in Obsidian's
-reading view. Everything the check knows about Obsidian's half of the disagreement is read off
-CommonMark; everything it knows about this tool's half is measured.
+The paragraphs this replaces said the claim followed from CommonMark's lazy-continuation rule and
+from the author having written a heading and expected a card, and that it stayed an inference —
+still flagged as one on 2026-09-03 after the row was closed, because a shipped check reads as a
+settled question. They are withdrawn as superseded, not as wrong: the reasoning they gave was
+sound and the observation has now caught up with it.
+
+**WHY THIS PARTICULAR CLAIM WAS WORTH CHASING.** The whole check rests on it. Had Obsidian
+swallowed the line too, the two parsers would have AGREED, there would have been no disagreement
+to report, and the check merged as `dc84c5e` would have refused a well-formed note on every
+instance — a false positive shipped as a fix. That is why three independent agents each flagged it
+unprompted and none would close it by argument.
 
 **MEASURED 2026-09-03, while closing the row**, each by parsing the input with the production
 parser and printing the tree:
