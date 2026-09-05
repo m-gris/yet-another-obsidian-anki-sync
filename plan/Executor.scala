@@ -650,6 +650,12 @@ object Executor:
           (if legacyTags.isEmpty then cats.Monad[F].unit
            else anki.removeTags(Vector(noteId), legacyTags))
 
+      // WHICH KEY AN EXISTING NOTE CLAIMS, REWRITTEN IN PLACE. See `SyncAction.Reassign` for what
+      // licenses this and why it exists. The write itself is not built yet, and nothing produces
+      // this action: `Planner` does not yet consult the move survey, so the hole below is
+      // unreachable from a run rather than merely untested.
+      case _: SyncAction.Reassign => ???
+
       case SyncAction.Flag(key, noteId) =>
         anki.addTags(Vector(noteId), Vector(OwnedTag.orphaned(key))) *>
           anki.cardsOf(Vector(noteId)).flatMap(anki.suspend)

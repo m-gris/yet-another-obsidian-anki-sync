@@ -85,7 +85,67 @@ object Report:
       if p.failures.isEmpty then Vector.empty
       else "" +: "build failures" +: p.failures.map(describeFailure).map("  " + _)
 
-    header ++ orphanNote ++ parkedNote(p.parked) ++ failureLines
+    header ++ orphanNote ++ parkedNote(p.parked) ++ moveNote(p.moveEvidence) ++ failureLines
+
+  /** WHAT THE RUN MADE OF THE NOTES WHOSE SOURCE THE VAULT NO LONGER PRODUCES.
+    *
+    * ═══ WHY THIS IS PRINTED AT ALL, AND WHY IT IS NOT OPTIONAL ═══
+    *
+    * Marc's 2026-09-05 ruling lets an unambiguous pairing REASSIGN a card automatically — it
+    * moves review history without asking. The other half of that ruling is that a reassignment is
+    * "reversible and VISIBLE": a person who disagrees can only undo what they were told about. A
+    * run that silently moved a card's history onto another card would be exactly the invisible
+    * change this project is built to prevent, so `MoveFinding.describe` names both keys and every
+    * field that differed, and this block prints it.
+    *
+    * ═══ THE OTHER FINDINGS ARE PRINTED TOO, AND THEY ARE THE LONGER HALF ═══
+    *
+    * Ambiguous, contested, unaccounted-for, unexplained and incomparable findings change nothing
+    * about the collection. Printing them is not noise: each one is a card sitting suspended with
+    * its history stranded, and the evidence saying which. `docs/design/REVIEW-QUEUE.md` argues
+    * that the cost of these is invisible today and that the invisibility IS the problem.
+    *
+    * SPLIT INTO WHAT WAS DONE AND WHAT WAS NOT, because those are two different things to read
+    * and a reader scanning one block for the other finds neither.
+    *
+    * MATCHED LONGHAND WITH NO CATCH-ALL, so a seventh finding has to say which side of that split
+    * it belongs on. Under `-Wconf:msg=exhaustive:e` a `case _ => false` here would quietly file a
+    * new kind of evidence under "nothing was applied", which is the wrong answer to state by
+    * accident about an action that moves review history.
+    *
+    * SILENT AT ZERO, following [[parkedNote]] and for its reason: a fixed heading over an empty
+    * list trains the reader to skip the place where the real number will one day be.
+    */
+  private def moveNote(evidence: Vector[MoveFinding]): Vector[String] =
+    val (reassigned, reported) = evidence.partition {
+      case _: MoveFinding.Corroborated => true
+      case _: MoveFinding.Ambiguous    => false
+      case _: MoveFinding.Contested    => false
+      case _: MoveFinding.Unaccounted  => false
+      case _: MoveFinding.Unexplained  => false
+      case _: MoveFinding.Incomparable => false
+    }
+
+    val done =
+      if reassigned.isEmpty then Vector.empty
+      else
+        Vector(
+          "",
+          s"${quantify(reassigned.size, "card")} moved in the vault and " +
+            s"${if reassigned.sizeIs == 1 then "was" else "were"} reassigned, keeping " +
+            s"${if reassigned.sizeIs == 1 then "its" else "their"} review history:",
+        ) ++ reassigned.map("  " + _.describe)
+
+    val outstanding =
+      if reported.isEmpty then Vector.empty
+      else
+        Vector(
+          "",
+          s"${quantify(reported.size, "note")} the vault no longer produces, and nothing was " +
+            s"applied to ${if reported.sizeIs == 1 then "it" else "them"}:",
+        ) ++ reported.map("  " + _.describe)
+
+    done ++ outstanding
 
   /** What this tool is already holding, said on EVERY run rather than only on the run that
     * parked it.
@@ -635,6 +695,12 @@ object Report:
         case RetypePolicy.Apply => "move to another note type"
     case _: SyncAction.Flag   => "flag as orphaned"
     case _: SyncAction.Unflag => "clear orphan flag"
+
+    // NAMED FOR WHAT IS PRESERVED RATHER THAN FOR WHAT IS WRITTEN. "Reassign" is the mechanism —
+    // an identity field rewritten on a note that stays put. What a person needs from a summary
+    // line is that their review history survived a heading they moved, because the alternative
+    // this replaces (a create plus a suspended orphan) is what they have learned to expect.
+    case _: SyncAction.Reassign => "follow a card that moved, keeping its review history"
 
     // NAMED IN THE AUTHOR'S TERMS, NOT THE TOOL'S. "Carry identity" describes the mechanism;
     // what a person sees is a note being brought up to date with how this tool now records

@@ -717,7 +717,7 @@ class PlannerTest extends munit.FunSuite:
     // Apply only the first half, as an interrupted run would.
     val applied   = full.actions.take(3)
     val unapplied = full.actions.drop(3)
-    runPlan(Plan(applied, full.orphanInference, Vector.empty, full.parked), anki)
+    runPlan(Plan(applied, full.orphanInference, Vector.empty, full.parked, full.moveEvidence), anki)
 
     val resumed = planOf(scan, observe(anki))
     assertEquals(

@@ -1222,7 +1222,7 @@ object Main
                 // `HeadingPath.render` joins heading segments only and is file-independent,
                 // so two files sharing a heading chain would otherwise produce two identical
                 // and indistinguishable lines.
-                val k = keyOf(f.action)
+                val k = f.action.cardKey
                 s"  '${k.path.render}' (note '${k.noteId.value}'): ${f.error.toString}"
               } ++
               Vector(
@@ -1253,24 +1253,12 @@ object Main
           "collection then hold, so whatever was already applied is not applied twice.",
         )
 
-  /** The identity of the card an action is about.
-    *
-    * Only the KEY, with no verb. The verb would have to duplicate `Report.kindOf`'s wording,
-    * which is private — and a second copy of it here is exactly the second source of truth
-    * this file already refuses to create for `AnkiError`. Nothing is duplicated, so nothing
-    * can drift: the action counts `Report.plan` printed just above carry the verbs, and
-    * `AnkiError.Remote` and `AnkiError.UnsupportedOperation` name their own operation.
-    *
-    * The right home for this rendering is `Report.scala`; it is here only because that file
-    * is outside this change.
-    */
-  private def keyOf(a: SyncAction): CardKey = a match
-    case SyncAction.Create(key, _)                => key
-    case SyncAction.Update(key, _, _)             => key
-    case SyncAction.Retype(key, _, _, _, _, _, _, _) => key
-    case SyncAction.Flag(key, _)                  => key
-    case SyncAction.Unflag(key, _)                => key
-    case SyncAction.CarryIdentity(key, _, _, _)   => key
+  // A private `keyOf` sat here — a third copy of the same projection, whose own comment said it
+  // belonged elsewhere and was here only because that file was outside the change that added it.
+  // REMOVED 2026-09-05, when a sixth action arrived and this copy was the one place the compiler
+  // had to ask twice. `SyncAction.cardKey` is the definition, and its docstring named exactly
+  // this hazard: "a third copy would have been the point at which they could start disagreeing
+  // about a case added later". The caller above now asks the action.
 
   /** How the run is to be judged: ONE value, read by the exit code and by the last line on
     * screen alike.

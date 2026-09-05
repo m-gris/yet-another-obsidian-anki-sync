@@ -230,6 +230,80 @@ enum SyncAction:
       legacyTags: Vector[OwnedTag],
   )
 
+  /** GIVE AN EXISTING NOTE THE KEY THE VAULT NOW PRODUCES FOR IT, because its heading moved.
+    *
+    * ═══ WHAT IT IS FOR ═══
+    *
+    * A card's identity is its heading path, so making an `## X` into a `### X` under some other
+    * heading mints a NEW key and leaves the old one absent from the vault. Until 2026-09-05 that
+    * was treated exactly as a deletion: the note holding the review history was flagged and
+    * SUSPENDED, and a second note was created at the new key with nothing at all. This is the
+    * action that stops that happening — it rewrites WHICH KEY AN EXISTING NOTE CLAIMS, and it
+    * takes the place of the [[Create]] the moved card would otherwise have caused.
+    *
+    * ═══ IT PRESERVES THE CARD AND ITS HISTORY, WHICH IS THE ENTIRE POINT ═══
+    *
+    * The note keeps its Anki id, so it keeps its cards, and they keep their intervals, their
+    * ease, their due dates and their whole review log. NOTHING HERE DELETES AND RECREATES, and
+    * nothing could: the algebra has no delete, deliberately — `README.md`'s `prune` is the only
+    * deletion this tool has ever contemplated, and the note at the removed `Relink` case below
+    * exists to stop a deletion reaching the executor by falling through a catch-all.
+    *
+    * ═══ WHY IT MAY ONLY BE BUILT FROM ONE SHAPE OF EVIDENCE ═══
+    *
+    * `corroboration` IS THE FINDING ITSELF, not a copy of the two keys taken out of it, and that
+    * is the type doing the work Marc's 2026-09-05 ruling asks of it. Only a
+    * [[MoveFinding.Corroborated]] may reassign — exact substance agreement, every name divergence
+    * accounted for by the key, and mutual uniqueness — and `MoveFinding`'s other five cases are
+    * not subtypes of that one. So an [[MoveFinding.Ambiguous]] cannot be put here, and the only
+    * function that constructs this action is an extension on the corroborated case
+    * ([[MoveFinding.reassignment]]). "Ambiguous never applies" is therefore a fact about what can
+    * be written down rather than a rule somebody has to keep.
+    *
+    * IT ALSO MAKES THE ACTION SELF-EXPLAINING. The finding carries what agreed and what differed,
+    * so a run that moves review history can say why in the same line — which `cli/Report.scala`
+    * does, and which the ruling makes mandatory rather than optional.
+    *
+    * ═══ WHAT IT WRITES, AND WHY EACH PART IS HERE ═══
+    *
+    * `fields` IS THE VAULT'S WHOLE FIELD SET FOR THE NEW CARD, identity included. Not the note's
+    * own fields with one value swapped: the breadcrumb is one of them, and a note reassigned
+    * without it would go on naming the place its heading left. It is also what makes the write
+    * idempotent — afterwards the note holds exactly what a [[Create]] would have written.
+    *
+    * `newSha` TRAVELS WITH THE FIELDS AND IS WRITTEN AFTER THEM, exactly as
+    * [[Change.FieldsChanged]] requires and for the reason recorded there: an interruption between
+    * them leaves new content under a stale hash, which the next run sees as a difference and
+    * simply writes again. The reverse leaves old content under a new hash and is skipped forever.
+    *
+    * `legacyTags` ARE THE `src::` TAGS OF A NOTE WRITTEN BEFORE THE IDENTITY MOVED INTO A FIELD,
+    * removed by the same action for the reason [[CarryIdentity]] removes them: a note whose field
+    * says one key and whose tag says another is a note two readers can disagree about. `Observer`
+    * reads the field first, so such a tag is stale rather than dangerous — but a stale identity
+    * that nothing ever clears is the state the migration exists to end.
+    *
+    * `vaultTags` AND `deck` KEEP THE RUN CONVERGENT IN ONE PASS. The note is landing at a key the
+    * vault produces, so everything the ordinary update path would have made true of it has to be
+    * true afterwards, or the next run plans work for a card this one just finished.
+    *
+    * ═══ WHAT IT DELIBERATELY DOES NOT DO ═══
+    *
+    * IT DOES NOT UNSUSPEND, AND IT DOES NOT CLEAR `orphaned::`. A stranded note may already have
+    * been parked by an earlier run, and undoing that is exactly what [[Unflag]] is — including
+    * the unsuspend-then-untag ordering `plan/Executor.scala` argues for at length. The planner
+    * emits an `Unflag` BEFORE this action when the note carries the flag, naming the OLD key,
+    * because that is the key the tag was minted from. Folding it in here would be a second
+    * implementation of an ordering that already has one.
+    */
+  case Reassign(
+      corroboration: MoveFinding.Corroborated,
+      fields: Vector[(String, String)],
+      newSha: String,
+      vaultTags: Vector[OwnedTag],
+      legacyTags: Vector[OwnedTag],
+      deck: Option[DeckPath],
+  )
+
   /** Previously flagged, now present again. Clears the orphan tag.
     *
     * Without this the flag set only grows, and a stale orphan becomes indistinguishable
@@ -268,6 +342,12 @@ enum SyncAction:
     case Flag(key, _)                      => key
     case Unflag(key, _)                    => key
     case CarryIdentity(key, _, _, _)       => key
+    // THE KEY IT IS MOVING TO, NOT THE ONE IT IS LEAVING, and the choice is not a toss-up. This
+    // method answers "which card is this action about", and after a reassignment the card IS the
+    // one the vault now produces — which is what makes this action a substitute for the `Create`
+    // the planner would otherwise have emitted, and what keeps `Planner`'s `updatedKeys` census
+    // right. The key it left is on the finding, named as `stranded`.
+    case Reassign(evidence, _, _, _, _, _) => evidence.candidate
 
   def dispositionUnder(policy: RetypePolicy): Disposition = this match
     case _: Create => Disposition.Attempt
@@ -283,6 +363,14 @@ enum SyncAction:
     // note on a stock type is reached by the retype path instead, which moves it somewhere it
     // can hold one.)
     case _: CarryIdentity => Disposition.Attempt
+    // ATTEMPTED UNDER EVERY POLICY, AND THE ONE POLICY THAT EXISTS IS ABOUT SOMETHING ELSE.
+    // `RetypePolicy` asks whether a run may move notes between NOTE TYPES; a reassignment moves
+    // no note type and passes no shrink gate — it writes fields, a hash and an identity onto a
+    // note that stays exactly where it is. Deferring it would also be the certain loss Marc's
+    // 2026-09-05 ruling weighs against: the evidence for a pairing is the body still matching, so
+    // a decision put off until the body is edited is a decision lost. See `MoveFinding` for the
+    // whole asymmetry, and `Reassign` for what may and may not produce one.
+    case _: Reassign => Disposition.Attempt
     case _: Retype =>
       policy match
         case RetypePolicy.Defer => Disposition.Defer
@@ -430,4 +518,29 @@ final case class Plan(
       * silent wrongness this field exists to end.
       */
     parked: Vector[CardKey],
+
+    /** WHAT THE VAULT AND THE COLLECTION SAID ABOUT EACH OTHER'S LOOSE ENDS — one finding per
+      * note the vault has stopped accounting for, whatever the evidence came to.
+      *
+      * CONSERVATION: every note the survey considered stranded appears in EXACTLY ONE finding,
+      * because `MoveEvidence.survey` maps over that set rather than filtering it. That is what
+      * makes this readable as an account rather than as a highlight reel.
+      *
+      * IT CARRIES THE CORROBORATED ONES TOO, WHICH LOOK REDUNDANT BESIDE `actions` AND ARE NOT.
+      * They are the SAME values the [[SyncAction.Reassign]] actions carry, not copies, and having
+      * every finding in one place is what lets a reader ask "what did the run make of the notes
+      * that went missing" and get a total answer. Filtering the applied ones out would make the
+      * count here mean "the ones nothing was done about", which is a different and less useful
+      * fact that a reader would have to be told about.
+      *
+      * EMPTY IS AMBIGUOUS ON PURPOSE AND `orphanInference` RESOLVES IT. Nothing stranded and a
+      * scan that could not look both produce no findings; which of the two it was is the question
+      * that field already answers, so a second flag saying the same thing would be one more
+      * thing to keep in step.
+      *
+      * NO DEFAULT VALUE, following `parked` immediately above and for its reason: a default
+      * would let a construction site omit the survey and report that nothing moved, over a run
+      * that reassigned a dozen cards.
+      */
+    moveEvidence: Vector[MoveFinding],
 )

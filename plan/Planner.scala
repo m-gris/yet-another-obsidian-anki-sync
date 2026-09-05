@@ -606,5 +606,9 @@ object Planner:
             inference,
             scan.failures,
             observed.parkedOrphans.map(_.key),
+            // NOTHING YET. The survey that fills this is `plan/MoveEvidence.scala`, and this
+            // planner does not consult it: wiring it in is what the next commit does, and doing
+            // it here would make the red-to-green diff a rewrite rather than a fill.
+            Vector.empty,
           )
         )
