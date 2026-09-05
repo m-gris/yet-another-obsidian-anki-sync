@@ -651,10 +651,44 @@ object Executor:
            else anki.removeTags(Vector(noteId), legacyTags))
 
       // WHICH KEY AN EXISTING NOTE CLAIMS, REWRITTEN IN PLACE. See `SyncAction.Reassign` for what
-      // licenses this and why it exists. The write itself is not built yet, and nothing produces
-      // this action: `Planner` does not yet consult the move survey, so the hole below is
-      // unreachable from a run rather than merely untested.
-      case _: SyncAction.Reassign => ???
+      // licenses this and why it exists; what matters here is that NOTHING BELOW DELETES OR
+      // CREATES ANYTHING. The note keeps its id, so it keeps its cards, their intervals and their
+      // whole review log — which is the entire point of the action, and the reason its executor
+      // arm is four writes to a note that was already there.
+      //
+      // FIELDS FIRST, HASH LAST, exactly as `Change.FieldsChanged` requires and for the reason
+      // recorded there. The identity is INSIDE the fields, so after the first write the note
+      // already claims its new key; interrupted before the second it holds new content under a
+      // stale hash, which the next run sees as an ordinary difference and simply writes again.
+      // The reverse order would leave old content under the new hash, and `Planner` decides
+      // "nothing to do" by comparing exactly those two — the note would be skipped forever.
+      //
+      // INTERRUPTED BEFORE THE FIRST WRITE, nothing about the note has changed except that the
+      // preceding `Unflag` may have unsuspended it: the next run finds it stranded again, surveys
+      // it again, and plans the same pair. Every window this can be stopped in is repairable by
+      // running again, which is the property the ordering is chosen for.
+      case SyncAction.Reassign(corroboration, fields, newSha, vaultTags, legacyTags, deck) =>
+        // THE NOTE ID COMES OFF THE EVIDENCE, WHICH IS THE ONLY PLACE IT IS RECORDED. The action
+        // does not carry a second copy: a reassignment that wrote to a note the evidence was not
+        // about is the one mistake here that cannot be undone, and one field cannot disagree with
+        // itself.
+        val noteId = corroboration.noteId
+        for
+          _ <- anki.updateNoteFields(noteId, fields)
+          _ <- replaceOwnedPrefix(anki, noteId, OwnedTag.ShaPrefix, OwnedTag.sha(newSha))
+          // THE AUTHOR'S OWN TAGS, MADE TO MATCH THE VAULT, under one namespace and nowhere else
+          // — the same call the update path makes, for the same reason, so that a card which was
+          // moved and re-tagged in one edit needs no second action.
+          _ <- replaceOwnedPrefixWith(anki, noteId, VaultTag.Prefix, vaultTags)
+          // THE LEGACY `src::` TAG GOES ONLY AFTER THE FIELD HOLDS THE NEW IDENTITY, so there is
+          // no window in which the note holds an identity in NEITHER home. The same ordering, and
+          // the same argument, as `CarryIdentity` above.
+          _ <-
+            if legacyTags.isEmpty then cats.Monad[F].unit
+            else anki.removeTags(Vector(noteId), legacyTags)
+          // Decks are per-card, so a note-level move must fan out to its cards.
+          _ <- deck.fold(F.unit)(d => anki.cardsOf(Vector(noteId)).flatMap(anki.changeDeck(_, d)))
+        yield ()
 
       case SyncAction.Flag(key, noteId) =>
         anki.addTags(Vector(noteId), Vector(OwnedTag.orphaned(key))) *>

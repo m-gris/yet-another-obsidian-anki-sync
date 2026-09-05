@@ -275,7 +275,29 @@ object FieldRole:
     * declaring `0` and `2` would leave a segment belonging to neither axis, and every grade below
     * would then be answering about a path it had silently cut a hole in.
     */
-  def rolesFor(noteType: String): Option[Map[String, FieldRole]] = ???
+  def rolesFor(noteType: String): Option[Map[String, FieldRole]] =
+    declared.get(noteType).map { roles =>
+      val expected = Marker.FieldOrder.byNoteType(noteType).toSet
+      if roles.keySet != expected then
+        sys.error(
+          s"the field roles declared for '$noteType' do not cover its declared fields: " +
+            s"missing ${(expected -- roles.keySet).toVector.sorted.mkString(", ")}; " +
+            s"unknown ${(roles.keySet -- expected).toVector.sorted.mkString(", ")}"
+        )
+      if !roles.values.exists(_ == Substance) then
+        sys.error(
+          s"'$noteType' declares no Substance field, so every card of it would agree with " +
+            "every other one — see FieldRole.rolesFor"
+        )
+      val indices = roles.values.collect { case Anchor(fromEnd) => fromEnd }.toVector.sorted
+      if indices != indices.indices.toVector then
+        sys.error(
+          s"'$noteType' declares Anchor fields at positions ${indices.mkString(", ")} counted " +
+            s"from the end of the key path, which is not ${indices.indices.mkString(", ")} — the " +
+            "name segments must be the LAST ones, or Agreement cannot say what sits above them"
+        )
+      roles
+    }
 
   /** HOW MANY SEGMENTS AT THE END OF A KEY PATH THIS NOTE TYPE SHOWS AS FIELDS.
     *
@@ -544,7 +566,25 @@ object MoveFinding:
       * THE TWO BOOLEANS ARE THE WHOLE OF IT, and the match over them is exhaustive because there
       * are two of them.
       */
-    def agreement: Agreement = ???
+    def agreement: Agreement =
+      val depth = FieldRole
+        .rolesFor(c.noteType)
+        .map(FieldRole.nameDepth)
+        .getOrElse(
+          sys.error(
+            s"a corroborated pairing is on '${c.noteType}', which this tool does not declare — " +
+              "MoveEvidence.survey cannot admit such a note, so this is a defect in this tool"
+          )
+        )
+      val was = MoveEvidence.segmentsOf(c.stranded.path)
+      val now = MoveEvidence.segmentsOf(c.candidate.path)
+      val nameMoved  = MoveEvidence.nameSegments(was, depth) != MoveEvidence.nameSegments(now, depth)
+      val placeMoved = was.dropRight(depth) != now.dropRight(depth)
+      (nameMoved, placeMoved) match
+        case (false, false) => Agreement.Total
+        case (false, true)  => Agreement.NameAndSubstance
+        case (true, false)  => Agreement.PlaceAndSubstance
+        case (true, true)   => Agreement.SubstanceAlone
 
     /** THE ONE PLACE IN THIS CODEBASE THAT MINTS A REASSIGNMENT.
       *
@@ -603,7 +643,20 @@ object MoveFinding:
         vaultTags: Vector[OwnedTag],
         legacyTags: Vector[OwnedTag],
         deck: Option[DeckPath],
-    ): SyncAction.Reassign = ???
+    ): SyncAction.Reassign =
+      if sourced.key != c.candidate then
+        sys.error(
+          s"a reassignment was built for '${sourced.key.path.render}' from evidence about " +
+            s"'${c.candidate.path.render}' — the two must be the same card"
+        )
+      SyncAction.Reassign(
+        corroboration = c,
+        fields = sourced.spec.fields,
+        newSha = Planner.contentHash(sourced.spec),
+        vaultTags = vaultTags,
+        legacyTags = legacyTags,
+        deck = deck,
+      )
 
 /** Pair what the vault now produces against what the collection still holds, and say what the
   * evidence is.
@@ -672,7 +725,94 @@ object MoveEvidence:
     * same report — and, since 2026-09-05, APPLY THE SAME WRITES. Nothing here reads a `Map`'s
     * iteration order, which is a hash-table detail.
     */
-  def survey(stranded: Vector[ObservedCard], unclaimed: Vector[SourcedSpec]): Vector[MoveFinding] = ???
+  def survey(stranded: Vector[ObservedCard], unclaimed: Vector[SourcedSpec]): Vector[MoveFinding] =
+    // SORTED ONCE, AT THE TOP, so every list below inherits the order rather than each deciding
+    // its own. The note id breaks a tie between two notes claiming one key — a state
+    // `PlanError.DuplicateIdentityInAnki` refuses upstream, so it should not arrive, and a sort
+    // that quietly depended on it not arriving would be one more thing to be wrong about.
+    val orderedStranded =
+      stranded.sortBy(c => (c.key.noteId.value, c.key.path.render, c.note.id.value))
+    val orderedUnclaimed = unclaimed.sortBy(s => (s.key.noteId.value, s.key.path.render))
+
+    // EITHER THE CANDIDATES, OR WHY THIS NOTE COULD NOT BE COMPARED AT ALL. Computed for every
+    // stranded note before any of them is judged, because the mutual-uniqueness rule below is a
+    // question about the whole survey and cannot be answered one note at a time.
+    val examined: Vector[(ObservedCard, Either[String, Vector[(SourcedSpec, Vector[Divergence])]])] =
+      orderedStranded.map { card =>
+        card -> rolesOn(card).map { roles =>
+          orderedUnclaimed.flatMap(spec => compare(roles, card, spec).map(spec -> _))
+        }
+      }
+
+    // WHICH STRANDED NOTES CLAIM EACH CANDIDATE — the other half of the uniqueness rule. Keyed by
+    // note id as well as by card key, so that excluding "this note" below excludes exactly one
+    // note rather than everything sharing its key.
+    val claimants: Map[CardKey, Vector[(AnkiNoteId, CardKey)]] =
+      examined.flatMap {
+        case (card, Right(candidates)) => candidates.map(_._1.key -> (card.note.id, card.key))
+        case (_, Left(_))              => Vector.empty
+      }.groupMap(_._1)(_._2)
+
+    examined.map {
+      case (card, Left(reason)) =>
+        MoveFinding.Incomparable(card.key, card.note.id, reason)
+
+      case (card, Right(candidates)) =>
+        candidates match
+          case Vector() => MoveFinding.Unexplained(card.key, card.note.id)
+
+          case Vector((spec, divergences)) =>
+            // MUTUAL UNIQUENESS, WHICH IS THE HALF THAT IS EASY TO FORGET. One candidate from
+            // this note's side is not enough: if another stranded note also agrees with the same
+            // key, then two notes would both have become the same card, which is not a thing that
+            // happened. `spike/RenameEvidence.scala` reached the identical rule for a renamed
+            // table column and its `Contested` case is the precedent for this one.
+            claimants(spec.key).filterNot(_._1 == card.note.id).map(_._2) match
+              case Vector() =>
+                // AND THEN THE KEY HAS TO EXPLAIN THE NAME. See [[MoveFinding.Unaccounted]]: a
+                // card whose own name changed for a reason the key does not show did not simply
+                // move, and this design applies only what a move explains.
+                NonEmptyVector.fromVector(
+                  unaccountedFor(card.key.path, spec.key.path, divergences)
+                ) match
+                  case None =>
+                    MoveFinding.Corroborated(
+                      card.key,
+                      card.note.id,
+                      spec.key,
+                      spec.source,
+                      card.note.noteType,
+                      divergences,
+                    )
+                  case Some(unexplained) =>
+                    MoveFinding.Unaccounted(
+                      card.key,
+                      card.note.id,
+                      spec.key,
+                      spec.source,
+                      unexplained,
+                    )
+
+              case others =>
+                // Non-empty by the arm above, and already in `orderedStranded`'s order because it
+                // was built by walking that vector.
+                MoveFinding.Contested(
+                  card.key,
+                  card.note.id,
+                  spec.key,
+                  NonEmptyVector.fromVectorUnsafe(others),
+                )
+
+          // TWO OR MORE, by the two arms above. Named and not ranked: the evidence distinguishes
+          // nothing between them, and picking the first would be a guess wearing an answer's
+          // clothes.
+          case several =>
+            MoveFinding.Ambiguous(
+              card.key,
+              card.note.id,
+              NonEmptyVector.fromVectorUnsafe(several.map(_._1.key)),
+            )
+    }
 
   /** THE CANONICALISED SEGMENTS OF A PATH, OUTERMOST FIRST, so the last one is always the node the
     * card hangs off.
@@ -722,7 +862,28 @@ object MoveEvidence:
     * one — the evidence would be strongest exactly where the collection is most damaged. Saying
     * "I could not look" is the only honest answer available.
     */
-  private def rolesOn(card: ObservedCard): Either[String, Map[String, FieldRole]] = ???
+  private def rolesOn(card: ObservedCard): Either[String, Map[String, FieldRole]] =
+    FieldRole.rolesFor(card.note.noteType) match
+      case None =>
+        Left(
+          s"'${card.note.noteType}' is not a note type this tool declares, so its fields carry " +
+            "no roles and nothing about them can be compared"
+        )
+      case Some(roles) =>
+        val present = card.note.fields.map(_._1).toSet
+        if present == roles.keySet then Right(roles)
+        else
+          val complaints = Vector(
+            Option.when((roles.keySet -- present).nonEmpty)(
+              s"missing ${(roles.keySet -- present).toVector.sorted.mkString(", ")}"
+            ),
+            Option.when((present -- roles.keySet).nonEmpty)(
+              s"unexpected ${(present -- roles.keySet).toVector.sorted.mkString(", ")}"
+            ),
+          ).flatten
+          Left(
+            s"the note's fields are not those of '${card.note.noteType}': ${complaints.mkString("; ")}"
+          )
 
   /** `Some(divergences)` when this note and this spec may be paired at all, `None` when they may
     * not. The divergences are the [[FieldRole.Anchor]] and [[FieldRole.Bearing]] fields that
@@ -750,7 +911,55 @@ object MoveEvidence:
       roles: Map[String, FieldRole],
       card: ObservedCard,
       spec: SourcedSpec,
-  ): Option[Vector[Divergence]] = ???
+  ): Option[Vector[Divergence]] =
+    Option
+      .when(
+        sameKind(card.key.path, spec.key.path) &&
+          card.note.noteType == spec.spec.noteTypeName
+      ) {
+        val inAnki  = card.note.fields.toMap
+        val inVault = spec.spec.fields.toMap
+
+        Marker.FieldOrder.byNoteType(card.note.noteType).map { field =>
+          val was = inAnki.getOrElse(
+            field,
+            sys.error(
+              s"Anki note ${card.note.id.value} holds no '$field', which " +
+                s"'${card.note.noteType}' declares — see Marker.FieldOrder"
+            ),
+          )
+          val now = inVault.getOrElse(
+            field,
+            sys.error(
+              s"the spec for '${spec.key.path.render}' emits no '$field', which " +
+                s"'${card.note.noteType}' declares — see Marker.FieldOrder"
+            ),
+          )
+          (field, roles(field), was, now)
+        }
+      }
+      .flatMap { compared =>
+        // ── THE FLOOR. Substance is what the author wrote and Setting is what the marker asked
+        // for, and a MOVE can change neither — so a pairing in which either differs is not weak
+        // evidence of a move, it is evidence of something else entirely, and this says nothing
+        // about it. See `FieldRole.Setting` for the false negative that costs, and why it is the
+        // safe direction.
+        val floorHolds = compared.forall {
+          case (_, FieldRole.Substance | FieldRole.Setting, was, now) => was == now
+          case _                                                     => true
+        }
+
+        Option.when(floorHolds)(
+          compared.collect {
+            // IDENTITY IS ABSENT FROM THIS LIST BY BEING ABSENT FROM THIS PATTERN, not by being
+            // filtered earlier. The two identities differ by construction — a pairing exists only
+            // because they do — so recording that as a divergence would put the question into the
+            // answer.
+            case (field, role @ (FieldRole.Anchor(_) | FieldRole.Bearing), was, now) if was != now =>
+              Divergence(field, role, was, now)
+          }
+        )
+      }
 
   /** Whether two paths describe the same KIND of node.
     *
@@ -758,7 +967,13 @@ object MoveEvidence:
     * fifth kind of anchor cannot join by falling through a catch-all. `CardPath` gained its
     * fourth case after the first three shipped; the next one must be told what it may pair with.
     */
-  private def sameKind(a: CardPath, b: CardPath): Boolean = ???
+  private def sameKind(a: CardPath, b: CardPath): Boolean = (a, b) match
+    case (CardPath.Headings(_), CardPath.Headings(_)) => true
+    case (CardPath.Property(_), CardPath.Property(_)) => true
+    case (CardPath.Note, CardPath.Note)               => true
+    case (CardPath.Block(_), CardPath.Block(_))       => true
+    case (CardPath.Headings(_) | CardPath.Property(_) | CardPath.Note | CardPath.Block(_), _) =>
+      false
 
   /** THE NAME DIVERGENCES THE KEY DOES NOT EXPLAIN — empty when the pairing may be acted on.
     *
@@ -789,4 +1004,19 @@ object MoveEvidence:
       was: CardPath,
       now: CardPath,
       divergences: Vector[Divergence],
-  ): Vector[Divergence] = ???
+  ): Vector[Divergence] =
+    val oldSegments = segmentsOf(was)
+    val newSegments = segmentsOf(now)
+
+    def segmentAt(segments: Vector[String], fromEnd: Int): Option[String] =
+      Option.when(fromEnd < segments.length)(segments(segments.length - 1 - fromEnd))
+
+    divergences.filter { d =>
+      d.role match
+        case FieldRole.Anchor(fromEnd) =>
+          (segmentAt(oldSegments, fromEnd), segmentAt(newSegments, fromEnd)) match
+            case (Some(before), Some(after)) => before == after
+            case _                           => true
+        case FieldRole.Bearing | FieldRole.Substance | FieldRole.Setting | FieldRole.Identity =>
+          false
+    }

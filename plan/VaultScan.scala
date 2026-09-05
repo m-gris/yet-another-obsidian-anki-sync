@@ -1,6 +1,6 @@
 package obsidiananki.plan
 
-import obsidiananki.model.{CardKey, CardSpec, NoteId, RecallText, VaultTag}
+import obsidiananki.model.{CardKey, CardPath, CardSpec, NoteId, RecallText, VaultTag}
 
 /** Where a spec came from, so that a collision can be reported legibly.
   *
@@ -451,3 +451,89 @@ object VaultScan:
     def canInferOrphans: Boolean = scan match
       case CompleteScan(_, _) => true
       case PartialScan(_, _)  => false
+
+/** THE ONE ANSWER TO "DOES THE VAULT STILL ACCOUNT FOR THIS KEY?", asked of a whole scan once and
+  * then of each key in turn.
+  *
+  * ═══ WHY IT IS A VALUE AND NOT A FUNCTION ON [[VaultScan]] ═══
+  *
+  * Because answering needs three sets derived from the whole scan, and a per-key function on the
+  * scan would rebuild all three for every note in the collection. Holding them is structural here
+  * rather than an optimisation: with a few thousand notes it is the difference between a survey
+  * that runs and one that does not.
+  *
+  * ═══ WHY IT EXISTS AT ALL, WHICH IS THE PART WORTH READING ═══
+  *
+  * It was `Planner.plan`'s local `underAFailedSection` together with the four conditions around
+  * it, and it had exactly one caller. A SECOND consumer — `plan/MoveEvidence.scala`, which has to
+  * know which notes the vault has stopped claiming before it can say anything about where they
+  * went — would otherwise have restated the rule, and a restatement is how two answers to one
+  * question come to disagree. `ObservedState.parkedOrphans` makes the same argument for itself:
+  * one definition, so that nothing can hold a second, disagreeing one.
+  *
+  * THE STAKES ARE THE ONES [[BuildFailure.shelters]] NAMES. A key wrongly read as unaccounted-for
+  * is a live card flagged and SUSPENDED — out of the review queue with its history intact and
+  * invisible. `extract/Extractor.scala` records that one image pasted into one table cell did
+  * exactly that to fifteen cards.
+  */
+final case class VaultAccounting private (
+    builtKeys: Set[CardKey],
+    failedKeys: Set[CardKey],
+    suppressedNoteIds: Set[NoteId],
+):
+
+  /** True when the vault has SOMETHING to say about this key — it built the card, or it failed to
+    * build it, or it failed at a section above it, or it could not enumerate the note at all.
+    *
+    * A `false` IS ONLY MEANINGFUL ON A COMPLETE SCAN, and this value cannot enforce that because
+    * it deliberately no longer holds the scan. [[VaultScan.canInferOrphans]] is the guard, and
+    * both callers consult it before reading anything into a `false`.
+    */
+  def accountsFor(key: CardKey): Boolean =
+    builtKeys.contains(key) ||
+      failedKeys.contains(key) ||
+      suppressedNoteIds.contains(key.noteId) ||
+      underAFailedSection(key)
+
+  /** SHELTERING IS A HEADING-PATH RELATION, and the other kinds are not "not yet
+    * handled" — they are outside the relation entirely.
+    *
+    * The rule protects cards whose key extends the key of a section that failed to
+    * build, because a broken section must not read as a deleted one. A frontmatter
+    * property is not inside any section: it is read from the note's frontmatter, which
+    * parses independently of whether the body's markdown does. A section failing says
+    * nothing about it, so sheltering it would hide a genuinely deleted property. The
+    * same holds for the note-itself card.
+    */
+  private def underAFailedSection(card: CardKey): Boolean =
+    (card.path match
+      case CardPath.Headings(cardPath) =>
+        failedKeys.exists { f =>
+          f.noteId == card.noteId && (f.path match
+            case CardPath.Headings(failedPath) =>
+              failedPath.segments.length < cardPath.segments.length &&
+                cardPath.segments.toVector.startsWith(failedPath.segments.toVector)
+            case CardPath.Property(_) | CardPath.Note | CardPath.Block(_) => false)
+        }
+
+      // ── A BLOCK CARD IS OUTSIDE THE RELATION, AND THAT IS A COST RATHER THAN A
+      // TIDY FIT. A property and the note-itself card genuinely sit outside any
+      // section. A BLOCK does not — it is inside one — but its key deliberately
+      // records no heading chain, because carrying one would make moving a paragraph
+      // between headings re-key its card, which is the fragility the `^blockid`
+      // anchor exists to remove.
+      //
+      // SO THE RELATION CANNOT BE COMPUTED FOR IT, and a block card inside a section
+      // that failed to build reads as deleted rather than as sheltered. That is a
+      // real gap, not a case awaiting an implementation, and it is the honest price
+      // of a location-independent identity. Filed rather than papered over.
+      case CardPath.Property(_) | CardPath.Note | CardPath.Block(_) => false)
+
+object VaultAccounting:
+
+  /** The three sets, gathered once, and THE ONLY WAY TO BUILD ONE — the case class's constructor
+    * is private, so three sets that came from different scans, or from nowhere at all, cannot be
+    * assembled into something that answers as though it had read a vault.
+    */
+  def of(scan: VaultScan): VaultAccounting =
+    VaultAccounting(scan.builtKeys, scan.failedKeys, scan.suppressedNoteIds)
