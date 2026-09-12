@@ -190,9 +190,12 @@ class NodeCensusTest extends munit.FunSuite:
       failures = Vector(BuildFailure.FileUnreadable("Other.md", "frontmatter: bad yaml")),
       outlines = Map(noteId("n1") -> Vector(Vector("kafka"))),
     )
+    // THE REASON NAMES THE STATE RATHER THAN THE FILE, following `MarkedHeadings.CouldNotLook`:
+    // the run reports that failure by name in its own block, and a second wording of it here
+    // would be a third place one failure is put into words.
     assert(
-      unsurveyableReason(census, "n1").contains("Other.md"),
-      s"the reason must name the file: ${unsurveyableReason(census, "n1")}",
+      unsurveyableReason(census, "n1").contains("could not be read"),
+      s"the reason must say what could not be done: ${unsurveyableReason(census, "n1")}",
     )
     assert(unsurveyableReason(census, "n2").nonEmpty)
   }
