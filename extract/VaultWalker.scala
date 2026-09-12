@@ -4,7 +4,7 @@ import cats.data.NonEmptyVector
 import obsidiananki.anki.DeckPath
 import obsidiananki.model.*
 import obsidiananki.parser.ObsidianSyntax
-import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef, VaultScan}
+import obsidiananki.plan.{BuildFailure, NodeCensus, SourceKind, SourceRef, VaultScan}
 
 /** One markdown file's path and contents.
   *
@@ -14,13 +14,23 @@ import obsidiananki.plan.{BuildFailure, SourceKind, SourceRef, VaultScan}
   */
 final case class VaultFile(relativePath: String, content: String)
 
-/** The scan, plus the deck each card belongs in.
+/** The scan, plus the deck each card belongs in, plus which nodes each note still holds.
   *
   * Decks are carried alongside rather than inside [[obsidiananki.plan.SourcedSpec]] because a
   * deck is a property of the card's LOCATION IN THE VAULT, not of the card itself — and the
   * planner takes it as a function for exactly that reason.
+  *
+  * THE CENSUS IS HERE FOR THE SAME REASON THE DECKS ARE. A note's node tree is a property of the
+  * vault's LAYOUT and of no spec: two of its nodes hold no card at all — a heading that kept only
+  * prose, and a table row whose cards were withdrawn — so there is nothing in `scan.specs` for it
+  * to be a field of. It is derived from this walk rather than from a second one, because a second
+  * reading of the heading tree is a second answer to "what does this note contain".
   */
-final case class VaultIndex(scan: VaultScan, decks: Map[CardKey, DeckPath]):
+final case class VaultIndex(
+    scan: VaultScan,
+    decks: Map[CardKey, DeckPath],
+    census: NodeCensus,
+):
   def deckOf(root: DeckPath): CardKey => DeckPath = key => decks.getOrElse(key, root)
 
 /** Every deck level a card's location COULD contribute, in document order.
@@ -303,6 +313,48 @@ private[extract] def hasNoHeadings(root: laika.ast.RootElement): Boolean =
     case _                    => false
   !root.content.exists(anyHeading)
 
+/** EVERY HEADING THIS TOOL READS AS A HEADING, each as its own chain of canonical segments,
+  * outermost first — the raw material of [[obsidiananki.plan.NodeCensus]].
+  *
+  * ONE ENTRY PER HEADING, WHICH IS WHAT MAKES THE RESULT PREFIX-CLOSED. Every ancestor is a
+  * heading too and gets its own entry, so the consumer needs no closure step and
+  * `NodeCensus.Outlines` can say it arrives that way.
+  *
+  * MARKED OR NOT, AND THAT IS THE WHOLE POINT. The half of a node census the keys can already
+  * supply is the half where a card exists. This is the other half: a concept heading whose
+  * descriptors were all moved away still exists, holds prose, and appears in no key anywhere.
+  *
+  * ═══ WHY IT MIRRORS `Extractor`'s OWN WALK, ARM FOR ARM ═══
+  *
+  * `Section` for a heading, `BlockContainer` to descend, nothing for anything else, and
+  * `HeadingSegment.fromExtractedText` for the segment — because a census that disagreed with the
+  * key derivation about what a heading is, or about what its canonical text is, would answer
+  * "the old concept survives" about a tree the keys were never derived from. The two readings must
+  * agree, so this one is written to match, and `VaultWalker.test.scala` pins the agreement on real
+  * markdown rather than leaving it to this sentence.
+  *
+  * A HEADING THAT EXTRACTS TO NOTHING STOPS THE DESCENT, exactly as it does there. It contributes
+  * no segment, so nothing below it has a derivable chain either — and the note is reported
+  * `KeyUnderivableInFile`, which makes its census unanswerable anyway. Mirroring the extractor is
+  * what keeps that agreement true rather than coincidental.
+  */
+private[extract] def headingChains(root: laika.ast.RootElement): Vector[Vector[String]] =
+  def walk(element: laika.ast.Element, ancestors: Vector[String]): Vector[Vector[String]] =
+    element match
+      case section: laika.ast.Section =>
+        HeadingSegment.fromExtractedText(section.header.extractText) match
+          case Left(_) => Vector.empty
+          case Right(segment) =>
+            val chain = ancestors :+ segment.value
+            chain +: section.content.toVector.flatMap(walk(_, chain))
+
+      case container: laika.ast.BlockContainer =>
+        container.content.toVector.flatMap(walk(_, ancestors))
+
+      case _ => Vector.empty
+
+  walk(root, Vector.empty)
+
 /** Whether any heading in a file carries a `#flashcard` marker — INCLUDING the case where the
   * question could not be asked.
   *
@@ -391,6 +443,11 @@ object VaultWalker:
     val specs    = Vector.newBuilder[obsidiananki.plan.SourcedSpec]
     val failures = Vector.newBuilder[BuildFailure]
     val decks    = Map.newBuilder[CardKey, DeckPath]
+
+    // EVERY HEADING OF EVERY NOTE WHOSE KEYS THIS WALK DERIVED, gathered here rather than by a
+    // later pass over the vault: the census must be a reading of THE SAME parse the keys came
+    // from, and a second pass could read a file that changed underneath it.
+    val outlines = Map.newBuilder[NoteId, Vector[Vector[String]]]
 
 
     // Sorted so a scan is reproducible: the same vault must always yield the same plan, or
@@ -823,6 +880,16 @@ object VaultWalker:
                     s"markdown: ${err.toString.take(200)}",
                   )
                 case Right(doc) =>
+                  // RECORDED FOR EVERY NOTE WHOSE ID IS GOOD AND WHOSE MARKDOWN PARSED, which is
+                  // exactly the set of notes whose keys are derived below. A note that reaches
+                  // neither — no id, or markdown that will not parse — owns no census entry, and
+                  // `NodeCensus` answers about it from the failures instead.
+                  //
+                  // AN EMPTY VECTOR IS A LEGITIMATE ANSWER, not a missing one: a note with no
+                  // headings holds no heading nodes, and its table rows and properties still reach
+                  // the census through its keys.
+                  outlines += noteId -> headingChains(doc.content)
+
                   val note =
                     Extractor.fromDocument(
                       noteId,
@@ -865,7 +932,12 @@ object VaultWalker:
     // A CROSS-NOTE CHECK, AND THEREFORE ONLY POSSIBLE HERE. Whether a reversible edge asks a
     // question with several right answers is a fact about the whole vault, not about any note.
     val built = specs.result()
+    val scanned = VaultScan.from(built, failures.result() ++ Edges.reverseCollisions(built))
     VaultIndex(
-      VaultScan.from(built, failures.result() ++ Edges.reverseCollisions(built)),
+      scanned,
       decks.result(),
+      // THE CENSUS IS BUILT FROM THE FINISHED SCAN, so that "which notes could not be surveyed"
+      // is read off the same failures the rest of the run reports rather than from a second
+      // tally kept alongside this loop.
+      NodeCensus.of(scanned, outlines.result()),
     )
