@@ -1449,3 +1449,77 @@ class VaultWalkerTest extends munit.FunSuite:
       "an author who wrote a heading was told their note has none",
     )
   }
+
+  // ================================================ the node census ====
+
+  /** THE WALK'S READING OF A NOTE'S NODE TREE, asserted through the real walk rather than over
+    * hand-built chains.
+    *
+    * WHY THESE TESTS ARE HERE AND NOT BESIDE `NodeCensus` ITSELF. That suite pins what the census
+    * does with the material it is handed; this one pins that the material is the same tree the KEYS
+    * were derived from. A census that disagreed with the key derivation about what counts as a
+    * heading would answer "the old concept survives" about a document the keys never came from,
+    * and what follows from that answer is review history moved onto a different card.
+    */
+  def censusNodes(index: VaultIndex, id: String): Set[Vector[String]] =
+    val noteId = NoteId.fromFrontmatter(id).getOrElse(fail(s"unusable test id '$id'"))
+    index.census.nodesOf(noteId) match
+      case obsidiananki.plan.NodeCensus.Answer.Surveyed(nodes) => nodes
+      case obsidiananki.plan.NodeCensus.Answer.Unsurveyable(why) =>
+        fail(s"expected a surveyed census for '$id': $why")
+
+  test("an UNMARKED heading that makes no card is still a node of its note") {
+    // The half of the census no key can supply. `## Cost` carries prose and no marker, so nothing
+    // in the scan mentions it — and a concept heading that kept only such a section would look
+    // deleted to anything reading keys alone.
+    val index = scan(
+      "Kafka.md" -> note("k1", "# Kafka\n\n## Cost\n\nIt costs.\n\n## Definition #flashcard/cdd/2way\n\nA log.\n")
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+    assert(censusNodes(index, "k1").contains(Vector("kafka", "cost")), censusNodes(index, "k1"))
+  }
+
+  test("a MARKED heading's own key path is a node too, so the census and the keys agree") {
+    val index = scan(
+      "Kafka.md" -> note("k1", "# Kafka\n\n## Definition #flashcard/cdd/2way\n\nA log.\n")
+    )
+    assertEquals(
+      index.scan.specs.map(_.key.path.render),
+      Vector("kafka / definition"),
+      "the fixture's own key is not what this test assumes",
+    )
+    assert(censusNodes(index, "k1").contains(Vector("kafka", "definition")))
+  }
+
+  test("a table's ROW is a node, arriving from its pair cards rather than from any heading") {
+    val index = scan(
+      "T.md" -> note(
+        "t1",
+        "# Trade-offs\n\n## Cost / benefit #flashcard/table/3way\n\n" +
+          "| Pattern | Benefit |\n|---|---|\n| Queue | Decoupling |\n",
+      )
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+    assert(
+      censusNodes(index, "t1").contains(Vector("trade-offs", "cost / benefit", "queue")),
+      censusNodes(index, "t1"),
+    )
+  }
+
+  test("a note whose heading tree could not be derived has NO census answer, not an empty one") {
+    // A heading that extracts to nothing stops the key derivation and is reported
+    // `KeyUnderivableInFile`; a census read off that tree would be describing a different file.
+    val index = scan("N.md" -> note("n1", "# #flashcard/1way\n\nBody.\n"))
+    assert(
+      index.scan.failures.exists {
+        case _: BuildFailure.KeyUnderivableInFile => true
+        case _                                    => false
+      },
+      s"the fixture must make the note's keys underivable: ${index.scan.failures}",
+    )
+    val noteId = NoteId.fromFrontmatter("n1").getOrElse(fail("unusable id"))
+    index.census.nodesOf(noteId) match
+      case obsidiananki.plan.NodeCensus.Answer.Unsurveyable(_) => ()
+      case obsidiananki.plan.NodeCensus.Answer.Surveyed(nodes) =>
+        fail(s"a note whose keys are underivable was surveyed anyway: $nodes")
+  }
