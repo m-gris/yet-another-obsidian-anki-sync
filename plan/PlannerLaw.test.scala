@@ -128,7 +128,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
   def planOf(scan: VaultScan, anki: InMemoryAnki, deck: DeckPath = defaultDeck): Plan =
     val observed = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     Planner
-      .plan(scan, observed, _ => deck, newNoteOf)
+      .plan(scan, observed, _ => deck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
   /** `RetypePolicy.Apply`, so that a generated scan which happens to move a note between note

@@ -68,7 +68,7 @@ class RetypingTest extends munit.FunSuite:
 
   def planOf(scan: VaultScan, anki: InMemoryAnki): Plan =
     Planner
-      .plan(scan, observe(anki), _ => defaultDeck, newNoteOf)
+      .plan(scan, observe(anki), _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"unexpected plan errors: ${errs.map(_.describe)}"), identity)
 
   def runReport(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): ExecutionReport =

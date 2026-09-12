@@ -161,7 +161,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   def planOf(scan: VaultScan, anki: Anki[Result]): Plan =
     val observed = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     Planner
-      .plan(scan, observed, _ => defaultDeck, newNoteOf)
+      .plan(scan, observed, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
   def storedBack(anki: InMemoryAnki): String =

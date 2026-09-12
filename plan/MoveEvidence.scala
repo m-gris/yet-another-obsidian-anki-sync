@@ -57,10 +57,21 @@ import obsidiananki.model.{CardKey, CardPath, Marker, OwnedTag}
  * WHAT MAY AND MAY NOT REASSIGN, WHICH IS THE OTHER HALF OF THAT RULING. Only
  * [[MoveFinding.Corroborated]] — exact substance agreement, every name divergence accounted for
  * by the key, and MUTUAL uniqueness. [[MoveFinding.Ambiguous]], [[MoveFinding.Contested]],
- * [[MoveFinding.Unexplained]], [[MoveFinding.Unaccounted]] and [[MoveFinding.Incomparable]] are
- * REPORTED and never applied. That separation is load-bearing rather than stylistic: the only
- * function in this codebase that mints a [[SyncAction.Reassign]] is an extension on the
- * corroborated case, so a finding of any other shape cannot be widened into one.
+ * [[MoveFinding.Unexplained]], [[MoveFinding.Unaccounted]], [[MoveFinding.Reparented]],
+ * [[MoveFinding.RelabelUnvouched]] and [[MoveFinding.Incomparable]] are REPORTED and never
+ * applied. That separation is load-bearing rather than stylistic: the only function in this
+ * codebase that mints a [[SyncAction.Reassign]] is an extension on the corroborated case, so a
+ * finding of any other shape cannot be widened into one.
+ *
+ * ══ WHICH PAIRINGS MAY BE CORROBORATED AT ALL — the ruled identity policy ══
+ *
+ * Marc's rulings of 2026-09-12 (`docs/design/IDENTITY-DECISION-SHEET.md`) did not change
+ * "corroborated ⇒ apply". They changed WHICH pairings may be corroborated, and the change is
+ * expressed by TYPING THE EXCEPTIONS APART rather than by a policy check anybody could forget:
+ * a card whose SUBJECT changed while the subject it left goes on existing is a different card
+ * (R2), and it comes back as [[MoveFinding.Reparented]], which has no `reassignment` method to
+ * call. A subject change that also moved, or one whose premise the run could not establish, comes
+ * back as [[MoveFinding.RelabelUnvouched]] for the same reason.
  *
  * ══ THE STANDING RULE THIS OBEYS ══
  *
@@ -398,8 +409,33 @@ enum Agreement:
     case PlaceAndSubstance => "a different name, in the same place"
     case SubstanceAlone   => "a different name, somewhere else"
 
-/** WHAT THE EVIDENCE SHOWS about ONE stranded note. Six outcomes, and each says a different thing
-  * to whoever reads it.
+/** WHY A SUBJECT CHANGE THAT LOOKS LIKE A RELABEL IS NOT FOLLOWED ANYWAY.
+  *
+  * TWO CASES, AND THEY ARE NOT TWO SEVERITIES OF ONE THING. The first is a fact about the vault —
+  * two things moved at once, so the ruling grades the evidence weaker. The second is a fact about
+  * THIS RUN — it could not establish the premise at all. A reader who is told "the cluster moved"
+  * about a run that could not look has been told something false.
+  */
+enum RelabelDoubt:
+
+  /** The subject changed and so did where the cluster sits, or the card crossed into another
+    * note. Ruled a question rather than a follow (Decision 2, 2026-09-12).
+    */
+  case ClusterMoved
+
+  /** The census could not say whether the old subject survives, so nothing may be concluded from
+    * its absence. `reason` is [[NodeCensus.Answer.Unsurveyable]]'s own words, carried so the
+    * report can say WHY it declined rather than merely that it did.
+    */
+  case CensusUnavailable(reason: String)
+
+  def describe: String = this match
+    case ClusterMoved => "the cluster moved as well, so the rename is not vouched for"
+    case CensusUnavailable(reason) =>
+      s"whether the old subject survives could not be established: $reason"
+
+/** WHAT THE EVIDENCE SHOWS about ONE stranded note. Eight outcomes, and each says a different
+  * thing to whoever reads it.
   *
   * ONLY ONE OF THEM IS AN INSTRUCTION, AND IT IS THE FIRST. The other five say what agreed and
   * stop there; `spike/RenameEvidence.scala` settled that vocabulary for a renamed table column
@@ -483,6 +519,72 @@ enum MoveFinding:
       unaccountedFor: NonEmptyVector[Divergence],
   )
 
+  /** THE CARD'S SUBJECT CHANGED AND THE SUBJECT IT LEFT GOES ON EXISTING — so this is not the
+    * same card, and there is nothing here to pair.
+    *
+    * ═══ WHAT IT IS, IN ONE SENTENCE ═══
+    *
+    * A concept-descriptor card's parent concept is CONSTITUTIVE — the card asserts a
+    * three-way relation, and the concept is one of its three terms (standing ruling R2). So
+    * `## Definition` moved from under `# Kafka` to under `# NATS`, while `# Kafka` still stands,
+    * is a NEW card under NATS and a DELETED card under Kafka. Deck scenario S24.
+    *
+    * ═══ WHY IT IS NOT [[RelabelUnvouched]], WHICH IS THE DISTINCTION THAT EARNS IT A CASE ═══
+    *
+    * The two arise from the same key comparison and ask for opposite things from a reader. This
+    * one says THERE IS NOTHING TO PAIR: a future review surface must not offer a human the choice
+    * of moving this history, because the ruling has already answered it. That one says POSSIBLY
+    * THE SAME CARD, relabelled and relocated at once, which is exactly the shape
+    * `docs/design/REVIEW-QUEUE.md` exists for. Behind one name with a boolean they would be one
+    * population with two remedies, which is the defect every world's policy confessed to.
+    *
+    * `survivingParent` IS THE EVIDENCE, not a convenience: it is the node path the census found
+    * still in the vault, and without it the report can say "a different card" and not why.
+    *
+    * IT CARRIES EVERY DIVERGENCE, like [[Corroborated]] and under the same ruling of 2026-09-04:
+    * a run that will not act must still say what it saw.
+    */
+  case Reparented(
+      stranded: CardKey,
+      noteId: AnkiNoteId,
+      candidate: CardKey,
+      where: SourceRef,
+      survivingParent: Vector[String],
+      divergences: Vector[Divergence],
+  )
+
+  /** THE CARD'S SUBJECT CHANGED, THE OLD SUBJECT IS GONE — AND SOMETHING ELSE MOVED TOO, so the
+    * follow is not vouched for.
+    *
+    * ═══ THE RULING THIS IMPLEMENTS ═══
+    *
+    * Decision 2 of `docs/design/IDENTITY-DECISION-SHEET.md`, ruled 2026-09-12, follows a subject
+    * change only when the cluster stayed in place: "the path weighs both ways — a name change
+    * combined with a move grades weaker and becomes a question". This is that question, and it is
+    * REPORTED rather than applied.
+    *
+    * [[RelabelDoubt]] says which of the two doubts it is, and the second is the honesty half: a
+    * census that could not be taken cannot establish that the old subject is gone, and "I could
+    * not look" must never be spent as "I looked and it was not there".
+    *
+    * ═══ WHAT IT IS NOT ═══
+    *
+    * NOT [[Unaccounted]], though both are "one candidate, nothing applied". That one says the
+    * card's NAME changed for a reason the KEY does not explain. Here the key explains the name
+    * perfectly; what is unvouched for is the INFERENCE from the key to sameness.
+    *
+    * NOT [[Ambiguous]] or [[Contested]] either: the pairing is mutually unique, and a reader who
+    * saw those would go looking for a rival claimant that does not exist.
+    */
+  case RelabelUnvouched(
+      stranded: CardKey,
+      noteId: AnkiNoteId,
+      candidate: CardKey,
+      where: SourceRef,
+      cause: RelabelDoubt,
+      divergences: Vector[Divergence],
+  )
+
   /** Nothing the vault now produces agrees with this note.
     *
     * THE COMPARISON WAS MADE AND CAME BACK EMPTY, which is the whole difference between this and
@@ -511,12 +613,14 @@ enum MoveFinding:
     * is an override rather than a projection and will not compile.
     */
   def strandedNote: AnkiNoteId = this match
-    case Corroborated(_, id, _, _, _, _) => id
-    case Ambiguous(_, id, _)             => id
-    case Contested(_, id, _, _)          => id
-    case Unaccounted(_, id, _, _, _)     => id
-    case Unexplained(_, id)              => id
-    case Incomparable(_, id, _)          => id
+    case Corroborated(_, id, _, _, _, _)      => id
+    case Ambiguous(_, id, _)                  => id
+    case Contested(_, id, _, _)               => id
+    case Unaccounted(_, id, _, _, _)          => id
+    case Reparented(_, id, _, _, _, _)        => id
+    case RelabelUnvouched(_, id, _, _, _, _)  => id
+    case Unexplained(_, id)                   => id
+    case Incomparable(_, id, _)               => id
 
   /** For a person reading a run.
     *
@@ -548,6 +652,21 @@ enum MoveFinding:
         s"says the same thing as '${candidate.path.render}' in ${candidate.noteId.value} " +
         s"(${where.describe}) — but its name changed for a reason the key does not explain, so " +
         s"nothing is applied: ${unaccountedFor.toVector.map(_.describe).mkString(", ")}"
+
+    case Reparented(stranded, id, candidate, where, survivingParent, divergences) =>
+      s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
+        s"says the same thing as '${candidate.path.render}' in ${candidate.noteId.value} " +
+        s"(${where.describe}) — but '${survivingParent.mkString(" / ")}' is still in the vault, so " +
+        s"this is a DIFFERENT card under a different subject and nothing is applied" +
+        (if divergences.isEmpty then ""
+         else s"; ${divergences.map(_.describe).mkString(", ")}")
+
+    case RelabelUnvouched(stranded, id, candidate, where, cause, divergences) =>
+      s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
+        s"may have been renamed to '${candidate.path.render}' in ${candidate.noteId.value} " +
+        s"(${where.describe}) — ${cause.describe}, so nothing is applied" +
+        (if divergences.isEmpty then ""
+         else s"; ${divergences.map(_.describe).mkString(", ")}")
 
     case Unexplained(stranded, id) =>
       s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
@@ -724,8 +843,20 @@ object MoveEvidence:
     * finding by key, so two runs over an unchanged vault and an unchanged collection print the
     * same report — and, since 2026-09-05, APPLY THE SAME WRITES. Nothing here reads a `Map`'s
     * iteration order, which is a hash-table detail.
+    *
+    * ═══ THE CENSUS IS THE AFTER VAULT'S NODE TREE, FROM THE SAME SCAN AS `unclaimed` ═══
+    *
+    * It answers the one question the other two inputs cannot: whether the subject a card left is
+    * still in the vault. `unclaimed` is what the vault produces and `stranded` is what the
+    * collection holds, and a concept heading that kept only prose is in neither. A census taken
+    * from a DIFFERENT scan would answer about a vault that is not the one being planned; nothing
+    * here can check that, so both arrive from one [[obsidiananki.extract.VaultIndex]].
     */
-  def survey(stranded: Vector[ObservedCard], unclaimed: Vector[SourcedSpec]): Vector[MoveFinding] =
+  def survey(
+      stranded: Vector[ObservedCard],
+      unclaimed: Vector[SourcedSpec],
+      census: NodeCensus,
+  ): Vector[MoveFinding] =
     // SORTED ONCE, AT THE TOP, so every list below inherits the order rather than each deciding
     // its own. The note id breaks a tie between two notes claiming one key — a state
     // `PlanError.DuplicateIdentityInAnki` refuses upstream, so it should not arrive, and a sort

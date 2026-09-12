@@ -152,7 +152,7 @@ class FixtureVaultTest extends munit.FunSuite:
     def planNow(): Plan =
       val observed = Observer.observe(anki).fold(e => fail(s"observe: $e"), identity)
       Planner
-        .plan(index.scan, observed, index.deckOf(deckRoot), newNoteOf)
+        .plan(index.scan, observed, index.deckOf(deckRoot), newNoteOf, index.census)
         .fold(errs => fail(s"plan errors: ${errs.map(_.describe).mkString("\n")}"), identity)
 
     val first = planNow()

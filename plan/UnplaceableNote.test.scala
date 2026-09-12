@@ -90,11 +90,13 @@ class UnplaceableNoteTest extends munit.FunSuite:
     Observer.observe[Result](anki).fold(e => fail(s"observe failed: $e"), identity)
 
   def planOver(anki: InMemoryAnki, specs: Vector[SourcedSpec]): Either[Vector[PlanError], Plan] =
+    val scan = VaultScan.from(specs, Vector.empty)
     Planner.plan(
-      VaultScan.from(specs, Vector.empty),
+      scan,
       observe(anki),
       _ => deck,
       (s, d, sha) => newNoteOf(s, d, sha),
+      HandBuiltCensus.of(scan),
     )
 
   /** One note synced normally, then given a SECOND identity tag by hand — the manual-rebind

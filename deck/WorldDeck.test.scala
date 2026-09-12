@@ -1,7 +1,7 @@
 package obsidiananki.deck
 
 import obsidiananki.TestSources
-import obsidiananki.plan.{Agreement, MoveFinding}
+import obsidiananki.plan.{Agreement, MoveFinding, RelabelDoubt}
 
 /** THE DECK'S OWN TESTS — every scenario's finding pinned, and the seam's contract enforced.
   *
@@ -43,12 +43,22 @@ class WorldDeckTest extends munit.FunSuite:
 
   /** One finding as a comparable label: the case, and for a corroboration its grade. */
   private def shape(f: MoveFinding): String = f match
-    case c: MoveFinding.Corroborated => s"corroborated/${c.agreement}"
-    case _: MoveFinding.Ambiguous    => "ambiguous"
-    case _: MoveFinding.Contested    => "contested"
-    case _: MoveFinding.Unaccounted  => "unaccounted"
-    case _: MoveFinding.Unexplained  => "unexplained"
-    case _: MoveFinding.Incomparable => "incomparable"
+    case c: MoveFinding.Corroborated     => s"corroborated/${c.agreement}"
+    case _: MoveFinding.Ambiguous        => "ambiguous"
+    case _: MoveFinding.Contested        => "contested"
+    case _: MoveFinding.Unaccounted      => "unaccounted"
+    case _: MoveFinding.Reparented       => "reparented"
+    case r: MoveFinding.RelabelUnvouched => s"relabel-unvouched/${doubt(r.cause)}"
+    case _: MoveFinding.Unexplained      => "unexplained"
+    case _: MoveFinding.Incomparable     => "incomparable"
+
+  /** WHICH DOUBT, IN THE LABEL, because the two are different claims about the run: one says the
+    * vault moved two things at once, the other says this run could not look. A scenario asserting
+    * only "relabel-unvouched" would pass on either.
+    */
+  private def doubt(cause: RelabelDoubt): String = cause match
+    case RelabelDoubt.ClusterMoved         => "cluster-moved"
+    case RelabelDoubt.CensusUnavailable(_) => "census-unavailable"
 
   private def shapes(step: WorldDeck.StepResult): Vector[String] = step.findings.map(shape)
 

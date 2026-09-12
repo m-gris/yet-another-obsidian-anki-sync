@@ -122,8 +122,14 @@ object Report:
       case _: MoveFinding.Ambiguous    => false
       case _: MoveFinding.Contested    => false
       case _: MoveFinding.Unaccounted  => false
-      case _: MoveFinding.Unexplained  => false
-      case _: MoveFinding.Incomparable => false
+      // BOTH OUTCOMES OF THE SUBJECT GATE BELONG ON THE "NOTHING WAS APPLIED" SIDE, and they are
+      // the two that could most easily have been filed on the other: each names one candidate card
+      // and every field that agreed, which is what a corroboration looks like from here. What
+      // separates them is that the ruling forbids following — see `plan/MoveEvidence.scala`.
+      case _: MoveFinding.Reparented       => false
+      case _: MoveFinding.RelabelUnvouched => false
+      case _: MoveFinding.Unexplained      => false
+      case _: MoveFinding.Incomparable     => false
     }
 
     val done =

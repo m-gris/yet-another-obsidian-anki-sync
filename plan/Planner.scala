@@ -299,6 +299,11 @@ object Planner:
       observed: ObservedState,
       deckOf: CardKey => DeckPath,
       newNoteOf: (SourcedSpec, DeckPath, String) => NewNote,
+      // THE VAULT'S NODE TREE, PASSED THE WAY `deckOf` IS. Both are derived from the same walk
+      // and neither is a property of any spec, so both are the caller's to hand over — see
+      // `extract/VaultWalker.scala`'s `VaultIndex`. The move survey needs it to tell a relabelled
+      // subject from a re-parented card; nothing else here reads it.
+      census: NodeCensus,
   ): Either[Vector[PlanError], Plan] =
     // BOTH SIDES ARE CHECKED BEFORE EITHER IS REPORTED, so one run tells the author
     // everything that needs fixing rather than revealing the Anki-side collision only after
@@ -366,7 +371,7 @@ object Planner:
           !accounting.accountsFor(card.key) && (card.isFlaggedOrphan || scan.canInferOrphans)
         }
         val unclaimed = scan.specs.filterNot(sourced => byKey.contains(sourced.key))
-        val evidence  = MoveEvidence.survey(stranded, unclaimed)
+        val evidence  = MoveEvidence.survey(stranded, unclaimed, census)
 
         val strandedByNoteId = stranded.map(card => card.note.id -> card).toMap
 

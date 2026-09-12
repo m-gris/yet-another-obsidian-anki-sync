@@ -71,8 +71,9 @@ class PlannerTest extends munit.FunSuite:
     // `Planner.newNoteFor`, NOT this file's `newNoteOf`. The helper builds a note the way these
     // tests find convenient; the production function is the one that decides what tags a note
     // gets, and a test asserting about tags against the helper would assert about itself.
+    val scan = scanOf(withTags)
     val plan = Planner
-      .plan(scanOf(withTags), ObservedState(Vector.empty), _ => defaultDeck, Planner.newNoteFor)
+      .plan(scan, ObservedState(Vector.empty), _ => defaultDeck, Planner.newNoteFor, HandBuiltCensus.of(scan))
       .fold(e => fail(s"plan: $e"), identity)
     val created = plan.actions.collect { case c: SyncAction.Create => c }
     assertEquals(created.size, 1, s"${plan.actions}")
@@ -105,7 +106,7 @@ class PlannerTest extends munit.FunSuite:
 
   def planOf(scan: VaultScan, observed: ObservedState): Plan =
     Planner
-      .plan(scan, observed, _ => defaultDeck, newNoteOf)
+      .plan(scan, observed, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"unexpected plan errors: ${errs.map(_.describe)}"), identity)
 
   def observe(anki: InMemoryAnki): ObservedState =
@@ -210,8 +211,9 @@ class PlannerTest extends munit.FunSuite:
     runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "f", "old"))), observe(anki)), anki)
 
     val moved = deck("Obsidian", "Patterns")
+    val edited = scanOf(sourced(twoFieldSpec(k, "f", "new")))
     val plan = Planner
-      .plan(scanOf(sourced(twoFieldSpec(k, "f", "new"))), observe(anki), _ => moved, newNoteOf)
+      .plan(edited, observe(anki), _ => moved, newNoteOf, HandBuiltCensus.of(edited))
       .fold(e => fail(s"$e"), identity)
 
     plan.actions match
@@ -252,8 +254,9 @@ class PlannerTest extends munit.FunSuite:
     // decks because nothing would have moved.
     val moved   = deck("Obsidian", "Patterns")
     val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext, RevealOrder.DepthFirst)
+    val afterRetag = scanOf(sourced(retyped))
     val plan = Planner
-      .plan(scanOf(sourced(retyped)), observe(anki), _ => moved, newNoteOf)
+      .plan(afterRetag, observe(anki), _ => moved, newNoteOf, HandBuiltCensus.of(afterRetag))
       .fold(e => fail(s"$e"), identity)
 
     assertEquals(plan.actions.size, 1, s"expected ONE action carrying the whole note: ${plan.actions}")
@@ -267,7 +270,7 @@ class PlannerTest extends munit.FunSuite:
     // AND THE LAW HOLDS. This is the half the old behaviour broke: it converged, but only by
     // doing unrequested work on a later run.
     val second = Planner
-      .plan(scanOf(sourced(retyped)), observe(anki), _ => moved, newNoteOf)
+      .plan(afterRetag, observe(anki), _ => moved, newNoteOf, HandBuiltCensus.of(afterRetag))
       .fold(e => fail(s"$e"), identity)
     assertEquals(second.actions, Vector.empty, s"a second run still had work to do: ${second.actions}")
   }
@@ -495,7 +498,7 @@ class PlannerTest extends munit.FunSuite:
       SourcedSpec(twoFieldSpec(k, "f", "one"), SourceRef("Note.md", 10, SourceKind.Heading), NoSectionChain, NoRecall, Vector.empty),
       SourcedSpec(twoFieldSpec(k, "f", "two"), SourceRef("Note.md", 40, SourceKind.TablePair), NoSectionChain, NoRecall, Vector.empty),
     )
-    Planner.plan(scan, ObservedState(Vector.empty), _ => defaultDeck, newNoteOf) match
+    Planner.plan(scan, ObservedState(Vector.empty), _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan)) match
       case Left(errors) => assertEquals(errors.size, 1)
       case Right(_)     => fail("a duplicate key was allowed through")
   }

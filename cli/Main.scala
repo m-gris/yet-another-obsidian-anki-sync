@@ -1071,7 +1071,15 @@ object Main
     Observer.observe[Refused](anki).value.flatMap {
       case Left(error) => IO.pure(SyncOutcome.CouldNotObserve(error))
       case Right(observed) =>
-        Planner.plan(index.scan, observed, index.deckOf(deckRoot), Planner.newNoteFor) match
+        // THE CENSUS AND THE SCAN COME FROM ONE INDEX, which is all that keeps them talking about
+        // the same vault — see `Planner.plan`'s own note on that parameter.
+        Planner.plan(
+          index.scan,
+          observed,
+          index.deckOf(deckRoot),
+          Planner.newNoteFor,
+          index.census,
+        ) match
           case Left(errors) => IO.pure(SyncOutcome.RefusedInconsistent(errors))
           case Right(plan) =>
             emit(

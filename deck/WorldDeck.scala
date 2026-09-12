@@ -348,7 +348,10 @@ object WorldDeck:
       // (card.isFlaggedOrphan || scan.canInferOrphans)`; unclaimed is the `Create` complement.
       val stranded  = collection.filter(c => !accounting.accountsFor(c.key) && (c.isFlaggedOrphan || scan.canInferOrphans))
       val unclaimed = scan.specs.filterNot(s => byKey.contains(s.key))
-      val findings  = MoveEvidence.survey(stranded, unclaimed)
+      // THE CENSUS COMES FROM THE SAME `index` AS `unclaimed`, which is the AFTER state — the
+      // question it answers is whether a subject the collection remembers is still in the vault
+      // the run is planning against.
+      val findings = MoveEvidence.survey(stranded, unclaimed, index.census)
 
       val decisions = findings.map { f =>
         val d = policy.decide(f)

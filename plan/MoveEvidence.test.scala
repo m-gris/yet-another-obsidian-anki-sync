@@ -258,10 +258,24 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   // ==================================================== CORROBORATION: THE CASES ====
 
+  /** THE SURVEY OVER A VAULT THAT HOLDS NOTHING BUT THESE UNCLAIMED CARDS.
+    *
+    * The census is derived from the same specs, which is the honest reading of a fixture built out
+    * of specs alone: no heading exists here that no card hangs off, so the only nodes are the ones
+    * ABOVE these cards. A test that needs a node no card proves — a concept heading that kept only
+    * prose — must build its own census, which [[surveyWith]] is for.
+    */
   def surveyOf(
       stranded: Vector[ObservedCard],
       unclaimed: Vector[SourcedSpec],
-  ): Vector[MoveFinding] = MoveEvidence.survey(stranded, unclaimed)
+  ): Vector[MoveFinding] =
+    surveyWith(stranded, unclaimed, HandBuiltCensus.of(VaultScan.from(unclaimed, Vector.empty)))
+
+  def surveyWith(
+      stranded: Vector[ObservedCard],
+      unclaimed: Vector[SourcedSpec],
+      census: NodeCensus,
+  ): Vector[MoveFinding] = MoveEvidence.survey(stranded, unclaimed, census)
 
   def onlyFinding(
       stranded: Vector[ObservedCard],
@@ -525,7 +539,7 @@ class MoveEvidenceTest extends munit.FunSuite:
   def planOf(scan: VaultScan, anki: InMemoryAnki): Plan =
     val state = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     Planner
-      .plan(scan, state, _ => deck, Planner.newNoteFor)
+      .plan(scan, state, _ => deck, Planner.newNoteFor, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"unexpected plan errors: ${errs.map(_.describe)}"), identity)
 
   def runPlan(p: Plan, anki: InMemoryAnki): Unit =
