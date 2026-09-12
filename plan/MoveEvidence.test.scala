@@ -42,6 +42,15 @@ class MoveEvidenceTest extends munit.FunSuite:
   def noteKey(id: String): CardKey =
     CardKey(NoteId.fromFrontmatter(id).toOption.get, CardPath.Note)
 
+  /** A card anchored at a frontmatter property — a relation card. Its path is ONE segment however
+    * many name fields its note type declares, which is what the subject gate has to survive.
+    */
+  def propertyKey(id: String, name: String): CardKey =
+    CardKey(
+      NoteId.fromFrontmatter(id).toOption.get,
+      CardPath.Property(PropertyName.fromFrontmatter(name).toOption.get),
+    )
+
   def body(s: String): Body = Body.fromExtracted(s).getOrElse(fail("empty test body"))
 
   val deck: DeckPath = DeckPath(NonEmptyVector.of("Obsidian", "System-Design"))
@@ -277,6 +286,41 @@ class MoveEvidenceTest extends munit.FunSuite:
       census: NodeCensus,
   ): Vector[MoveFinding] = MoveEvidence.survey(stranded, unclaimed, census)
 
+  def noteIdOf(id: String): NoteId =
+    NoteId.fromFrontmatter(id).getOrElse(fail(s"unusable test note id '$id'"))
+
+  /** THE SURVEY OVER A VAULT WHOSE HEADING TREE IS STATED OUTRIGHT.
+    *
+    * This is how a test says "the concept the card left is still there" or "it is not", which is
+    * the one fact no card can prove either way: a concept heading that kept only prose produces no
+    * spec, so [[surveyOf]]'s census cannot see it in either direction.
+    */
+  def surveyOver(
+      stranded: Vector[ObservedCard],
+      unclaimed: Vector[SourcedSpec],
+      outlines: NodeCensus.Outlines,
+  ): Vector[MoveFinding] =
+    surveyWith(stranded, unclaimed, NodeCensus.of(VaultScan.from(unclaimed, Vector.empty), outlines))
+
+  /** THE SURVEY OVER A VAULT THIS RUN COULD NOT READ IN FULL — one file's frontmatter would not
+    * parse, so no note's node tree may be relied on.
+    */
+  def surveyBlind(
+      stranded: Vector[ObservedCard],
+      unclaimed: Vector[SourcedSpec],
+  ): Vector[MoveFinding] =
+    surveyWith(
+      stranded,
+      unclaimed,
+      NodeCensus.of(
+        VaultScan.from(
+          unclaimed,
+          Vector(BuildFailure.FileUnreadable("Elsewhere.md", "frontmatter: will not parse")),
+        ),
+        Map.empty,
+      ),
+    )
+
   def onlyFinding(
       stranded: Vector[ObservedCard],
       unclaimed: Vector[SourcedSpec],
@@ -332,14 +376,25 @@ class MoveEvidenceTest extends munit.FunSuite:
     assertEquals(found.divergences.map(_.field), Vector(Marker.BasicFields.Front))
   }
 
-  test("a concept-descriptor card moved under a different parent moves a name segment and a place segment") {
-    // Its `Concept` IS its parent heading, so this one edit moves both axes at once — the cost
-    // `FieldRole.Anchor` records, arriving as a grade rather than as a refusal.
+  test("a concept-descriptor card whose concept AND place both moved is a question, not a follow") {
+    // ⚠️ THIS TEST USED TO ASSERT A CORROBORATION GRADED `SubstanceAlone`, and the ruling of
+    // 2026-09-12 (Decision 2) moved it: a concept-descriptor card's subject is its parent, so a
+    // changed concept alongside a changed place is a rename combined with a move, which "grades
+    // weaker and becomes a question". The GRADE still exists and is still reachable — a plain
+    // heading reworded and re-parented in one commit is `SubstanceAlone` and applies (deck S09) —
+    // because for a note type with one name field a changed last segment is not a subject change.
     val was = threeField(key("n1", "top", "kafka", "delivery"), "Kafka", "Delivery", "At least once.", "Top")
     val now = threeField(key("n1", "other", "nats", "delivery"), "NATS", "Delivery", "At least once.", "Other")
-    val found = corroboration(Vector(observed(was, 1)), Vector(sourced(now)))
-    assertEquals(found.agreement, Agreement.SubstanceAlone)
-    assertEquals(found.divergences.map(_.field).toSet, Set("Concept", Marker.ContextField))
+    surveyOver(
+      Vector(observed(was, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> Vector(Vector("other"), Vector("other", "nats"))),
+    ) match
+      case Vector(MoveFinding.RelabelUnvouched(_, _, candidate, _, cause, divergences)) =>
+        assertEquals(candidate, now.key)
+        assertEquals(cause, RelabelDoubt.ClusterMoved)
+        assertEquals(divergences.map(_.field).toSet, Set("Concept", Marker.ContextField))
+      case other => fail(s"a subject change that also moved must not be applied: $other")
   }
 
   test("a heading carried into another note keeps its whole path, so the survey searches the whole vault") {
@@ -445,16 +500,25 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   // =========================== THE NAME THE KEY DOES NOT ACCOUNT FOR ====
 
-  test("a name that changed while its key segment did not is reported and NOT applied") {
-    // The author bolded the heading in the same edit that moved it. `HeadingSegment` strips
-    // markup, so the key segment is unchanged — which means the key does not explain why the
-    // card's face is different, and this design applies only what a move explains.
+  test("a name whose MARKUP changed over an agreeing key segment follows the move, and says what changed") {
+    // ⚠️ THIS TEST USED TO ASSERT `Unaccounted`, AND DECISION 4 OF 2026-09-12 OVERRULED IT. The
+    // author bolded the heading in the same edit that moved it. In Marc's words: "flashcard
+    // 2way... same front, same back... same card" — a card IS its front and its back, the words of
+    // both are unchanged, and markup is rendering rather than identity.
+    //
+    // THE DIVERGENCE STILL TRAVELS, which is the other half of the ruling: the run says the face
+    // changed, and the reassignment writes the vault's fields, so Anki ends up showing the new
+    // markup.
     val heldInAnki = observedWith(beforeMove, 1, Marker.BasicFields.Front -> "<b>Scale</b>")
     onlyFinding(Vector(heldInAnki), Vector(sourced(afterMove))) match
-      case MoveFinding.Unaccounted(_, _, candidate, _, unexplained) =>
-        assertEquals(candidate, movedKey)
-        assertEquals(unexplained.toVector.map(_.field), Vector(Marker.BasicFields.Front))
-      case other => fail(s"an unexplained name change must not reassign: ${other.describe}")
+      case c: MoveFinding.Corroborated =>
+        assertEquals(c.candidate, movedKey)
+        assertEquals(c.agreement, Agreement.NameAndSubstance)
+        assertEquals(
+          c.divergences.map(_.field).toSet,
+          Set(Marker.BasicFields.Front, Marker.ContextField),
+        )
+      case other => fail(s"markup is not identity, so this must follow: ${other.describe}")
   }
 
   test("a concept taken from the FILE NAME has no key segment to account for it, and is reported") {
@@ -468,6 +532,199 @@ class MoveEvidenceTest extends munit.FunSuite:
         assertEquals(unexplained.toVector.map(_.field), Vector("Concept"))
       case other =>
         fail(s"a concept with no segment behind it cannot be accounted for: ${other.describe}")
+  }
+
+  // ============================ THE SUBJECT GATE: RELABEL, RE-PARENT, OR A QUESTION ====
+
+  /** EVERY ROUTE THROUGH THE GATE THE RULINGS OF 2026-09-12 INSTALLED.
+    *
+    * The whole gate turns on one question — did the card's SUBJECT change, and if so, is the
+    * subject it left still in the vault — so each test below fixes that answer explicitly rather
+    * than letting a fixture imply it. The deck (`deck/WorldDeck.test.scala`) runs the same routes
+    * end to end over real markdown; these say what the rule IS, including the two routes no
+    * fixture exercises.
+    *
+    * THE FIXTURES ARE CONCEPT-DESCRIPTOR CARDS BECAUSE THAT IS THE ONLY SHAPE THE GATE CAN FIRE
+    * FOR, and not by a check on the note type: the gate asks whether the name window MINUS ITS
+    * LAST SEGMENT moved, and that window is one segment long for every note type but this one.
+    * Two of the tests below are the guards on exactly that.
+    */
+  val definitionUnderKafka: CardSpec =
+    threeField(key("n1", "top", "kafka", "definition"), "Kafka", "Definition", "A durable log.", "Top")
+
+  /** The same descriptor and the same body, under a differently-named concept. */
+  def definitionUnder(concept: String, noteIdText: String, place: String): CardSpec =
+    threeField(
+      key(noteIdText, place, concept, "definition"),
+      concept,
+      "Definition",
+      "A durable log.",
+      place.capitalize,
+    )
+
+  /** What a note's heading tree looks like once the descriptor sits under `concept`. */
+  def treeWith(place: String, concept: String): Vector[Vector[String]] =
+    Vector(Vector(place), Vector(place, concept), Vector(place, concept, "definition"))
+
+  test("the DESCRIPTOR changing under an unchanged concept is corroborated, census or no census") {
+    // THE GUARD THAT KEEPS THE GATE NARROW. The concept is the subject; the descriptor is the
+    // facet's label. `# Kafka` is plainly still there, and that must not block anything — Decision
+    // 3 of 2026-09-12 rules this a rewording and follows it.
+    val now = threeField(key("n1", "top", "kafka", "contrast"), "Kafka", "Contrast", "A durable log.", "Top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> treeWith("top", "kafka")),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.agreement, Agreement.PlaceAndSubstance)
+      case other => fail(s"a descriptor rewording under an unchanged concept must follow: $other")
+  }
+
+  test("a descriptor RE-PARENTED under a concept that goes on existing is a different card") {
+    // Standing ruling R2, deck scenario S24: the parent concept is constitutive, so this is a new
+    // card under NATS and a deleted one under Kafka. `# Kafka` survives — holding its other
+    // descriptor, or merely prose — and that is the fact the census supplies.
+    val now = definitionUnder("NATS", "n1", "top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
+    ) match
+      case Vector(MoveFinding.Reparented(stranded, _, candidate, _, survivingParent, divergences)) =>
+        assertEquals(stranded, definitionUnderKafka.key)
+        assertEquals(candidate, now.key)
+        assertEquals(survivingParent, Vector("top", "kafka"))
+        assertEquals(divergences.map(_.field), Vector("Concept"))
+      case other => fail(s"a re-parent under a surviving concept must never follow: $other")
+  }
+
+  test("a concept RELABELLED in place, its old path surviving nowhere, is corroborated") {
+    // Decision 2 of 2026-09-12: "Least Element" becomes "Bottom". Every descriptor and description
+    // is unchanged and the cluster stayed where it was, so these are the same cards.
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.agreement, Agreement.PlaceAndSubstance)
+        assertEquals(c.divergences.map(_.field), Vector("Concept"))
+      case other => fail(s"a relabel in place must follow: $other")
+  }
+
+  test("a concept relabelled AND the cluster moved is reported, not applied") {
+    // "The path weighs both ways" — Decision 2. The old concept is gone, so this is not a
+    // re-parent; but two things moved at once, which the ruling grades weaker than a rename.
+    val now = definitionUnder("RabbitMQ", "n1", "elsewhere")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> treeWith("elsewhere", "rabbitmq")),
+    ) match
+      case Vector(r: MoveFinding.RelabelUnvouched) => assertEquals(r.cause, RelabelDoubt.ClusterMoved)
+      case other => fail(s"a relabel that also moved must be a question: $other")
+  }
+
+  test("a concept relabelled into ANOTHER NOTE is a question too") {
+    // ⚠️ AN INTERPRETATION AWAITING MARC'S CONFIRMATION, flagged rather than buried. Decision 2
+    // follows a relabel when "the cluster stayed in place (the path agreed)", and a card that
+    // crossed into a different note is read here as a cluster that did not stay — a card key is a
+    // note id AND a path, so the note id is part of where the cluster sits. No deck scenario
+    // exercises this combination, which is why it is pinned here and nowhere else.
+    val now = definitionUnder("RabbitMQ", "n2", "top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n2") -> treeWith("top", "rabbitmq")),
+    ) match
+      case Vector(r: MoveFinding.RelabelUnvouched) => assertEquals(r.cause, RelabelDoubt.ClusterMoved)
+      case other => fail(s"a relabel across notes must be a question: $other")
+  }
+
+  test("a census that could not be taken is never spent as 'the old subject is gone'") {
+    // THE HONESTY HALF, and the one route whose absence would be invisible: with the census
+    // silenced, this fixture is byte-for-byte the corroborated relabel above. A run that could not
+    // look must not be mistaken for a run that looked and found nothing — the argument
+    // `MoveFinding.Incomparable` makes one level down.
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyBlind(Vector(observed(definitionUnderKafka, 1)), Vector(sourced(now))) match
+      case Vector(MoveFinding.RelabelUnvouched(_, _, _, _, RelabelDoubt.CensusUnavailable(reason), _)) =>
+        assert(reason.nonEmpty, "the report must be able to say WHY it declined")
+      case other => fail(s"an unsurveyable census must not license a follow: $other")
+  }
+
+  test("the old subject is looked for in the stranded card's OWN note, not across the whole vault") {
+    // ⚠️ A SECOND INTERPRETATION AWAITING CONFIRMATION. The sheet says the old concept must
+    // "survive nowhere"; read as vault-wide matching on canonical TEXT, an innocent rename in one
+    // note would be blocked whenever any other note happened to hold a heading of the same name —
+    // and `# Notes` exists everywhere. A node is addressed as a path within a note, so "nowhere"
+    // is read as "at no path in this note". Deck scenario S24 is same-note, so no fixture can
+    // distinguish the two readings.
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(
+        noteIdOf("n1") -> treeWith("top", "rabbitmq"),
+        noteIdOf("n9") -> Vector(Vector("top"), Vector("top", "kafka")),
+      ),
+    ) match
+      case Vector(_: MoveFinding.Corroborated) => ()
+      case other =>
+        fail(s"an unrelated note's heading of the same name must not block a rename: $other")
+  }
+
+  test("a plain heading's own rewording is not a subject change, however deep its path") {
+    // THE SECOND GUARD ON THE GATE'S REACH. A two-field card shows ONE name field, so its window
+    // is one segment and the window-minus-its-last is empty on both sides. Deck S01 and S09 depend
+    // on this: a reworded plain heading follows, and so does one reworded and re-parented at once.
+    val was = twoField(key("n1", "notes", "coupling"), "Coupling", "Two things move together.", "Notes")
+    val now =
+      twoField(key("n1", "notes", "temporal coupling"), "Temporal coupling", "Two things move together.", "Notes")
+    surveyOver(
+      Vector(observed(was, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> Vector(Vector("notes"), Vector("notes", "temporal coupling"))),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.agreement, Agreement.PlaceAndSubstance)
+      case other => fail(s"a plain heading has no subject segment to move: $other")
+  }
+
+  test("a relation card's predicate rename is not a subject change either") {
+    // A relation card IS a concept-descriptor card — subject is the concept, predicate is the
+    // descriptor — but its path is a single frontmatter property, so its two declared name fields
+    // read a window one segment long. Deck S65 follows this, and the gate must not fire on it.
+    val was = threeField(propertyKey("n1", "special-case-of"), "Function Space", "Special-Case-Of", "An exponential object.", "")
+    val now = threeField(propertyKey("n1", "instance-of"), "Function Space", "Instance-Of", "An exponential object.", "")
+    surveyOver(Vector(observed(was, 1)), Vector(sourced(now)), Map.empty) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.agreement, Agreement.PlaceAndSubstance)
+      case other => fail(s"a property has no subject segment above its name: $other")
+  }
+
+  test("an unactionable subject-gate finding still occupies mutual uniqueness") {
+    // The gate runs AFTER the uniqueness rule, and it must stay there. If a re-parent were decided
+    // first and then excused from the claimant bookkeeping, the surviving claimant would be
+    // corroborated alone — a pairing asserted uniquely because its rival had been filed elsewhere.
+    val alsoClaiming =
+      threeField(key("n1", "top", "zookeeper", "definition"), "ZooKeeper", "Definition", "A durable log.", "Top")
+    val now = definitionUnder("NATS", "n1", "top")
+    val findings = surveyOver(
+      Vector(observed(definitionUnderKafka, 1), observed(alsoClaiming, 2)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
+    )
+    assertEquals(findings.size, 2)
+    assert(
+      findings.forall {
+        case _: MoveFinding.Contested => true
+        case _                        => false
+      },
+      s"two notes claiming one card establish nothing, gate or no gate: ${findings.map(_.describe)}",
+    )
   }
 
   test("every stranded note produces exactly one finding, whatever the evidence came to") {

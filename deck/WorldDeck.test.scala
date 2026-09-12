@@ -9,14 +9,22 @@ import obsidiananki.plan.{Agreement, MoveFinding, RelabelDoubt}
   *
   * A **[SETTLED]** scenario asserts the finding, its grade, AND the baseline policy's action —
   * that is the behaviour some ruling or the card model already fixes. Where a ruling says the
-  * CURRENT mechanism is wrong (S17 / R5, S24 / R2, S33 / R3), the test asserts the defective
-  * current output and carries the ruling in its NAME, so a red test after the gate is fixed
-  * points straight at the expectation that must flip.
+  * CURRENT mechanism is wrong, the test asserts the defective current output and carries the
+  * ruling in its NAME, so a red test after the fix points straight at the expectation that must
+  * flip. **Only S17 (the whole-plan refusal over a duplicate key, R5) is left in that state**;
+  * S24's and S33's were discharged by the gate of 2026-09-12 and their names no longer claim the
+  * mechanism is wrong.
   *
   * An **[OPEN]** scenario asserts only the mechanism's output — the finding and its grade —
   * never a policy verdict. What is done with such a finding is exactly the question the worlds
   * exist to vary, and a policy assertion here would close it in the wrong file. A world's own
   * tests, at the [[MovePolicy]] seam, are where those verdicts belong.
+  *
+  * **[SETTLED-RULING D1…D5]** marks a scenario the rulings of 2026-09-12
+  * (`docs/design/IDENTITY-DECISION-SHEET.md`) closed: it names the decision, and it asserts the
+  * policy verdict, because that verdict is no longer a world's to vary. Fifteen scenarios
+  * graduated from [OPEN] on that date; the decision sheet is the authority, and the test name is
+  * the pointer back to it.
   *
   * ==Why one shared run per scenario==
   *
@@ -77,10 +85,14 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(shapes(lastStep("S01")), Vector(s"corroborated/${Agreement.PlaceAndSubstance}"))
     assertEquals(decisionLabels(lastStep("S01")), Vector("apply-reassign"))
 
-  test("S02 [OPEN] subject swap is byte-indistinguishable from S01's rewording"):
+  test("S02 [SETTLED-RULING D1] subject swap on a plain heading: byte-indistinguishable from S01, and it follows"):
     assertEquals(shapes(lastStep("S02")), Vector(s"corroborated/${Agreement.PlaceAndSubstance}"))
     // THE deck's central exhibit: the mechanism cannot tell S01 from S02.
     assertEquals(shapes(lastStep("S02")), shapes(lastStep("S01")))
+    // RULED 2026-09-12, Decision 1: a plain card's own heading changing in place is a rewording
+    // and history follows — "this is not a cdd card... the odds are that it should follow
+    // silently". The mechanism's blindness here is priced rather than paid for.
+    assertEquals(decisionLabels(lastStep("S02")), Vector("apply-reassign"))
 
   test("S03 [SETTLED-MODEL] ancestor reworded: Corroborated·NameAndSubstance, reassigned"):
     assertEquals(shapes(lastStep("S03")), Vector(s"corroborated/${Agreement.NameAndSubstance}"))
@@ -106,15 +118,25 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(shapes(lastStep("S08")), Vector("unexplained"))
     assertEquals(decisionLabels(lastStep("S08")), Vector("park-and-report"))
 
-  test("S09 [OPEN] reword AND re-parent: Corroborated·SubstanceAlone"):
+  test("S09 [SETTLED-RULING D1] reword AND re-parent a plain heading: SubstanceAlone, and it follows"):
     assertEquals(shapes(lastStep("S09")), Vector(s"corroborated/${Agreement.SubstanceAlone}"))
+    // THE GRADE THE SUBJECT GATE DOES NOT TOUCH. A two-field card shows one name field, so its
+    // changed last segment is a rewording and not a subject change — the gate reads the name
+    // window MINUS its last segment, which is empty here. Decision 1 rules this follows.
+    assertEquals(decisionLabels(lastStep("S09")), Vector("apply-reassign"))
 
   test("S10 [SETTLED-MODEL] bolding a heading word re-renders the field at the same key: Update"):
     assertEquals(shapes(lastStep("S10")), Vector.empty)
     assertEquals(diffWords(lastStep("S10")), Vector("update"))
 
-  test("S11 [OPEN] markup change AND re-parent: Unaccounted — the segment agrees, the field does not"):
-    assertEquals(shapes(lastStep("S11")), Vector("unaccounted"))
+  test("S11 [SETTLED-RULING D4] markup change AND re-parent: markup is rendering, so it follows"):
+    // FLIPPED BY DECISION 4 OF 2026-09-12, which overruled the mechanism's deliberate refusal here
+    // — its docstring named "the author re-bolded the heading" as the blocking example. In Marc's
+    // words: "same front, same back... same card". The key segment already agreed, so the pairing
+    // is now corroborated, and the reassignment writes the vault's fields — which is how the Anki
+    // face comes to show the new markup.
+    assertEquals(shapes(lastStep("S11")), Vector(s"corroborated/${Agreement.NameAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S11")), Vector("apply-reassign"))
 
   test("S12 [SETTLED-RULING] deletion: Unexplained, flagged and suspended, never deleted"):
     assertEquals(shapes(lastStep("S12")), Vector("unexplained"))
@@ -127,13 +149,15 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(shapes(steps(1)), Vector.empty)
     assert(diffWords(steps(1)).contains("unflag"))
 
-  test("S14 [OPEN retroactive default] a PARKED orphan re-enters the survey and corroborates"):
+  test("S14 [SETTLED-RULING D5+D1] a PARKED orphan re-enters the survey, corroborates and is applied"):
     val steps = scenarioRun("S14").steps
     assertEquals(shapes(steps(0)), Vector("unexplained"))
-    // The built default is retroactive-INCLUSIVE (plan/Planner.scala, the
-    // `isFlaggedOrphan || canInferOrphans` filter); whether that default is ratified is the
-    // seam question, so only the mechanism's output is asserted here.
+    // RATIFIED 2026-09-12, Decision 5: the builder's elected retroactive-INCLUSIVE default
+    // (plan/Planner.scala, the `isFlaggedOrphan || canInferOrphans` filter) is now the ruled
+    // answer — a parked orphan participates in every later survey for as long as it lives, which
+    // is until `prune` removes it. Decision 1 then rules run 2's reworded recreation a follow.
     assertEquals(shapes(steps(1)), Vector(s"corroborated/${Agreement.PlaceAndSubstance}"))
+    assertEquals(decisionLabels(steps(1)), Vector("apply-reassign"))
     assert(diffWords(steps(1)).contains("parked"))
 
   test("S15 [SETTLED-MODEL] split keeping the heading: Update + Create, no finding"):
@@ -165,22 +189,47 @@ class WorldDeckTest extends munit.FunSuite:
 
   // ── kind 2: concept-descriptor heading cards ────────────────────────────────────
 
-  test("S20 [OPEN] descriptor slot reworded: Corroborated·PlaceAndSubstance"):
+  test("S20 [SETTLED-RULING D3] descriptor slot reworded: PlaceAndSubstance, and it follows"):
     assertEquals(shapes(lastStep("S20")), Vector(reassign))
+    assertEquals(decisionLabels(lastStep("S20")), Vector("apply-reassign"))
 
-  test("S21 [OPEN] descriptor slot REPLACED: byte-indistinguishable from S20"):
+  test("S21 [SETTLED-RULING D3] descriptor slot REPLACED: indistinguishable from S20, and it follows"):
     assertEquals(shapes(lastStep("S21")), shapes(lastStep("S20")))
+    // RULED 2026-09-12, Decision 3: the concept — the card's subject — is untouched, and what
+    // changed is the facet's label. "This is actually the same card, just reworded." The subject
+    // gate therefore does not fire, whether or not `# Kafka` is still standing: it reads the name
+    // window minus its last segment, and only the last segment moved.
+    assertEquals(decisionLabels(lastStep("S21")), Vector("apply-reassign"))
 
-  test("S22 [OPEN] concept reworded in place: BOTH cards Corroborated·PlaceAndSubstance (D5: always this grade)"):
+  test("S22 [SETTLED-RULING D2] concept reworded in place: both cards follow, the old path surviving nowhere"):
+    // The label on this test used to read "(D5: always this grade)", which was a slip — D5 is the
+    // retroactive ruling. The ruling that governs here is Decision 2.
     assertEquals(shapes(lastStep("S22")), Vector(reassign, reassign))
+    assertEquals(decisionLabels(lastStep("S22")), Vector("apply-reassign", "apply-reassign"))
 
-  test("S23 [OPEN discriminator] concept subject SWAPPED: byte-indistinguishable from S22"):
+  test("S23 [SETTLED-RULING D2] concept subject SWAPPED: indistinguishable from S22, and it follows too"):
+    // RULED 2026-09-12, Decision 2, revising R3: with every descriptor and description unchanged
+    // and the cluster in place, the edit is read as a relabel — "Least Element" becoming "Bottom".
+    // A genuine replacement would change the descriptions and fail the floor by itself, so a
+    // replacement that keeps them byte-identical is priced as not a real case.
+    //
+    // THE GATE IS CONSULTED HERE AND LETS IT THROUGH: the subject moved, and `# Kafka` is a path
+    // the census finds nowhere in the note. Contrast S24, where it is still standing.
     assertEquals(shapes(lastStep("S23")), shapes(lastStep("S22")))
+    assertEquals(decisionLabels(lastStep("S23")), Vector("apply-reassign", "apply-reassign"))
 
-  test("S24 [RULED R2: the concept is CONSTITUTIVE, so this is a DIFFERENT card — the CURRENT gate wrongly reassigns]"):
-    assertEquals(shapes(lastStep("S24")), Vector(reassign))
-    // The defective current behaviour, asserted so a fixed gate turns exactly this red:
-    assertEquals(decisionLabels(lastStep("S24")), Vector("apply-reassign"))
+  test("S24 [SETTLED-RULING R2] a descriptor re-parented under a surviving concept is a DIFFERENT card"):
+    // FLIPPED FROM apply TO park. The concept is constitutive — a concept-descriptor card asserts
+    // a three-way relation and its parent is one of the three terms — so a descriptor moved under
+    // `# NATS` while `# Kafka` goes on existing is a new card there and a deleted card here.
+    //
+    // WHAT MAKES THE DIFFERENCE VISIBLE TO THE SEAM: the node census finds `kafka` still in the
+    // note (it holds `## Cost`), which is exactly the fact S23's vault does not have. The evidence
+    // is typed apart rather than filtered, so `Reparented` has no reassignment to mint.
+    assertEquals(shapes(lastStep("S24")), Vector("reparented"))
+    assertEquals(decisionLabels(lastStep("S24")), Vector("park-and-report"))
+    assert(diffWords(lastStep("S24")).contains("flag"), diffWords(lastStep("S24")).toString)
+    assert(diffWords(lastStep("S24")).contains("create"), diffWords(lastStep("S24")).toString)
 
   test("S25 [SETTLED-MODEL+R2+R4] whole subtree moved cross-note: Corroborated·Total ×2, reassigned"):
     assertEquals(
@@ -213,24 +262,34 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(shapes(lastStep("S30")), Vector.empty)
     assert(diffWords(lastStep("S30")).contains("update"))
 
-  test("S31 [OPEN] column header renamed, values distinct: Corroborated·PlaceAndSubstance per row"):
+  test("S31 [SETTLED-RULING D3] column header renamed, values distinct: both rows follow"):
+    // A column header is the DESCRIPTOR position of every pair card in that column, so this is
+    // Decision 3 one card kind over. The row concept — the subject — is untouched.
     assertEquals(shapes(lastStep("S31")), Vector(reassign, reassign))
+    assertEquals(decisionLabels(lastStep("S31")), Vector("apply-reassign", "apply-reassign"))
 
   test("S32 [SETTLED mechanism D6] column header renamed, values identical: Ambiguous, report only"):
     assertEquals(shapes(lastStep("S32")), Vector("ambiguous", "ambiguous"))
     assertEquals(decisionLabels(lastStep("S32")), Vector("park-and-report", "park-and-report"))
 
-  test("S33 [RULED R3: the subject changed, history must NOT follow — the CURRENT gate wrongly reassigns the pair cards]"):
-    // The row card strands while both pair cards corroborate — the pair/row asymmetry
-    // inside ONE run, which is itself deck evidence (the spec's residue item 2).
+  test("S33 [SETTLED-RULING D2] a row's subject replaced: the pair cards follow, the row card strands"):
+    // THE NAME OF THIS TEST USED TO CLAIM THE GATE WAS WRONG HERE. Decision 2 of 2026-09-12
+    // revised R3 and made this the ruled outcome: a table row is the same cluster shape one card
+    // kind over — Marc confirmed no distinction — so with every value byte-identical and the row
+    // still under the same heading, the pair cards follow. The gate is consulted and lets them
+    // through because the node `cost / benefit / queue` is gone from the vault.
+    //
+    // The row card strands while both pair cards corroborate — the pair/row asymmetry inside ONE
+    // run, and the cost that is deliberately left visible rather than ruled away.
     assertEquals(shapes(lastStep("S33")).sorted, Vector(reassign, reassign, "unexplained").sorted)
     assertEquals(
       decisionLabels(lastStep("S33")).sorted,
       Vector("apply-reassign", "apply-reassign", "park-and-report").sorted,
     )
 
-  test("S34 [OPEN] row concept typo fix: byte-indistinguishable from S33's subject swap"):
+  test("S34 [SETTLED-RULING D2] row concept typo fix: indistinguishable from S33, and it follows too"):
     assertEquals(shapes(lastStep("S34")).sorted, shapes(lastStep("S33")).sorted)
+    assertEquals(decisionLabels(lastStep("S34")).sorted, decisionLabels(lastStep("S33")).sorted)
 
   test("S35 [SETTLED-MODEL] adding a column adds Creates and disturbs nothing"):
     assertEquals(shapes(lastStep("S35")), Vector.empty)
@@ -351,8 +410,11 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(shapes(lastStep("S56")), Vector(reassign))
     assertEquals(decisionLabels(lastStep("S56")), Vector("apply-reassign"))
 
-  test("S56b [OPEN] title subject swapped: byte-indistinguishable from S56"):
+  test("S56b [SETTLED-RULING D1] sequence title subject swapped: indistinguishable from S56, and it follows"):
     assertEquals(shapes(lastStep("S56b")), shapes(lastStep("S56")))
+    // A sequence card shows ONE name field, so its title is its own name and not its subject —
+    // the same shape as S02, one card kind over. Decision 1 rules it a follow.
+    assertEquals(decisionLabels(lastStep("S56b")), Vector("apply-reassign"))
 
   test("S57 [SETTLED-MODEL] sequence source switched in place: same key, Update"):
     assertEquals(shapes(lastStep("S57")), Vector.empty)
@@ -393,8 +455,13 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(shapes(lastStep("S64")), Vector("unaccounted"))
     assertEquals(decisionLabels(lastStep("S64")), Vector("park-and-report"))
 
-  test("S65 [OPEN] predicate renamed: Corroborated·PlaceAndSubstance — S20's tension on the Property path"):
+  test("S65 [SETTLED-RULING D3] predicate renamed: PlaceAndSubstance, and it follows"):
+    // A relation card IS a concept-descriptor card — subject is the concept, predicate is the
+    // descriptor (`extract/Edges.scala`) — so renaming the predicate is Decision 3 exactly. Its
+    // path is a single frontmatter property, which is also why the subject gate cannot fire on it:
+    // the name window is one segment long, so there is nothing above the name to have moved.
     assertEquals(shapes(lastStep("S65")), Vector(reassign))
+    assertEquals(decisionLabels(lastStep("S65")), Vector("apply-reassign"))
 
   test("S66 [SETTLED-MODEL] property re-capitalised: the KEY is canonical and holds; the field re-renders → Update"):
     // The reconciliation table said non-event; the Descriptor field carries the author's own
