@@ -1,0 +1,493 @@
+package obsidiananki.deck
+
+import obsidiananki.TestSources
+import obsidiananki.plan.{Agreement, MoveFinding}
+
+/** THE DECK'S OWN TESTS — every scenario's finding pinned, and the seam's contract enforced.
+  *
+  * ==What is asserted, and what deliberately is not==
+  *
+  * A **[SETTLED]** scenario asserts the finding, its grade, AND the baseline policy's action —
+  * that is the behaviour some ruling or the card model already fixes. Where a ruling says the
+  * CURRENT mechanism is wrong (S17 / R5, S24 / R2, S33 / R3), the test asserts the defective
+  * current output and carries the ruling in its NAME, so a red test after the gate is fixed
+  * points straight at the expectation that must flip.
+  *
+  * An **[OPEN]** scenario asserts only the mechanism's output — the finding and its grade —
+  * never a policy verdict. What is done with such a finding is exactly the question the worlds
+  * exist to vary, and a policy assertion here would close it in the wrong file. A world's own
+  * tests, at the [[MovePolicy]] seam, are where those verdicts belong.
+  *
+  * ==Why one shared run per scenario==
+  *
+  * Every test reads from one lazily-computed run of the whole deck under [[BaselinePolicy]].
+  * The deck is deterministic by construction (see [[WorldDeck]]'s docstring), and the
+  * determinism test below is what pins that claim rather than assuming it.
+  */
+class WorldDeckTest extends munit.FunSuite:
+
+  private lazy val fixtures =
+    TestSources.repoRoot(getClass).resolve("deck").resolve("fixtures")
+
+  private lazy val runs: Map[String, WorldDeck.ScenarioRun] =
+    WorldDeck.scenarios
+      .map(sc => sc.id -> WorldDeck.runScenario(fixtures, sc, BaselinePolicy))
+      .toMap
+
+  // ------------------------------------------------------------------ helpers ----
+
+  private def scenarioRun(id: String): WorldDeck.ScenarioRun =
+    runs.getOrElse(id, fail(s"no scenario '$id' in the deck"))
+
+  private def lastStep(id: String): WorldDeck.StepResult = scenarioRun(id).steps.last
+
+  /** One finding as a comparable label: the case, and for a corroboration its grade. */
+  private def shape(f: MoveFinding): String = f match
+    case c: MoveFinding.Corroborated => s"corroborated/${c.agreement}"
+    case _: MoveFinding.Ambiguous    => "ambiguous"
+    case _: MoveFinding.Contested    => "contested"
+    case _: MoveFinding.Unaccounted  => "unaccounted"
+    case _: MoveFinding.Unexplained  => "unexplained"
+    case _: MoveFinding.Incomparable => "incomparable"
+
+  private def shapes(step: WorldDeck.StepResult): Vector[String] = step.findings.map(shape)
+
+  private def decisionLabels(step: WorldDeck.StepResult): Vector[String] =
+    step.decisions.map(_._2.label)
+
+  private val reassign = s"corroborated/${Agreement.PlaceAndSubstance}"
+
+  /** The evidence-free classifications of a step, as their leading words ("create", "flag"…). */
+  private def diffWords(step: WorldDeck.StepResult): Vector[String] =
+    step.diff.map(_.render.trim.takeWhile(!_.isWhitespace))
+
+  // ── kind 1: plain heading cards ─────────────────────────────────────────────────
+
+  test("S01 [SETTLED R1+R4] reword in place: Corroborated·PlaceAndSubstance, reassigned"):
+    assertEquals(shapes(lastStep("S01")), Vector(s"corroborated/${Agreement.PlaceAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S01")), Vector("apply-reassign"))
+
+  test("S02 [OPEN] subject swap is byte-indistinguishable from S01's rewording"):
+    assertEquals(shapes(lastStep("S02")), Vector(s"corroborated/${Agreement.PlaceAndSubstance}"))
+    // THE deck's central exhibit: the mechanism cannot tell S01 from S02.
+    assertEquals(shapes(lastStep("S02")), shapes(lastStep("S01")))
+
+  test("S03 [SETTLED-MODEL] ancestor reworded: Corroborated·NameAndSubstance, reassigned"):
+    assertEquals(shapes(lastStep("S03")), Vector(s"corroborated/${Agreement.NameAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S03")), Vector("apply-reassign"))
+
+  test("S04 [SETTLED-RULING] re-parent in the same note: Corroborated·NameAndSubstance, reassigned"):
+    assertEquals(shapes(lastStep("S04")), Vector(s"corroborated/${Agreement.NameAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S04")), Vector("apply-reassign"))
+
+  test("S05 [SETTLED-RULING] verbatim move to another note: Corroborated·Total, reassigned"):
+    assertEquals(shapes(lastStep("S05")), Vector(s"corroborated/${Agreement.Total}"))
+    assertEquals(decisionLabels(lastStep("S05")), Vector("apply-reassign"))
+
+  test("S06 [SETTLED-MODEL] heading level change is a non-event"):
+    assertEquals(shapes(lastStep("S06")), Vector.empty)
+    assertEquals(diffWords(lastStep("S06")), Vector("non-event"))
+
+  test("S07 [SETTLED-MODEL] body edit in place is an Update, no finding"):
+    assertEquals(shapes(lastStep("S07")), Vector.empty)
+    assertEquals(diffWords(lastStep("S07")), Vector("update"))
+
+  test("S08 [SETTLED action / OPEN report richness] move+edit in one commit: Unexplained, parked"):
+    assertEquals(shapes(lastStep("S08")), Vector("unexplained"))
+    assertEquals(decisionLabels(lastStep("S08")), Vector("park-and-report"))
+
+  test("S09 [OPEN] reword AND re-parent: Corroborated·SubstanceAlone"):
+    assertEquals(shapes(lastStep("S09")), Vector(s"corroborated/${Agreement.SubstanceAlone}"))
+
+  test("S10 [SETTLED-MODEL] bolding a heading word re-renders the field at the same key: Update"):
+    assertEquals(shapes(lastStep("S10")), Vector.empty)
+    assertEquals(diffWords(lastStep("S10")), Vector("update"))
+
+  test("S11 [OPEN] markup change AND re-parent: Unaccounted — the segment agrees, the field does not"):
+    assertEquals(shapes(lastStep("S11")), Vector("unaccounted"))
+
+  test("S12 [SETTLED-RULING] deletion: Unexplained, flagged and suspended, never deleted"):
+    assertEquals(shapes(lastStep("S12")), Vector("unexplained"))
+    assertEquals(decisionLabels(lastStep("S12")), Vector("park-and-report"))
+    assert(diffWords(lastStep("S12")).contains("flag"))
+
+  test("S13 [SETTLED-MODEL] delete then restore verbatim: run 2 unflags, history intact"):
+    val steps = scenarioRun("S13").steps
+    assertEquals(shapes(steps(0)), Vector("unexplained"))
+    assertEquals(shapes(steps(1)), Vector.empty)
+    assert(diffWords(steps(1)).contains("unflag"))
+
+  test("S14 [OPEN retroactive default] a PARKED orphan re-enters the survey and corroborates"):
+    val steps = scenarioRun("S14").steps
+    assertEquals(shapes(steps(0)), Vector("unexplained"))
+    // The built default is retroactive-INCLUSIVE (plan/Planner.scala, the
+    // `isFlaggedOrphan || canInferOrphans` filter); whether that default is ratified is the
+    // seam question, so only the mechanism's output is asserted here.
+    assertEquals(shapes(steps(1)), Vector(s"corroborated/${Agreement.PlaceAndSubstance}"))
+    assert(diffWords(steps(1)).contains("parked"))
+
+  test("S15 [SETTLED-MODEL] split keeping the heading: Update + Create, no finding"):
+    assertEquals(shapes(lastStep("S15")), Vector.empty)
+    assertEquals(diffWords(lastStep("S15")).sorted, Vector("create", "update"))
+
+  test("S15b [OPEN history ownership] split with both halves reworded: one Unexplained, two Creates"):
+    assertEquals(shapes(lastStep("S15b")), Vector("unexplained"))
+    assertEquals(diffWords(lastStep("S15b")).count(_ == "create"), 2)
+
+  test("S16 [OPEN] merge of two differing sections: Unexplained twice"):
+    assertEquals(shapes(lastStep("S16")), Vector("unexplained", "unexplained"))
+
+  test("S16b [SETTLED mechanism / OPEN outcome] merge of byte-identical sections: Contested twice"):
+    assertEquals(shapes(lastStep("S16b")), Vector("contested", "contested"))
+
+  test("S17 [RULED R5: refuse only the cards involved — the CURRENT mechanism wrongly refuses the WHOLE plan]"):
+    val step = lastStep("S17")
+    assert(step.refused)
+    assertEquals(step.findings, Vector.empty)
+    assert(step.diff.exists(_.render.contains("PLAN REFUSED")))
+
+  test("S18 [SETTLED-MODEL] retag 2way→1way in place: Retype, deferred, no finding"):
+    assertEquals(shapes(lastStep("S18")), Vector.empty)
+    assertEquals(diffWords(lastStep("S18")), Vector("retype"))
+
+  test("S19 [SETTLED-MODEL] retag AND re-parent: note types differ, comparison refused → Unexplained"):
+    assertEquals(shapes(lastStep("S19")), Vector("unexplained"))
+
+  // ── kind 2: concept-descriptor heading cards ────────────────────────────────────
+
+  test("S20 [OPEN] descriptor slot reworded: Corroborated·PlaceAndSubstance"):
+    assertEquals(shapes(lastStep("S20")), Vector(reassign))
+
+  test("S21 [OPEN] descriptor slot REPLACED: byte-indistinguishable from S20"):
+    assertEquals(shapes(lastStep("S21")), shapes(lastStep("S20")))
+
+  test("S22 [OPEN] concept reworded in place: BOTH cards Corroborated·PlaceAndSubstance (D5: always this grade)"):
+    assertEquals(shapes(lastStep("S22")), Vector(reassign, reassign))
+
+  test("S23 [OPEN discriminator] concept subject SWAPPED: byte-indistinguishable from S22"):
+    assertEquals(shapes(lastStep("S23")), shapes(lastStep("S22")))
+
+  test("S24 [RULED R2: the concept is CONSTITUTIVE, so this is a DIFFERENT card — the CURRENT gate wrongly reassigns]"):
+    assertEquals(shapes(lastStep("S24")), Vector(reassign))
+    // The defective current behaviour, asserted so a fixed gate turns exactly this red:
+    assertEquals(decisionLabels(lastStep("S24")), Vector("apply-reassign"))
+
+  test("S25 [SETTLED-MODEL+R2+R4] whole subtree moved cross-note: Corroborated·Total ×2, reassigned"):
+    assertEquals(
+      shapes(lastStep("S25")),
+      Vector(s"corroborated/${Agreement.Total}", s"corroborated/${Agreement.Total}"),
+    )
+    assertEquals(decisionLabels(lastStep("S25")), Vector("apply-reassign", "apply-reassign"))
+
+  test("S26 [SETTLED mechanics / OPEN visibility] file rename of an ancestorless cdd: silent subject drift, NO finding"):
+    assertEquals(shapes(lastStep("S26")), Vector.empty)
+    assertEquals(diffWords(lastStep("S26")), Vector("update"))
+
+  test("S27 [SETTLED-RULING] file rename AND id change: Unaccounted — the Concept has no key projection"):
+    assertEquals(shapes(lastStep("S27")), Vector("unaccounted"))
+    assertEquals(decisionLabels(lastStep("S27")), Vector("park-and-report"))
+
+  test("S28 [SETTLED-MODEL] retag cdd/2way→cdd/3way in place: Update, no finding"):
+    assertEquals(shapes(lastStep("S28")), Vector.empty)
+
+  test("S28b [SETTLED-MODEL] cdd retag AND re-parent: the ThreeWay Setting flips, floor fails → Unexplained"):
+    assertEquals(shapes(lastStep("S28b")), Vector("unexplained"))
+
+  // ── kind 3: table pair cards ────────────────────────────────────────────────────
+
+  test("S29 [SETTLED-MODEL] row and column swaps are non-events"):
+    assertEquals(shapes(lastStep("S29")), Vector.empty)
+    assertEquals(diffWords(lastStep("S29")).distinct, Vector("non-event"))
+
+  test("S30 [SETTLED-MODEL] cell value edit: Update in place"):
+    assertEquals(shapes(lastStep("S30")), Vector.empty)
+    assert(diffWords(lastStep("S30")).contains("update"))
+
+  test("S31 [OPEN] column header renamed, values distinct: Corroborated·PlaceAndSubstance per row"):
+    assertEquals(shapes(lastStep("S31")), Vector(reassign, reassign))
+
+  test("S32 [SETTLED mechanism D6] column header renamed, values identical: Ambiguous, report only"):
+    assertEquals(shapes(lastStep("S32")), Vector("ambiguous", "ambiguous"))
+    assertEquals(decisionLabels(lastStep("S32")), Vector("park-and-report", "park-and-report"))
+
+  test("S33 [RULED R3: the subject changed, history must NOT follow — the CURRENT gate wrongly reassigns the pair cards]"):
+    // The row card strands while both pair cards corroborate — the pair/row asymmetry
+    // inside ONE run, which is itself deck evidence (the spec's residue item 2).
+    assertEquals(shapes(lastStep("S33")).sorted, Vector(reassign, reassign, "unexplained").sorted)
+    assertEquals(
+      decisionLabels(lastStep("S33")).sorted,
+      Vector("apply-reassign", "apply-reassign", "park-and-report").sorted,
+    )
+
+  test("S34 [OPEN] row concept typo fix: byte-indistinguishable from S33's subject swap"):
+    assertEquals(shapes(lastStep("S34")).sorted, shapes(lastStep("S33")).sorted)
+
+  test("S35 [SETTLED-MODEL] adding a column adds Creates and disturbs nothing"):
+    assertEquals(shapes(lastStep("S35")), Vector.empty)
+    assert(diffWords(lastStep("S35")).contains("create"))
+
+  test("S36 [SETTLED-RULING] deleting a column: Unexplained per vanished key, flagged"):
+    assertEquals(shapes(lastStep("S36")), Vector.fill(4)("unexplained"))
+
+  test("S36b [SETTLED-RULING] blanking one value cell retires that pair card and the row card"):
+    assertEquals(shapes(lastStep("S36b")), Vector.fill(2)("unexplained"))
+
+  test("S37 [SETTLED-MODEL+R4] table heading reworded: NameAndSubstance ×6, reassigned"):
+    assertEquals(shapes(lastStep("S37")), Vector.fill(6)(s"corroborated/${Agreement.NameAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S37")), Vector.fill(6)("apply-reassign"))
+
+  test("S37b [SETTLED-MODEL+R4] table section moved cross-note: Total ×6, reassigned"):
+    assertEquals(shapes(lastStep("S37b")), Vector.fill(6)(s"corroborated/${Agreement.Total}"))
+
+  test("S38 [SETTLED-MODEL] first header cell renamed: ConceptLabel is a Setting, shown never keyed → Update ×6"):
+    assertEquals(shapes(lastStep("S38")), Vector.empty)
+    assertEquals(diffWords(lastStep("S38")), Vector.fill(6)("update"))
+
+  test("S38b [SETTLED-MODEL] first header renamed AND moved: the ConceptLabel Setting floor fails → Unexplained ×6"):
+    assertEquals(shapes(lastStep("S38b")), Vector.fill(6)("unexplained"))
+
+  test("S39 [SETTLED-MODEL] withdrawing cell cards (table/rows): deletion semantics for the withdrawn"):
+    assertEquals(shapes(lastStep("S39")), Vector.fill(4)("unexplained"))
+
+  test("S39b [SETTLED-MODEL] direction change alone (table/1way): Setting flip → Update"):
+    assertEquals(shapes(lastStep("S39b")), Vector.empty)
+    assert(diffWords(lastStep("S39b")).contains("update"))
+
+  test("S40 [SETTLED-MODEL — the shelter CLOSED the spec's D10 blast radius] an embed in one cell shelters the whole table"):
+    // The reconciliation predicted Unexplained ×N and a mass Flag, reading the stale comment
+    // at extract/Extractor.scala's buildSpecs. On move-build, VaultAccounting.underAFailedSection
+    // shelters every card keyed BENEATH the failed section key, so nothing is stranded and the
+    // survey has nothing to say. The cost that remains: the whole table's cards go silent while
+    // the section is broken.
+    val step = lastStep("S40")
+    assertEquals(shapes(step), Vector.empty)
+    assertEquals(diffWords(step).count(_ == "sheltered"), 6)
+    assertEquals(diffWords(step).count(_ == "flag"), 0)
+
+  // ── kind 4: table row cards ─────────────────────────────────────────────────────
+
+  test("S41 [SETTLED R3-by-accident] the row card strands on S33's edit because its Substance renders the concept"):
+    val rowFinding = lastStep("S41").findings.collectFirst {
+      case u: MoveFinding.Unexplained => u.stranded.path.render
+    }
+    assertEquals(rowFinding, Some("cost / benefit / queue"))
+
+  test("S42 [OPEN] the row card also strands on S34's typo fix — history lost on a wording fix"):
+    assert(shapes(lastStep("S42")).contains("unexplained"))
+
+  test("S43 [SETTLED-MODEL] a value edit updates the pair card and the row card in place"):
+    assertEquals(shapes(lastStep("S43")), Vector.empty)
+    assertEquals(diffWords(lastStep("S43")).count(_ == "update"), 2)
+
+  // ── kind 5: cloze section cards ─────────────────────────────────────────────────
+
+  test("S44 [SETTLED-MODEL+R1+R4] cloze heading reworded: NameAndSubstance (the heading is pure filing), reassigned"):
+    assertEquals(shapes(lastStep("S44")), Vector(s"corroborated/${Agreement.NameAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S44")), Vector("apply-reassign"))
+
+  test("S44b [SETTLED-MODEL] cloze section moved cross-note, path verbatim: Total, reassigned"):
+    assertEquals(shapes(lastStep("S44b")), Vector(s"corroborated/${Agreement.Total}"))
+
+  test("S45 [SETTLED-MODEL] prose edit around deletions: Update"):
+    assertEquals(shapes(lastStep("S45")), Vector.empty)
+    assert(diffWords(lastStep("S45")).contains("update"))
+
+  test("S46 [SETTLED action / OPEN report richness] cloze move AND prose edit: Unexplained"):
+    assertEquals(shapes(lastStep("S46")), Vector("unexplained"))
+
+  test("S47 [SETTLED-MODEL — documented hazard] a new unlabelled highlight renumbers ordinals invisibly: Update"):
+    assertEquals(shapes(lastStep("S47")), Vector.empty)
+    assert(diffWords(lastStep("S47")).contains("update"))
+
+  test("S48 [SETTLED-MODEL, R5-consistent] duplicate unlabelled highlight refuses THAT card alone, sheltered"):
+    val step = lastStep("S48")
+    assertEquals(shapes(step), Vector.empty)
+    assert(diffWords(step).contains("refused"))
+    assert(diffWords(step).contains("sheltered"))
+    // The block card beside it is untouched:
+    assert(diffWords(step).contains("non-event"))
+
+  test("S49 [SETTLED mechanism / OPEN transition] marker off, block anchor on: kinds never pair → Unexplained + Create"):
+    assertEquals(shapes(lastStep("S49")), Vector("unexplained"))
+    assert(diffWords(lastStep("S49")).contains("create"))
+
+  // ── kind 6: cloze block cards ───────────────────────────────────────────────────
+
+  test("S50 [SETTLED-MODEL] block moved under a different heading, same note: the anchor holds, Update only"):
+    assertEquals(shapes(lastStep("S50")), Vector.empty)
+
+  test("S51 [SETTLED-RULING R4] block moved cross-note with its anchor: Total, reassigned"):
+    assertEquals(shapes(lastStep("S51")), Vector(s"corroborated/${Agreement.Total}"))
+    assertEquals(decisionLabels(lastStep("S51")), Vector("apply-reassign"))
+
+  test("S52 [SETTLED-MODEL] block anchor renamed: the id is transport, not content — reassigned"):
+    assertEquals(shapes(lastStep("S52")), Vector(s"corroborated/${Agreement.NameAndSubstance}"))
+    assertEquals(decisionLabels(lastStep("S52")), Vector("apply-reassign"))
+
+  test("S53 [SETTLED-MODEL] anchor deleted, deletions kept: the refusal carries no key → Unexplained"):
+    assertEquals(shapes(lastStep("S53")), Vector("unexplained"))
+    assert(diffWords(lastStep("S53")).contains("refused"))
+
+  test("S54 [OPEN transition] block absorbed into the cloze section: cross-kind → Unexplained"):
+    assertEquals(shapes(lastStep("S54")), Vector("unexplained"))
+
+  // ── kind 7: sequence cards ──────────────────────────────────────────────────────
+
+  test("S55 [SETTLED-MODEL] items reordered: Update — one note, one schedule"):
+    assertEquals(shapes(lastStep("S55")), Vector.empty)
+    assertEquals(diffWords(lastStep("S55")), Vector("update"))
+
+  test("S56 [SETTLED-RULING R1] title reworded in place: PlaceAndSubstance, reassigned"):
+    assertEquals(shapes(lastStep("S56")), Vector(reassign))
+    assertEquals(decisionLabels(lastStep("S56")), Vector("apply-reassign"))
+
+  test("S56b [OPEN] title subject swapped: byte-indistinguishable from S56"):
+    assertEquals(shapes(lastStep("S56b")), shapes(lastStep("S56")))
+
+  test("S57 [SETTLED-MODEL] sequence source switched in place: same key, Update"):
+    assertEquals(shapes(lastStep("S57")), Vector.empty)
+    assertEquals(diffWords(lastStep("S57")), Vector("update"))
+
+  test("S57b [SETTLED-MODEL] reveal order changed AND moved: the Reveal Setting floor fails → Unexplained"):
+    assertEquals(shapes(lastStep("S57b")), Vector("unexplained"))
+
+  // ── kind 8: whole-note cards ────────────────────────────────────────────────────
+
+  test("S58 [SETTLED mechanics / OPEN visibility] file rename: the Front rewrites silently, NO finding"):
+    assertEquals(shapes(lastStep("S58")), Vector.empty)
+    assertEquals(diffWords(lastStep("S58")), Vector("update"))
+
+  test("S59 [SETTLED-MODEL+R4] id change alone: Total (empty segment vectors agree), reassigned"):
+    assertEquals(shapes(lastStep("S59")), Vector(s"corroborated/${Agreement.Total}"))
+    assertEquals(decisionLabels(lastStep("S59")), Vector("apply-reassign"))
+
+  test("S60 [SETTLED-RULING] id change AND file rename: Unaccounted — the Front diverges over an empty segment vector"):
+    assertEquals(shapes(lastStep("S60")), Vector("unaccounted"))
+    assertEquals(decisionLabels(lastStep("S60")), Vector("park-and-report"))
+
+  test("S61 [SETTLED for the flag / OPEN transition] a first heading arrives: Note vs Headings never pair"):
+    assertEquals(shapes(lastStep("S61")), Vector("unexplained"))
+    assert(diffWords(lastStep("S61")).contains("create"))
+
+  test("S62 [SETTLED-RULING] id deleted: the note is ineligible, its card strands"):
+    assertEquals(shapes(lastStep("S62")), Vector("unexplained"))
+    assert(diffWords(lastStep("S62")).contains("refused"))
+
+  // ── kind 9: relation cards ──────────────────────────────────────────────────────
+
+  test("S63 [SETTLED-MODEL] relation file rename: the Concept rewrites silently, NO finding"):
+    assertEquals(shapes(lastStep("S63")), Vector.empty)
+    assertEquals(diffWords(lastStep("S63")), Vector("update"))
+
+  test("S64 [SETTLED-RULING] relation moved cross-note: Unaccounted — a genuine move and a coincidence are indistinguishable"):
+    assertEquals(shapes(lastStep("S64")), Vector("unaccounted"))
+    assertEquals(decisionLabels(lastStep("S64")), Vector("park-and-report"))
+
+  test("S65 [OPEN] predicate renamed: Corroborated·PlaceAndSubstance — S20's tension on the Property path"):
+    assertEquals(shapes(lastStep("S65")), Vector(reassign))
+
+  test("S66 [SETTLED-MODEL] property re-capitalised: the KEY is canonical and holds; the field re-renders → Update"):
+    // The reconciliation table said non-event; the Descriptor field carries the author's own
+    // casing, so the content hash moves while the key does not — the same shape as S10.
+    assertEquals(shapes(lastStep("S66")), Vector.empty)
+    assertEquals(diffWords(lastStep("S66")), Vector("update"))
+
+  test("S67 [SETTLED-MODEL] a second value: values are fields, not key → Update"):
+    assertEquals(shapes(lastStep("S67")), Vector.empty)
+    assertEquals(diffWords(lastStep("S67")), Vector("update"))
+
+  test("S68 [SETTLED-RULING] rule removed from Properties-to-Flashcards: the card strands"):
+    assertEquals(shapes(lastStep("S68")), Vector("unexplained"))
+
+  test("S69 [SETTLED-MODEL, R5-consistent] reverse collision refuses the involved cards only, by name"):
+    val step = lastStep("S69")
+    assertEquals(shapes(step), Vector.empty)
+    assertEquals(diffWords(step).count(_ == "refused"), 2)
+    assert(!step.refused, "the collision must not refuse the whole plan")
+
+  test("S70 [SETTLED-RULING R4] basename coincidence: Corroborated·Total reassigns onto the named residual"):
+    assertEquals(shapes(lastStep("S70")), Vector(s"corroborated/${Agreement.Total}"))
+    assertEquals(decisionLabels(lastStep("S70")), Vector("apply-reassign"))
+
+  test("S71 [SETTLED-MODEL] property re-expressed as a heading: the kind is identity, never pairs"):
+    assertEquals(shapes(lastStep("S71")), Vector("unexplained"))
+    assert(diffWords(lastStep("S71")).contains("create"))
+
+  // ── cross-cutting ───────────────────────────────────────────────────────────────
+
+  test("S72 [SETTLED-MODEL] folder move: keys intact, a deck move is a change inside one → Update"):
+    assertEquals(shapes(lastStep("S72")), Vector.empty)
+    assertEquals(diffWords(lastStep("S72")), Vector("update"))
+
+  test("S73 [SETTLED-MODEL — stated limit] a hand-edited note fails the floor: Unexplained"):
+    assertEquals(shapes(lastStep("S73")), Vector("unexplained"))
+
+  test("S74 [SETTLED-MODEL] a legacy note type is Incomparable, never mistaken for 'nothing matched'"):
+    assertEquals(shapes(lastStep("S74")), Vector("incomparable"))
+
+  // ── the harness's own contract ──────────────────────────────────────────────────
+
+  test("every scenario id from S01 to S74 is in the deck, in order"):
+    val ids = WorldDeck.scenarios.map(_.id)
+    val core = (1 to 74).map(n => f"S$n%02d")
+    assertEquals(ids.filterNot(_.endsWith("b")), core.toVector)
+    // and the b-variants sit directly after their parent:
+    ids.filter(_.endsWith("b")).foreach { b =>
+      assertEquals(ids(ids.indexOf(b) - 1), b.stripSuffix("b"), s"$b must follow ${b.stripSuffix("b")}")
+    }
+
+  test("the transcript is deterministic: two runs render byte-identically"):
+    val one = WorldDeck.transcript(fixtures, BaselinePolicy)
+    val two = WorldDeck.transcript(fixtures, BaselinePolicy)
+    assertEquals(one, two)
+
+  test("conservation: every stranded note appears in exactly one finding"):
+    runs.values.foreach { run =>
+      run.steps.foreach { step =>
+        val noted = step.findings.map(_.strandedNote)
+        assertEquals(noted.distinct.size, noted.size, s"${run.scenario.id}: a note appears twice")
+      }
+    }
+
+  test("the transcript renders every scenario with all five sections"):
+    val rendered = WorldDeck.transcript(fixtures, BaselinePolicy)
+    WorldDeck.scenarios.foreach { sc =>
+      assert(rendered.contains(s"SCENARIO ${sc.id} — "), s"${sc.id} missing from the transcript")
+    }
+    Vector("EDIT", "DIFF", "EVIDENCE", "POLICY", "LEDGER").foreach { section =>
+      assert(rendered.linesIterator.count(_ == section) >= WorldDeck.scenarios.size,
+        s"section '$section' missing somewhere")
+    }
+
+  test("the seam refuses a reassignment minted from evidence the policy was not asked about"):
+    // A rogue world that answers every finding with the FIRST corroboration it ever saw —
+    // exactly the laundering the runner must reject.
+    val stolen = lastStep("S01").findings.collectFirst { case c: MoveFinding.Corroborated => c }
+      .getOrElse(fail("S01 must corroborate for this test to have a weapon"))
+    object Rogue extends MovePolicy:
+      val name = "rogue"
+      def decide(finding: MoveFinding): PolicyDecision =
+        PolicyDecision.ApplyReassign(stolen, "laundered")
+    val s04 = WorldDeck.scenarios.find(_.id == "S04").getOrElse(fail("no S04"))
+    val e = intercept[RuntimeException](WorldDeck.runScenario(fixtures, s04, Rogue))
+    assert(e.getMessage.contains("may only be minted from the finding it answers"))
+
+  test("a world adding Refuse / QueueForReview vocabulary runs the whole deck and its choices show"):
+    object Cautious extends MovePolicy:
+      val name = "cautious"
+      def decide(finding: MoveFinding): PolicyDecision = finding match
+        case c: MoveFinding.Corroborated => PolicyDecision.QueueForReview(s"queued — ${c.describe}")
+        case other                       => PolicyDecision.ParkAndReport(other.describe)
+    val rendered = WorldDeck.transcript(fixtures, Cautious)
+    assert(rendered.contains("queue-for-review: queued — "))
+    assert(!rendered.contains("apply-reassign"))
+
+  test("vacuity guard: the discriminator pairs really are DIFFERENT edits, not one fixture twice"):
+    // If a pair's fixtures were accidentally identical, 'byte-indistinguishable observables'
+    // would be proven by nothing. The stranded/candidate paths must differ between the twins.
+    def candidatePaths(id: String): Vector[String] =
+      lastStep(id).findings.collect { case c: MoveFinding.Corroborated => c.candidate.path.render }
+    assertNotEquals(candidatePaths("S01"), candidatePaths("S02"))
+    assertNotEquals(candidatePaths("S20"), candidatePaths("S21"))
+    assertNotEquals(candidatePaths("S22"), candidatePaths("S23"))
+    assertNotEquals(candidatePaths("S56"), candidatePaths("S56b"))
