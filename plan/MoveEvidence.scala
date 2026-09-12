@@ -113,11 +113,21 @@ enum FieldRole:
     * the last segment, `1` the one above it.
     *
     * WHAT THIS BUYS, WHICH IS THE REASON THE ROLE CARRIES AN INDEX AT ALL. A name field that
-    * DIFFERS between the collection and the vault has to be explained before a pairing may be
-    * acted on, and the key is the only thing that can explain it: if the segment this field
-    * renders also moved, the field moved BECAUSE THE CARD MOVED. If it did not, something other
-    * than a move changed the card's name, and [[MoveFinding.Unaccounted]] says so rather than
-    * reassigning on the strength of a coincidence.
+    * DIFFERS between the collection and the vault has to be explained before a pairing may be acted
+    * on, and the key is the only thing that can explain it. The index is what makes the key ANSWER:
+    * it names the segment this field is a display of, so the run can ask whether there IS one —
+    * and, when there is, whether it moved.
+    *
+    * THE TWO QUESTIONS ARE ASKED IN DIFFERENT PLACES AND DECIDE DIFFERENT THINGS.
+    * [[MoveEvidence.unaccountedFor]] asks only about PRESENCE: with no segment at that position
+    * there is nothing the key can say, and [[MoveFinding.Unaccounted]] reports rather than acts. A
+    * segment that is present but AGREES is not a defect in the pairing — it says the card's face was
+    * re-rendered while its canonical name held, which is what bolding a heading or re-casing one
+    * does, and Decision 4 of `docs/design/IDENTITY-DECISION-SHEET.md` ruled that rendering is not
+    * identity. WHETHER the segment moved is then read one level up, by the subject gate: for the
+    * concept-descriptor card, `Anchor(1)` is the card's parent concept, and a card whose parent
+    * changed may be a different card rather than a moved one — see
+    * [[MoveEvidence.underTheSubjectGate]].
     */
   case Anchor(fromEnd: Int)
 
@@ -492,14 +502,19 @@ enum MoveFinding:
     *
     * ═══ WHAT THIS CATCHES, AND WHY IT IS NOT A REFUSAL ═══
     *
-    * A name field is the display of a key segment ([[FieldRole.Anchor]]), so when the card moves,
-    * that field moves BECAUSE the segment did. This case is what is left when it does not: the
-    * segment agrees and the field does not — the author re-bolded the heading, or a heading's
-    * maths began rendering — or there is no segment at that position to compare at all, which is
-    * the concept-descriptor card whose marked heading has no ancestor and whose `Concept` is
-    * therefore THE FILE NAME (`Extractor.buildSpecs`, `ancestorTitles.lastOption.getOrElse
-    * (fileName)`). Rename that file and the concept changes with nothing in the key to show for
-    * it.
+    * A name field is the display of a key segment ([[FieldRole.Anchor]]), so a pairing may be acted
+    * on when the key HAS a segment at that field's position on both sides — whether it moved or
+    * merely re-rendered. This case is what is left when there is NO SEGMENT THERE AT ALL to show
+    * what the field displays: the concept-descriptor card whose marked heading has no ancestor and
+    * whose `Concept` is therefore THE FILE NAME (`Extractor.buildSpecs`,
+    * `ancestorTitles.lastOption.getOrElse(fileName)`). Rename that file and the concept changes with
+    * nothing in the key to show for it.
+    *
+    * THE RE-BOLDED HEADING USED TO ARRIVE HERE AND NO LONGER DOES. Decision 4 of
+    * `docs/design/IDENTITY-DECISION-SHEET.md` (2026-09-12) ruled that markup over an agreed segment
+    * is rendering rather than identity, so that shape is [[Corroborated]] and follows its move; deck
+    * scenario S11 pins it. What still reaches this case is the file-name-derived name — S27, S60 and
+    * S64.
     *
     * REPORTED RATHER THAN REFUSED, AND THAT IS THE POINT OF GIVING IT A CASE. Folding it into
     * [[Unexplained]] would say "nothing the vault produces agrees with this note", which is
@@ -686,15 +701,7 @@ object MoveFinding:
       * are two of them.
       */
     def agreement: Agreement =
-      val depth = FieldRole
-        .rolesFor(c.noteType)
-        .map(FieldRole.nameDepth)
-        .getOrElse(
-          sys.error(
-            s"a corroborated pairing is on '${c.noteType}', which this tool does not declare — " +
-              "MoveEvidence.survey cannot admit such a note, so this is a defect in this tool"
-          )
-        )
+      val depth = MoveEvidence.nameDepthOf(c.noteType)
       val was = MoveEvidence.segmentsOf(c.stranded.path)
       val now = MoveEvidence.segmentsOf(c.candidate.path)
       val nameMoved  = MoveEvidence.nameSegments(was, depth) != MoveEvidence.nameSegments(now, depth)
@@ -906,15 +913,12 @@ object MoveEvidence:
                 NonEmptyVector.fromVector(
                   unaccountedFor(card.key.path, spec.key.path, divergences)
                 ) match
-                  case None =>
-                    MoveFinding.Corroborated(
-                      card.key,
-                      card.note.id,
-                      spec.key,
-                      spec.source,
-                      card.note.noteType,
-                      divergences,
-                    )
+                  // AND FINALLY: WHICH OF THE CARD'S NAME SEGMENTS MOVED, WHICH IS NOT THE SAME
+                  // QUESTION. Everything above establishes that this note and this spec say the
+                  // same thing and that the key accounts for the difference in their faces. What
+                  // the gate decides is whether the change the key made is a rewording or a change
+                  // of SUBJECT — and a changed subject is a different card, not a moved one.
+                  case None => underTheSubjectGate(card, spec, divergences, census)
                   case Some(unexplained) =>
                     MoveFinding.Unaccounted(
                       card.key,
@@ -944,6 +948,124 @@ object MoveEvidence:
               NonEmptyVector.fromVectorUnsafe(several.map(_._1.key)),
             )
     }
+
+  /** IS THE CHANGE THE KEY RECORDS A REWORDING, OR A CHANGE OF SUBJECT? The last question between a
+    * pairing and a reassignment.
+    *
+    * ═══ WHAT THIS ASKS THAT [[unaccountedFor]] DOES NOT ═══
+    *
+    * That one asks whether the KEY accounts for the card's face. This asks what the key accounting
+    * for it MEANS. A segment inside the name window moved, so the two faces differ legitimately —
+    * and for a card whose window is ONE segment long that is the end of the matter, because the
+    * only segment there is the card's own name, and renaming a card in place is a rewording
+    * (standing ruling R1). The concept-descriptor card is the one whose window is TWO segments, and
+    * the upper of them is the card's SUBJECT: its parent concept is one of the three terms the card
+    * asserts (standing ruling R2). A card that changed THAT did not move — it became a different
+    * card — unless what changed was the subject's own NAME, which is a rewording one level up.
+    *
+    * ═══ THE FACT THAT SEPARATES THOSE TWO, AND WHY IT COMES FROM OUTSIDE ═══
+    *
+    * `# Kafka` relabelled `# RabbitMQ` with its descriptors following, and `## Definition` carried
+    * from under `# Kafka` to under `# NATS`, PRODUCE THE SAME TWO KEYS. What tells them apart is
+    * whether `# Kafka` is still in the vault, which is a fact about the note's node tree and about
+    * no card at all — see [[NodeCensus]] for why neither of this survey's other two inputs can
+    * hold it.
+    *
+    * ═══ THE ROUTES, WHICH ARE THE RULINGS OF 2026-09-12 ═══
+    *
+    *   - THE SUBJECT DID NOT MOVE — [[MoveFinding.Corroborated]], exactly as before this gate
+    *     existed. Decisions 1 and 3: a card's own name, or a descriptor's label, changing over an
+    *     untouched subject is a rewording, and history follows.
+    *   - THE OLD SUBJECT IS STILL THERE — [[MoveFinding.Reparented]]. Ruling R2, deck scenario S24:
+    *     there are two cards here, not one that moved.
+    *   - IT IS GONE AND THE CLUSTER STAYED PUT — [[MoveFinding.Corroborated]]. Decision 2, revising
+    *     R3: "Least Element" became "Bottom", and the same cards keep their history.
+    *   - IT IS GONE AND SOMETHING ELSE MOVED TOO — [[MoveFinding.RelabelUnvouched]]. Decision 2
+    *     again: "the path weighs both ways — a name change combined with a move grades weaker and
+    *     becomes a question".
+    *   - THE CENSUS COULD NOT SAY — [[MoveFinding.RelabelUnvouched]], carrying the reason. "It is
+    *     gone" is the premise the follow rests on, and a run that could not look has not
+    *     established it.
+    *
+    * SURVIVAL IS ASKED BEFORE THE CLUSTER, AND THE ORDER IS LOAD-BEARING. A descriptor re-parented
+    * under a surviving concept is a different card whether or not it also moved; telling somebody
+    * "possibly renamed, but it moved as well" about one would invite them to pair what R2 has
+    * already refused.
+    *
+    * ═══ WHY IT RUNS LAST, AFTER MUTUAL UNIQUENESS ═══
+    *
+    * Because its two unactionable outcomes must still OCCUPY the claimant bookkeeping. A gate that
+    * decided first and then excused a re-parent from the uniqueness rule would leave the rival
+    * claimant corroborated ALONE — a pairing asserted as unique precisely because its competitor had
+    * been filed under another name.
+    */
+  private def underTheSubjectGate(
+      card: ObservedCard,
+      spec: SourcedSpec,
+      divergences: Vector[Divergence],
+      census: NodeCensus,
+  ): MoveFinding =
+    val depth = nameDepthOf(card.note.noteType)
+    val was   = segmentsOf(card.key.path)
+    val now   = segmentsOf(spec.key.path)
+
+    def corroborated = MoveFinding.Corroborated(
+      card.key,
+      card.note.id,
+      spec.key,
+      spec.source,
+      card.note.noteType,
+      divergences,
+    )
+
+    def unvouched(cause: RelabelDoubt) = MoveFinding.RelabelUnvouched(
+      card.key,
+      card.note.id,
+      spec.key,
+      spec.source,
+      cause,
+      divergences,
+    )
+
+    // THE NAME WINDOW MINUS ITS LAST SEGMENT IS THE SUBJECT, and asking it this way makes the gate
+    // per-kind WITHOUT EVER ASKING THE KIND. Only the concept-descriptor note type declares a
+    // second name field, so for every other type that window holds one segment and dropping it
+    // leaves nothing — empty on both sides, equal, and the gate cannot fire. A note-type check
+    // would say the same thing in a place where a fifth note type could contradict it; the two
+    // guards in `plan/MoveEvidence.test.scala` pin the reach rather than the spelling.
+    val subjectMoved =
+      nameSegments(was, depth).dropRight(1) != nameSegments(now, depth).dropRight(1)
+
+    // THE NODE THE CARD HUNG OFF — its WHOLE path minus its own name, because that is how a node is
+    // addressed: from the note's root. A suffix of it would ask the census about a path that is not
+    // in it, and get "gone" for a subject standing in plain sight.
+    val oldSubject = was.dropRight(1)
+
+    if !subjectMoved then corroborated
+    else
+      census.nodesOf(card.key.noteId) match
+        case NodeCensus.Answer.Unsurveyable(reason) =>
+          unvouched(RelabelDoubt.CensusUnavailable(reason))
+
+        case NodeCensus.Answer.Surveyed(nodes) =>
+          if nodes.contains(oldSubject) then
+            MoveFinding.Reparented(
+              card.key,
+              card.note.id,
+              spec.key,
+              spec.source,
+              oldSubject,
+              divergences,
+            )
+          else
+            // ⚠️ THE NOTE-ID HALF IS AN INTERPRETATION AWAITING MARC'S CONFIRMATION, flagged here
+            // rather than buried. Decision 2 follows a relabel when "the cluster stayed in place
+            // (the path agreed)", and a card key is A NOTE ID AND A PATH — so a card that crossed
+            // into another note is read here as a cluster that did not stay. No deck scenario
+            // exercises the combination; `plan/MoveEvidence.test.scala` is where it is pinned.
+            val clusterMoved =
+              was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId
+            if clusterMoved then unvouched(RelabelDoubt.ClusterMoved) else corroborated
 
   /** THE CANONICALISED SEGMENTS OF A PATH, OUTERMOST FIRST, so the last one is always the node the
     * card hangs off.
@@ -979,6 +1101,29 @@ object MoveEvidence:
     */
   private[plan] def nameSegments(segments: Vector[String], depth: Int): Vector[String] =
     segments.takeRight(depth)
+
+  /** HOW MANY SEGMENTS AT THE END OF A PATH A CARD OF THIS NOTE TYPE SHOWS AS FIELDS — the width of
+    * the window both [[underTheSubjectGate]] and [[MoveFinding.agreement]] read.
+    *
+    * A HARD ERROR ON AN UNDECLARED NOTE TYPE, AND IT IS UNREACHABLE RATHER THAN DEFENSIVE. [[survey]]
+    * answers [[MoveFinding.Incomparable]] for such a note at [[rolesOn]], long before either caller
+    * can be reached, so arriving here means this tool has contradicted itself and the only useful
+    * thing to do is say so.
+    *
+    * SHARED BY THE TWO CALLERS so that the impossible state is described in ONE sentence. They ask
+    * at different moments — the gate while deciding, the grade afterwards from the stored note type
+    * — and two copies of this message would be two things to keep true about one defect.
+    */
+  private[plan] def nameDepthOf(noteType: String): Int =
+    FieldRole
+      .rolesFor(noteType)
+      .map(FieldRole.nameDepth)
+      .getOrElse(
+        sys.error(
+          s"a pairing was admitted on '$noteType', which this tool does not declare — " +
+            "MoveEvidence.survey cannot admit such a note, so this is a defect in this tool"
+        )
+      )
 
   /** The roles for this note's fields, or WHY the comparison cannot be made.
     *
@@ -1111,18 +1256,26 @@ object MoveEvidence:
     * ═══ WHAT "EXPLAINED" MEANS, EXACTLY ═══
     *
     * A name field renders one segment of the key path, counted from the end
-    * ([[FieldRole.Anchor]]). Its divergence is explained when BOTH paths have a segment at that
-    * position AND those two segments differ — that is the key saying, in canonical form, that the
-    * thing this field names is a different thing now. Anything else is left over:
+    * ([[FieldRole.Anchor]]). Its divergence is explained when BOTH paths HAVE a segment at that
+    * position — the key then shows, in canonical form, what this field is a display of, and whether
+    * that segment moved decides what KIND of change it was rather than whether there was one.
     *
-    *   - THE SEGMENTS AGREE AND THE FIELD DOES NOT. The canonical text did not move, so the key
-    *     is not what changed the card's face. Bolding a heading does this — `model/CardKey.scala`
-    *     strips markup out of a segment precisely so that formatting cannot orphan a card — and
-    *     so does a heading whose maths begins rendering.
-    *   - THERE IS NO SEGMENT AT THAT POSITION on one side or the other. The concept-descriptor
-    *     card whose marked heading has no ancestor takes its `Concept` from THE FILE NAME, which
-    *     is in no key at all; rename the file and the concept changes with nothing in the key to
-    *     account for it.
+    * WHAT IS LEFT OVER IS THE ONE SITUATION WHERE THERE IS NO SEGMENT TO SHOW, on one side or the
+    * other. The concept-descriptor card whose marked heading has no ancestor takes its `Concept`
+    * from THE FILE NAME, which is in no key at all; rename the file and the concept changes with
+    * nothing in the key to account for it. Deck scenarios S27, S60 and S64 are that shape, and they
+    * are reported and not applied.
+    *
+    * ═══ THE SEGMENTS AGREEING WHILE THE FIELD DIFFERS IS *NOT* LEFT OVER, SINCE 2026-09-12 ═══
+    *
+    * It was until then, and Decision 4 of `docs/design/IDENTITY-DECISION-SHEET.md` overruled it
+    * outright. Bolding a heading does this — `model/CardKey.scala` strips markup out of a segment
+    * precisely so that formatting cannot orphan a card — and so does re-casing one, or a heading
+    * whose maths begins rendering. In Marc's words: "same front, same back... same card". The card
+    * IS its front and its back, the WORDS of both are what the canonical segment preserves, and
+    * MARKUP IS RENDERING RATHER THAN IDENTITY. So the pairing follows, the divergence still travels
+    * in [[MoveFinding.Corroborated.divergences]] for the report to show, and the reassignment writes
+    * the vault's fields — which is how the Anki face comes to show the new markup.
     *
     * ═══ WHY ONLY THE NAME FIELDS ARE ASKED ═══
     *
@@ -1146,8 +1299,14 @@ object MoveEvidence:
       d.role match
         case FieldRole.Anchor(fromEnd) =>
           (segmentAt(oldSegments, fromEnd), segmentAt(newSegments, fromEnd)) match
-            case (Some(before), Some(after)) => before == after
-            case _                           => true
+            // BOTH SEGMENTS PRESENT IS ENOUGH, and the two are deliberately not compared. A segment
+            // that moved says the card's name changed; a segment that agreed says only the
+            // RENDERING did, which Decision 4 ruled is not identity. Either way the key has shown
+            // what this field displays, which is all that is being asked here. The match is kept
+            // over the pair rather than collapsed to an `isEmpty` test because the question is
+            // about presence on BOTH sides, and a reader should see both being asked.
+            case (Some(_), Some(_)) => false
+            case _                  => true
         case FieldRole.Bearing | FieldRole.Substance | FieldRole.Setting | FieldRole.Identity =>
           false
     }
