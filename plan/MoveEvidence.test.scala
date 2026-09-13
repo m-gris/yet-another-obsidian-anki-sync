@@ -858,7 +858,7 @@ class MoveEvidenceTest extends munit.FunSuite:
         assertEquals(cost.candidate, costNow.key, "the witness is the pairing this run acts on")
         assertEquals(
           reparented.survival,
-          SubjectSurvival.CorroboratedOnto(Vector("kafka"), costNow.key),
+          SubjectSurvival.CorroboratedOnto(Vector("top", "kafka"), costNow.key),
           "the report must name the pairing it read, not a note the reader will find empty",
         )
       case other =>
@@ -894,7 +894,7 @@ class MoveEvidenceTest extends munit.FunSuite:
         // as the paired card's own fields show it that the two sides are compared on.
         assertEquals(
           reparented.survival,
-          SubjectSurvival.CorroboratedOnto(Vector("kafka"), costNow.key),
+          SubjectSurvival.CorroboratedOnto(Vector("top", "kafka"), costNow.key),
         )
       case other => fail(s"a re-nested concept is still a concept the run kept: $other")
   }
@@ -996,7 +996,7 @@ class MoveEvidenceTest extends munit.FunSuite:
         assertEquals(candidate, definitionNow.key)
         assertEquals(
           survival,
-          SubjectSurvival.StillInTheCollection(Vector("kafka"), costUnderKafkaElsewhere.key),
+          SubjectSurvival.StillInTheCollection(Vector("top", "kafka"), costUnderKafkaElsewhere.key),
           "the report must name the card it read, which is the fact a reader can check",
         )
       case other =>
@@ -1037,8 +1037,12 @@ class MoveEvidenceTest extends munit.FunSuite:
     // THE OTHER HALF OF THE PER-KIND REACH. The sheet names `cdd/*` AND `table` as the
     // parent-constitutive kinds, and a table's pair card is a concept-descriptor card whose concept
     // is the row's first cell — so the same window, read the same way, and no second rule.
+    // ITS CHAIN IS THE STRANDED CARD'S SUBJECT CHAIN, which the ruling of 2026-09-13 requires of
+    // every witness: a table under `# Top` whose row is Kafka puts a card at `top / kafka / …`, the
+    // same place `## Definition` hung off. A namesake row under some other ancestor would testify to
+    // nothing, and the test below this one is that case.
     val pairCard = CardSpec.ThreeField(
-      key("n2", "comparison", "kafka", "throughput"),
+      key("n2", "top", "kafka", "throughput"),
       "Kafka",
       "Throughput",
       body("Millions of messages a second."),
@@ -1056,8 +1060,134 @@ class MoveEvidenceTest extends munit.FunSuite:
       Vector(observed(pairCard, 101)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
-        assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("kafka"), pairCard.key))
+        assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("top", "kafka"), pairCard.key))
       case other => fail(s"a table row's concept is a concept: $other")
+  }
+
+  // ======= A CONCEPT IS ITS CHAIN: A NAMESAKE AT AN UNRELATED PLACE IS SILENCE ====
+
+  /** RESOLVED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "a concept is its chain;
+    * namesakes at unrelated places are silence"), and entailed by standing ruling R2.
+    *
+    * THE SHAPE, WHICH IS AS ORDINARY AS A VAULT GETS. `Kafka.md` holds `# Kafka` / `## Performance`
+    * with a card under it; `NATS.md` holds `# NATS` / `## Performance` with its own. Those are TWO
+    * CONCEPTS SHARING A SPELLING, not one concept in two files — R2 says as much already, since the
+    * parent concept is constitutive and the chain is what identifies it. Marc, shown the pair: "you
+    * realize that there are no questions there?"
+    *
+    * WHY THE WITNESSES WERE BARE-NAME IN THE FIRST PLACE, because it was deliberate rather than
+    * careless: a RELOCATED concept still has to witness. When `# Kafka` leaves for another note with
+    * one of its descriptors, the pairing that lands there is what says Kafka goes on existing (the
+    * reviewer's S24A), and its new chain is not its old one. Matching the name alone was the cheapest
+    * thing that kept that working.
+    *
+    * THE RECONCILIATION, WHICH IS THE WHOLE OF THIS SECTION. A witness vouches for the subject at
+    * place P only if it STANDS AT P, or if ITS OWN PAIRING MOVED IT FROM P in this run — and that
+    * pairing's OLD key is the bridge between the chains. A bare name somewhere else with no bridge
+    * testifies to nothing. Both halves are tested: the two tests here are the namesakes that must
+    * fall silent, and the S24A, S24B and cross-note-live tests above are the bridges and the
+    * same-chain standings that must go on working.
+    */
+  val throughputUnderKafkaPerformance: CardSpec =
+    threeField(
+      key("k1", "kafka", "performance", "throughput"),
+      "Performance",
+      "Throughput",
+      "Millions of messages a second.",
+      "Kafka",
+    )
+
+  /** The same descriptor moved under a SIBLING subject of its own note — an ordinary re-filing, and
+    * the event both namesake tests put a stranger's `## Performance` in the way of.
+    */
+  val throughputUnderKafkaDurability: CardSpec =
+    threeField(
+      key("k1", "kafka", "durability", "throughput"),
+      "Durability",
+      "Throughput",
+      "Millions of messages a second.",
+      "Kafka",
+    )
+
+  /** `NATS.md`'s own `## Performance` cluster: the same subject SPELLING under a different parent, in
+    * a different note, untouched by the run and bridged to nothing.
+    */
+  val latencyUnderNatsPerformance: CardSpec =
+    threeField(
+      key("n1", "nats", "performance", "latency"),
+      "Performance",
+      "Latency",
+      "Sub-millisecond, in memory.",
+      "NATS",
+    )
+
+  /** What `Kafka.md` looks like once Throughput sits under `## Durability`: its `## Performance` is
+    * gone, and `NATS.md`'s is exactly where it always was.
+    */
+  val afterTheReFiling: NodeCensus.Outlines = Map(
+    noteIdOf("k1") -> Vector(
+      Vector("kafka"),
+      Vector("kafka", "durability"),
+      Vector("kafka", "durability", "throughput"),
+    ),
+    noteIdOf("n1") -> Vector(
+      Vector("nats"),
+      Vector("nats", "performance"),
+      Vector("nats", "performance", "latency"),
+    ),
+  )
+
+  test("a LIVE namesake subject at an unrelated chain is no witness, so the re-filing follows") {
+    // THE THIRD WITNESS, QUALIFIED. `NATS.md`'s live `## Performance` card is in the collection and
+    // declares the subject spelled `performance` — and it stands at `nats / performance`, which is not
+    // the `kafka / performance` this card left. Nothing bridges the two, so it testifies to nothing
+    // and the run proceeds exactly as if no namesake existed: the old subject is gone from this note,
+    // the cluster stayed, and Decision 2 follows the relabel.
+    surveyDeclaring(
+      Vector(observed(throughputUnderKafkaPerformance, 1)),
+      Vector(sourced(throughputUnderKafkaDurability)),
+      afterTheReFiling,
+      Vector(observed(latencyUnderNatsPerformance, 101)),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, throughputUnderKafkaDurability.key)
+      case other =>
+        fail(s"another note's same-named subject must not block an ordinary re-filing: $other")
+  }
+
+  test("a PAIRING onto a namesake subject at an unrelated chain is no witness either") {
+    // THE SECOND WITNESS, QUALIFIED, AND IT NEEDS ITS OWN TEST BECAUSE IT HAS ITS OWN BRIDGE. Here
+    // `NATS.md`'s Performance cluster is not merely standing — it MOVES, to another note, in this very
+    // run, so the survey corroborates a card whose subject is spelled `performance`. That pairing
+    // bridges `nats / performance` to wherever it went; it says nothing about `kafka / performance`,
+    // and the re-filing in Kafka.md must follow regardless.
+    val latencyMoved =
+      threeField(
+        key("n2", "nats", "performance", "latency"),
+        "Performance",
+        "Latency",
+        "Sub-millisecond, in memory.",
+        "NATS",
+      )
+    val findings = surveyOver(
+      Vector(observed(throughputUnderKafkaPerformance, 1), observed(latencyUnderNatsPerformance, 2)),
+      Vector(sourced(throughputUnderKafkaDurability), sourced(latencyMoved)),
+      afterTheReFiling ++ Map(
+        noteIdOf("n2") -> Vector(Vector("nats"), Vector("nats", "performance"))
+      ),
+    )
+    assert(
+      findings.exists {
+        case c: MoveFinding.Corroborated => c.candidate == latencyMoved.key
+        case _                           => false
+      },
+      s"the fixture must corroborate the NATS move for this test to have a weapon: $findings",
+    )
+    findings.find(_.strandedNote == AnkiNoteId(1)) match
+      case Some(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, throughputUnderKafkaDurability.key)
+      case other =>
+        fail(s"an unrelated chain's pairing must not park this one: $other")
   }
 
   test("a live card under some OTHER concept witnesses nothing about this one") {
@@ -1090,7 +1220,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       Vector(observed(costUnderKafkaElsewhere, 101)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
-        assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("kafka"), costUnderKafkaElsewhere.key))
+        assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("top", "kafka"), costUnderKafkaElsewhere.key))
       case other =>
         fail(s"an unreadable vault does not unestablish what the collection holds: $other")
   }
