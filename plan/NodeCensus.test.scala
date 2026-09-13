@@ -104,6 +104,13 @@ class NodeCensusTest extends munit.FunSuite:
   test("a table row is a node, though it is no heading: it arrives as a key's proper prefix") {
     // `## Cost / benefit`'s pair cards key as `…/{row concept}/{column header}`, so the ROW is
     // a node that exists in no heading tree and in no key of its own.
+    //
+    // ONE OF THE TWO ROUTES A ROW TAKES, not the only one, and the distinction became load-bearing
+    // on 2026-09-13. This route needs the row to HAVE a card; empty every value cell and it has
+    // none, and the row then reaches the census through the walker's outline instead — see
+    // `extract/VaultWalker.scala`'s `tableRowChains`, and the walker suite for the real markdown.
+    // This test drives the prefix route on purpose, by stating an outline that holds the heading
+    // alone.
     val census = censusOf(
       built = Vector(key("n1", "cost / benefit", "queue", "benefit")),
       failures = Vector.empty,

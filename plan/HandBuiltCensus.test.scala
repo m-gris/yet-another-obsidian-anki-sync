@@ -8,10 +8,11 @@ package obsidiananki.plan
   * same walk as the scan, and a default would let a call site fall silently back to an emptier
   * vault than the one being planned. So each test says what it is passing, in a word that says it.
   *
-  * WHAT IT IS: the census of a vault nobody walked. A real one reads a note's whole heading tree,
-  * including headings that make no card; this one has only what the scan's own keys imply — every
-  * node above a card the scan accounts for. It is a WEAKER census, never a wrong one: it can say
-  * "this node is here" only where a card proves it.
+  * WHAT IT IS: the census of a vault nobody walked. A real one reads the note's own document —
+  * every heading, including those that make no card, and every table row's subject cell, including
+  * rows whose value cells are all empty; this one has only what the scan's own keys imply, which is
+  * every node above a card the scan accounts for. It is a WEAKER census, never a wrong one: it can
+  * say "this node is here" only where a card proves it.
   *
   * WHICH DIRECTION THAT ERRS IN, SO A READER KNOWS WHAT A PASS IS WORTH. Fewer nodes means fewer
   * surviving parents, so a subject change looks more like a relabel and less like a re-parent. A

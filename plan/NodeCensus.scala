@@ -5,15 +5,17 @@ import obsidiananki.model.{CardKey, CardPath, NoteId}
 /** WHICH NODES OF A NOTE THE VAULT STILL HOLDS — a fact the move survey could not see, and the only
   * witness of survival that can see a concept which kept nothing but prose.
   *
-  * ══ ONE WITNESS OF TWO, SINCE 2026-09-13 ══
+  * ══ ONE WITNESS OF THREE, SINCE 2026-09-13 ══
   *
-  * This type was built as THE discriminator, and it is now the first of two: the ruling of
-  * 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`) also counts a concept as surviving when the
-  * same survey corroborated a card onto it — see `plan/MoveEvidence.scala`'s `SubjectSurvival`. That
-  * second witness exists because the question this type answers is about ONE NOTE'S TREE: a concept
-  * that left for another note, or that was re-nested under a new ancestor, is absent from the node
-  * paths of the note it left, and answering "gone" about it is truthful and not enough. Nothing
-  * about this type changed; what changed is that its answer is no longer the whole of the check.
+  * This type was built as THE discriminator, and it is now the first of three. Both of the others
+  * arrived from the rulings of 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`) and both exist
+  * for the same reason: the question THIS type answers is about ONE NOTE'S TREE, so a concept that
+  * left for another note, or that was re-nested under a new ancestor, is absent from the node paths
+  * of the note it left — and answering "gone" about it is truthful and not enough. A concept also
+  * counts as surviving when the same survey corroborated a card onto it, and when a live card the
+  * collection already holds declares it; `plan/MoveEvidence.scala`'s `SubjectSurvival` holds all
+  * three. Nothing about this type's CONTRACT changed under either ruling; what changed is that its
+  * answer is no longer the whole of the check.
   *
   * ══ THE QUESTION THIS ANSWERS, AND WHY NOTHING ELSE COULD ══
   *
@@ -40,11 +42,20 @@ import obsidiananki.model.{CardKey, CardPath, NoteId}
   * first — the same reading [[MoveEvidence.segmentsOf]] takes of a key path. Two sources fill it,
   * and neither covers the other:
   *
-  *   - EVERY HEADING THE TOOL READS AS A HEADING, marked or not, canonicalised exactly as a key
-  *     segment is. This is the half that sees a concept which kept only prose.
-  *   - EVERY PROPER PREFIX OF EVERY KEY THE SCAN ACCOUNTS FOR. This is the half that sees a TABLE
-  *     ROW, whose node is a row's first cell and is no heading at all — `## Cost / benefit`'s pair
-  *     cards key as `…/{row concept}/{column header}`, so the row node exists only as their prefix.
+  *   - THE WALKER'S OUTLINE OF THE NOTE: every heading the tool reads as a heading, marked or not,
+  *     and the subject cell of every row of every section's table — both canonicalised exactly as a
+  *     key segment is, by the same readings the key derivation uses. This is the half that sees a
+  *     subject which kept NOTHING KEYED UNDER IT: a concept heading holding only prose, and, since
+  *     the ruling of 2026-09-13, a table row standing with its value cells emptied.
+  *   - EVERY PROPER PREFIX OF EVERY KEY THE SCAN ACCOUNTS FOR. This is the half that needs no
+  *     document at all: a card proves every place above it, whatever kind of place that is.
+  *
+  * A TABLE ROW ARRIVES BY BOTH ROUTES AND THAT IS NOT REDUNDANT, which is worth saying because it
+  * reads like it. `## Cost / benefit`'s pair cards key as `…/{row concept}/{column header}`, so a row
+  * WITH cards is a prefix of theirs — and the prefix route was the only one until 2026-09-13, which
+  * is exactly why a row whose cells were all emptied fell out of the census while standing in the
+  * markdown. The outline route does not depend on a row having cards; the prefix route does not
+  * depend on the document being readable. Neither covers the other.
   *
   * ══ WHY THE ANSWER IS THREE-VALUED ══
   *
@@ -77,11 +88,17 @@ final case class NodeCensus private (
 
 object NodeCensus:
 
-  /** WHAT THE WALKER SAW: per note, one entry per heading it read, as that heading's whole chain
-    * of canonical segments.
+  /** WHAT THE WALKER SAW: per note, one entry per PLACE A CARD COULD HANG OFF that the document
+    * itself shows, as that place's whole chain of canonical segments. Two kinds of place today —
+    * every heading it read, and every subject cell of every section's table — produced by
+    * `extract/VaultWalker.scala`'s `headingChains` and `tableRowChains` and passed here as their
+    * union.
     *
     * PREFIX-CLOSED ON ARRIVAL, which is why [[of]] takes no closure over it. Every heading in the
-    * tree gets its own entry, so the chain of any heading's ancestor is itself an entry.
+    * tree gets its own entry, so the chain of any heading's ancestor is itself an entry; and a row
+    * chain's proper prefix is the heading chain of the section holding its table, which is one of
+    * those entries. The closure holds for the UNION and not for either half alone, which is why the
+    * walker takes the union before it gets here.
     */
   type Outlines = Map[NoteId, Vector[Vector[String]]]
 
@@ -90,7 +107,7 @@ object NodeCensus:
     case Surveyed(nodes: Set[Vector[String]])
     case Unsurveyable(reason: String)
 
-  /** ONE PRODUCER: the walker's heading outlines, plus the keys the scan accounts for.
+  /** ONE PRODUCER: the walker's outline of each note, plus the keys the scan accounts for.
     *
     * TAKES THE WHOLE SCAN RATHER THAN A LIST OF KEYS, because "accounted for" is already a
     * decided question — built keys plus the keys of cards that failed to build, which are present
