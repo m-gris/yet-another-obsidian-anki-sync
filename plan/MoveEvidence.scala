@@ -58,6 +58,7 @@ import obsidiananki.model.{CardKey, CardPath, Marker, OwnedTag}
  * [[MoveFinding.Corroborated]] — exact substance agreement, every name divergence accounted for
  * by the key, and MUTUAL uniqueness. [[MoveFinding.Ambiguous]], [[MoveFinding.Contested]],
  * [[MoveFinding.Unexplained]], [[MoveFinding.Unaccounted]], [[MoveFinding.Reparented]],
+ * [[MoveFinding.NoVoucher]],
  * [[MoveFinding.RelabelUnvouched]] and [[MoveFinding.Incomparable]] are REPORTED and never
  * applied. That separation is load-bearing rather than stylistic: the only function in this
  * codebase that mints a [[SyncAction.Reassign]] is an extension on the corroborated case, so a
@@ -686,13 +687,18 @@ enum RelabelDoubt:
     case CensusUnavailable(reason) =>
       s"whether the old subject survives could not be established: $reason"
 
-/** WHAT THE EVIDENCE SHOWS about ONE stranded note. Eight outcomes, and each says a different
-  * thing to whoever reads it.
+/** WHAT THE EVIDENCE SHOWS about ONE stranded note. Nine outcomes, and each says a different thing
+  * to whoever reads it.
   *
-  * ONLY ONE OF THEM IS AN INSTRUCTION, AND IT IS THE FIRST. The other five say what agreed and
-  * stop there; `spike/RenameEvidence.scala` settled that vocabulary for a renamed table column
+  * ONLY ONE OF THEM IS AN INSTRUCTION, AND IT IS THE FIRST. Every other case says what agreed and
+  * stops there; `spike/RenameEvidence.scala` settled that vocabulary for a renamed table column
   * and its reasoning transfers whole. What changed on 2026-09-05 is that the corroborated case
   * became actionable — see this file's header for Marc's ruling and the asymmetry behind it.
+  *
+  * THE COUNT KEEPS GROWING AND THAT IS THE DESIGN WORKING, not a type sprawling: each ruling of
+  * 2026-09-12 and 2026-09-13 distinguished a population that had been answered with somebody else's
+  * sentence, and the way this file refuses to act on evidence is by giving the evidence a case with
+  * no `reassignment` method on it.
   */
 enum MoveFinding:
 

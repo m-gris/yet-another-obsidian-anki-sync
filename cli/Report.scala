@@ -100,17 +100,19 @@ object Report:
     *
     * ═══ THE OTHER FINDINGS ARE PRINTED TOO, AND THEY ARE THE LONGER HALF ═══
     *
-    * Ambiguous, contested, unaccounted-for, unexplained and incomparable findings change nothing
-    * about the collection. Printing them is not noise: each one is a card sitting suspended with
-    * its history stranded, and the evidence saying which. `docs/design/REVIEW-QUEUE.md` argues
-    * that the cost of these is invisible today and that the invisibility IS the problem.
+    * EVERY FINDING BUT THE CORROBORATED ONE changes nothing about the collection — the list below is
+    * the authority on which those are, and it has grown with each of the rulings of 2026-09-12 and
+    * 2026-09-13 rather than staying at the five this paragraph used to name. Printing them is not
+    * noise: each one is a card sitting suspended with its history stranded, and the evidence saying
+    * which. `docs/design/REVIEW-QUEUE.md` argues that the cost of these is invisible today and that
+    * the invisibility IS the problem.
     *
     * SPLIT INTO WHAT WAS DONE AND WHAT WAS NOT, because those are two different things to read
     * and a reader scanning one block for the other finds neither.
     *
-    * MATCHED LONGHAND WITH NO CATCH-ALL, so a seventh finding has to say which side of that split
-    * it belongs on. Under `-Wconf:msg=exhaustive:e` a `case _ => false` here would quietly file a
-    * new kind of evidence under "nothing was applied", which is the wrong answer to state by
+    * MATCHED LONGHAND WITH NO CATCH-ALL, so a finding added later has to say which side of that
+    * split it belongs on. Under `-Wconf:msg=exhaustive:e` a `case _ => false` here would quietly
+    * file a new kind of evidence under "nothing was applied", which is the wrong answer to state by
     * accident about an action that moves review history.
     *
     * SILENT AT ZERO, following [[parkedNote]] and for its reason: a fixed heading over an empty
