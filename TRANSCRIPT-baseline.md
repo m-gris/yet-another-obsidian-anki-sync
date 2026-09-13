@@ -1,6 +1,6 @@
 # The ruled identity policy's deck transcript
 
-All 88 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
+All 89 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
 move-evidence survey, with the policy seam filled by `BaselinePolicy`
 (`deck/MovePolicy.scala`) — the same "corroborated applies, everything else is reported" policy
 the `move-build` Planner has always shipped. What changed is not the policy: it is *which*
@@ -13,8 +13,8 @@ scala-cli run . --main-class obsidiananki.deck.runDeck
 
 ## What the rulings changed, as seen in this transcript
 
-Of the 100 findings the deck's 88 scenarios now produce, `BaselinePolicy` applies 46 and reports
-54 without acting. Three scenarios read differently from the pre-ruling mechanism:
+Of the 103 findings the deck's 89 scenarios now produce, `BaselinePolicy` applies 46 and reports
+57 without acting. Three scenarios read differently from the pre-ruling mechanism:
 
 - **S24** — a descriptor re-parented under a concept that goes on existing (`# Kafka` still holds
   `## Cost` after `## Definition` moves to `# NATS`) no longer auto-applies. The survey can now
@@ -74,6 +74,27 @@ survey which fields are a card's name: a kind showing two name fields has a subj
 card's own name, a kind showing one has nothing above it. So filing — a `1way` heading card, a
 table's row card — witnesses nothing, and a namesake heading with no card under it witnesses
 nothing either.
+
+## And what the table half of the same day changed
+
+One more scenario is new — **S33b** — and it is S33 with one thing varied back. S33 deletes the
+`Queue` row and adds a `Stream` row with byte-identical values, so the node `cost / benefit / queue`
+is gone and Decision 2 lets the pair cards follow. S33b leaves the Queue row standing, holding its
+subject cell and no values, while the value it lost turns up on the `Broker` row.
+
+That used to follow, and it should not have. A row with no value cells produces no cards, so it
+survived in no key anywhere — and a table row reached the node census only as the prefix of its own
+cards' keys. The row stood in plain sight in the markdown and the check could not see it, so the
+cell landing on Broker read as a rename of the Queue row and took its review history along. Written
+as headings the same event already parked: a concept keeping only prose is a heading line, the
+walker's outline holds every heading it reads, and **S24C** pins it. One edit, two spellings,
+opposite outcomes — which is what made this a break rather than a preference. Marc ruled that a
+standing subject cell counts exactly as a standing heading line does, so a note's outline now holds
+the subject cell of every row of every section's table alongside its headings, and S33b's `EVIDENCE`
+line names `'cost / benefit / queue'` as the thing still in the vault.
+
+S33 itself is unchanged, and that is the pair worth reading together: the discriminating fact is
+whether the old row goes away, and the deck now shows both answers to it.
 
 ## The full transcript
 
@@ -744,6 +765,31 @@ LEDGER
   history FOLLOWED onto 'cost / benefit / stream / benefit' — the existing note was reassigned, no new card
   history FOLLOWED onto 'cost / benefit / stream / cost' — the existing note was reassigned, no new card
   history STRANDED on the suspended note: 'cost / benefit / queue'
+
+SCENARIO S33b — re-parent a cell onto another row while the old row STANDS   [table pair card]
+EDIT
+  the Queue row's Benefit value moves onto the Broker row, and Queue's Cost value is emptied — so the Queue row is still there, holding its subject cell and no values
+DIFF
+  create      'cost / benefit / broker' in t4
+  create      'cost / benefit / broker / benefit' in t4
+  non-event   'cost / benefit / broker / cost' in t4
+  flag        'cost / benefit / queue' in t4 — suspended, never deleted
+  flag        'cost / benefit / queue / benefit' in t4 — suspended, never deleted
+  flag        'cost / benefit / queue / cost' in t4 — suspended, never deleted
+EVIDENCE
+  note 2, which held 'cost / benefit / queue' in t4, matches nothing the vault now produces
+  note 3, which held 'cost / benefit / queue / benefit' in t4, says the same thing as 'cost / benefit / broker / benefit' in t4 (Patterns.md:5 (table pair card, row 2)) — but 'cost / benefit / queue' is still in the vault, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Queue' → 'Broker'
+  note 4, which held 'cost / benefit / queue / cost' in t4, matches nothing the vault now produces
+POLICY
+  park-and-report: note 2, which held 'cost / benefit / queue' in t4, matches nothing the vault now produces
+  park-and-report: note 3, which held 'cost / benefit / queue / benefit' in t4, says the same thing as 'cost / benefit / broker / benefit' in t4 (Patterns.md:5 (table pair card, row 2)) — but 'cost / benefit / queue' is still in the vault, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Queue' → 'Broker'
+  park-and-report: note 4, which held 'cost / benefit / queue / cost' in t4, matches nothing the vault now produces
+LEDGER
+  new card at ZERO: 'cost / benefit / broker'
+  new card at ZERO: 'cost / benefit / broker / benefit'
+  history STRANDED on the suspended note: 'cost / benefit / queue'
+  history STRANDED on the suspended note: 'cost / benefit / queue / benefit'
+  history STRANDED on the suspended note: 'cost / benefit / queue / cost'
 
 SCENARIO S34 — fix a typo in a row concept   [table pair card]
 EDIT

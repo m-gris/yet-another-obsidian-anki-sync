@@ -354,6 +354,28 @@ class WorldDeckTest extends munit.FunSuite:
       Vector("apply-reassign", "apply-reassign", "park-and-report").sorted,
     )
 
+  test("S33b [SETTLED-RULING 2026-09-13] the old row STANDS with no values: the cell must not follow"):
+    // S33 varied one thing and this varies it back. There the Queue row is DELETED, so the node
+    // `cost / benefit / queue` is gone and Decision 2 lets the pair cards follow. Here the row stays,
+    // holding its subject cell and nothing else — and a row with no value cells has no cards, so it
+    // used to survive in no key anywhere and the census could not see it. The Benefit value landing
+    // on the Broker row then read as a rename of the Queue row and took its review history along.
+    //
+    // WRITTEN AS HEADINGS THE SAME EVENT ALREADY PARKED (S24C), which is what made this a break
+    // rather than a preference: one edit, two spellings, opposite outcomes. Ruled 2026-09-13 — a
+    // standing subject cell counts exactly as a standing heading line does.
+    assertEquals(shapes(lastStep("S33b")), Vector("unexplained", "reparented", "unexplained"))
+    assertEquals(
+      decisionLabels(lastStep("S33b")),
+      Vector("park-and-report", "park-and-report", "park-and-report"),
+    )
+    // AND THE WITNESS MUST BE THE ROW ITSELF. Naming it is what separates this from a run that
+    // parked for some unrelated reason: the node is `cost / benefit / queue`, which is no heading —
+    // `## Cost / benefit` is the heading, and `queue` is a cell in the table under it.
+    val witnessed =
+      lastStep("S33b").findings.collectFirst { case r: MoveFinding.Reparented => r.survival }
+    assertEquals(witnessed, Some(SubjectSurvival.StillInTheNote(Vector("cost / benefit", "queue"))))
+
   test("S34 [SETTLED-RULING D2] row concept typo fix: indistinguishable from S33, and it follows too"):
     assertEquals(shapes(lastStep("S34")).sorted, shapes(lastStep("S33")).sorted)
     assertEquals(decisionLabels(lastStep("S34")).sorted, decisionLabels(lastStep("S33")).sorted)

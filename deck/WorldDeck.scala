@@ -161,6 +161,12 @@ object WorldDeck:
     s("S31", "rename a column header, values distinct", tablePair, "'Benefit' becomes 'Advantage'; the two rows hold distinct values in that column"),
     s("S32", "rename a column header, values identical", tablePair, "'Benefit' becomes 'Advantage'; both rows hold the byte-identical value in that column"),
     s("S33", "replace a row's subject, values byte-identical", tablePair, "the Queue row is deleted and a Stream row with the same values added"),
+    // S33's SIBLING FROM THE ATTACK SWARM, and the one thing it varies is whether the old row goes
+    // away. S33 DELETES the Queue row; this leaves it standing with its subject cell and no values,
+    // which is the table's version of the concept heading that kept only prose (S24C). Its fixtures
+    // are the judge's own T4 vault. `docs/design/IDENTITY-DECISION-SHEET.md`, "a standing table-row
+    // subject counts as the old subject standing", is what it pins.
+    shared("S33b", "S33b", "re-parent a cell onto another row while the old row STANDS", tablePair, "the Queue row's Benefit value moves onto the Broker row, and Queue's Cost value is emptied — so the Queue row is still there, holding its subject cell and no values"),
     s("S34", "fix a typo in a row concept", tablePair, "'Qeue' becomes 'Queue'; values untouched — the same observable as S33"),
     s("S35", "add a column", tablePair, "a Latency column with values is added"),
     s("S36", "delete a column", tablePair, "the Cost column is removed"),
