@@ -231,6 +231,43 @@ class WorldDeckTest extends munit.FunSuite:
     assert(diffWords(lastStep("S24")).contains("flag"), diffWords(lastStep("S24")).toString)
     assert(diffWords(lastStep("S24")).contains("create"), diffWords(lastStep("S24")).toString)
 
+  test("S24A [SETTLED-RULING 2026-09-13] the concept moved to ANOTHER NOTE: the descriptor still parks"):
+    // THE CASE THE FINAL ADVERSARIAL REVIEW CONSTRUCTED, and the reason the survival check had to
+    // grow a second witness. `# Kafka` leaves Messaging.md for Queues.md with `## Cost` under it
+    // while `## Definition` re-parents under `# NATS`. A check that asks only "is `kafka` a node of
+    // THIS note" answers no — truthfully — and the run then moves Cost's history onto
+    // `kafka / cost` in Queues.md WHILE moving Definition's history on the grounds that Kafka
+    // vanished. One run, both halves of a contradiction.
+    //
+    // RULED 2026-09-13: the run's own corroboration is the witness, so Kafka survives and the
+    // re-parent parks (R2). Cost's own pairing is untouched by the ruling and still applies.
+    assertEquals(shapes(lastStep("S24A")), Vector(s"corroborated/${Agreement.Total}", "reparented"))
+    assertEquals(decisionLabels(lastStep("S24A")), Vector("apply-reassign", "park-and-report"))
+
+  test("S24B [SETTLED-RULING 2026-09-13] the concept RE-NESTED in the same note: the descriptor still parks"):
+    // `# Kafka` becomes `## Kafka` under a new `# Archive`, so the node `kafka` is genuinely absent
+    // from the note — a node is addressed from the note's root, and this one is now
+    // `archive / kafka`. The per-note census therefore answers "gone" here too.
+    //
+    // THE RULING'S COHERENCE ARGUMENT IS WHAT DECIDES THIS ONE: the corroboration onto
+    // `archive / kafka / cost` is this run putting a card back under Kafka, so Kafka goes on
+    // existing. Nothing about the re-nesting is a rename of Kafka, and a run may not both keep a
+    // concept and declare it gone.
+    assertEquals(
+      shapes(lastStep("S24B")),
+      Vector(s"corroborated/${Agreement.NameAndSubstance}", "reparented"),
+    )
+    assertEquals(decisionLabels(lastStep("S24B")), Vector("apply-reassign", "park-and-report"))
+
+  test("S24C [SETTLED-RULING 2026-09-13] the concept keeping only PROSE parks it, as it already did"):
+    // THE WITNESS THE RULING ADDS TO RATHER THAN REPLACES. `# Kafka` stays in the note holding
+    // nothing but prose, and `## Cost` is deleted — so no card and no corroboration can show
+    // Kafka, and the per-note census is the only thing that can. This scenario passed before the
+    // ruling and must go on passing after it; it is what stops the second witness being built as a
+    // replacement for the first.
+    assertEquals(shapes(lastStep("S24C")), Vector("unexplained", "reparented"))
+    assertEquals(decisionLabels(lastStep("S24C")), Vector("park-and-report", "park-and-report"))
+
   test("S25 [SETTLED-MODEL+R2+R4] whole subtree moved cross-note: Corroborated·Total ×2, reassigned"):
     assertEquals(
       shapes(lastStep("S25")),
@@ -522,13 +559,22 @@ class WorldDeckTest extends munit.FunSuite:
 
   // ── the harness's own contract ──────────────────────────────────────────────────
 
-  test("every scenario id from S01 to S74 is in the deck, in order"):
-    val ids = WorldDeck.scenarios.map(_.id)
+  test("every scenario id from S01 to S74 is in the deck, in order, each variant in its parent's run"):
+    // A CORE ID IS THREE CHARACTERS ('S24') AND A VARIANT IS A CORE ID PLUS A SUFFIX ('S15b',
+    // 'S24A') — which is what the test asks, rather than asking for the suffix 'b' by name. It used
+    // to: ten `b`-variants were all there was until the three cases of 2026-09-13 arrived, and a
+    // test naming one spelling would have failed on scenarios it has no opinion about.
+    val ids  = WorldDeck.scenarios.map(_.id)
     val core = (1 to 74).map(n => f"S$n%02d")
-    assertEquals(ids.filterNot(_.endsWith("b")), core.toVector)
-    // and the b-variants sit directly after their parent:
-    ids.filter(_.endsWith("b")).foreach { b =>
-      assertEquals(ids(ids.indexOf(b) - 1), b.stripSuffix("b"), s"$b must follow ${b.stripSuffix("b")}")
+    assertEquals(ids.filter(_.length == 3), core.toVector)
+    // and a variant sits inside its parent's run — directly after the parent, or after an earlier
+    // variant of the same parent, so that 'S24, S24A, S24B, S24C' is in order and a stray is not:
+    ids.zipWithIndex.filter((id, _) => id.length > 3).foreach { (variant, i) =>
+      assertEquals(
+        ids(i - 1).take(3),
+        variant.take(3),
+        s"$variant must sit in ${variant.take(3)}'s run",
+      )
     }
 
   test("the transcript is deterministic: two runs render byte-identically"):

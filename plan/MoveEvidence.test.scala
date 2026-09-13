@@ -676,6 +676,130 @@ class MoveEvidenceTest extends munit.FunSuite:
         fail(s"an unrelated note's heading of the same name must not block a rename: $other")
   }
 
+  // ============ THE SECOND WITNESS OF SURVIVAL: THIS SURVEY'S OWN CORROBORATIONS ====
+
+  /** RULED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "the survival check answers with
+    * evidence, not spelling"): a concept counts as SURVIVING when THIS SAME SURVEY corroborated a
+    * card onto it. The per-note census stays as the first witness — it is the only thing that can
+    * see a concept which kept nothing but prose — and this is the second, which reaches the whole
+    * vault without ever matching on spelling alone.
+    *
+    * WHAT THE THREE TESTS BELOW PIN, AND WHY THE RULE NEEDED A SECOND WITNESS AT ALL. The final
+    * adversarial review constructed a run that asserted both halves of a contradiction at once:
+    * `# Kafka` leaves for another note with `## Cost` under it, so the run moves Cost's history
+    * onto `kafka / cost` THERE — while moving `## Definition`'s history on the grounds that Kafka
+    * had vanished. The per-note check answers honestly and is asking too narrow a question: the
+    * node `kafka` is indeed gone from this note. What the run may not do is spend that answer
+    * while its own conclusions say otherwise.
+    */
+  val costUnderKafka: CardSpec =
+    threeField(key("n1", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+
+  test("a concept this survey put a card back under has SURVIVED, though it left this note") {
+    // The reviewer's S24A, as a survey. `## Cost` follows `# Kafka` into another note and pairs
+    // there — subject unchanged, so that pairing needs no survival check and is decided first.
+    // Kafka therefore goes on existing, and `## Definition`'s move under `# NATS` is a re-parent:
+    // a different card by standing ruling R2, never a rename.
+    val definitionNow = definitionUnder("NATS", "n1", "top")
+    val costNow =
+      threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1), observed(costUnderKafka, 2)),
+      Vector(sourced(definitionNow), sourced(costNow)),
+      Map(
+        noteIdOf("n1") -> treeWith("top", "nats"),
+        noteIdOf("n2") -> Vector(Vector("top"), Vector("top", "kafka")),
+      ),
+    ) match
+      // Findings come out in the stranded keys' order, so the descriptor that stayed under Kafka
+      // ('… / cost') precedes the one that left ('… / definition').
+      case Vector(cost: MoveFinding.Corroborated, _: MoveFinding.Reparented) =>
+        assertEquals(cost.candidate, costNow.key, "the witness is the pairing this run acts on")
+      case other =>
+        fail(s"a concept this run kept a card under must not be read as gone: $other")
+  }
+
+  test("a concept RE-NESTED under a new ancestor has survived too, though its node path is gone") {
+    // The reviewer's S24B. `# Kafka` becomes `## Kafka` under a new `# Archive`, so the node
+    // `top / kafka` is genuinely absent from the note — the per-note census answers "gone" here as
+    // well. The corroboration onto `top / archive / kafka / cost` is what says otherwise, and the
+    // ruling's coherence argument is what decides it: re-nesting a concept is not renaming it, and
+    // one run may not both keep Kafka and declare it gone.
+    val definitionNow = definitionUnder("NATS", "n1", "top")
+    val costNow = threeField(
+      key("n1", "top", "archive", "kafka", "cost"),
+      "Kafka",
+      "Cost",
+      "Operational complexity.",
+      "Top › Archive",
+    )
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1), observed(costUnderKafka, 2)),
+      Vector(sourced(definitionNow), sourced(costNow)),
+      Map(
+        noteIdOf("n1") -> (treeWith("top", "nats") ++ Vector(
+          Vector("top", "archive"),
+          Vector("top", "archive", "kafka"),
+        ))
+      ),
+    ) match
+      case Vector(_: MoveFinding.Corroborated, _: MoveFinding.Reparented) => ()
+      case other => fail(s"a re-nested concept is still a concept the run kept: $other")
+  }
+
+  test("a corroboration onto some OTHER concept witnesses nothing about this one") {
+    // THE VACUITY GUARD ON THE WITNESS. Without it, "did this run corroborate anything at all"
+    // would pass every test above while blocking every innocent rename that happened to share a
+    // run with an unrelated move. `# ZooKeeper`'s descriptor moves note-to-note and pairs; the
+    // concept it lands under is ZooKeeper, and `# Kafka`'s rename to `# RabbitMQ` still follows.
+    val zooWas =
+      threeField(key("n1", "top", "zookeeper", "cost"), "ZooKeeper", "Cost", "Ensembles are odd-sized.", "Top")
+    val zooNow =
+      threeField(key("n2", "top", "zookeeper", "cost"), "ZooKeeper", "Cost", "Ensembles are odd-sized.", "Top")
+    val definitionNow = definitionUnder("RabbitMQ", "n1", "top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1), observed(zooWas, 2)),
+      Vector(sourced(definitionNow), sourced(zooNow)),
+      Map(
+        noteIdOf("n1") -> treeWith("top", "rabbitmq"),
+        noteIdOf("n2") -> Vector(Vector("top"), Vector("top", "zookeeper")),
+      ),
+    ) match
+      case Vector(_: MoveFinding.Corroborated, _: MoveFinding.Corroborated) => ()
+      case other => fail(s"an unrelated concept's pairing must not block a rename: $other")
+  }
+
+  test("a PAIRING the run will not act on is no witness — the run consults its conclusions") {
+    // The witness is what the survey CONCLUDED, not what it merely compared. Two stranded notes
+    // agree with one `# Kafka` descriptor in another note, so that claim is Contested and nothing
+    // is applied; a run that has established nothing about Kafka may not spend it as a survival.
+    // This is the fork the implementation must get right: witnesses are read off the findings, and
+    // reading them off the raw candidate lists would make this test fail.
+    val rivalHere =
+      threeField(key("n1", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    val rivalElsewhere =
+      threeField(key("n1", "other", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    val costNow =
+      threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    val definitionNow = definitionUnder("RabbitMQ", "n1", "top")
+    val findings = surveyOver(
+      Vector(observed(definitionUnderKafka, 1), observed(rivalHere, 2), observed(rivalElsewhere, 3)),
+      Vector(sourced(definitionNow), sourced(costNow)),
+      Map(
+        noteIdOf("n1") -> treeWith("top", "rabbitmq"),
+        noteIdOf("n2") -> Vector(Vector("top"), Vector("top", "kafka")),
+      ),
+    )
+    assertEquals(
+      findings.collect { case c: MoveFinding.Contested => c.stranded }.size,
+      2,
+      s"the fixture must contest the Kafka claim for this test to have a weapon: $findings",
+    )
+    findings.collectFirst { case c: MoveFinding.Corroborated => c } match
+      case Some(c) => assertEquals(c.candidate, definitionNow.key)
+      case None    => fail(s"the rename must still follow: $findings")
+  }
+
   test("a plain heading's own rewording is not a subject change, however deep its path") {
     // THE SECOND GUARD ON THE GATE'S REACH. A two-field card shows ONE name field, so its window
     // is one segment and the window-minus-its-last is empty on both sides. Deck S01 and S09 depend

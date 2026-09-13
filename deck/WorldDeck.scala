@@ -136,6 +136,14 @@ object WorldDeck:
     s("S22", "reword the concept in place", conceptDescriptor, "'# Kafka' becomes '# Apache Kafka'; both descriptor sections are untouched"),
     s("S23", "swap the concept's subject in place", conceptDescriptor, "'# Kafka' becomes '# RabbitMQ'; bodies untouched — the same observable as S22"),
     s("S24", "re-parent a descriptor under a different concept", conceptDescriptor, "'## Definition' (body verbatim) moves from under '# Kafka' to under '# NATS'"),
+    // THE THREE CONSTRUCTED BY THE FINAL ADVERSARIAL REVIEW, 2026-09-13, and named as it named
+    // them. Each varies ONE thing about S24: where the concept the descriptor left ends up. The
+    // review's point was that S24 alone cannot tell a survival check reading a NOTE'S OWN node
+    // tree from one reading the whole vault's evidence — the ruling of 2026-09-13 in
+    // `docs/design/IDENTITY-DECISION-SHEET.md` is what these pin.
+    s("S24A", "re-parent a descriptor while the concept moves to ANOTHER NOTE", conceptDescriptor, "'## Definition' moves under '# NATS' in Messaging.md; '# Kafka' and '## Cost' move verbatim into Queues.md"),
+    s("S24B", "re-parent a descriptor while the concept is RE-NESTED in the same note", conceptDescriptor, "'## Definition' moves under '# NATS'; '# Kafka' becomes '## Kafka' under a new '# Archive'"),
+    s("S24C", "re-parent a descriptor while the concept keeps only PROSE", conceptDescriptor, "'## Definition' moves under '# NATS'; '# Kafka' stays but holds only prose, '## Cost' is deleted"),
     s("S25", "move a concept and its whole subtree to another note", conceptDescriptor, "'# Kafka' and both descriptor sections move verbatim into Queues.md"),
     s("S26", "rename the file of an ancestorless descriptor", conceptDescriptor, "Kafka.md becomes NATS.md; the id and the body are untouched"),
     s("S27", "rename the file AND change the id", conceptDescriptor, "Kafka.md becomes NATS.md and 'id: k1' becomes 'id: k2' in one commit"),
