@@ -1197,11 +1197,12 @@ object MoveEvidence:
         // is not in it, and get "gone" for a subject standing in plain sight.
         subjectNode = was.dropRight(1),
         subject = subject,
-        // ⚠️ THE NOTE-ID HALF IS AN INTERPRETATION MARC HAS NOT BEEN ASKED ABOUT. Decision 2 follows
-        // a relabel when "the cluster stayed in place (the path agreed)", and a card key is A NOTE ID
-        // AND A PATH — so a card that crossed into another note is read here as a cluster that did
-        // not stay. No deck scenario exercises the combination; `plan/MoveEvidence.test.scala` is
-        // where it is pinned.
+        // ⚠️ THE NOTE-ID HALF IS AN INTERPRETATION AWAITING MARC'S CONFIRMATION, flagged here
+        // rather than buried — and it is NOT the one the ruling of 2026-09-13 settled, which was the
+        // other interpretation this gate carried. Decision 2 follows a relabel when "the cluster
+        // stayed in place (the path agreed)", and a card key is A NOTE ID AND A PATH — so a card that
+        // crossed into another note is read here as a cluster that did not stay. No deck scenario
+        // exercises the combination; `plan/MoveEvidence.test.scala` is where it is pinned.
         clusterMoved =
           was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId,
       )

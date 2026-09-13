@@ -658,13 +658,17 @@ class MoveEvidenceTest extends munit.FunSuite:
       case other => fail(s"an unsurveyable census must not license a follow: $other")
   }
 
-  test("the old subject is looked for in the stranded card's OWN note, not across the whole vault") {
-    // ⚠️ A SECOND INTERPRETATION AWAITING CONFIRMATION. The sheet says the old concept must
-    // "survive nowhere"; read as vault-wide matching on canonical TEXT, an innocent rename in one
-    // note would be blocked whenever any other note happened to hold a heading of the same name —
-    // and `# Notes` exists everywhere. A node is addressed as a path within a note, so "nowhere"
-    // is read as "at no path in this note". Deck scenario S24 is same-note, so no fixture can
-    // distinguish the two readings.
+  test("a NAMESAKE HEADING elsewhere, with no card this run paired onto it, proves nothing") {
+    // RULED 2026-09-13, and this test's reading was the one confirmed. The sheet says the old
+    // concept must "survive nowhere"; read as vault-wide matching on canonical TEXT, an innocent
+    // rename in one note would be blocked whenever any other note happened to hold a heading of the
+    // same name — and `# Notes` exists everywhere. So the census is asked about the card's own note,
+    // and the vault-wide half of the question is answered by EVIDENCE instead: a concept survives
+    // when this same survey corroborated a card onto it, which a bare namesake heading has not.
+    //
+    // The two readings the deck could not distinguish are therefore both live, and each has its own
+    // fixtures now: this test for the namesake that witnesses nothing, and the three below it for
+    // the concept the run itself keeps a card under.
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyOver(
       Vector(observed(definitionUnderKafka, 1)),
