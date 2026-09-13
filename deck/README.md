@@ -114,8 +114,11 @@ deck/fixtures/<Sxx>/after/    the vault after the edit
 deck/fixtures/<Sxx>/after2/   (three-step scenarios only) the vault after the second edit
 ```
 
-Two scenarios may share a fixture (S41/S42 re-read S33/S34's edits from the row card's side).
-Bodies that must be byte-identical across states are **copied, never retyped**. Scenarios whose
+No scenario shares a fixture with another. S41/S42 read the same shape of edit as S33/S34 (a
+row's subject swapped, or a typo in it fixed) but from their own directories, under a marker
+that mints row cards only (`#flashcard/table/rows`) — so their transcript block holds the row
+card's own evidence in isolation, with no pair card sharing it. Bodies that must be
+byte-identical across states are **copied, never retyped**. Scenarios whose
 observed collection must differ from anything a spec produces (S73's hand-edited field, S74's
 stock note type, S14's parked orphan) perturb the synthesized cards in `WorldDeck.scenarios`,
 and only those.
