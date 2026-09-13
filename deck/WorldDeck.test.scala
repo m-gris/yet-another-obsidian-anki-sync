@@ -335,14 +335,32 @@ class WorldDeckTest extends munit.FunSuite:
 
   // ── kind 4: table row cards ─────────────────────────────────────────────────────
 
-  test("S41 [SETTLED R3-by-accident] the row card strands on S33's edit because its Substance renders the concept"):
+  test("S41 [SETTLED-MODEL] subject swap on an isolated row-only table: the row card strands alone"):
+    // Own fixture, not shared with S33: the marker is #flashcard/table/rows, so the table mints
+    // row cards only — no pair card shares this transcript block, unlike the harness anomaly
+    // this scenario used to reproduce (IDENTITY-DECISION-SHEET.md, Appendix B). The row card's
+    // Front and Back both render the row's subject cell, so a subject swap fails the comparison
+    // floor on its own, isolated from any pair-card corroboration.
+    assertEquals(shapes(lastStep("S41")), Vector("unexplained"))
     val rowFinding = lastStep("S41").findings.collectFirst {
       case u: MoveFinding.Unexplained => u.stranded.path.render
     }
     assertEquals(rowFinding, Some("cost / benefit / queue"))
+    assertEquals(decisionLabels(lastStep("S41")), Vector("park-and-report"))
+    assertEquals(diffWords(lastStep("S41")).count(_ == "create"), 1)
+    assertEquals(diffWords(lastStep("S41")).count(_ == "non-event"), 1)
 
-  test("S42 [OPEN] the row card also strands on S34's typo fix — history lost on a wording fix"):
-    assert(shapes(lastStep("S42")).contains("unexplained"))
+  test("S42 [OPEN] typo fix on an isolated row-only table: the same stranding as S41, unruled"):
+    // History is lost on a wording fix, because for a row card the subject cell sits inside
+    // Substance and the floor cannot be asked to excuse it — the pair/row asymmetry S33's
+    // shared run showed at once (pair cards followed, the row card stranded), now visible from
+    // the row side alone, with no pair card in the same block to contrast it against.
+    assertEquals(shapes(lastStep("S42")), Vector("unexplained"))
+    val rowFinding = lastStep("S42").findings.collectFirst {
+      case u: MoveFinding.Unexplained => u.stranded.path.render
+    }
+    assertEquals(rowFinding, Some("cost / benefit / qeue"))
+    assertEquals(diffWords(lastStep("S42")).count(_ == "create"), 1)
 
   test("S43 [SETTLED-MODEL] a value edit updates the pair card and the row card in place"):
     assertEquals(shapes(lastStep("S43")), Vector.empty)
@@ -568,3 +586,8 @@ class WorldDeckTest extends munit.FunSuite:
     assertNotEquals(candidatePaths("S20"), candidatePaths("S21"))
     assertNotEquals(candidatePaths("S22"), candidatePaths("S23"))
     assertNotEquals(candidatePaths("S56"), candidatePaths("S56b"))
+    // S41/S42 strand rather than corroborate, so the discriminator is the stranded path, not
+    // the candidate path — but the same guard applies: two genuinely different edits.
+    def strandedPaths(id: String): Vector[String] =
+      lastStep(id).findings.collect { case u: MoveFinding.Unexplained => u.stranded.path.render }
+    assertNotEquals(strandedPaths("S41"), strandedPaths("S42"))
