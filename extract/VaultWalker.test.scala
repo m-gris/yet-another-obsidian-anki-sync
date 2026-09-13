@@ -1506,6 +1506,74 @@ class VaultWalkerTest extends munit.FunSuite:
     )
   }
 
+  /** THE CANONICAL SEGMENTS OF A CARD'S PATH, so a test can compare what the census says about a row
+    * against what the KEY DERIVATION said about the same row. The comparison is the point: these are
+    * two readings of one table cell, and the census is worth nothing if they disagree.
+    */
+  def keySegments(key: CardKey): Vector[String] = key.path match
+    case CardPath.Headings(headings) => headings.segments.toVector.map(_.value)
+    case other => fail(s"the fixture must produce heading-path keys, not ${other.render}")
+
+  test("a table row whose value cells are ALL EMPTY is still a node, though no card is keyed under it") {
+    // RULED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "a standing table-row subject
+    // counts as the old subject standing"): the table analogue of the concept heading that kept only
+    // prose. Emptying a row's value cells destroys every card under it, so the row survives in no
+    // key anywhere — and the survival check would then read a value moved onto ANOTHER row as a
+    // rename of this one and move its review history. The same event written as headings parks
+    // (deck S24C); written as a table it followed.
+    val index = scan(
+      "T.md" -> note(
+        "t1",
+        "## Cost / benefit #flashcard/table\n\n" +
+          "| Pattern | Benefit | Cost |\n|---|---|---|\n" +
+          "| Queue |  |  |\n| Broker | Load absorption | Ops overhead |\n",
+      )
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+
+    // THE VACUITY GUARD, and without it this test would pass on the census half that already
+    // existed. A row that still has a card contributes its node as that card's key PREFIX; the
+    // whole question here is the row that has no card, so the fixture must contain no key that
+    // mentions it.
+    assert(
+      index.scan.specs.forall(s => !keySegments(s.key).contains("queue")),
+      s"the fixture must leave 'queue' in no key at all: ${index.scan.specs.map(_.key.path.render)}",
+    )
+
+    assert(
+      censusNodes(index, "t1").contains(Vector("cost / benefit", "queue")),
+      censusNodes(index, "t1"),
+    )
+  }
+
+  test("an emptied row's subject is canonicalised exactly as a keyed row's subject is") {
+    // TWO READINGS OF ONE KIND OF CELL, and they have to agree. The row that still has cards
+    // anchors what the KEY derivation makes of a subject cell; the emptied row is read by the
+    // census alone. Both cells here carry markup and mixed case, so a census reading the cell as a
+    // card FACE shows it — escaped, or with its markup left in — or one that skipped
+    // canonicalisation would disagree with the anchor and this test would say so.
+    val index = scan(
+      "T.md" -> note(
+        "t1",
+        "## Cost / benefit #flashcard/table\n\n" +
+          "| Pattern | Benefit | Cost |\n|---|---|---|\n" +
+          "| **Message Queue** |  |  |\n| *Shared Broker* | Load absorption | Ops overhead |\n",
+      )
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+
+    val keyedRow = index.scan.specs
+      .map(s => keySegments(s.key))
+      .filter(_.length == 3)
+      .map(_.dropRight(1))
+      .distinct
+    assertEquals(keyedRow, Vector(Vector("cost / benefit", "shared broker")))
+
+    val nodes = censusNodes(index, "t1")
+    assert(nodes.contains(keyedRow.head), s"the keyed row's own parent is not a node: $nodes")
+    assert(nodes.contains(Vector("cost / benefit", "message queue")), nodes)
+  }
+
   test("a note whose heading tree could not be derived has NO census answer, not an empty one") {
     // A heading that extracts to nothing stops the key derivation and is reported
     // `KeyUnderivableInFile`; a census read off that tree would be describing a different file.
