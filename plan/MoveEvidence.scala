@@ -1199,7 +1199,7 @@ object MoveEvidence:
     read.map {
       case SurveyRead.Concluded(finding) => finding
       case pairing: SurveyRead.AwaitingSurvival =>
-        underTheSurvivalCheck(pairing, census, corroboratedConcepts)
+        underTheSurvivalCheck(pairing, census, corroboratedConcepts, declared)
     }
 
   /** THE CONCEPTS THIS SURVEY ITSELF PUT A CARD UNDER — the second witness of survival, per the
@@ -1330,15 +1330,27 @@ object MoveEvidence:
       )
 
   /** DOES THE SUBJECT THE CARD LEFT GO ON EXISTING? The question pass one could not answer, because
-    * one of its two witnesses is a fact about the whole survey.
+    * one of its three witnesses is a fact about the whole survey.
     *
-    * ═══ THE TWO WITNESSES, AND WHY THE RUN'S OWN IS ASKED FIRST ═══
+    * ═══ THE THREE WITNESSES, AND WHAT DECIDES THE ORDER THEY ARE ASKED IN ═══
     *
-    * The order is not an optimisation. The census has THREE answers, and one of them is "I could not
-    * look" — from which nothing may be concluded, which is why an unsurveyable census turns a
-    * relabel into a question. But a survival this run ESTABLISHED needs no census at all: the run
-    * itself put a card under that subject, and a census that could not be taken cannot unestablish
-    * it. Asking the census first would spend "I could not look" on a run that already knew.
+    * They cannot disagree about the ANSWER — each is a positive declaration, and none of them can
+    * say a subject is gone — so the order decides only WHICH ONE THE REPORT NAMES. Two things fix
+    * it, and neither is taste.
+    *
+    * FIRST: A POSITIVE DECLARATION OUTRANKS "I COULD NOT LOOK". The census has three answers and one
+    * of them is an admission; from that nothing may be concluded, which is why an unsurveyable
+    * census turns a relabel into a question. But a survival ESTABLISHED by this run's own pairings,
+    * or by a card the collection is holding, needs no census at all — and a census that could not be
+    * taken cannot unestablish either of them. So the census's ADMISSION is asked last, after both
+    * witnesses that do not depend on it.
+    *
+    * SECOND: NAME THE MOST DIRECT FACT AVAILABLE. Where the concept is still a node of the stranded
+    * card's OWN NOTE, that is a sentence a reader checks by opening one file, so it is preferred over
+    * "some other card elsewhere declares it" — which is why the census's POSITIVE answer is asked
+    * before the collection's declarations even though the admission is asked after. Splitting the
+    * census's two answers apart is the whole reason this reads as a list of witnesses rather than as
+    * a nested match.
     *
     * ═══ THE ROUTES, WHICH ARE THE RULINGS OF 2026-09-12 AND 2026-09-13 ═══
     *
@@ -1348,12 +1360,17 @@ object MoveEvidence:
     *   - THE SUBJECT IS STILL A NODE OF THIS NOTE — [[MoveFinding.Reparented]] again. Ruling R2,
     *     deck scenarios S24 and S24C: there are two cards here, not one that moved. This is the only
     *     witness that can see a concept which kept nothing but prose.
+    *   - A LIVE CARD IN THE COLLECTION DECLARES THE SUBJECT — [[MoveFinding.Reparented]] again.
+    *     Resolved 2026-09-13 as entailed by the standing rulings, and it is the only witness that
+    *     survives the sync boundary: the other two are facts about THIS run, and the attack that
+    *     forced this simply put the concept's departure and the descriptor's re-parenting in
+    *     different runs. See [[LiveDeclarations]].
     *   - IT IS GONE AND THE CLUSTER STAYED PUT — [[MoveFinding.Corroborated]]. Decision 2, revising
     *     R3: "Least Element" became "Bottom", and the same cards keep their history.
     *   - IT IS GONE AND SOMETHING ELSE MOVED TOO — [[MoveFinding.RelabelUnvouched]]. Decision 2
     *     again: "the path weighs both ways — a name change combined with a move grades weaker and
     *     becomes a question".
-    *   - THE CENSUS COULD NOT SAY, AND THIS RUN ESTABLISHED NOTHING — [[MoveFinding.RelabelUnvouched]],
+    *   - THE CENSUS COULD NOT SAY, AND NOTHING ELSE ANSWERED — [[MoveFinding.RelabelUnvouched]],
     *     carrying the reason. "It is gone" is the premise the follow rests on, and a run that could
     *     not look has not established it.
     *
@@ -1366,6 +1383,7 @@ object MoveEvidence:
       pairing: SurveyRead.AwaitingSurvival,
       census: NodeCensus,
       corroboratedConcepts: Map[Vector[String], CardKey],
+      declared: LiveDeclarations,
   ): MoveFinding =
     // THE WAITING PAIRING TRAVELS AS ONE VALUE rather than as its six fields, because two of those
     // fields are `Vector[String]` and mean different things — the node address and the subject —
@@ -1384,34 +1402,46 @@ object MoveEvidence:
       divergences,
     )
 
-    corroboratedConcepts.get(subject) match
-      case Some(witness) =>
-        reparented(SubjectSurvival.CorroboratedOnto(subject, witness))
+    def unvouched(cause: RelabelDoubt) = MoveFinding.RelabelUnvouched(
+      card.key,
+      card.note.id,
+      spec.key,
+      spec.source,
+      cause,
+      divergences,
+    )
 
+    // ASKED ONCE AND READ TWICE, because its POSITIVE answer and its ADMISSION sit at opposite ends
+    // of the witness order — see this function's docstring for what puts them there.
+    val counted = census.nodesOf(card.key.noteId)
+
+    val stillInTheNote = counted match
+      case NodeCensus.Answer.Surveyed(nodes) if nodes.contains(pairing.subjectNode) =>
+        Some(SubjectSurvival.StillInTheNote(pairing.subjectNode))
+      case NodeCensus.Answer.Surveyed(_) | NodeCensus.Answer.Unsurveyable(_) => None
+
+    // THE THREE WITNESSES, IN ONE EXPRESSION AND IN THE ORDER THE DOCSTRING ARGUES FOR. Each is a
+    // positive declaration, so the first one to answer decides — there is no case in which asking a
+    // later one could contradict an earlier one, only one in which it would be named instead.
+    val survived: Option[SubjectSurvival] =
+      corroboratedConcepts
+        .get(subject)
+        .map(SubjectSurvival.CorroboratedOnto(subject, _))
+        .orElse(stillInTheNote)
+        .orElse(declared.witnessFor(subject).map(SubjectSurvival.StillInTheCollection(subject, _)))
+
+    survived match
+      case Some(survival) => reparented(survival)
+
+      // NOTHING DECLARED THE SUBJECT. What is left is the two ways that can mean something and the
+      // one way it can mean nothing, and the census's own answer is what separates them.
       case None =>
-        census.nodesOf(card.key.noteId) match
+        counted match
           case NodeCensus.Answer.Unsurveyable(reason) =>
-            MoveFinding.RelabelUnvouched(
-              card.key,
-              card.note.id,
-              spec.key,
-              spec.source,
-              RelabelDoubt.CensusUnavailable(reason),
-              divergences,
-            )
+            unvouched(RelabelDoubt.CensusUnavailable(reason))
 
-          case NodeCensus.Answer.Surveyed(nodes) =>
-            if nodes.contains(pairing.subjectNode) then
-              reparented(SubjectSurvival.StillInTheNote(pairing.subjectNode))
-            else if pairing.clusterMoved then
-              MoveFinding.RelabelUnvouched(
-                card.key,
-                card.note.id,
-                spec.key,
-                spec.source,
-                RelabelDoubt.ClusterMoved,
-                divergences,
-              )
+          case NodeCensus.Answer.Surveyed(_) =>
+            if pairing.clusterMoved then unvouched(RelabelDoubt.ClusterMoved)
             else
               MoveFinding.Corroborated(
                 card.key,
