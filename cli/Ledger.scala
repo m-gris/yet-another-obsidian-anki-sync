@@ -1,11 +1,13 @@
 package obsidiananki.cli
 
 import io.circe.Json
+import io.circe.syntax.*
 import java.io.IOException
 import java.nio.file.Path
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneOffset}
-import obsidiananki.plan.HistoryMove
+import obsidiananki.model.{CardKey, TagCodec}
+import obsidiananki.plan.{Agreement, HistoryMove}
 
 /** WHICH RUN OF THE TOOL A LEDGER LINE BELONGS TO.
   *
@@ -124,8 +126,68 @@ object LedgerFile:
     */
   def locate(home: Path): Path = home.resolve(RelativeLocation)
 
-  /** ONE ENTRY AS THE OBJECT THAT GOES ON THE WIRE. */
-  def json(entry: LedgerEntry): Json = ???
+  /** ONE ENTRY AS THE OBJECT THAT GOES ON THE WIRE.
+    *
+    * `action` IS A CONSTANT, AND IT IS HERE RATHER THAN ON THE TYPE. A reassignment is the only
+    * action in the algebra that moves review history without being asked, so [[LedgerEntry]] needs
+    * no field to say which kind it is — a field that can hold only one value is a field that can one
+    * day hold the wrong one. It is still EMITTED, because a consumer's filter
+    * (`select(.action == "reassign")`) has to keep working on the day a second kind of action earns a
+    * line, and a line that never said what it was cannot be told apart from one that did.
+    *
+    * `divergences` IS ALWAYS PRESENT, EVEN WHEN EMPTY, which is `cli/AsJson.scala`'s always-emit rule
+    * applied here: a consumer distinguishing "nothing differed" from "this version does not report
+    * what differed" cannot do it if the key is absent in both cases, and the failure would be silent.
+    * A grade of `Total` reaches this with an empty list routinely.
+    *
+    * KEYS ARE NAMED FOR THE READER OF A SCRIPT rather than for this codebase's vocabulary — `was`
+    * and `now` rather than `inAnki` and `inVault`. Somebody writing a `jq` filter has not read
+    * `plan/MoveEvidence.scala`.
+    */
+  def json(entry: LedgerEntry): Json =
+    Json.obj(
+      "at"          := entry.at.toString,
+      "run"         := entry.run.value,
+      "action"      := "reassign",
+      "ankiNote"    := entry.moved.ankiNote.value,
+      "from"        := key(entry.moved.from),
+      "to"          := key(entry.moved.to),
+      "grade"       := gradeName(entry.moved.grade),
+      "noteType"    := entry.moved.noteType,
+      "divergences" := entry.moved.divergences.map(d =>
+        Json.obj("field" := d.field, "was" := d.inAnki, "now" := d.inVault)
+      ),
+      "unflagged" := entry.moved.unflagged,
+    )
+
+  /** ONE KEY IN BOTH OF THE FORMS THE TRAIL'S TWO READERS NEED.
+    *
+    * `tag` is the `TagCodec` encoding — the form a program decodes back into a `CardKey` exactly,
+    * which is what makes a line checkable against a collection. `note` and `path` are what a person
+    * greps: nobody hunting a lost card remembers its percent-encoding.
+    *
+    * BOTH, NOT A CHOICE BETWEEN THEM. Only the encoded form would make the trail unusable from a
+    * terminal. Only the rendered form would make it lossy, because `render` joins segments with
+    * " / " and a segment containing that string is free to forge one.
+    */
+  private def key(k: CardKey): Json =
+    Json.obj(
+      "tag"  := TagCodec.encode(k).value,
+      "note" := k.noteId.value,
+      "path" := k.path.render,
+    )
+
+  /** SPELLED OUT RATHER THAN `toString`, so the wire format is a decision and not a consequence.
+    *
+    * The four names happen to equal the enum's case names today. Written as a match, renaming a case
+    * is a compile error here and therefore a deliberate choice about the wire; written as `toString`
+    * it would be a silent change to what every future reader of an old line sees.
+    */
+  private def gradeName(grade: Agreement): String = grade match
+    case Agreement.Total             => "Total"
+    case Agreement.NameAndSubstance  => "NameAndSubstance"
+    case Agreement.PlaceAndSubstance => "PlaceAndSubstance"
+    case Agreement.SubstanceAlone    => "SubstanceAlone"
 
   /** One line, compact, carrying no newline of its own. */
   def line(entry: LedgerEntry): String = json(entry).noSpaces
@@ -144,4 +206,5 @@ object LedgerFile:
     *
     * Empty in, empty out: a run that moved no history appends nothing, not a blank line.
     */
-  def document(moves: Vector[HistoryMove], at: Instant, run: RunId): String = ???
+  def document(moves: Vector[HistoryMove], at: Instant, run: RunId): String =
+    moves.map(move => line(LedgerEntry(at, run, move)) + "\n").mkString

@@ -94,7 +94,32 @@ object HistoryMove:
     * which is what makes "a mere content update writes no ledger line" an assertion rather than a
     * hope.
     */
-  def inActions(actions: Vector[SyncAction]): Vector[HistoryMove] = ???
+  def inActions(actions: Vector[SyncAction]): Vector[HistoryMove] =
+    // MATCHED ON BOTH THE NOTE AND THE OLD KEY, NOT ON THE NOTE ALONE, and the reason is not visible
+    // from here: `plan/Planner.scala` emits `Unflag` from THREE branches. One is the reassignment
+    // branch, which emits it naming the OLD key immediately before the `Reassign`. The other two
+    // concern a note that is present AT its key and merely needs its orphan tag cleared. Matching
+    // the note id alone would therefore record "this note was released as part of its move" for a
+    // note released for an unrelated reason — a claim about somebody's collection on no evidence.
+    // The old key is what makes it the same event.
+    val released: Set[(AnkiNoteId, CardKey)] = actions.collect {
+      case SyncAction.Unflag(key, noteId) => (noteId, key)
+    }.toSet
+
+    actions.collect { case SyncAction.Reassign(corroboration, _, _, _, _, _) =>
+      HistoryMove(
+        ankiNote = corroboration.noteId,
+        from = corroboration.stranded,
+        to = corroboration.candidate,
+        // DERIVED HERE THE SAME WAY THE REPORT DERIVES IT, from the two keys and the note type,
+        // rather than stored on the finding. A grade computed twice from one source cannot disagree
+        // with itself; a grade stored and copied can.
+        grade = corroboration.agreement,
+        noteType = corroboration.noteType,
+        divergences = corroboration.divergences,
+        unflagged = released.contains((corroboration.noteId, corroboration.stranded)),
+      )
+    }
 
 /** WHERE A RUN WRITES DOWN WHAT IT IS ABOUT TO DO TO SOMEBODY'S REVIEW HISTORY.
   *
