@@ -28,9 +28,13 @@ From the repository root:
 scala-cli run . --main-class obsidiananki.deck.runDeck
 ```
 
-prints the whole deck's transcript under the baseline policy (the behaviour the `move-build`
-Planner ships today: a corroborated finding auto-applies per the 2026-09-05 ruling; every other
-finding is reported and never acted on). Redirect it to a file to diff against another world's.
+prints the whole deck's transcript under the baseline policy: a corroborated finding auto-applies
+per the 2026-09-05 ruling, every other finding is reported and never acted on. That policy itself
+has not changed; what has is which pairings the survey is willing to call `Corroborated`, per the
+five rulings of `docs/design/IDENTITY-DECISION-SHEET.md` — so this command now prints the ruled
+policy's transcript, not a pre-ruling one. A committed copy, annotated with what reads
+differently from before those rulings landed, is `TRANSCRIPT-baseline.md` at the repository root.
+Redirect a fresh run to a file to diff against another world's.
 
 The deck's own tests:
 
@@ -100,11 +104,12 @@ from `WorldDeck.runScenario(...)` steps, or against hand-built ones. The deck's 
 (`deck/WorldDeck.test.scala`) already pins the **mechanism's** output for every scenario:
 `[SETTLED]` scenarios assert finding, grade and the baseline action; `[OPEN]` scenarios assert
 the finding and grade only, because the verdict on those is precisely what a world decides.
-Where a standing ruling says the current mechanism is wrong, the test asserts the defective
-current output and carries the ruling in its name — S17 (R5: a duplicate key should refuse only
-the cards involved, not the whole run), S24 (R2: a concept-descriptor's parent is constitutive,
-so re-parenting a descriptor must NOT carry history), S33 (R3: a table row whose subject changed
-must NOT silently keep its history).
+Where a standing ruling once said the mechanism was wrong, the gate built for
+`docs/design/IDENTITY-DECISION-SHEET.md`'s rulings now makes most of those scenarios read
+correctly, and their test names no longer claim otherwise: S24 (R2) and S33/S34 (Decision 2) are
+now `[SETTLED-RULING]`. Only **S17** is still left asserting a defective current output, carrying
+the ruling its fix must satisfy in its name (R5: a duplicate key should refuse only the cards
+involved, not the whole run).
 
 ## Fixture layout
 
