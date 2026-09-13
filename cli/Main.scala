@@ -715,11 +715,14 @@ object Main
     * no second `.attempt` over `IO`, so the gate comment above about there being exactly one stays
     * true.
     *
-    * LIKE EVERYTHING ELSE IN THIS SECTION, THIS IS PRODUCTION WIRING THE SUITE INJECTS PAST. The
-    * format, the path and the ordering are all tested; that those tested pieces are handed a real
-    * file by this function is exercised by running the tool.
+    * UNLIKE THE REST OF THIS SECTION IT IS NOT WIRING THE SUITE INJECTS PAST, and that is deliberate:
+    * `to` is a parameter, so a test points it at a temporary directory and asserts on the bytes that
+    * land. The ruling this serves is about DURABILITY, and everything else about the ledger can be
+    * correct while nothing ever reaches a disk — so "a file appears, and a second run appends to it
+    * rather than replacing it" is the one claim that cannot be left to be exercised by running the
+    * tool. `private[cli]` for exactly that reason and no other.
     */
-  private def appendingLedger(to: Path, at: Instant, run: RunId): Ledger[Refused] =
+  private[cli] def appendingLedger(to: Path, at: Instant, run: RunId): Ledger[Refused] =
     new Ledger[Refused]:
       def record(moves: Vector[HistoryMove]): Refused[Unit] =
         EitherT.liftF(IO.blocking {

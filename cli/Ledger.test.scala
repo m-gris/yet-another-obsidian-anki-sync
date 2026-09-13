@@ -1,8 +1,9 @@
 package obsidiananki.cli
 
 import cats.data.NonEmptyVector
+import cats.effect.unsafe.implicits.global
 import io.circe.parser.parse
-import java.nio.file.Paths
+import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 import obsidiananki.anki.AnkiNoteId
 import obsidiananki.model.{CardKey, CardPath, HeadingPath, HeadingSegment, NoteId, TagCodec}
@@ -213,4 +214,98 @@ class LedgerFileTest extends munit.FunSuite:
   test("two runs starting in the same second are still told apart") {
     val together = Instant.parse("2026-09-13T00:45:00Z")
     assertNotEquals(RunId.of(together, "a3f9c1").value, RunId.of(together, "b7e204").value)
+  }
+
+  // ══════════════════════════════════ THE APPENDER, AGAINST A REAL FILESYSTEM ════
+  //
+  // Everything above is pure, and every one of those assertions could hold while nothing ever
+  // reached a disk. The ruling of 2026-09-12 is about DURABILITY, so the claim that a file appears —
+  // and that a second run adds to it rather than replacing it — is the one that has to be made
+  // against a real filesystem. A temporary directory, never the real home: these tests must not
+  // write where the tool writes.
+
+  def inTempHome[A](use: Path => A): A =
+    val home = Files.createTempDirectory("yaoas-ledger-test")
+    try use(home)
+    finally
+      // Depth-first, because a directory cannot be deleted while it holds anything.
+      Files
+        .walk(home)
+        .sorted(java.util.Comparator.reverseOrder[Path])
+        .forEach(p => Files.deleteIfExists(p): Unit)
+
+  def append(home: Path, moves: Vector[HistoryMove], run: RunId): Unit =
+    Main
+      .appendingLedger(LedgerFile.locate(home), at, run)
+      .record(moves)
+      .value
+      .unsafeRunSync()
+      .fold(e => fail(s"the append reported an Anki error, which it cannot have: $e"), identity)
+
+  test("a first run creates the directory it has never had, and writes one line per move") {
+    inTempHome { home =>
+      append(home, Vector(moved), run)
+
+      val file = LedgerFile.locate(home)
+      assert(Files.exists(file), s"no ledger was written at $file")
+      val lines = Files.readString(file).linesIterator.toVector
+      assertEquals(lines.size, 1)
+      assertEquals(objectOf(lines.head)("run").flatMap(_.asString), Some(run.value))
+    }
+  }
+
+  test("a second run APPENDS — the first run's line is still there afterwards") {
+    // The property the whole file format exists for, and the one a wrong open flag would destroy
+    // silently: `WRITE` without `APPEND` truncates, and the loss would only be noticed by somebody
+    // looking for a record that had been there a moment ago.
+    inTempHome { home =>
+      val second = RunId.of(Instant.parse("2026-09-13T09:00:00Z"), "b7e204")
+      append(home, Vector(moved), run)
+      append(home, Vector(moved.copy(unflagged = false)), second)
+
+      val lines = Files.readString(LedgerFile.locate(home)).linesIterator.toVector
+      assertEquals(lines.size, 2, "the second run did not append to the first run's trail")
+      assertEquals(
+        lines.map(l => objectOf(l)("run").flatMap(_.asString)),
+        Vector(Some(run.value), Some(second.value)),
+        "the runs are out of order, or one overwrote the other",
+      )
+    }
+  }
+
+  test("a run that moved no history leaves no file at all") {
+    // Its absence is information: somebody who has never had a card reassigned should not find a
+    // ledger. An empty file would say "this tool has moved history and here is the record", which is
+    // the opposite of true.
+    inTempHome { home =>
+      append(home, Vector.empty, run)
+      assert(
+        !Files.exists(LedgerFile.locate(home)),
+        "an empty batch created a ledger file anyway",
+      )
+    }
+  }
+
+  test("a ledger that cannot be written raises an error naming the file and the consequence") {
+    // Modelled by handing the appender a home that is a FILE, so the directory beneath it cannot be
+    // created. What matters is that the failure is not swallowed and not reported as an Anki error:
+    // the run has to stop, because an automatic action that cannot be recorded must not happen.
+    val notADirectory = Files.createTempFile("yaoas-ledger-not-a-dir", "")
+    try
+      val raised = intercept[LedgerUnwritable] {
+        Main
+          .appendingLedger(LedgerFile.locate(notADirectory), at, run)
+          .record(Vector(moved))
+          .value
+          .unsafeRunSync()
+      }
+      assert(
+        raised.getMessage.contains("ledger.jsonl"),
+        s"the failure does not name the file it could not write: ${raised.getMessage}",
+      )
+      assert(
+        raised.getMessage.contains("nothing was written to Anki"),
+        s"the failure does not say the collection was left alone: ${raised.getMessage}",
+      )
+    finally Files.deleteIfExists(notADirectory): Unit
   }
