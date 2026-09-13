@@ -1319,15 +1319,60 @@ object MoveEvidence:
         // is not in it, and get "gone" for a subject standing in plain sight.
         subjectNode = was.dropRight(1),
         subject = subject,
-        // ⚠️ THE NOTE-ID HALF IS AN INTERPRETATION AWAITING MARC'S CONFIRMATION, flagged here
-        // rather than buried — and it is NOT the one the ruling of 2026-09-13 settled, which was the
-        // other interpretation this gate carried. Decision 2 follows a relabel when "the cluster
-        // stayed in place (the path agreed)", and a card key is A NOTE ID AND A PATH — so a card that
-        // crossed into another note is read here as a cluster that did not stay. No deck scenario
-        // exercises the combination; `plan/MoveEvidence.test.scala` is where it is pinned.
+        // WHERE THE CARD SITS, WHICH IS A PATH AND A NOTE ID BOTH. A card key is both, so a card
+        // that crossed into another note is a card whose cluster did not stay — the same answer the
+        // ⚠️-flagged interpretation this gate used to carry gave, and confirmed by the entailment of
+        // 2026-09-13 in the only place it still decides anything.
+        //
+        // WHAT CHANGED THAT DAY IS WHO ASKS THIS, NOT WHAT IT MEANS. It used to decide the relabel
+        // for every kind; it now decides it only for a card whose author declared that its
+        // description identifies nothing — see [[declaresItsConcept]] and [[underTheSurvivalCheck]].
         clusterMoved =
           was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId,
       )
+
+  /** DID THE AUTHOR DECLARE THAT THIS DESCRIPTION IDENTIFIES ITS CONCEPT? The fact the relabel gate
+    * turns on since the entailment of 2026-09-13.
+    *
+    * ═══ WHAT IT READS, AND WHY THAT FIELD ═══
+    *
+    * `Marker.ValueOnlyField`, which is set exactly when a marker asked for the value direction ALONE
+    * — `#flashcard/cdd/1way` and `#flashcard/table/1way`. Every other three-field way generates the
+    * CONCEPT-RECALL card: `cdd/2way`, `cdd/3way`, a bare `#flashcard/table`, `table/2way`,
+    * `table/3way` and the older `#flashcard/3way` spellings. So "this description identifies its
+    * concept" and "the collection holds a card that asks the author to name the concept from the
+    * description" are the same statement, and this field is where the marker put it.
+    *
+    * INVERTED, WHICH IS `Marker.ValueOnlyField`'s OWN CHOICE AND NOT AN ODDITY HERE: the note
+    * template tests `{{^ValueOnly}}`, so EMPTY means the concept-recall card is generated. Reading
+    * `isEmpty` as "declares" therefore agrees with what Anki actually shows, and it also gives the
+    * right answer for a note synced before the field existed — which is the reason the field was
+    * defined that way round.
+    *
+    * ═══ WHY THE VAULT'S SIDE IS READ AND WHY IT CANNOT MATTER WHICH ═══
+    *
+    * A declaration is the author's, and the vault is where the author writes. It also cannot change
+    * a verdict: `ValueOnly` is a [[FieldRole.Setting]] field, the comparison floor admits no pairing
+    * whose Setting fields differ, so by the time any pairing reaches here both sides say the same
+    * thing. Reading the spec makes the sentence "what the author declares NOW" true as well as
+    * correct.
+    *
+    * A LOUD FAILURE RATHER THAN A DEFAULT, and it is unreachable rather than defensive: this is only
+    * ever asked about a pairing that got through [[compare]], which already read every field the note
+    * type declares by name, and the subject gate only fires for the one note type whose window is two
+    * segments wide. A spec that reached here without the field would mean this tool had contradicted
+    * `Marker.FieldOrder`, and there is no correct answer available to it.
+    */
+  private def declaresItsConcept(spec: SourcedSpec): Boolean =
+    spec.spec.fields.toMap
+      .getOrElse(
+        Marker.ValueOnlyField,
+        sys.error(
+          s"the spec for '${spec.key.path.render}' emits no '${Marker.ValueOnlyField}', so what its " +
+            "author declared about the description cannot be read — see MoveEvidence.declaresItsConcept"
+        ),
+      )
+      .isEmpty
 
   /** DOES THE SUBJECT THE CARD LEFT GO ON EXISTING? The question pass one could not answer, because
     * one of its three witnesses is a fact about the whole survey.
@@ -1367,9 +1412,14 @@ object MoveEvidence:
     *     different runs. See [[LiveDeclarations]].
     *   - IT IS GONE AND THE CLUSTER STAYED PUT — [[MoveFinding.Corroborated]]. Decision 2, revising
     *     R3: "Least Element" became "Bottom", and the same cards keep their history.
-    *   - IT IS GONE AND SOMETHING ELSE MOVED TOO — [[MoveFinding.RelabelUnvouched]]. Decision 2
-    *     again: "the path weighs both ways — a name change combined with a move grades weaker and
-    *     becomes a question".
+    *   - IT IS GONE, SOMETHING ELSE MOVED TOO, AND THE DESCRIPTION IDENTIFIES THE CONCEPT —
+    *     [[MoveFinding.Corroborated]] as well. Entailed 2026-09-13: place was never part of what a
+    *     `/2way` or `/3way` declaration claims, so there is nothing for the path to weigh once the
+    *     description is unchanged and the old subject stands nowhere. See [[declaresItsConcept]].
+    *   - IT IS GONE, SOMETHING ELSE MOVED TOO, AND THE DESCRIPTION IDENTIFIES NOTHING —
+    *     [[MoveFinding.RelabelUnvouched]]. Decision 2's other half, which keeps its full force for a
+    *     `/1way`: "the path weighs both ways — a name change combined with a move grades weaker and
+    *     becomes a question". For such a card the location is the only voucher there could be.
     *   - THE CENSUS COULD NOT SAY, AND NOTHING ELSE ANSWERED — [[MoveFinding.RelabelUnvouched]],
     *     carrying the reason. "It is gone" is the premise the follow rests on, and a run that could
     *     not look has not established it.
@@ -1441,7 +1491,13 @@ object MoveEvidence:
             unvouched(RelabelDoubt.CensusUnavailable(reason))
 
           case NodeCensus.Answer.Surveyed(_) =>
-            if pairing.clusterMoved then unvouched(RelabelDoubt.ClusterMoved)
+            // THE PLACE QUESTION IS ASKED OF THE KIND THAT HAS NOTHING ELSE TO ANSWER WITH. For a
+            // card whose author declared that the description identifies its concept, place was
+            // never part of that claim, so a moved cluster is not a doubt — the entailment of
+            // 2026-09-13. For a card that declares the opposite, the location is the only thing that
+            // could vouch for the pairing, and it changed.
+            if pairing.clusterMoved && !declaresItsConcept(spec) then
+              unvouched(RelabelDoubt.ClusterMoved)
             else
               MoveFinding.Corroborated(
                 card.key,
