@@ -81,7 +81,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     val plan = Planner
       .plan(scan, observe(anki), _ => deck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
-    Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty).fold(e => fail(s"run failed: $e"), identity)
+    Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"run failed: $e"), identity)
 
   def cardsOf(anki: InMemoryAnki): Vector[AnkiCardId] =
     val ids = anki.ownedNotes.fold(e => fail(s"$e"), identity)

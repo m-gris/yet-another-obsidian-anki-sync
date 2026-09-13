@@ -801,7 +801,7 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   def runPlan(p: Plan, anki: InMemoryAnki): Unit =
     val report = Executor
-      .run(p, anki, RetypePolicy.Apply, Set.empty)
+      .run(p, anki, RetypePolicy.Apply, Set.empty, RecordedNowhere.ledger)
       .fold(e => fail(s"execution aborted entirely: $e"), identity)
     assert(report.failures.isEmpty, s"unexpected execution failures: ${report.failures}")
 

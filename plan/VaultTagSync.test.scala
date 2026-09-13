@@ -58,7 +58,7 @@ class VaultTagSyncTest extends munit.FunSuite:
     val plan = Planner
       .plan(scan, observe(anki), _ => deck, Planner.newNoteFor, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan: ${errs.map(_.describe)}"), identity)
-    Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty).fold(e => fail(s"run: $e"), identity)
+    Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"run: $e"), identity)
 
   private def tagsIn(anki: InMemoryAnki): Set[String] =
     val ids = anki.ownedNotes.fold(e => fail(s"$e"), identity)

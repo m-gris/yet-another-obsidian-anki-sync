@@ -304,12 +304,20 @@ object Executor:
     *
     * The reads cost nothing when there is nothing to retype: `Retyping.noteTypesIn` is empty,
     * so no request is made.
+    *
+    * EVERY AUTOMATIC MOVE OF REVIEW HISTORY IS RECORDED BEFORE THE FIRST WRITE, and a failure to
+    * record ABORTS the run. That is the second place this function departs from "collect and carry
+    * on", and it departs in the same safe direction as the first: nothing has been written yet, so a
+    * run that ends there has changed nothing. Marc's ruling of 2026-09-12 is what makes it an abort
+    * rather than a warning — an automatic action that cannot be recorded must not happen. See
+    * [[Ledger]] and `applyEach` below, which is where the ordering lives.
     */
   def run[F[_]](
       plan: Plan,
       anki: Anki[F],
       policy: RetypePolicy,
       approved: Set[DecisionHandle],
+      ledger: Ledger[F],
   )(using
       F: MonadError[F, AnkiError]
   ): F[ExecutionReport] =
@@ -332,7 +340,7 @@ object Executor:
         val deferred = setAside.collect { case retype: SyncAction.Retype => retype }
         // NOTHING IS WAITING UNDER `Defer`: no retype is attempted at all, so none of them
         // reaches the point where a price would be quoted.
-        applyEach(rest, anki, Map.empty, policy, Set.empty).map((failures, applied) =>
+        applyEach(rest, anki, Map.empty, policy, Set.empty, ledger).map((failures, applied) =>
           ExecutionReport(failures, deferred, applied, Vector.empty, Vector.empty, approved.toVector)
         )
 
@@ -360,7 +368,7 @@ object Executor:
           // BY IDENTITY, NOT BY ACTION. `runOne` receives one action and has to decide whether
           // THAT change was approved; the key is what both sides can name it by.
           authorisedKeys = decisions.authorised.map(_.retype.key).toSet
-          outcome <- applyEach(rest, anki, decisions.shapes, policy, authorisedKeys)
+          outcome <- applyEach(rest, anki, decisions.shapes, policy, authorisedKeys, ledger)
         yield ExecutionReport(
           outcome._1,
           Vector.empty,
@@ -474,24 +482,50 @@ object Executor:
             shapes,
           )
 
+  /** THE ONLY PLACE THIS FILE WRITES TO A COLLECTION, AND THEREFORE THE ONLY PLACE THE LEDGER CAN
+    * BE WRITTEN FIRST.
+    *
+    * THE RECORD IS DERIVED FROM `actions`, WHICH IS WHAT MAKES THE GUARANTEE LOCAL. This function
+    * receives exactly the actions that are about to be attempted — both policy arms have already
+    * done their setting-aside — so "what was recorded" and "what was attempted" are two readings of
+    * one value. Deriving the record from the whole plan further up would let a future policy
+    * withhold a reassignment that the ledger nonetheless claimed had happened.
+    */
   private def applyEach[F[_]](
       actions: Vector[SyncAction],
       anki: Anki[F],
       shapes: Map[String, NoteTypeShape],
       policy: RetypePolicy,
       authorised: Set[CardKey],
+      ledger: Ledger[F],
   )(using F: MonadError[F, AnkiError]): F[(Vector[ExecutionFailure], Vector[SyncAction])] =
-    // EACH ACTION ANSWERS FOR ITSELF, as a Left or a Right, rather than as an `Option` whose
-    // `None` means success. The old shape discarded which actions had succeeded, so the report
-    // could say how many failed and never what was done.
-    actions
-      .traverse(action =>
-        runOne(action, anki, shapes, policy, authorised).attempt.map {
-          case Left(error) => Left(ExecutionFailure(action, error))
-          case Right(_)    => Right(action)
-        }
-      )
-      .map(results => (results.collect { case Left(f) => f }, results.collect { case Right(a) => a }))
+    // RECORDED FIRST, AND SEQUENCED WITH `flatMap` RATHER THAN `*>` — which is not a style choice
+    // but the difference between this guarantee holding and silently not holding. `F` is not always
+    // lazy: `InMemoryAnki` interprets into `Either`, which is EAGER, so with `record(…) *> traverse(…)`
+    // the traversal is evaluated to build the ARGUMENT before `*>` ever inspects the left side —
+    // every write happens and only the RESULT is discarded. This file already records that exact
+    // defect one function down, where a `val move` performed a retype before the match had decided
+    // whether it should (caught 2026-08-28 by a test asserting a refused move left the note alone).
+    // `flatMap` takes a function, so nothing below runs until the append has succeeded.
+    //
+    // AND THE ORDER IS THE PESSIMISTIC ONE THIS FILE ARGUES FOR THROUGHOUT. Interrupted between the
+    // append and the first write, a move is recorded and not applied: the next run finds the note
+    // still stranded, corroborates it again and records it again, so the cost is a duplicate line
+    // that says so. The reverse order would move somebody's review history with nothing anywhere
+    // saying it happened, which is the one state Marc's 2026-09-12 ruling forbids outright.
+    ledger.record(HistoryMove.inActions(actions)).flatMap { _ =>
+      // EACH ACTION ANSWERS FOR ITSELF, as a Left or a Right, rather than as an `Option` whose
+      // `None` means success. The old shape discarded which actions had succeeded, so the report
+      // could say how many failed and never what was done.
+      actions
+        .traverse(action =>
+          runOne(action, anki, shapes, policy, authorised).attempt.map {
+            case Left(error) => Left(ExecutionFailure(action, error))
+            case Right(_)    => Right(action)
+          }
+        )
+        .map(results => (results.collect { case Left(f) => f }, results.collect { case Right(a) => a }))
+    }
 
   private def runOne[F[_]](
       action: SyncAction,
