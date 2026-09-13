@@ -1460,7 +1460,10 @@ object MoveEvidence:
     //
     // A CARD IS NEVER ITS OWN RIVAL: `underTheClaimCheck` keeps only claims answering a DIFFERENT
     // concept, and a card's own claim answers its own concept.
-    val standing: Map[(String, String), Vector[ReverseClaim]] = Map.empty
+    val standing: Map[(String, String), Vector[ReverseClaim]] =
+      (declared.claims ++ orderedUnclaimed.flatMap(spec =>
+        ReverseClaim.of(spec.spec.noteTypeName, spec.key, spec.spec.fields.toMap)
+      )).groupBy(_.question)
 
     // ── PASS ONE: EVERYTHING ONE PAIRING CAN DECIDE ON ITS OWN ────────────────────────────
     //
