@@ -1,7 +1,8 @@
 # The scenario deck — every edit-event of the card model, run without Anki
 
-This directory holds a **deck of 87 scenarios** (S01–S74, ten `b`-variants, and S24A/S24B/S24C —
-the three cases the final adversarial review constructed for the ruling of 2026-09-13) covering every
+This directory holds a **deck of 88 scenarios** (S01–S74, ten `b`-variants, S24A/S24B/S24C — the
+three cases the final adversarial review constructed for the ruling of 2026-09-13 — and S24D, the
+two-run case the attack swarm built on top of them) covering every
 card kind the tool produces — plain heading, concept-descriptor, table pair, table row, cloze
 section, cloze block, sequence, whole-note, relation — and, for each kind, every edit an author
 can make: reword, move, retag, split, merge, delete, restore, rename a file, change an id, and
@@ -57,8 +58,10 @@ byte-comparable and `diff` shows exactly — and only — where their policies d
 | `POLICY`   | the seam's decision and exact user-facing message, per finding — **the only section a world may change** |
 | `LEDGER`   | one line per card: history followed / history stranded / new card at zero / refused |
 
-Multi-step scenarios (S13, S14) render one `DIFF…LEDGER` block per run, the collection evolving
-between runs by the evidence-free diff alone.
+Multi-step scenarios (S13, S14, S24D) render one `DIFF…LEDGER` block per run, the collection
+evolving between runs by the evidence-free diff alone. S24D is what those runs are FOR: two of the
+three witnesses that a concept survives are facts about one run, so only a multi-step scenario can
+show what the third one is needed for.
 
 ## Implementing a world
 
@@ -108,7 +111,7 @@ the finding and grade only, because the verdict on those is precisely what a wor
 Where a standing ruling once said the mechanism was wrong, the gate built for
 `docs/design/IDENTITY-DECISION-SHEET.md`'s rulings now makes most of those scenarios read
 correctly, and their test names no longer claim otherwise: S24 (R2) and S33/S34 (Decision 2) are
-now `[SETTLED-RULING]`, as are S24A/S24B/S24C (the ruling of 2026-09-13). Only **S17** is still
+now `[SETTLED-RULING]`, as are S24A/S24B/S24C and S24D (the rulings of 2026-09-13). Only **S17** is still
 left asserting a defective current output, carrying the ruling its fix must satisfy in its name
 (R5: a duplicate key should refuse only the cards involved, not the whole run).
 
@@ -120,8 +123,8 @@ deck/fixtures/<Sxx>/after/    the vault after the edit
 deck/fixtures/<Sxx>/after2/   (three-step scenarios only) the vault after the second edit
 ```
 
-A variant carries its parent's number and a suffix — the ten `b`-variants, and S24A/S24B/S24C —
-and sits directly after it in `WorldDeck.scenarios`, which the deck's own id contract asserts.
+A variant carries its parent's number and a suffix — the ten `b`-variants, and S24A/S24B/S24C/S24D
+— and sits directly after it in `WorldDeck.scenarios`, which the deck's own id contract asserts.
 
 No scenario shares a fixture with another. S41/S42 read the same shape of edit as S33/S34 (a
 row's subject swapped, or a typo in it fixed) but from their own directories, under a marker

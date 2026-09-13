@@ -1,7 +1,7 @@
 package obsidiananki.deck
 
 import obsidiananki.TestSources
-import obsidiananki.plan.{Agreement, MoveFinding, RelabelDoubt}
+import obsidiananki.plan.{Agreement, MoveFinding, RelabelDoubt, SubjectSurvival}
 
 /** THE DECK'S OWN TESTS — every scenario's finding pinned, and the seam's contract enforced.
   *
@@ -267,6 +267,36 @@ class WorldDeckTest extends munit.FunSuite:
     // replacement for the first.
     assertEquals(shapes(lastStep("S24C")), Vector("unexplained", "reparented"))
     assertEquals(decisionLabels(lastStep("S24C")), Vector("park-and-report", "park-and-report"))
+
+  test("S24D [SETTLED-RULING 2026-09-13] the concept left a run EARLIER: the descriptor still parks"):
+    // S24A's edit, split across a sync boundary — which is all it took to get past both witnesses
+    // S24A and S24B installed. Run one moves `# Kafka` and `## Cost` to Queues.md and pairs Cost
+    // there; run two relabels the `# Kafka` heading that `## Definition` still hangs off. By then the
+    // corroboration onto Kafka belongs to a finished run, and the node was never in this note, so
+    // BOTH of those witnesses answer "gone" honestly and the descriptor's history would follow a
+    // subject change — which R2 forbids.
+    //
+    // WHAT ANSWERS IN RUN TWO is the card run one created: a live `kafka / cost` in the collection,
+    // declaring that the concept exists. That is the third witness, resolved 2026-09-13 as entailed
+    // by the standing rulings rather than newly ruled.
+    val steps = scenarioRun("S24D").steps
+    // Run one is S24A's own Cost pairing and nothing else: the same path in a different note.
+    assertEquals(shapes(steps(0)), Vector(s"corroborated/${Agreement.Total}"))
+    assertEquals(decisionLabels(steps(0)), Vector("apply-reassign"))
+    // Run two. The first finding is the note run one left parked, whose key the vault no longer
+    // produces at all; the second is the re-parented descriptor, and it must NOT be corroborated.
+    assertEquals(shapes(steps(1)), Vector("unexplained", "reparented"))
+    assertEquals(decisionLabels(steps(1)), Vector("park-and-report", "park-and-report"))
+    // AND THE REPORT MUST NAME THE CARD IT READ, not a note the reader would open and find empty:
+    // Messaging.md holds no `# Kafka` by run two, so "still in the vault" would read as a lie.
+    val witnessed = steps(1).findings.collectFirst { case r: MoveFinding.Reparented => r.survival }
+    assertEquals(
+      witnessed.map {
+        case SubjectSurvival.StillInTheCollection(concept, card) => concept -> card.path.render
+        case other => fail(s"the live collection must be the witness here, not: ${other.describe}")
+      },
+      Some(Vector("kafka") -> "kafka / cost"),
+    )
 
   test("S25 [SETTLED-MODEL+R2+R4] whole subtree moved cross-note: Corroborated·Total ×2, reassigned"):
     assertEquals(

@@ -144,6 +144,13 @@ object WorldDeck:
     s("S24A", "re-parent a descriptor while the concept moves to ANOTHER NOTE", conceptDescriptor, "'## Definition' moves under '# NATS' in Messaging.md; '# Kafka' and '## Cost' move verbatim into Queues.md"),
     s("S24B", "re-parent a descriptor while the concept is RE-NESTED in the same note", conceptDescriptor, "'## Definition' moves under '# NATS'; '# Kafka' becomes '## Kafka' under a new '# Archive'"),
     s("S24C", "re-parent a descriptor while the concept keeps only PROSE", conceptDescriptor, "'## Definition' moves under '# NATS'; '# Kafka' stays but holds only prose, '## Cost' is deleted"),
+    // THE FOURTH, FROM THE ATTACK SWARM OF 2026-09-13, and the only one of the four that needs TWO
+    // RUNS. It is S24A's edit split across a sync boundary, which is all it took to get past both of
+    // the witnesses S24A and S24B installed: by run two the corroboration onto Kafka has already
+    // happened and is over, and the node was never in this note. Its fixtures are the attack's own,
+    // byte for byte. `docs/design/IDENTITY-DECISION-SHEET.md`, "survival evidence has no sync
+    // boundary", is what this pins.
+    threeStep("S24D", "re-parent a descriptor ONE RUN AFTER the concept left for another note", conceptDescriptor, "two runs: (1) '## Cost' moves out under a new '# Kafka' in Queues.md and Messaging.md keeps '# Kafka' > '## Definition'; (2) Messaging.md's '# Kafka' becomes '# NATS' with Definition and Queues.md both untouched"),
     s("S25", "move a concept and its whole subtree to another note", conceptDescriptor, "'# Kafka' and both descriptor sections move verbatim into Queues.md"),
     s("S26", "rename the file of an ancestorless descriptor", conceptDescriptor, "Kafka.md becomes NATS.md; the id and the body are untouched"),
     s("S27", "rename the file AND change the id", conceptDescriptor, "Kafka.md becomes NATS.md and 'id: k1' becomes 'id: k2' in one commit"),

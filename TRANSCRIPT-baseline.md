@@ -1,6 +1,6 @@
 # The ruled identity policy's deck transcript
 
-All 87 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
+All 88 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
 move-evidence survey, with the policy seam filled by `BaselinePolicy`
 (`deck/MovePolicy.scala`) — the same "corroborated applies, everything else is reported" policy
 the `move-build` Planner has always shipped. What changed is not the policy: it is *which*
@@ -13,8 +13,8 @@ scala-cli run . --main-class obsidiananki.deck.runDeck
 
 ## What the rulings changed, as seen in this transcript
 
-Of the 97 findings the deck's 87 scenarios now produce, `BaselinePolicy` applies 45 and reports
-52 without acting. Three scenarios read differently from the pre-ruling mechanism:
+Of the 100 findings the deck's 88 scenarios now produce, `BaselinePolicy` applies 46 and reports
+54 without acting. Three scenarios read differently from the pre-ruling mechanism:
 
 - **S24** — a descriptor re-parented under a concept that goes on existing (`# Kafka` still holds
   `## Cost` after `## Definition` moves to `# NATS`) no longer auto-applies. The survey can now
@@ -51,6 +51,29 @@ had vanished. The ruling of 2026-09-13 makes the run's own corroborations a seco
 survival, so both now park, and their `EVIDENCE` lines name the pairing they read rather than
 claiming the concept is "still in the vault" of a note that no longer holds it. S24C is the
 regression guard: only the census can see a concept which kept no cards, and it still does.
+
+## And what the sync boundary changed
+
+One scenario is new — **S24D** — and it is the case the attack swarm of the same day built on top
+of those three. It is S24A's edit split across TWO SYNCS, which is all it took to get past both of
+the witnesses above. Run one carries `# Kafka` and `## Cost` into Queues.md and pairs Cost there;
+run two relabels the `# Kafka` heading that `## Definition` still hangs off. By run two the
+corroboration onto Kafka belongs to a finished run, and the node was never in Messaging.md — so
+both witnesses answer "gone" honestly and the descriptor's history followed a subject change, which
+standing ruling R2 forbids.
+
+What answers in run two is the card run one created. A live `kafka / cost` sits in the collection
+declaring that the concept exists, and the sheet's entry "survival evidence has no sync boundary"
+records that as a third witness entailed by the standing rulings rather than newly ruled: a
+declaration is a contract, and no ruling says evidence expires. So S24D's run 2 reads
+`park-and-report`, and its `EVIDENCE` line names the card it read — the only one of the three
+witnesses that outlives the run that produced it.
+
+Which cards may declare a concept is decided per KIND, by the same roles table that tells the
+survey which fields are a card's name: a kind showing two name fields has a subject above the
+card's own name, a kind showing one has nothing above it. So filing — a `1way` heading card, a
+table's row card — witnesses nothing, and a namesake heading with no card under it witnesses
+nothing either.
 
 ## The full transcript
 
@@ -502,6 +525,37 @@ POLICY
 LEDGER
   new card at ZERO: 'nats / definition'
   history STRANDED on the suspended note: 'kafka / cost'
+  history STRANDED on the suspended note: 'kafka / definition'
+
+SCENARIO S24D — re-parent a descriptor ONE RUN AFTER the concept left for another note   [concept-descriptor heading card]
+EDIT
+  two runs: (1) '## Cost' moves out under a new '# Kafka' in Queues.md and Messaging.md keeps '# Kafka' > '## Definition'; (2) Messaging.md's '# Kafka' becomes '# NATS' with Definition and Queues.md both untouched
+RUN 1
+DIFF
+  non-event   'kafka / definition' in n1
+  create      'kafka / cost' in n1b
+  flag        'kafka / cost' in n1 — suspended, never deleted
+EVIDENCE
+  note 1, which held 'kafka / cost' in n1, is 'kafka / cost' in n1b — the same path, in a different note, Queues.md:9 (heading); Context: 'Messaging' → 'Queues'
+POLICY
+  apply-reassign: reassigned, keeping its review history — note 1, which held 'kafka / cost' in n1, is 'kafka / cost' in n1b — the same path, in a different note, Queues.md:9 (heading); Context: 'Messaging' → 'Queues'
+LEDGER
+  history FOLLOWED onto 'kafka / cost' — the existing note was reassigned, no new card
+RUN 2
+DIFF
+  create      'nats / definition' in n1
+  non-event   'kafka / cost' in n1b
+  parked      'kafka / cost' in n1 — already flagged by an earlier run
+  flag        'kafka / definition' in n1 — suspended, never deleted
+EVIDENCE
+  note 1, which held 'kafka / cost' in n1, matches nothing the vault now produces
+  note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:7 (heading)) — but 'kafka' goes on existing: the collection already holds 'kafka / cost' in n1b under it, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+POLICY
+  park-and-report: note 1, which held 'kafka / cost' in n1, matches nothing the vault now produces
+  park-and-report: note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:7 (heading)) — but 'kafka' goes on existing: the collection already holds 'kafka / cost' in n1b under it, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+LEDGER
+  new card at ZERO: 'nats / definition'
+  history still STRANDED (parked): 'kafka / cost'
   history STRANDED on the suspended note: 'kafka / definition'
 
 SCENARIO S25 — move a concept and its whole subtree to another note   [concept-descriptor heading card]
