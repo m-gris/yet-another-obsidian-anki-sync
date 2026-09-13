@@ -337,6 +337,95 @@ object FieldRole:
       case Substance | Bearing | Setting | Identity => false
     }
 
+/** WHAT THE AUTHOR DECLARED ABOUT THEIR OWN CONTENT: does a card's substance identify what the card
+  * is about?
+  *
+  * ═══ WHY THIS IS A DECLARATION AND NOT A MEASUREMENT ═══
+  *
+  * `docs/design/IDENTITY-DECISION-SHEET.md`'s ruled principle of 2026-09-13: the card KIND is the
+  * author's own statement about their content. `2way` is written exactly when they expect to recall
+  * the heading from the body; `1way` exactly when they know they cannot. So "does this content
+  * identify this card" is answered by reading the marker rather than by judging the prose — and the
+  * answer is trusted absolutely while coherent, with no confidence weight anywhere near it.
+  *
+  * ═══ WHY THREE STATES AND NOT A BOOLEAN ═══
+  *
+  * Because [[Unstated]] is a different thing from [[NonIdentifying]], and a boolean would have to
+  * lie about one of them. A cloze card's author was never offered the choice — there is no
+  * `#flashcard/cloze/1way` — so silence from that kind is not a declaration that its passage
+  * identifies nothing. Two rules read this type and they ask DIFFERENT questions of the three
+  * states, which is the clearest evidence that collapsing them would be wrong:
+  *
+  *   - The relabel gate drops its place requirement only for [[Identifying]] (the entailment of
+  *     2026-09-13 about declared-identifying kinds).
+  *   - The voucher rule refuses a reattachment only for [[NonIdentifying]] ("no voucher, no edit",
+  *     the same day) — silence refuses nothing, because no ruling has refused it.
+  *
+  * `MarkedHeadings` in `extract/VaultWalker.scala` is the precedent for the shape: three states
+  * because there are three, and a boolean there "told a lie".
+  */
+enum SubstanceDeclaration:
+
+  /** The author asked to recall the card's own name FROM its substance — `#flashcard/2way`,
+    * `#flashcard/cdd/2way`, `#flashcard/cdd/3way`, a bare `#flashcard/table`, `#flashcard/table/2way`,
+    * `#flashcard/table/3way`, and the older `#flashcard/3way` spellings. A content match on such a
+    * card is same-card evidence, by declaration.
+    */
+  case Identifying
+
+  /** The author asked one way only — `#flashcard/1way`, `#flashcard/cdd/1way`,
+    * `#flashcard/table/1way`. They have said the content does NOT identify what it is about, so a
+    * content match is evidence of nothing on its own.
+    */
+  case NonIdentifying
+
+  /** THIS KIND CARRIES NO SUCH DECLARATION, so neither answer may be attributed to its author. A
+    * cloze card and a sequence card are the two today: no marker spells a direction for either.
+    */
+  case Unstated
+
+object SubstanceDeclaration:
+
+  /** WHAT A NOTE TYPE AND ITS FIELDS SAY, and the two families answer in two different places.
+    *
+    * THE TWO-FIELD FAMILY ANSWERS BY NOTE TYPE. `#flashcard/1way` and `#flashcard/2way` differ in
+    * the TEMPLATES Anki needs — one card or two — so they are two note types, and the note type
+    * carries the declaration with no field to read.
+    *
+    * THE THREE-FIELD FAMILY ANSWERS BY FIELD, because every three-field way shares one note type and
+    * the directions are conditionals inside its templates. The field is `Marker.ValueOnlyField`, set
+    * exactly when a marker asked for the value direction ALONE. It is INVERTED by its own design —
+    * the template tests `{{^ValueOnly}}` — so EMPTY means the concept-recall card is generated, which
+    * is why `isEmpty` reads as [[Identifying]] here. That inversion also gives the right answer for a
+    * note synced before the field existed, which is the reason it was defined that way round.
+    *
+    * A LOUD FAILURE ON AN UNDECLARED NOTE TYPE, and it is unreachable rather than defensive: every
+    * caller asks about a pairing that got through [[MoveEvidence.survey]]'s `rolesOn`, which answers
+    * [[MoveFinding.Incomparable]] for a note type this tool does not declare. Arriving here means
+    * this tool has contradicted itself, and a sixth note type must be told what it declares rather
+    * than inheriting somebody's default — `plan/MoveEvidence.test.scala` sweeps
+    * `Marker.NoteTypes.All` so that the omission fails immediately.
+    */
+  def of(noteType: String, fields: Map[String, String]): SubstanceDeclaration = noteType match
+    case Marker.NoteTypes.BasicAndReversed => Identifying
+    case Marker.NoteTypes.Basic            => NonIdentifying
+    case Marker.NoteTypes.Cloze | Marker.NoteTypes.ClozeSequence => Unstated
+    case Marker.NoteTypes.ConceptDescriptor =>
+      val valueOnly = fields.getOrElse(
+        Marker.ValueOnlyField,
+        sys.error(
+          s"a '$noteType' card carries no '${Marker.ValueOnlyField}', which it declares — so what " +
+            "its author said about the description cannot be read; see Marker.FieldOrder"
+        ),
+      )
+      if valueOnly.isEmpty then Identifying else NonIdentifying
+    case other =>
+      sys.error(
+        s"'$other' is not a note type this tool declares, so nothing can be read about what its " +
+          "author declared — MoveEvidence.survey cannot admit such a note, so this is a defect in " +
+          "this tool"
+      )
+
 /** ONE FIELD THAT DID NOT AGREE, with both values and what the field is made of.
   *
   * BOTH VALUES TRAVEL, because a person reading what a run did has to see what changed — "the
@@ -755,6 +844,45 @@ enum MoveFinding:
       divergences: Vector[Divergence],
   )
 
+  /** THE SUBSTANCE AGREES EXACTLY AND NOTHING VOUCHES THAT THE TWO ARE THE SAME CARD — so the
+    * orphan stays parked and the new section starts at zero.
+    *
+    * ═══ THE RULE, WHICH IS A CONJUNCTION AND THEREFORE NEEDS NO DISCRIMINATOR FIELD ═══
+    *
+    * Resolved 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "no voucher, no edit"): an
+    * orphaned note may be EDITED onto a new section only when something vouches they are the same
+    * card, and there are exactly three vouchers — the author's DECLARATION that the content
+    * identifies what it is about, the LOCATION agreeing, or the SINGLE EDIT of a note this very run
+    * stranded. This case is built only when all three are absent, so its existence IS the
+    * conjunction: there is no variant of it to carry and no version of it a reader could mistake for
+    * a different shape of doubt. [[MoveEvidence.underTheVoucherGate]] is the one place it is minted.
+    *
+    * ═══ WHY IT IS NOT ANY OF THE CASES THAT NEARLY FIT ═══
+    *
+    * NOT [[Unexplained]], which would be the tempting quiet answer and is a false one: the substance
+    * agreed byte for byte and there IS one candidate. Saying "matches nothing the vault now
+    * produces" about it would hide real evidence from the one report that exists to show it — the
+    * argument [[Unaccounted]] already makes for having its own case.
+    *
+    * NOT [[RelabelUnvouched]], though the words are close. That one is about a SUBJECT that changed
+    * and a path that cannot vouch for the rename; here nothing about the card's own name need have
+    * changed at all — the canonical case is a heading recreated VERBATIM in another note, a sync
+    * later.
+    *
+    * NOT [[Reparented]]: no subject survives anywhere, and nothing here is a different card under a
+    * different subject. It may well be the same card; what is missing is anything entitled to say so.
+    *
+    * IT CARRIES EVERY DIVERGENCE, like every other reporting case and under the ruling of
+    * 2026-09-04: a run that will not act must still say what it saw.
+    */
+  case NoVoucher(
+      stranded: CardKey,
+      noteId: AnkiNoteId,
+      candidate: CardKey,
+      where: SourceRef,
+      divergences: Vector[Divergence],
+  )
+
   /** Nothing the vault now produces agrees with this note.
     *
     * THE COMPARISON WAS MADE AND CAME BACK EMPTY, which is the whole difference between this and
@@ -789,6 +917,7 @@ enum MoveFinding:
     case Unaccounted(_, id, _, _, _)          => id
     case Reparented(_, id, _, _, _, _)        => id
     case RelabelUnvouched(_, id, _, _, _, _)  => id
+    case NoVoucher(_, id, _, _, _)            => id
     case Unexplained(_, id)                   => id
     case Incomparable(_, id, _)               => id
 
@@ -835,6 +964,15 @@ enum MoveFinding:
       s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
         s"may have been renamed to '${candidate.path.render}' in ${candidate.noteId.value} " +
         s"(${where.describe}) — ${cause.describe}, so nothing is applied" +
+        (if divergences.isEmpty then ""
+         else s"; ${divergences.map(_.describe).mkString(", ")}")
+
+    case NoVoucher(stranded, id, candidate, where, divergences) =>
+      s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
+        s"says the same thing as '${candidate.path.render}' in ${candidate.noteId.value} " +
+        s"(${where.describe}) — but nothing vouches that they are the same card: this content was " +
+        "declared not to identify what it is about, it is in a different place, and this note was " +
+        "parked by an earlier run, so nothing is applied and the new card starts at zero" +
         (if divergences.isEmpty then ""
          else s"; ${divergences.map(_.describe).mkString(", ")}")
 
@@ -1331,48 +1469,32 @@ object MoveEvidence:
           was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId,
       )
 
-  /** DID THE AUTHOR DECLARE THAT THIS DESCRIPTION IDENTIFIES ITS CONCEPT? The fact the relabel gate
-    * turns on since the entailment of 2026-09-13.
+  /** WHAT THE AUTHOR DECLARED ABOUT THE CARD THE VAULT NOW PRODUCES — [[SubstanceDeclaration]] read
+    * off one side of a pairing.
     *
-    * ═══ WHAT IT READS, AND WHY THAT FIELD ═══
+    * ═══ WHY THE VAULT'S SIDE, AND WHY IT CANNOT MATTER WHICH ═══
     *
-    * `Marker.ValueOnlyField`, which is set exactly when a marker asked for the value direction ALONE
-    * — `#flashcard/cdd/1way` and `#flashcard/table/1way`. Every other three-field way generates the
-    * CONCEPT-RECALL card: `cdd/2way`, `cdd/3way`, a bare `#flashcard/table`, `table/2way`,
-    * `table/3way` and the older `#flashcard/3way` spellings. So "this description identifies its
-    * concept" and "the collection holds a card that asks the author to name the concept from the
-    * description" are the same statement, and this field is where the marker put it.
+    * A declaration is the author's, and the vault is where the author writes; reading the spec makes
+    * the sentence "what the author declares NOW" true as well as correct. It also cannot change a
+    * verdict. The declaration lives in a note type and in a [[FieldRole.Setting]] field, [[compare]]
+    * admits no pairing whose note types differ, and the comparison floor admits none whose Setting
+    * fields differ — so by the time any pairing reaches a gate, both sides say the same thing.
+    */
+  private def declarationOn(spec: SourcedSpec): SubstanceDeclaration =
+    SubstanceDeclaration.of(spec.spec.noteTypeName, spec.spec.fields.toMap)
+
+  /** Whether the author declared that this card's substance identifies what the card is about — the
+    * fact the relabel gate drops its place requirement for, entailed 2026-09-13.
     *
-    * INVERTED, WHICH IS `Marker.ValueOnlyField`'s OWN CHOICE AND NOT AN ODDITY HERE: the note
-    * template tests `{{^ValueOnly}}`, so EMPTY means the concept-recall card is generated. Reading
-    * `isEmpty` as "declares" therefore agrees with what Anki actually shows, and it also gives the
-    * right answer for a note synced before the field existed — which is the reason the field was
-    * defined that way round.
-    *
-    * ═══ WHY THE VAULT'S SIDE IS READ AND WHY IT CANNOT MATTER WHICH ═══
-    *
-    * A declaration is the author's, and the vault is where the author writes. It also cannot change
-    * a verdict: `ValueOnly` is a [[FieldRole.Setting]] field, the comparison floor admits no pairing
-    * whose Setting fields differ, so by the time any pairing reaches here both sides say the same
-    * thing. Reading the spec makes the sentence "what the author declares NOW" true as well as
-    * correct.
-    *
-    * A LOUD FAILURE RATHER THAN A DEFAULT, and it is unreachable rather than defensive: this is only
-    * ever asked about a pairing that got through [[compare]], which already read every field the note
-    * type declares by name, and the subject gate only fires for the one note type whose window is two
-    * segments wide. A spec that reached here without the field would mean this tool had contradicted
-    * `Marker.FieldOrder`, and there is no correct answer available to it.
+    * MATCHED RATHER THAN COMPARED, so that [[SubstanceDeclaration]]'s third state has to be answered
+    * for rather than falling through a `==`. Silence is NOT a declaration of identifying-ness: it
+    * cannot license dropping the place requirement, and the only kinds it applies to are the ones the
+    * subject gate never fires for anyway, which is why the two spellings agree today.
     */
   private def declaresItsConcept(spec: SourcedSpec): Boolean =
-    spec.spec.fields.toMap
-      .getOrElse(
-        Marker.ValueOnlyField,
-        sys.error(
-          s"the spec for '${spec.key.path.render}' emits no '${Marker.ValueOnlyField}', so what its " +
-            "author declared about the description cannot be read — see MoveEvidence.declaresItsConcept"
-        ),
-      )
-      .isEmpty
+    declarationOn(spec) match
+      case SubstanceDeclaration.Identifying                                    => true
+      case SubstanceDeclaration.NonIdentifying | SubstanceDeclaration.Unstated => false
 
   /** DOES THE SUBJECT THE CARD LEFT GO ON EXISTING? The question pass one could not answer, because
     * one of its three witnesses is a fact about the whole survey.

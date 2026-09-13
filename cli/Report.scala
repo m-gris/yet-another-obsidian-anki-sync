@@ -128,6 +128,12 @@ object Report:
       // separates them is that the ruling forbids following — see `plan/MoveEvidence.scala`.
       case _: MoveFinding.Reparented       => false
       case _: MoveFinding.RelabelUnvouched => false
+      // THE VOUCHER RULE'S OUTCOME BELONGS ON THAT SIDE TOO, and it is the hardest of the three to
+      // file correctly by eye: the substance agreed byte for byte and one candidate was named,
+      // which is exactly what a corroboration looks like from here. What separates it is that
+      // nothing was entitled to say the two are the same card, so nothing was written — see
+      // `plan/MoveEvidence.scala`'s `NoVoucher`.
+      case _: MoveFinding.NoVoucher        => false
       case _: MoveFinding.Unexplained      => false
       case _: MoveFinding.Incomparable     => false
     }

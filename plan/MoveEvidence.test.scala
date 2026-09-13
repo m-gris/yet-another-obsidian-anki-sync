@@ -76,6 +76,17 @@ class MoveEvidenceTest extends munit.FunSuite:
   ): CardSpec =
     CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.Default, context, "")
 
+  /** A TWO-FIELD CARD DECLARED `#flashcard/2way` — the body recalled from the heading AND the
+    * heading from the body, which is the author declaring that this body identifies its heading.
+    *
+    * [[twoField]] is `TwoFieldDirections.Forward`, i.e. `#flashcard/1way`, which declares the
+    * opposite. The two differ by NOTE TYPE rather than by a field — `Obsidian Basic` against
+    * `Obsidian Basic (and reversed)` — and since the voucher rule of 2026-09-13 that difference
+    * decides whether an orphan may be reattached on content alone.
+    */
+  def twoFieldBothWays(k: CardKey, front: String, back: String, context: String): CardSpec =
+    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Both, context)
+
   /** THE SAME CARD SHAPE DECLARED `#flashcard/cdd/1way` — the description recalled and NOTHING
     * ELSE, so the author has declared that this description does NOT identify its concept.
     *
@@ -1121,6 +1132,148 @@ class MoveEvidenceTest extends munit.FunSuite:
       thrown.getMessage.contains("1"),
       s"the refusal must name the note that arrived on both sides: ${thrown.getMessage}",
     )
+  }
+
+  // ============== NO VOUCHER, NO EDIT: WHAT LICENSES REATTACHING AN ORPHAN AT ALL ====
+
+  /** RESOLVED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "no voucher, no edit"), and
+    * entailed by the standing rulings rather than newly ruled.
+    *
+    * THE SHAPE THAT FORCED IT, which the sheet had carried as an open case. `add.md` holds
+    * `# Nature #flashcard/1way` over "a binary operation"; that section is deleted in one sync, and a
+    * byte-identical one appears in `multiply.md` in a LATER sync. Each is unique within its own
+    * sync's delta, so the mutual-uniqueness guard passes and addition's review history was reattached
+    * onto multiplication's card. A false move, and Marc on the story: "story 1 is about a 1way
+    * card... I don't see what we could even ask".
+    *
+    * WHAT MAY REATTACH AN ORPHAN, stated as three vouchers, any one of which suffices:
+    *
+    *   - THE DECLARATION — `/2way`, `/3way` and every three-field way that asks for concept recall.
+    *     The author has said the content identifies what it is about, so a content match IS
+    *     same-card evidence.
+    *   - THE LOCATION — the place agreed: same note, same chain above the card's own name. Then the
+    *     location identifies it whatever its content declares, which is Decision 5's shape.
+    *   - THE SINGLE EDIT — the note was stranded by THIS run, so the disappearance and the
+    *     appearance are one edit. That signature is what makes a verbatim cross-note move a move
+    *     (deck S05) rather than a coincidence.
+    *
+    * A `/1way` card parked by an earlier run and claiming a section in a different note has none of
+    * the three: its content identifies nothing by declaration, its location changed, and the two
+    * events are in different syncs. Nothing vouches, so nothing is edited.
+    *
+    * WHY EVERY PIN BELOW IS AS LOAD-BEARING AS THE RED ONE. Each names a voucher that must go on
+    * working, and the failure they guard against is silent in the expensive direction: a reattachment
+    * refused is a review history stranded on a suspended note, which is the certain loss the ruling
+    * of 2026-09-05 weighs against a bounded, visible, wrong reassignment.
+    */
+  val oneWayInAdd: CardSpec =
+    twoField(key("add", "nature"), "Nature", "A binary operation.", "Add")
+
+  /** The same note, already flagged `orphaned::` by an earlier run — which is the only way the
+    * survey can tell "vanished and reappeared in one sync" from "parked, then something similar
+    * turned up later". `plan/Planner.scala` surveys both populations deliberately.
+    */
+  def parked(spec: CardSpec, id: Long): ObservedCard =
+    observed(spec, id, Vector(OwnedTag.orphaned(spec.key).value))
+
+  test("a 1way orphan parked by an EARLIER run may not claim a section in another note") {
+    // THE add/multiply CASE. Nothing vouches: the declaration says this body identifies nothing, the
+    // note changed, and the parking says the two events are in different syncs.
+    val inMultiply = twoField(key("multiply", "nature"), "Nature", "A binary operation.", "Multiply")
+    assertEquals(
+      oneWayInAdd.noteTypeName,
+      Marker.NoteTypes.Basic,
+      "the fixture must be a 1way card for this test to have a weapon",
+    )
+    surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(inMultiply))) match
+      case Vector(MoveFinding.NoVoucher(stranded, _, candidate, _, _)) =>
+        assertEquals(stranded, oneWayInAdd.key)
+        assertEquals(candidate, inMultiply.key)
+      case other =>
+        fail(s"a 1way orphan's cross-sync claim on another note must not be applied: $other")
+  }
+
+  test("the same claim made INSIDE one sync still follows — the single edit vouches") {
+    // Deck S05's settled behaviour, and the reason the rule reads the orphan FLAG rather than the
+    // keys alone: a note this run stranded vanished and reappeared in one edit, which is what a move
+    // looks like. The fixture differs from the test above in nothing but the tag.
+    val inMultiply = twoField(key("multiply", "nature"), "Nature", "A binary operation.", "Multiply")
+    surveyOf(Vector(observed(oneWayInAdd, 1)), Vector(sourced(inMultiply))) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, inMultiply.key)
+        assertEquals(c.agreement, Agreement.Total)
+      case other => fail(s"a verbatim cross-note move inside one sync must follow: $other")
+  }
+
+  test("a 1way orphan recreated in the SAME PLACE still follows — the location vouches") {
+    // Decision 5's shape, in the kind the deck does not cover: deck S14's own fixture is `2way`, so
+    // the deck pins the DECLARATION route and this pins the LOCATION route. The card's own name
+    // changed and everything above it did not, so the place identifies it whatever its content
+    // declares.
+    val reworded = twoField(key("add", "the nature of it"), "The nature of it", "A binary operation.", "Add")
+    surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(reworded))) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.agreement, Agreement.PlaceAndSubstance)
+      case other => fail(s"a parked 1way recreated in place must follow: $other")
+  }
+
+  test("a 2way orphan's cross-sync claim on another note DOES follow — the declaration vouches") {
+    // The same two syncs and the same two notes as the refused case, with `#flashcard/2way` in place
+    // of `/1way`. The author has declared that this body identifies its heading, so a content match
+    // is same-card evidence and the parking changes nothing about that.
+    val was = twoFieldBothWays(key("add", "nature"), "Nature", "A binary operation.", "Add")
+    val now = twoFieldBothWays(key("multiply", "nature"), "Nature", "A binary operation.", "Multiply")
+    assertEquals(was.noteTypeName, Marker.NoteTypes.BasicAndReversed, "the fixture must be a 2way card")
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+      case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, now.key)
+      case other => fail(s"a 2way declaration vouches across syncs and notes: $other")
+  }
+
+  test("a cdd/3way orphan's cross-sync claim on another note follows too") {
+    // The three-field half of the declaration route. `cdd/3way` asks for concept recall, so the
+    // description identifies its concept and the rule has no quarrel with it.
+    val was = threeField(key("n1", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    val now = threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+      case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, now.key)
+      case other => fail(s"a concept-recall declaration vouches: $other")
+  }
+
+  test("a cdd/1way orphan parked earlier may not claim a section in another note either") {
+    // THE THREE-FIELD HALF OF THE REFUSAL, and the reason the declaration is read per kind rather
+    // than per note type: this card and the one above share the `Obsidian Concept-Descriptor` note
+    // type and differ in one Setting field, which is where the three-field family writes its
+    // declaration.
+    val was =
+      threeFieldOneWay(key("n1", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    val now =
+      threeFieldOneWay(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    assertEquals(was.noteTypeName, now.noteTypeName, "the fixture must share the note type to be a test")
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+      case Vector(_: MoveFinding.NoVoucher) => ()
+      case other => fail(s"a cdd/1way declaration vouches for nothing: $other")
+  }
+
+  test("a CLOZE orphan's cross-sync claim is unchanged, because no declaration speaks to it") {
+    // THE THIRD STATE, AND THE ONE THAT MUST NOT BE GUESSED. A cloze card carries no direction
+    // declaration at all — there is no `cloze/1way` — so the voucher table of 2026-09-13 has nothing
+    // to read about it, and a rule that treated silence as "identifies nothing" would refuse
+    // reattachments no ruling has refused. Behaviour here is therefore deliberately unchanged, and
+    // whether a cloze passage should vouch for itself is an open question rather than this rule's.
+    val was = cloze(key("n1", "layers"), "The ==<<epidermis>>== is outermost.", "One")
+    val now = cloze(key("n2", "layers"), "The ==<<epidermis>>== is outermost.", "One")
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+      case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, now.key)
+      case other => fail(s"an unstated declaration must change nothing: $other")
+  }
+
+  test("every note type this tool declares says what its substance declares, or the rule is partial") {
+    // The twin of the roles-table guard above: a sixth note type must state whether its content
+    // identifies what it is about, because the voucher rule reads that per kind. Asking is the
+    // assertion — the reading raises on a note type it has no answer for.
+    Marker.NoteTypes.All.foreach { noteType =>
+      SubstanceDeclaration.of(noteType, Map(Marker.ValueOnlyField -> ""))
+    }
   }
 
   test("a plain heading's own rewording is not a subject change, however deep its path") {

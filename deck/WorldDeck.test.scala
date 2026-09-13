@@ -57,6 +57,7 @@ class WorldDeckTest extends munit.FunSuite:
     case _: MoveFinding.Unaccounted      => "unaccounted"
     case _: MoveFinding.Reparented       => "reparented"
     case r: MoveFinding.RelabelUnvouched => s"relabel-unvouched/${doubt(r.cause)}"
+    case _: MoveFinding.NoVoucher        => "no-voucher"
     case _: MoveFinding.Unexplained      => "unexplained"
     case _: MoveFinding.Incomparable     => "incomparable"
 
