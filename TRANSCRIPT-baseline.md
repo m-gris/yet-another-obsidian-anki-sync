@@ -1,10 +1,10 @@
 # The ruled identity policy's deck transcript
 
-All 84 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
+All 87 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
 move-evidence survey, with the policy seam filled by `BaselinePolicy`
 (`deck/MovePolicy.scala`) — the same "corroborated applies, everything else is reported" policy
 the `move-build` Planner has always shipped. What changed is not the policy: it is *which*
-pairings the survey is willing to call `Corroborated` in the first place, per the five rulings of
+pairings the survey is willing to call `Corroborated` in the first place, per the rulings of
 `docs/design/IDENTITY-DECISION-SHEET.md`. Regenerate this file with:
 
 ```
@@ -13,8 +13,8 @@ scala-cli run . --main-class obsidiananki.deck.runDeck
 
 ## What the rulings changed, as seen in this transcript
 
-Of the 91 findings the deck's 84 scenarios now produce, `BaselinePolicy` applies 43 and reports
-48 without acting. Three scenarios read differently from the pre-ruling mechanism:
+Of the 97 findings the deck's 87 scenarios now produce, `BaselinePolicy` applies 45 and reports
+52 without acting. Three scenarios read differently from the pre-ruling mechanism:
 
 - **S24** — a descriptor re-parented under a concept that goes on existing (`# Kafka` still holds
   `## Cost` after `## Definition` moves to `# NATS`) no longer auto-applies. The survey can now
@@ -35,6 +35,22 @@ Of the 91 findings the deck's 84 scenarios now produce, `BaselinePolicy` applies
 Every scenario the sheet's rulings named as already correct by accident (S22/S23, S33/S34's pair
 cards) reads exactly as before — the ruling confirmed the shipped behaviour rather than changing
 it.
+
+## And what the ruling of 2026-09-13 changed
+
+Three scenarios are new — **S24A, S24B, S24C** — and they are the cases the final adversarial
+review of this branch constructed. Each varies one thing about S24: where the concept the
+descriptor left ends up. S24A moves it to another note with one of its descriptors, S24B re-nests
+it under a new ancestor in the same note, S24C leaves it standing with nothing but prose.
+
+The first two used to read as renames. The survival check asked the node census whether the old
+concept was still a node of the card's own note, and a concept that moved away or was re-nested is
+not — so one run moved the travelling descriptor's history onto a key spelling the concept out,
+and in the same breath moved the re-parented descriptor's history on the grounds that the concept
+had vanished. The ruling of 2026-09-13 makes the run's own corroborations a second witness of
+survival, so both now park, and their `EVIDENCE` lines name the pairing they read rather than
+claiming the concept is "still in the vault" of a note that no longer holds it. S24C is the
+regression guard: only the census can see a concept which kept no cards, and it still does.
 
 ## The full transcript
 
@@ -427,6 +443,65 @@ POLICY
   park-and-report: note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:13 (heading)) — but 'kafka' is still in the vault, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
 LEDGER
   new card at ZERO: 'nats / definition'
+  history STRANDED on the suspended note: 'kafka / definition'
+
+SCENARIO S24A — re-parent a descriptor while the concept moves to ANOTHER NOTE   [concept-descriptor heading card]
+EDIT
+  '## Definition' moves under '# NATS' in Messaging.md; '# Kafka' and '## Cost' move verbatim into Queues.md
+DIFF
+  create      'nats / definition' in n1
+  non-event   'nats / guarantees' in n1
+  create      'kafka / cost' in n1b
+  flag        'kafka / cost' in n1 — suspended, never deleted
+  flag        'kafka / definition' in n1 — suspended, never deleted
+EVIDENCE
+  note 1, which held 'kafka / cost' in n1, is 'kafka / cost' in n1b — the same path, in a different note, Queues.md:9 (heading); Context: 'Messaging' → 'Queues'
+  note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:7 (heading)) — but 'kafka' goes on existing: this same run pairs 'kafka / cost' in n1b onto it, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+POLICY
+  apply-reassign: reassigned, keeping its review history — note 1, which held 'kafka / cost' in n1, is 'kafka / cost' in n1b — the same path, in a different note, Queues.md:9 (heading); Context: 'Messaging' → 'Queues'
+  park-and-report: note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:7 (heading)) — but 'kafka' goes on existing: this same run pairs 'kafka / cost' in n1b onto it, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+LEDGER
+  new card at ZERO: 'nats / definition'
+  history FOLLOWED onto 'kafka / cost' — the existing note was reassigned, no new card
+  history STRANDED on the suspended note: 'kafka / definition'
+
+SCENARIO S24B — re-parent a descriptor while the concept is RE-NESTED in the same note   [concept-descriptor heading card]
+EDIT
+  '## Definition' moves under '# NATS'; '# Kafka' becomes '## Kafka' under a new '# Archive'
+DIFF
+  create      'archive / kafka / cost' in n1
+  create      'nats / definition' in n1
+  non-event   'nats / guarantees' in n1
+  flag        'kafka / cost' in n1 — suspended, never deleted
+  flag        'kafka / definition' in n1 — suspended, never deleted
+EVIDENCE
+  note 1, which held 'kafka / cost' in n1, is 'archive / kafka / cost' in n1 — the same name, somewhere else, Messaging.md:9 (heading); Context: 'Messaging' → 'Messaging › Archive'
+  note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:15 (heading)) — but 'kafka' goes on existing: this same run pairs 'archive / kafka / cost' in n1 onto it, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+POLICY
+  apply-reassign: reassigned, keeping its review history — note 1, which held 'kafka / cost' in n1, is 'archive / kafka / cost' in n1 — the same name, somewhere else, Messaging.md:9 (heading); Context: 'Messaging' → 'Messaging › Archive'
+  park-and-report: note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:15 (heading)) — but 'kafka' goes on existing: this same run pairs 'archive / kafka / cost' in n1 onto it, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+LEDGER
+  history FOLLOWED onto 'archive / kafka / cost' — the existing note was reassigned, no new card
+  new card at ZERO: 'nats / definition'
+  history STRANDED on the suspended note: 'kafka / definition'
+
+SCENARIO S24C — re-parent a descriptor while the concept keeps only PROSE   [concept-descriptor heading card]
+EDIT
+  '## Definition' moves under '# NATS'; '# Kafka' stays but holds only prose, '## Cost' is deleted
+DIFF
+  create      'nats / definition' in n1
+  non-event   'nats / guarantees' in n1
+  flag        'kafka / cost' in n1 — suspended, never deleted
+  flag        'kafka / definition' in n1 — suspended, never deleted
+EVIDENCE
+  note 1, which held 'kafka / cost' in n1, matches nothing the vault now produces
+  note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:11 (heading)) — but 'kafka' is still in the vault, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+POLICY
+  park-and-report: note 1, which held 'kafka / cost' in n1, matches nothing the vault now produces
+  park-and-report: note 2, which held 'kafka / definition' in n1, says the same thing as 'nats / definition' in n1 (Messaging.md:11 (heading)) — but 'kafka' is still in the vault, so this is a DIFFERENT card under a different subject and nothing is applied; Concept: 'Kafka' → 'NATS'
+LEDGER
+  new card at ZERO: 'nats / definition'
+  history STRANDED on the suspended note: 'kafka / cost'
   history STRANDED on the suspended note: 'kafka / definition'
 
 SCENARIO S25 — move a concept and its whole subtree to another note   [concept-descriptor heading card]

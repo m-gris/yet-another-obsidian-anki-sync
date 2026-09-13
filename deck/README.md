@@ -1,6 +1,7 @@
 # The scenario deck — every edit-event of the card model, run without Anki
 
-This directory holds a **deck of 84 scenarios** (S01–S74 plus ten `b`-variants) covering every
+This directory holds a **deck of 87 scenarios** (S01–S74, ten `b`-variants, and S24A/S24B/S24C —
+the three cases the final adversarial review constructed for the ruling of 2026-09-13) covering every
 card kind the tool produces — plain heading, concept-descriptor, table pair, table row, cloze
 section, cloze block, sequence, whole-note, relation — and, for each kind, every edit an author
 can make: reword, move, retag, split, merge, delete, restore, rename a file, change an id, and
@@ -31,7 +32,7 @@ scala-cli run . --main-class obsidiananki.deck.runDeck
 prints the whole deck's transcript under the baseline policy: a corroborated finding auto-applies
 per the 2026-09-05 ruling, every other finding is reported and never acted on. That policy itself
 has not changed; what has is which pairings the survey is willing to call `Corroborated`, per the
-five rulings of `docs/design/IDENTITY-DECISION-SHEET.md` — so this command now prints the ruled
+rulings of `docs/design/IDENTITY-DECISION-SHEET.md` — so this command now prints the ruled
 policy's transcript, not a pre-ruling one. A committed copy, annotated with what reads
 differently from before those rulings landed, is `TRANSCRIPT-baseline.md` at the repository root.
 Redirect a fresh run to a file to diff against another world's.
@@ -107,9 +108,9 @@ the finding and grade only, because the verdict on those is precisely what a wor
 Where a standing ruling once said the mechanism was wrong, the gate built for
 `docs/design/IDENTITY-DECISION-SHEET.md`'s rulings now makes most of those scenarios read
 correctly, and their test names no longer claim otherwise: S24 (R2) and S33/S34 (Decision 2) are
-now `[SETTLED-RULING]`. Only **S17** is still left asserting a defective current output, carrying
-the ruling its fix must satisfy in its name (R5: a duplicate key should refuse only the cards
-involved, not the whole run).
+now `[SETTLED-RULING]`, as are S24A/S24B/S24C (the ruling of 2026-09-13). Only **S17** is still
+left asserting a defective current output, carrying the ruling its fix must satisfy in its name
+(R5: a duplicate key should refuse only the cards involved, not the whole run).
 
 ## Fixture layout
 
@@ -118,6 +119,9 @@ deck/fixtures/<Sxx>/before/   the vault as last synced (must extract cleanly —
 deck/fixtures/<Sxx>/after/    the vault after the edit
 deck/fixtures/<Sxx>/after2/   (three-step scenarios only) the vault after the second edit
 ```
+
+A variant carries its parent's number and a suffix — the ten `b`-variants, and S24A/S24B/S24C —
+and sits directly after it in `WorldDeck.scenarios`, which the deck's own id contract asserts.
 
 No scenario shares a fixture with another. S41/S42 read the same shape of edit as S33/S34 (a
 row's subject swapped, or a typo in it fixed) but from their own directories, under a marker
