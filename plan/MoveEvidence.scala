@@ -1067,17 +1067,8 @@ object MoveEvidence:
 
     read.map {
       case SurveyRead.Concluded(finding) => finding
-      case SurveyRead.AwaitingSurvival(card, spec, divergences, subjectNode, subject, clusterMoved) =>
-        underTheSurvivalCheck(
-          card,
-          spec,
-          divergences,
-          subjectNode,
-          subject,
-          clusterMoved,
-          census,
-          corroboratedConcepts,
-        )
+      case pairing: SurveyRead.AwaitingSurvival =>
+        underTheSurvivalCheck(pairing, census, corroboratedConcepts)
     }
 
   /** THE CONCEPTS THIS SURVEY ITSELF PUT A CARD UNDER — the second witness of survival, per the
@@ -1241,15 +1232,18 @@ object MoveEvidence:
     * already refused.
     */
   private def underTheSurvivalCheck(
-      card: ObservedCard,
-      spec: SourcedSpec,
-      divergences: Vector[Divergence],
-      subjectNode: Vector[String],
-      subject: Vector[String],
-      clusterMoved: Boolean,
+      pairing: SurveyRead.AwaitingSurvival,
       census: NodeCensus,
       corroboratedConcepts: Map[Vector[String], CardKey],
   ): MoveFinding =
+    // THE WAITING PAIRING TRAVELS AS ONE VALUE rather than as its six fields, because two of those
+    // fields are `Vector[String]` and mean different things — the node address and the subject —
+    // and a positional call site could swap them and still compile.
+    val card        = pairing.card
+    val spec        = pairing.spec
+    val divergences = pairing.divergences
+    val subject     = pairing.subject
+
     def reparented(survival: SubjectSurvival) = MoveFinding.Reparented(
       card.key,
       card.note.id,
@@ -1276,9 +1270,9 @@ object MoveEvidence:
             )
 
           case NodeCensus.Answer.Surveyed(nodes) =>
-            if nodes.contains(subjectNode) then
-              reparented(SubjectSurvival.StillInTheNote(subjectNode))
-            else if clusterMoved then
+            if nodes.contains(pairing.subjectNode) then
+              reparented(SubjectSurvival.StillInTheNote(pairing.subjectNode))
+            else if pairing.clusterMoved then
               MoveFinding.RelabelUnvouched(
                 card.key,
                 card.note.id,
