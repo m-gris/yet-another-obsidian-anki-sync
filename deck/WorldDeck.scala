@@ -124,6 +124,15 @@ object WorldDeck:
     s("S12", "delete the marked section", plainHeading, "the marked heading and its body are removed"),
     threeStep("S13", "delete, then restore verbatim", plainHeading, "run 1: the section is deleted; run 2: it is restored byte-identically"),
     threeStep("S14", "delete, park, then recreate reworded", plainHeading, "run 1: the section is deleted and the orphan parks; run 2: it is recreated with a reworded heading, body verbatim"),
+    // S14's SIBLING, AND THE CANONICAL CASE OF THE VOUCHER RULE. S14 recreates the section in the
+    // note it was deleted from, so the location still identifies it; this recreates it in ANOTHER
+    // note, a sync later, on a `1way` card whose author has declared that its body identifies
+    // nothing. Neither the declaration nor the location nor a single edit vouches, so the orphan
+    // stays parked and the new section starts at zero. `docs/design/IDENTITY-DECISION-SHEET.md`, "no
+    // voucher, no edit", carried this as an open case before it was resolved; the fixture is the
+    // sheet's own worked example, addition and multiplication both having "a binary operation" as
+    // their nature.
+    threeStep("S14b", "delete, park, then recreate byte-identically in ANOTHER NOTE", plainHeading, "run 1: '# Nature #flashcard/1way' over 'A binary operation.' is deleted from Addition.md and the orphan parks; run 2: the byte-identical section appears in Multiplication.md"),
     s("S15", "split one section into two", plainHeading, "the original heading keeps paragraph 1; a new marked sibling gets paragraph 2"),
     shared("S15b", "S15b", "split, both halves reworded", plainHeading, "the section is split and BOTH headings are new wordings"),
     s("S16", "merge two sections into one", plainHeading, "two marked siblings become one new marked heading whose body is the concatenation"),

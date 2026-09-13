@@ -1,6 +1,6 @@
 # The ruled identity policy's deck transcript
 
-All 89 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
+All 90 scenarios of `deck/fixtures`, run through the real extraction pipeline and the real
 move-evidence survey, with the policy seam filled by `BaselinePolicy`
 (`deck/MovePolicy.scala`) — the same "corroborated applies, everything else is reported" policy
 the `move-build` Planner has always shipped. What changed is not the policy: it is *which*
@@ -13,8 +13,8 @@ scala-cli run . --main-class obsidiananki.deck.runDeck
 
 ## What the rulings changed, as seen in this transcript
 
-Of the 103 findings the deck's 89 scenarios now produce, `BaselinePolicy` applies 46 and reports
-57 without acting. Three scenarios read differently from the pre-ruling mechanism:
+Of the 105 findings the deck's 90 scenarios now produce, `BaselinePolicy` applies 46 and reports
+59 without acting. Three scenarios read differently from the pre-ruling mechanism:
 
 - **S24** — a descriptor re-parented under a concept that goes on existing (`# Kafka` still holds
   `## Cost` after `## Definition` moves to `# NATS`) no longer auto-applies. The survey can now
@@ -95,6 +95,30 @@ line names `'cost / benefit / queue'` as the thing still in the vault.
 
 S33 itself is unchanged, and that is the pair worth reading together: the discriminating fact is
 whether the old row goes away, and the deck now shows both answers to it.
+
+## And what "no voucher, no edit" changed
+
+One scenario is new — **S14b** — and it is S14 with one thing varied: which note the deleted section
+comes back in. S14 recreates it in the note it was deleted from, so the place still identifies the
+card and its review history follows. S14b recreates it byte-identically in ANOTHER note, a sync
+later, on a card marked `#flashcard/1way`.
+
+That used to reattach, and it should not have. The fixture is the sheet's own worked example:
+addition and multiplication both have "a binary operation" as their nature, so the old behaviour
+moved addition's review history onto multiplication's card. Each section is unique within its own
+sync's delta, so the mutual-uniqueness guard passed and nothing else was looking. Marc: "story 1 is
+about a 1way card... I don't see what we could even ask."
+
+An orphaned note may now be edited onto a new section only when something vouches that the two are
+the same card, and there are three vouchers: the author's DECLARATION that the content identifies
+what it is about (`/2way`, `/3way`, and the table ways asking for concept recall), the LOCATION
+agreeing, or the SINGLE EDIT of a note the same run stranded — which is what makes a verbatim
+cross-note move a move rather than a coincidence. A `/1way` parked by an earlier run and claiming a
+section in a different note has none of the three, so S14b's run 2 reads `park-and-report` and its
+`LEDGER` shows both halves of the cost: a new card at zero, and a history still stranded.
+
+Nothing else in the deck moved, because every plain-heading fixture here is marked `#flashcard/2way`
+and the declaration vouches for all of them — which is exactly why the defect could ship.
 
 ## The full transcript
 
@@ -299,6 +323,30 @@ POLICY
   apply-reassign: reassigned, keeping its review history — note 1, which held 'temporal coupling' in n2, is 'temporal coupling of services' in n2 — a different name, in the same place, Coupling.md:5 (heading); Front: 'Temporal coupling' → 'Temporal coupling of services'
 LEDGER
   history FOLLOWED onto 'temporal coupling of services' — the existing note was reassigned, no new card
+
+SCENARIO S14b — delete, park, then recreate byte-identically in ANOTHER NOTE   [plain heading card]
+EDIT
+  run 1: '# Nature #flashcard/1way' over 'A binary operation.' is deleted from Addition.md and the orphan parks; run 2: the byte-identical section appears in Multiplication.md
+RUN 1
+DIFF
+  flag        'nature' in add — suspended, never deleted
+EVIDENCE
+  note 1, which held 'nature' in add, matches nothing the vault now produces
+POLICY
+  park-and-report: note 1, which held 'nature' in add, matches nothing the vault now produces
+LEDGER
+  history STRANDED on the suspended note: 'nature'
+RUN 2
+DIFF
+  create      'nature' in multiply
+  parked      'nature' in add — already flagged by an earlier run
+EVIDENCE
+  note 1, which held 'nature' in add, says the same thing as 'nature' in multiply (Multiplication.md:7 (heading)) — but nothing vouches that they are the same card: this content was declared not to identify what it is about, it is in a different note, and this note was parked by an earlier run, so nothing is applied and the new card starts at zero; Context: 'Addition' → 'Multiplication'
+POLICY
+  park-and-report: note 1, which held 'nature' in add, says the same thing as 'nature' in multiply (Multiplication.md:7 (heading)) — but nothing vouches that they are the same card: this content was declared not to identify what it is about, it is in a different note, and this note was parked by an earlier run, so nothing is applied and the new card starts at zero; Context: 'Addition' → 'Multiplication'
+LEDGER
+  new card at ZERO: 'nature'
+  history still STRANDED (parked): 'nature'
 
 SCENARIO S15 — split one section into two   [plain heading card]
 EDIT

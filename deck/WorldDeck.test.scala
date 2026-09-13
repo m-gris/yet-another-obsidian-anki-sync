@@ -161,6 +161,27 @@ class WorldDeckTest extends munit.FunSuite:
     assertEquals(decisionLabels(steps(1)), Vector("apply-reassign"))
     assert(diffWords(steps(1)).contains("parked"))
 
+  test("S14b [SETTLED-RULING 2026-09-13] recreated in ANOTHER note a sync later: nothing vouches"):
+    // S14 and S14b differ in one thing: which note the section comes back in. S14's recreation is in
+    // the note it was deleted from, so the location still identifies the card and the history
+    // follows. Here it comes back in another note, on a `1way` card whose author has declared that
+    // its body identifies nothing — and the two events are in different syncs, so there is no single
+    // edit to read either. Nothing vouches, so the orphan stays parked and the new card starts at
+    // zero.
+    //
+    // THIS IS THE SHEET'S OWN WORKED EXAMPLE, recorded as an open case before it resolved: addition
+    // and multiplication both have "a binary operation" as their nature, and the old behaviour moved
+    // addition's review history onto multiplication's card. Marc: "story 1 is about a 1way card... I
+    // don't see what we could even ask."
+    val steps = scenarioRun("S14b").steps
+    assertEquals(shapes(steps(0)), Vector("unexplained"))
+    assertEquals(shapes(steps(1)), Vector("no-voucher"))
+    assertEquals(decisionLabels(steps(1)), Vector("park-and-report"))
+    // AND THE LEDGER MUST SHOW BOTH HALVES OF THE COST, which is what makes this readable as a
+    // decision rather than as a silence: a new card at zero, and a history still stranded.
+    assert(diffWords(steps(1)).contains("create"), diffWords(steps(1)))
+    assert(diffWords(steps(1)).contains("parked"), diffWords(steps(1)))
+
   test("S15 [SETTLED-MODEL] split keeping the heading: Update + Create, no finding"):
     assertEquals(shapes(lastStep("S15")), Vector.empty)
     assertEquals(diffWords(lastStep("S15")).sorted, Vector("create", "update"))
