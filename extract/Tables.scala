@@ -258,6 +258,49 @@ object Tables:
         else Right(cards)
     }
 
+  /** THE SUBJECTS OF THIS SECTION'S TABLE ROWS, as key segments and in the table's own order —
+    * what a row CONTRIBUTES TO A NODE TREE, as against what it contributes to a card.
+    *
+    * ═══ WHY THE NODE CENSUS NEEDS THIS AND COULD NOT DERIVE IT ═══
+    *
+    * `plan/NodeCensus.scala` already sees a table row, as the proper prefix of its pair cards' keys
+    * — which works exactly as long as the row HAS a pair card. Empty every value cell of a row and
+    * it has none, so the row survives in no key anywhere while standing in plain sight in the
+    * markdown. The survival check then reads a value moved onto ANOTHER row as a rename of this one
+    * and moves review history across a subject change. Marc ruled on 2026-09-13
+    * (`docs/design/IDENTITY-DECISION-SHEET.md`, "a standing table-row subject counts as the old
+    * subject standing") that a standing subject cell counts exactly as a standing heading line does,
+    * and a heading line reaches the census through the walker's outline. This is the row's way in.
+    *
+    * ═══ WHY IT LIVES HERE RATHER THAN IN THE WALKER ═══
+    *
+    * Because it is [[cellSegment]] — the IDENTITY projection, the one this file freezes — and a
+    * second copy of that reading is precisely the hazard the census is built to avoid. A census
+    * disagreeing with the key derivation about what a row's subject IS would answer "the old subject
+    * survives" about a row the keys never came from. There are already two copies of
+    * [[cellSource]]'s body in this file (see [[CellDisplay.Default]], which argues for that one);
+    * this adds no third, and the walker gets the segments rather than the cells so that no rendered
+    * reading can reach it.
+    *
+    * ═══ THE REACH IS `fromSection`'s REACH, ARM FOR ARM ═══
+    *
+    * [[firstTable]], so a second table in one section contributes nothing — the extractor builds
+    * cards from the first alone, and claiming nodes for a table no key can ever come from is the
+    * same disagreement in the other direction. BODY ROWS ONLY: the header row's first cell is the
+    * concept LABEL, which is displayed and never keyed. A row with no cells, or whose subject cell
+    * yields no segment, names nothing — both refusals are `cardsForRow`'s, in its words.
+    *
+    * IT DOES NOT ASK WHETHER THE SECTION IS MARKED, and that mirrors the heading half rather than
+    * overlooking the question: the walker's outline holds every heading it reads, marked or not,
+    * because marking one is an edit away and a node is a place a card COULD hang off. The same is
+    * true of a row under an unmarked table. What both halves must not claim is a place no marker
+    * could ever put a card, which is why the reach above is the extractor's and not "every table".
+    */
+  private[extract] def rowSubjectsOf(section: Section): Vector[HeadingSegment] =
+    firstTable(section).toVector.flatMap { table =>
+      rowCells(table.body.content).flatMap(_.headOption).flatMap(cellSegment(_).toOption)
+    }
+
   /** A DECLARED descriptor column, paired once with the key segment its header yields.
     *
     * `segment` is `None` for a header that canonicalises to empty — blank, or nothing but a

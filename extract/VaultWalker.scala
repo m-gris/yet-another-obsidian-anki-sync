@@ -355,6 +355,67 @@ private[extract] def headingChains(root: laika.ast.RootElement): Vector[Vector[S
 
   walk(root, Vector.empty)
 
+/** EVERY TABLE ROW SUBJECT THIS TOOL COULD KEY A CARD UNDER, each as its own chain of canonical
+  * segments — the second half of [[obsidiananki.plan.NodeCensus]]'s raw material, and the half a
+  * heading walk cannot see.
+  *
+  * ═══ WHY IT EXISTS: A ROW CAN STAND WITH NOTHING KEYED UNDER IT ═══
+  *
+  * The census already sees a row that HAS cards, as the proper prefix of their keys. Empty every
+  * value cell of a row and it has no cards at all — and the row is no heading either, so it falls
+  * out of both halves while standing in plain sight in the markdown. The survival check then reads a
+  * value moved onto ANOTHER row as a rename of this one and moves review history across a subject
+  * change, which standing ruling R2 forbids. The SAME event written as headings parks (deck scenario
+  * S24C), which is what made this a break rather than a preference: one edit, two spellings,
+  * opposite outcomes. Ruled 2026-09-13 — `docs/design/IDENTITY-DECISION-SHEET.md`, "a standing
+  * table-row subject counts as the old subject standing".
+  *
+  * ═══ WHY IT IS A SECOND FUNCTION AND NOT A WIDER `headingChains` ═══
+  *
+  * A heading chain and a row chain are readings of different constructs, and one function emitting
+  * both could not be named for what it returns without lying about half of it. The two are combined
+  * at the ONE call site that wants a note's whole outline, where the union is visible, and each half
+  * stays directly testable and on the production path. The duplicated `Section`/`BlockContainer`
+  * descent below is the price, and it is the price [[headingChains]] already pays to mirror the
+  * extractor arm for arm: two short walks that agree with the key derivation beat one clever walk
+  * that might not.
+  *
+  * ═══ WHAT A ROW'S SUBJECT IS, IS NOT DECIDED HERE ═══
+  *
+  * `Tables.rowSubjectsOf` answers that, because it is the IDENTITY projection the extractor keys
+  * cards from, and a second copy of that reading is exactly the disagreement a census must not have.
+  * This function says only WHERE such a subject sits: under the chain of the section holding the
+  * table, which is the chain the pair cards' keys extend.
+  *
+  * ═══ PREFIX-CLOSED, LIKE ITS SIBLING, BUT ONLY IN UNION WITH IT ═══
+  *
+  * A row chain's proper prefix is its section's own heading chain, which [[headingChains]] emits and
+  * this does not. `NodeCensus.Outlines` can still say its material arrives prefix-closed because the
+  * call site passes the union of the two; neither half alone is a note's outline, and neither is used
+  * as one.
+  *
+  * A HEADING THAT EXTRACTS TO NOTHING STOPS THE DESCENT, exactly as in [[headingChains]] and in the
+  * extractor: with no segment there is no chain to hang a row under, and the note is reported
+  * `KeyUnderivableInFile`, which makes its census unanswerable anyway.
+  */
+private[extract] def tableRowChains(root: laika.ast.RootElement): Vector[Vector[String]] =
+  def walk(element: laika.ast.Element, ancestors: Vector[String]): Vector[Vector[String]] =
+    element match
+      case section: laika.ast.Section =>
+        HeadingSegment.fromExtractedText(section.header.extractText) match
+          case Left(_) => Vector.empty
+          case Right(segment) =>
+            val chain = ancestors :+ segment.value
+            Tables.rowSubjectsOf(section).map(subject => chain :+ subject.value) ++
+              section.content.toVector.flatMap(walk(_, chain))
+
+      case container: laika.ast.BlockContainer =>
+        container.content.toVector.flatMap(walk(_, ancestors))
+
+      case _ => Vector.empty
+
+  walk(root, Vector.empty)
+
 /** Whether any heading in a file carries a `#flashcard` marker — INCLUDING the case where the
   * question could not be asked.
   *
@@ -886,9 +947,17 @@ object VaultWalker:
                   // `NodeCensus` answers about it from the failures instead.
                   //
                   // AN EMPTY VECTOR IS A LEGITIMATE ANSWER, not a missing one: a note with no
-                  // headings holds no heading nodes, and its table rows and properties still reach
-                  // the census through its keys.
-                  outlines += noteId -> headingChains(doc.content)
+                  // headings and no table holds no outline nodes, and its properties still reach the
+                  // census through its keys.
+                  //
+                  // THE UNION OF THE TWO HALVES IS THE NOTE'S OUTLINE, and it is assembled HERE
+                  // rather than inside either half, so that a reader sees what a note's outline is
+                  // made of in one line. Headings the tool reads as headings, marked or not; plus
+                  // the subject cell of every row of every section's table, which is the half that
+                  // sees a row standing with all its value cells emptied — no card is keyed under
+                  // such a row, so nothing else in this scan mentions it. Ruled 2026-09-13; see
+                  // `tableRowChains`, which also says why this is a union rather than one walk.
+                  outlines += noteId -> (headingChains(doc.content) ++ tableRowChains(doc.content))
 
                   val note =
                     Extractor.fromDocument(
