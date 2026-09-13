@@ -76,6 +76,23 @@ class MoveEvidenceTest extends munit.FunSuite:
   ): CardSpec =
     CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.Default, context, "")
 
+  /** THE SAME CARD SHAPE DECLARED `#flashcard/cdd/1way` — the description recalled and NOTHING
+    * ELSE, so the author has declared that this description does NOT identify its concept.
+    *
+    * [[threeField]]'s `ThreeFieldDirections.Default` is `cdd/2way`, which declares the opposite.
+    * The two helpers differ in that one value and it is the whole point: since the ruling of
+    * 2026-09-13 the relabel gate reads the declaration, so a fixture's direction is no longer
+    * incidental to what the survey concludes about it.
+    */
+  def threeFieldOneWay(
+      k: CardKey,
+      concept: String,
+      descriptor: String,
+      description: String,
+      context: String,
+  ): CardSpec =
+    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.ValueOnly, context, "")
+
   def cloze(k: CardKey, text: String, context: String): CardSpec =
     CardSpec.Cloze(
       k,
@@ -409,15 +426,19 @@ class MoveEvidenceTest extends munit.FunSuite:
     assertEquals(found.divergences.map(_.field), Vector(Marker.BasicFields.Front))
   }
 
-  test("a concept-descriptor card whose concept AND place both moved is a question, not a follow") {
-    // ⚠️ THIS TEST USED TO ASSERT A CORROBORATION GRADED `SubstanceAlone`, and the ruling of
-    // 2026-09-12 (Decision 2) moved it: a concept-descriptor card's subject is its parent, so a
-    // changed concept alongside a changed place is a rename combined with a move, which "grades
-    // weaker and becomes a question". The GRADE still exists and is still reachable — a plain
-    // heading reworded and re-parented in one commit is `SubstanceAlone` and applies (deck S09) —
-    // because for a note type with one name field a changed last segment is not a subject change.
-    val was = threeField(key("n1", "top", "kafka", "delivery"), "Kafka", "Delivery", "At least once.", "Top")
-    val now = threeField(key("n1", "other", "nats", "delivery"), "NATS", "Delivery", "At least once.", "Other")
+  test("a cdd/1way card whose concept AND place both moved is a question, not a follow") {
+    // ⚠️ THIS TEST HAS BEEN MOVED TWICE AND BOTH MOVES ARE THE POINT OF IT. It first asserted a
+    // corroboration graded `SubstanceAlone`; Decision 2 of 2026-09-12 made it a question, on the
+    // ground that "a name change combined with a move grades weaker". Then the entailment of
+    // 2026-09-13 asked WHICH KINDS that sentence can be true of, and the answer narrowed it to
+    // one: a `cdd/1way` card, whose author has declared that its description identifies nothing.
+    // For such a card the location is the only thing that could vouch, so a moved location leaves
+    // nothing — which is why THIS fixture is `threeFieldOneWay` where it used to be `threeField`.
+    // The test below it is the same shape declared `cdd/2way`, and it follows.
+    val was =
+      threeFieldOneWay(key("n1", "top", "kafka", "delivery"), "Kafka", "Delivery", "At least once.", "Top")
+    val now =
+      threeFieldOneWay(key("n1", "other", "nats", "delivery"), "NATS", "Delivery", "At least once.", "Other")
     surveyOver(
       Vector(observed(was, 1)),
       Vector(sourced(now)),
@@ -427,7 +448,31 @@ class MoveEvidenceTest extends munit.FunSuite:
         assertEquals(candidate, now.key)
         assertEquals(cause, RelabelDoubt.ClusterMoved)
         assertEquals(divergences.map(_.field).toSet, Set("Concept", Marker.ContextField))
-      case other => fail(s"a subject change that also moved must not be applied: $other")
+      case other => fail(s"a 1way subject change that also moved must not be applied: $other")
+  }
+
+  test("the SAME shape declared cdd/2way follows, because place was never part of that claim") {
+    // RESOLVED 2026-09-13 as ENTAILED by the standing rulings (`docs/design/IDENTITY-DECISION-SHEET.md`,
+    // "a relabel's follow does not depend on place for declared-identifying kinds"). A `cdd/2way`
+    // declares that the description identifies its concept — Marc: "a 2way card... same descriptor,
+    // same description" — and place was never part of that claim. So with the description unchanged
+    // and the old subject standing nowhere, this is the same concept respelled and rehomed, and the
+    // history follows.
+    //
+    // BYTE-FOR-BYTE THE TEST ABOVE apart from one Setting field, which is what makes the pair worth
+    // reading together: the fixtures differ only in what the author declared, and that is now the
+    // whole of the difference in outcome.
+    val was = threeField(key("n1", "top", "kafka", "delivery"), "Kafka", "Delivery", "At least once.", "Top")
+    val now = threeField(key("n1", "other", "nats", "delivery"), "NATS", "Delivery", "At least once.", "Other")
+    surveyOver(
+      Vector(observed(was, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> Vector(Vector("other"), Vector("other", "nats"))),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, now.key)
+        assertEquals(c.agreement, Agreement.SubstanceAlone)
+      case other => fail(s"a 2way relabel needs no place evidence: $other")
   }
 
   test("a heading carried into another note keeps its whole path, so the survey searches the whole vault") {
@@ -650,33 +695,78 @@ class MoveEvidenceTest extends munit.FunSuite:
       case other => fail(s"a relabel in place must follow: $other")
   }
 
-  test("a concept relabelled AND the cluster moved is reported, not applied") {
-    // "The path weighs both ways" — Decision 2. The old concept is gone, so this is not a
-    // re-parent; but two things moved at once, which the ruling grades weaker than a rename.
+  test("a 2way concept relabelled AND the cluster moved FOLLOWS — place is not part of its claim") {
+    // ⚠️ THIS TEST ASSERTED A QUESTION UNTIL 2026-09-13, on Decision 2's "the path weighs both
+    // ways". The entailment recorded that day asked which KINDS that sentence can be true of: a
+    // `cdd/2way` declares that its description identifies its concept, and place was never part of
+    // that claim, so with the description unchanged and the old subject standing nowhere there is
+    // nothing left for the path to weigh. Marc: "here I have the impression that it is a
+    // non-question". The `/1way` twin below is where the question survives.
     val now = definitionUnder("RabbitMQ", "n1", "elsewhere")
     surveyOver(
       Vector(observed(definitionUnderKafka, 1)),
       Vector(sourced(now)),
       Map(noteIdOf("n1") -> treeWith("elsewhere", "rabbitmq")),
     ) match
-      case Vector(r: MoveFinding.RelabelUnvouched) => assertEquals(r.cause, RelabelDoubt.ClusterMoved)
-      case other => fail(s"a relabel that also moved must be a question: $other")
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, now.key)
+      case other => fail(s"a 2way relabel that also moved must follow: $other")
   }
 
-  test("a concept relabelled into ANOTHER NOTE is a question too") {
-    // ⚠️ AN INTERPRETATION AWAITING MARC'S CONFIRMATION, flagged rather than buried. Decision 2
-    // follows a relabel when "the cluster stayed in place (the path agreed)", and a card that
-    // crossed into a different note is read here as a cluster that did not stay — a card key is a
-    // note id AND a path, so the note id is part of where the cluster sits. No deck scenario
-    // exercises this combination, which is why it is pinned here and nowhere else.
+  test("a 2way concept relabelled into ANOTHER NOTE follows too, and that WAS the open question") {
+    // ⚠️ THIS TEST CARRIED THE FLAG "AN INTERPRETATION AWAITING MARC'S CONFIRMATION", and this is
+    // the confirmation — in the negative. The interpretation was that a card key is a note id AND a
+    // path, so crossing into another note is a cluster that did not stay. Walked against the
+    // standing rulings on 2026-09-13 it collapsed for the declared-identifying kinds: the note id is
+    // part of WHERE the card is, and where it is was never what a `2way` declaration claimed. So a
+    // relabel follows across notes or not, gated by the survival witnesses alone.
     val now = definitionUnder("RabbitMQ", "n2", "top")
     surveyOver(
       Vector(observed(definitionUnderKafka, 1)),
       Vector(sourced(now)),
       Map(noteIdOf("n2") -> treeWith("top", "rabbitmq")),
     ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate.noteId.value, "n2")
+      case other => fail(s"a 2way relabel across notes must follow: $other")
+  }
+
+  test("a 1way concept relabelled into ANOTHER NOTE stays a question — nothing vouches for it") {
+    // THE GUARD THAT KEEPS THE REFINEMENT PER-DECLARATION RATHER THAN A BLANKET WIDENING, and the
+    // one test that keeps `RelabelDoubt.ClusterMoved` reachable at all: no deck scenario produces
+    // it. A `cdd/1way` author has declared that this description identifies nothing, so the content
+    // match is not evidence of sameness and the location is the only thing that could have been —
+    // and it changed. Same fixture as the 2way test above, one Setting field apart.
+    val was =
+      threeFieldOneWay(key("n1", "top", "kafka", "definition"), "Kafka", "Definition", "A durable log.", "Top")
+    val now =
+      threeFieldOneWay(key("n2", "top", "rabbitmq", "definition"), "RabbitMQ", "Definition", "A durable log.", "Top")
+    surveyOver(
+      Vector(observed(was, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n2") -> treeWith("top", "rabbitmq")),
+    ) match
       case Vector(r: MoveFinding.RelabelUnvouched) => assertEquals(r.cause, RelabelDoubt.ClusterMoved)
-      case other => fail(s"a relabel across notes must be a question: $other")
+      case other => fail(s"a 1way relabel across notes must stay a question: $other")
+  }
+
+  test("a STANDING old subject still parks a 2way relabel, wherever the cluster went") {
+    // THE CONTRADICTION CASE THE REFINEMENT DOES NOT TOUCH, and the reason the ruling says "gated
+    // only by the survival witnesses" rather than "ungated". Place stopped being evidence; the old
+    // subject going on existing never was place evidence — it is the R2 question, and a descriptor
+    // under a subject that still stands is a different card however far it travelled.
+    val now = definitionUnder("NATS", "n2", "top")
+    surveyOver(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(
+        noteIdOf("n1") -> Vector(Vector("top"), Vector("top", "kafka")),
+        noteIdOf("n2") -> treeWith("top", "nats"),
+      ),
+    ) match
+      case Vector(r: MoveFinding.Reparented) =>
+        assertEquals(r.survival, SubjectSurvival.StillInTheNote(Vector("top", "kafka")))
+      case other => fail(s"a surviving old subject must still park a cross-note relabel: $other")
   }
 
   test("a census that could not be taken is never spent as 'the old subject is gone'") {
