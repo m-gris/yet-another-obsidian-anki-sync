@@ -1461,6 +1461,46 @@ class MoveEvidenceTest extends munit.FunSuite:
       case other => fail(s"a plain heading has no subject segment to move: $other")
   }
 
+  /** A card anchored at one `^blockid`-marked paragraph. The anchor is the WHOLE of its path, which
+    * is what makes the test below about the anchor and nothing else.
+    */
+  def blockKey(id: String, anchor: String): CardKey =
+    CardKey(
+      NoteId.fromFrontmatter(id).toOption.get,
+      CardPath.Block(BlockAnchor.read(anchor).getOrElse(fail(s"unusable test anchor '$anchor'"))),
+    )
+
+  test("a cloze block's ^anchor rewritten IN PLACE over identical text follows — the anchor is a name") {
+    // RULED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "the undeclared kinds take the 1way
+    // treatment; a cloze anchor is a name"). Marc's correction: the `^anchor` is NOT an identity
+    // contract — "not unique, arbitrary, manual, re-writable" — it is part of the block's ADDRESS. So
+    // rewriting it over a byte-identical block, in place, is Decision 1 one level down: the block's
+    // name changed, its substance and its place agreed, and the same card keeps its history.
+    //
+    // THIS PINS BEHAVIOUR THAT WAS ALREADY CORRECT rather than changing any. It earns a test because
+    // nothing else in this suite drives a block card through the gates, and because the outcome rests
+    // on two decisions taken for other reasons: a cloze note type declares no name field, so the
+    // subject gate cannot fire for it, and its `SubstanceDeclaration` is `Unstated`, so the voucher
+    // rule refuses nothing. Either of those moving would move this silently.
+    //
+    // THE GRADE READS THE ANCHOR AS PLACE, not as name, and that is a fact about the CARD rather than
+    // about the markdown: a cloze card shows no name field at all, so `Agreement`'s name half is
+    // vacuous for it — see that type's own note on `NameAndSubstance`. The ruling's "the block's name
+    // changed" is about the author's text; the card's fields never carried it.
+    val was = cloze(blockKey("n1", "forearm"), "The ==<<ulna>>== is medial.", "Bones")
+    val now = cloze(blockKey("n1", "ulna-note"), "The ==<<ulna>>== is medial.", "Bones")
+    assertEquals(
+      MoveEvidence.nameDepthOf(was.noteTypeName),
+      0,
+      "a cloze card must show no name field for this test to be about what it says it is",
+    )
+    surveyOf(Vector(observed(was, 1)), Vector(sourced(now))) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, now.key)
+        assertEquals(c.agreement, Agreement.NameAndSubstance)
+      case other => fail(s"an anchor rewritten in place must not orphan the card: $other")
+  }
+
   test("a relation card's predicate rename is not a subject change either") {
     // A relation card IS a concept-descriptor card — subject is the concept, predicate is the
     // descriptor — but its path is a single frontmatter property, so its two declared name fields
