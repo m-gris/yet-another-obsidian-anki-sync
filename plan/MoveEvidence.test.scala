@@ -1190,6 +1190,37 @@ class MoveEvidenceTest extends munit.FunSuite:
         fail(s"an unrelated chain's pairing must not park this one: $other")
   }
 
+  test("two notes holding the SAME chain still testify about one another — the residual cost") {
+    // THE BOUNDARY OF THE QUALIFICATION, PINNED SO THAT IT IS A MEASURED COST RATHER THAN A CLAIM IN
+    // A DOCSTRING. The chain is compared and the note id is not, and it cannot be: the
+    // live-collection witness exists precisely for a concept that left for ANOTHER note in an earlier
+    // sync, so requiring the note to agree would retire the witness altogether (the two-run shape).
+    // The price is this fixture — two notes that each hold `# Kafka` / `## Definition`, so renaming
+    // one note's Kafka is parked by the other note's.
+    //
+    // IT IS A DIFFERENT CASE FROM THE NAMESAKE ABOVE, which is why it is priced differently: there
+    // the two subjects sat under different parents and were plainly two concepts, while here the vault
+    // says the same concept lives in two places. Parking errs toward keeping a history rather than
+    // moving it, which is the safe direction, and it is reported rather than silent. Whether a vault
+    // may hold one concept's chain twice is the author's question, not this survey's.
+    val twinElsewhere =
+      threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
+      Vector(observed(twinElsewhere, 101)),
+    ) match
+      case Vector(r: MoveFinding.Reparented) =>
+        assertEquals(
+          r.survival,
+          SubjectSurvival.StillInTheCollection(Vector("top", "kafka"), twinElsewhere.key),
+        )
+      case other =>
+        fail(s"the same chain in another note is still a witness, by the rule as ruled: $other")
+  }
+
   test("a live card under some OTHER concept witnesses nothing about this one") {
     // THE VACUITY GUARD ON THE THIRD WITNESS, the twin of the one the second witness carries.
     // Without it, "does the collection declare anything at all" would pass every test above while

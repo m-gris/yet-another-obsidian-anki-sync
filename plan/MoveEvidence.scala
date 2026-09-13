@@ -530,6 +530,13 @@ enum Agreement:
   * surviving when THIS SAME SURVEY corroborated a card onto it. The run's own conclusions are the
   * witness, which makes the contradiction structurally impossible rather than merely unlikely.
   *
+  * WHAT THE PAIRING IS MATCHED ON, since "pairs a card onto the concept" is the part that took two
+  * tries to get right. Not the new key — a relocated or re-nested concept is not where it was, so the
+  * new key is no use for recognising the place the stranded card left. The pairing's OLD key is: it
+  * is where the subject STOOD, so it bridges that chain to wherever the run has just put the card.
+  * Matching a bare NAME instead, which is what shipped first, had one note's `## Performance`
+  * testifying about another's — see [[CorroboratedOnto]] and the entailment of the same day.
+  *
   * ═══ WHY THE DISTINCTION IS CARRIED RATHER THAN COLLAPSED ═══
   *
   * [[RelabelDoubt]]'s precedent: what the report says must match what the run actually established.
