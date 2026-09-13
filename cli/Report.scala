@@ -136,6 +136,11 @@ object Report:
       // nothing was entitled to say the two are the same card, so nothing was written — see
       // `plan/MoveEvidence.scala`'s `NoVoucher`.
       case _: MoveFinding.NoVoucher        => false
+      // A BROKEN BACKWARD CLAIM IS REFUSED, so it belongs on that side as well — and it is the one
+      // finding here whose remedy is not the tool's at all: the author rewords a description or
+      // retags a card. What it SAYS is `MoveFinding.describe`'s business; which block it prints in
+      // is this one's.
+      case _: MoveFinding.ClaimBroken      => false
       case _: MoveFinding.Unexplained      => false
       case _: MoveFinding.Incomparable     => false
     }

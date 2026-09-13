@@ -427,6 +427,93 @@ object SubstanceDeclaration:
           "this tool"
       )
 
+/** WHAT A CARD'S BACKWARD DIRECTION ASKS, AND WHAT IT ANSWERS — the unit a `/2way` declaration
+  * actually has, and therefore the unit at which that declaration can be caught breaking.
+  *
+  * ═══ THE QUESTION AND THE ANSWER ═══
+  *
+  * A concept-descriptor card's backward card asks "WHICH THING has this DESCRIPTOR with this
+  * DESCRIPTION?" — so [[descriptor]] and [[description]] are the question, and [[concept]] is the
+  * answer. Marc's precision of 2026-09-13: the claim's unit is THE PAIR. Two cards sharing only a
+  * description are innocent text reuse — addition's `## Definition` and multiplication's `## Nature`
+  * may both read "a binary operation" without either card lying. The same descriptor AND description
+  * under different concepts is a measurable contradiction: the backward card has two true answers, so
+  * it is not merely a doubtful pairing but a BROKEN FLASHCARD.
+  *
+  * ═══ READ OFF THE KEY AND ONE FIELD, WHICH IS WHY IT IS CANONICAL WHERE IT MATTERS ═══
+  *
+  * The descriptor and the concept come from the card's key segments, so they are canonicalised —
+  * bolding a heading must neither hide a contradiction nor invent one. The description is the
+  * Substance field verbatim, because the comparison floor everywhere else in this file is
+  * byte-identity and a description differing by a byte is a different claim.
+  *
+  * ═══ WHICH CARDS HAVE ONE, AND WHY THE DECLARATION IS NOT ASKED HERE ═══
+  *
+  * Only a card whose name window is TWO segments wide: a concept-descriptor card, heading-built or
+  * table-built, whose path is deep enough to hold both. The ancestorless one — `Extractor`'s
+  * file-name concept, deck S27, S60 and S64 — has no concept IN ITS KEY, so no claim can be read off
+  * it; a relation card's path is a single property, same answer.
+  *
+  * THE DECLARATION IS DELIBERATELY NOT CONSULTED. A `cdd/1way` card asserts no backward reading, so
+  * its own claim cannot break — but the FACT it states still stands in the vault, and a `/2way` card
+  * elsewhere claiming to identify the same pair is contradicted by it just the same. Whose claim is
+  * broken is a question about a declaration; whether a pair stands answered twice is a question about
+  * the world. [[MoveEvidence.underTheClaimCheck]] asks the first; this type answers the second.
+  */
+final case class ReverseClaim(
+    descriptor: String,
+    description: String,
+    concept: String,
+    at: CardKey,
+):
+
+  /** The part two cards may COLLIDE on — everything the backward card gives the author. */
+  def question: (String, String) = (descriptor, description)
+
+object ReverseClaim:
+
+  /** The claim a card makes, or `None` for a card whose key cannot hold one.
+    *
+    * TAKES THE THREE THINGS IT READS rather than a card or a spec, because it is applied to both: the
+    * collection's live cards and the specs the vault produces now. One reading for both sides, so a
+    * collision cannot depend on which side it was seen from.
+    *
+    * THE SINGLE SUBSTANCE FIELD IS REQUIRED, and a second one is a hard error rather than a silent
+    * pick. A note type with two Substance fields — `Obsidian Cloze` has `Text` and `Back Extra` —
+    * would make "this description" ambiguous, and comparing half of a card's substance would report a
+    * contradiction between two cards that say different things. Unreachable today, because such a
+    * type declares no name field and is refused by the window test above it.
+    */
+  private[plan] def of(
+      noteType: String,
+      key: CardKey,
+      fields: Map[String, String],
+  ): Option[ReverseClaim] =
+    FieldRole.rolesFor(noteType).flatMap { roles =>
+      val window =
+        MoveEvidence.nameSegments(MoveEvidence.segmentsOf(key.path), FieldRole.nameDepth(roles))
+      Option.when(window.sizeIs == 2) {
+        val substance =
+          Marker.FieldOrder.byNoteType(noteType).filter(field => roles(field) == FieldRole.Substance)
+        val description = substance match
+          case Vector(only) =>
+            fields.getOrElse(
+              only,
+              sys.error(
+                s"a '$noteType' card at '${key.path.render}' carries no '$only', which it declares " +
+                  "— see Marker.FieldOrder"
+              ),
+            )
+          case several =>
+            sys.error(
+              s"'$noteType' declares ${several.size} Substance fields (${several.mkString(", ")}), " +
+                "so what a card of it claims backward cannot be read as one description — see " +
+                "ReverseClaim.of"
+            )
+        ReverseClaim(descriptor = window(1), description = description, concept = window(0), at = key)
+      }
+    }
+
 /** ONE FIELD THAT DID NOT AGREE, with both values and what the field is made of.
   *
   * BOTH VALUES TRAVEL, because a person reading what a run did has to see what changed — "the
@@ -648,6 +735,19 @@ enum SubjectSurvival:
   */
 final class LiveDeclarations private (
     private val byConcept: Map[Vector[String], CardKey],
+    /** WHAT THE LIVE CARDS CLAIM BACKWARD, every one of them that can claim anything — the other half
+      * of "what the collection declares", and the half [[MoveEvidence.underTheClaimCheck]] reads.
+      *
+      * UNFILTERED BY DECLARATION ON PURPOSE, unlike [[byConcept]]'s per-kind test: a `cdd/1way` card's
+      * fact stands in the vault whether or not its author claimed to recall it backward, and it
+      * contradicts a `/2way` card elsewhere just the same. See [[ReverseClaim]].
+      *
+      * READ FROM WHAT ANKI HOLDS, which is what the last sync wrote. A live card whose description the
+      * vault has changed THIS run is therefore read at its old value, so a collision the author is in
+      * the middle of fixing may still be reported. That errs toward refusing rather than toward
+      * spending a broken claim, and the report names both places, so the author sees what the tool saw.
+      */
+    val claims: Vector[ReverseClaim],
     /** The notes this was read from. Carried so that [[MoveEvidence.survey]] can refuse a caller
       * that hands it a note as BOTH a stranded note and a live witness — see there for why that
       * particular mistake is worth a hard error rather than a comment.
@@ -660,10 +760,12 @@ final class LiveDeclarations private (
 object LiveDeclarations:
 
   def of(live: Vector[ObservedCard]): LiveDeclarations =
-    val declared = live
-      // SORTED HERE rather than relied on from the caller, so that the witness a report names is a
-      // function of the collection and not of the order somebody happened to build a vector in.
-      .sortBy(c => (c.key.noteId.value, c.key.path.render, c.note.id.value))
+    // SORTED ONCE, AND BOTH READINGS BELOW INHERIT IT, so that the witness a report names and the
+    // rival a contradiction names are both functions of the collection rather than of the order
+    // somebody happened to build a vector in.
+    val ordered = live.sortBy(c => (c.key.noteId.value, c.key.path.render, c.note.id.value))
+
+    val declared = ordered
       .flatMap { card =>
         for
           roles <- FieldRole.rolesFor(card.note.noteType)
@@ -678,6 +780,9 @@ object LiveDeclarations:
       }
     new LiveDeclarations(
       declared.groupMap(_._1)(_._2).view.mapValues(_.head).toMap,
+      ordered.flatMap(card =>
+        ReverseClaim.of(card.note.noteType, card.key, card.note.fields.toMap)
+      ),
       live.map(_.note.id).toSet,
     )
 
@@ -685,7 +790,7 @@ object LiveDeclarations:
     * one. NOT a default parameter anywhere: a survey run against no live cards at all is a
     * different question from one run against a collection, and a call site has to say which.
     */
-  val none: LiveDeclarations = new LiveDeclarations(Map.empty, Set.empty)
+  val none: LiveDeclarations = new LiveDeclarations(Map.empty, Vector.empty, Set.empty)
 
 /** WHY A SUBJECT CHANGE THAT LOOKS LIKE A RELABEL IS NOT FOLLOWED ANYWAY.
   *
@@ -875,6 +980,42 @@ enum MoveFinding:
       divergences: Vector[Divergence],
   )
 
+  /** THE CARD'S OWN BACKWARD CLAIM IS MEASURABLY BROKEN, so its testimony is refused and nothing is
+    * applied to it — the author has an edit to make.
+    *
+    * ═══ WHAT WAS DETECTED ═══
+    *
+    * This card declares that its description identifies what it is about (`/2way` or `/3way`), and the
+    * vault holds the SAME (descriptor, description) pair under a DIFFERENT concept — see
+    * [[ReverseClaim]] for why the pair is the unit. So its backward card has more than one true
+    * answer. That is not a doubtful pairing, it is a broken flashcard, and the reverse side is
+    * unanswerable however this survey resolves.
+    *
+    * ═══ WHY IT IS REFUSED RATHER THAN MERELY UNVOUCHED ═══
+    *
+    * The ruled principle of 2026-09-13 ("declarations are contracts, not hints"): a declaration is
+    * trusted absolutely WHILE COHERENT, and a DETECTED contradiction is "refused loudly for exactly
+    * the cards involved — same scoping as the duplicate-key ruling R5 — and reported as the author's
+    * edit to make". So this is not "one voucher is unavailable, try the others": the cards involved are
+    * refused outright, and the remedy named is the author's — reword one description, or retag one card
+    * to `/1way`, which withdraws the claim rather than breaking it.
+    *
+    * ═══ WHAT IT CARRIES, AND WHY BOTH PLACES ═══
+    *
+    * `claim` is this card's own, `alsoAnswered` is every rival standing at the same question. A report
+    * that said only "the claim is broken" would leave the author hunting the twin; naming both places
+    * is the whole of the remedy. Non-empty by construction — a claim with no rival is not broken.
+    */
+  case ClaimBroken(
+      stranded: CardKey,
+      noteId: AnkiNoteId,
+      candidate: CardKey,
+      where: SourceRef,
+      claim: ReverseClaim,
+      alsoAnswered: NonEmptyVector[ReverseClaim],
+      divergences: Vector[Divergence],
+  )
+
   /** THE SUBSTANCE AGREES EXACTLY AND NOTHING VOUCHES THAT THE TWO ARE THE SAME CARD — so the
     * orphan stays parked and the new section starts at zero.
     *
@@ -948,6 +1089,7 @@ enum MoveFinding:
     case Unaccounted(_, id, _, _, _)          => id
     case Reparented(_, id, _, _, _, _)        => id
     case RelabelUnvouched(_, id, _, _, _, _)  => id
+    case ClaimBroken(_, id, _, _, _, _, _)    => id
     case NoVoucher(_, id, _, _, _)            => id
     case Unexplained(_, id)                   => id
     case Incomparable(_, id, _)               => id
@@ -995,6 +1137,19 @@ enum MoveFinding:
       s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
         s"may have been renamed to '${candidate.path.render}' in ${candidate.noteId.value} " +
         s"(${where.describe}) — ${cause.describe}, so nothing is applied" +
+        (if divergences.isEmpty then ""
+         else s"; ${divergences.map(_.describe).mkString(", ")}")
+
+    case ClaimBroken(stranded, id, candidate, where, claim, alsoAnswered, divergences) =>
+      s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
+        s"says the same thing as '${candidate.path.render}' in ${candidate.noteId.value} " +
+        s"(${where.describe}) — but this card's own claim is broken, so nothing is applied: " +
+        s"'${claim.descriptor}' with this description answers '${claim.concept}' here and also " +
+        alsoAnswered.toVector
+          .map(r => s"'${r.concept}' at '${r.at.path.render}' in ${r.at.noteId.value}")
+          .mkString("; ") +
+        ", so its reverse card has more than one true answer. Reword one description, or retag one " +
+        "of them to 1way" +
         (if divergences.isEmpty then ""
          else s"; ${divergences.map(_.describe).mkString(", ")}")
 
@@ -1244,6 +1399,14 @@ object MoveEvidence:
     * it still alive. Silent, total, and in the direction that loses history by leaving it behind.
     * `plan/Planner.scala` splits on `VaultAccounting.accountsFor`, so the two cannot overlap there;
     * this refuses loudly rather than resting on that sentence staying true.
+    *
+    * ═══ AND THE SAME TWO INPUTS ANSWER A DIFFERENT QUESTION: IS A DECLARATION STILL COHERENT? ═══
+    *
+    * Ruled 2026-09-13. Before an unchanged description may vouch for anything, the run asks whether
+    * that card's backward claim still holds — whether the same (descriptor, description) pair stands
+    * answered by a DIFFERENT concept somewhere. The population is the live cards plus the specs the
+    * vault now produces, which is exactly what `declared` and `unclaimed` already carry, so this needs
+    * no new input. [[underTheClaimCheck]] is the gate and [[ReverseClaim]] is the unit.
     */
   def survey(
       stranded: Vector[ObservedCard],
@@ -1287,6 +1450,18 @@ object MoveEvidence:
         case (_, Left(_))              => Vector.empty
       }.groupMap(_._1)(_._2)
 
+    // WHERE EVERY BACKWARD QUESTION STANDS ANSWERED — the live collection's claims plus the ones the
+    // vault now produces, grouped by the question so a rival is one lookup away.
+    //
+    // BOTH SIDES, BECAUSE A CONTRADICTION HAS TWO HALVES AND EITHER MAY BE THE NEW ONE. The twin that
+    // breaks a claim may be a card that has stood for months (which is the shape that made this
+    // necessary, since a standing card is in neither `stranded` nor `unclaimed` and the ambiguity
+    // guard cannot see it) or one this very run creates under another concept.
+    //
+    // A CARD IS NEVER ITS OWN RIVAL: `underTheClaimCheck` keeps only claims answering a DIFFERENT
+    // concept, and a card's own claim answers its own concept.
+    val standing: Map[(String, String), Vector[ReverseClaim]] = Map.empty
+
     // ── PASS ONE: EVERYTHING ONE PAIRING CAN DECIDE ON ITS OWN ────────────────────────────
     //
     // Every arm below reaches a finding except the last, which reaches a question this pass
@@ -1314,12 +1489,24 @@ object MoveEvidence:
                 NonEmptyVector.fromVector(
                   unaccountedFor(card.key.path, spec.key.path, divergences)
                 ) match
-                  // AND FINALLY: WHICH OF THE CARD'S NAME SEGMENTS MOVED, WHICH IS NOT THE SAME
-                  // QUESTION. Everything above establishes that this note and this spec say the
-                  // same thing and that the key accounts for the difference in their faces. What
-                  // the gate decides is whether the change the key made is a rewording or a change
-                  // of SUBJECT — and a changed subject is a different card, not a moved one.
-                  case None => underTheSubjectGate(card, spec, divergences)
+                  // THEN: IS THIS CARD'S OWN BACKWARD CLAIM STILL COHERENT? Asked BEFORE the subject
+                  // gate, and the order is a judgement about what a reader most needs to be told. A
+                  // card whose (descriptor, description) pair stands answered by another concept is
+                  // unanswerable on its reverse side however this survey resolves the move, and the
+                  // ruled principle refuses it outright rather than merely withholding one voucher —
+                  // so telling somebody "a different card under a different subject" about it would
+                  // answer a question they do not have yet. See [[underTheClaimCheck]].
+                  case None =>
+                    underTheClaimCheck(card, spec, divergences, standing) match
+                      case Some(broken) => SurveyRead.Concluded(broken)
+
+                      // AND FINALLY: WHICH OF THE CARD'S NAME SEGMENTS MOVED, WHICH IS NOT THE SAME
+                      // QUESTION. Everything above establishes that this note and this spec say the
+                      // same thing, that the key accounts for the difference in their faces, and that
+                      // the card's own claim is coherent. What the gate decides is whether the change
+                      // the key made is a rewording or a change of SUBJECT — and a changed subject is
+                      // a different card, not a moved one.
+                      case None => underTheSubjectGate(card, spec, divergences)
                   case Some(unexplained) =>
                     SurveyRead.Concluded(
                       MoveFinding.Unaccounted(
@@ -1430,6 +1617,75 @@ object MoveEvidence:
       .view
       .mapValues(_.head)
       .toMap
+
+  /** IS THIS CARD'S OWN BACKWARD CLAIM STILL COHERENT? `Some` when it measurably is not, and then
+    * nothing about this pairing may be acted on.
+    *
+    * ═══ THE RULE ═══
+    *
+    * Ruled 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "the duplicate veto fires on the
+    * (descriptor, description) PAIR"). A card that declares its description identifying is claiming to
+    * answer one backward question; if the vault holds that same question answered by a DIFFERENT
+    * concept, the claim is broken as a matter of fact and its testimony is refused. Pairs whose claims
+    * are unbroken go on vouching exactly as before — this narrows nothing else.
+    *
+    * ═══ WHY THE PAIR, AND NOT THE DESCRIPTION ALONE ═══
+    *
+    * Because the pair is what the backward card gives the author. The same description under DIFFERENT
+    * descriptors is innocent text reuse and must not trip this: addition's `## Definition` and
+    * multiplication's `## Nature` may both read "a binary operation" while each card's own backward
+    * question still has exactly one answer. [[ReverseClaim]] holds that reasoning and the reading.
+    *
+    * ═══ WHY THE DECLARATION IS ASKED OF THIS CARD AND OF NO RIVAL ═══
+    *
+    * Whose claim can BREAK is a question about a declaration — only a `/2way` or `/3way` card claims
+    * the backward reading, so only such a card can be caught failing it, and a `cdd/1way` is refused
+    * nothing here. Whether the question stands ANSWERED TWICE is a question about the world, so every
+    * rival counts whatever its own author declared. Those are two different questions and this is the
+    * only place both are asked; conflating them would either excuse a broken claim whose twin happens
+    * to be `/1way`, or refuse a card that never claimed anything.
+    *
+    * ═══ WHAT THIS CATCHES THAT THE AMBIGUITY GUARD CANNOT ═══
+    *
+    * [[MoveFinding.Ambiguous]] already refuses the case where BOTH colliding cards are inside this
+    * sync's delta — deck S32, a column renamed while two rows hold the byte-identical value, comes back
+    * ambiguous and applies nothing. What it cannot see is the asymmetric case: a rival that simply
+    * STANDS, unchanged, in neither `stranded` nor `unclaimed`. That is the shape the ruling was made
+    * about — `Kafka.md` and `NATS.md` each holding a `## Definition` with one description — and it is
+    * why this reads the live collection rather than the delta.
+    */
+  private def underTheClaimCheck(
+      card: ObservedCard,
+      spec: SourcedSpec,
+      divergences: Vector[Divergence],
+      standing: Map[(String, String), Vector[ReverseClaim]],
+  ): Option[MoveFinding] =
+    val claimsTheBackwardReading = declarationOn(spec) match
+      case SubstanceDeclaration.Identifying                                     => true
+      case SubstanceDeclaration.NonIdentifying | SubstanceDeclaration.Unstated  => false
+
+    Option
+      .when(claimsTheBackwardReading)(
+        ReverseClaim.of(spec.spec.noteTypeName, spec.key, spec.spec.fields.toMap)
+      )
+      .flatten
+      .flatMap { mine =>
+        NonEmptyVector
+          .fromVector(
+            standing.getOrElse(mine.question, Vector.empty).filter(_.concept != mine.concept)
+          )
+          .map { alsoAnswered =>
+            MoveFinding.ClaimBroken(
+              card.key,
+              card.note.id,
+              spec.key,
+              spec.source,
+              mine,
+              alsoAnswered,
+              divergences,
+            )
+          }
+      }
 
   /** IS THE CHANGE THE KEY RECORDS A REWORDING, OR A CHANGE OF SUBJECT? The last question between a
     * pairing and a reassignment.

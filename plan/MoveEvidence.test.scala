@@ -104,6 +104,23 @@ class MoveEvidenceTest extends munit.FunSuite:
   ): CardSpec =
     CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.ValueOnly, context, "")
 
+  /** THE SAME CARD SHAPE DECLARED `#flashcard/cdd/3way` — every direction, so it claims the backward
+    * reading exactly as `cdd/2way` does and differs from it only in the `ThreeWay` Setting field.
+    *
+    * That one field is load-bearing in two directions: it puts this card in the same
+    * declared-identifying family for every rule that reads a declaration, AND it keeps a pairing with
+    * a `2way` card off the comparison floor, which is what lets a test place a rival card that is not
+    * also a candidate.
+    */
+  def threeFieldAllWays(
+      k: CardKey,
+      concept: String,
+      descriptor: String,
+      description: String,
+      context: String,
+  ): CardSpec =
+    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.All, context, "")
+
   def cloze(k: CardKey, text: String, context: String): CardSpec =
     CardSpec.Cloze(
       k,
@@ -1237,6 +1254,179 @@ class MoveEvidenceTest extends munit.FunSuite:
     ) match
       case Vector(_: MoveFinding.Corroborated) => ()
       case other => fail(s"an unrelated concept's live card must not block a rename: $other")
+  }
+
+  // ==== THE PAIR VETO: A DECLARATION CAUGHT BREAKING IS REFUSED FOR THE CARDS INVOLVED ====
+
+  /** RULED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "the duplicate veto fires on the
+    * (descriptor, description) PAIR").
+    *
+    * WHAT A `/2way` DECLARATION ACTUALLY CLAIMS, which is the precision the ruling turns on. Its
+    * backward card asks "WHICH THING has this DESCRIPTOR with this DESCRIPTION?" — so the claim's unit
+    * is the PAIR, not the description. Two cards sharing a description under different descriptors are
+    * innocent text reuse and each still has one true answer. The same descriptor AND description under
+    * two different concepts is a measurable contradiction: the backward card has two true answers, so
+    * the card is broken as a flashcard regardless of anything this survey concludes.
+    *
+    * WHAT HAPPENS THEN, per the ruled principle that declarations are contracts: a declaration is
+    * trusted absolutely WHILE COHERENT, and a detected contradiction is refused loudly for exactly the
+    * cards involved — R5's scoping — and reported as the author's edit to make. So this is not "one
+    * voucher is missing, try the others": nothing is applied, and the remedy named is theirs.
+    *
+    * WHY THE AMBIGUITY GUARD DOES NOT ALREADY COVER IT, which is the question to ask of any new
+    * refusal here. It covers the SYMMETRIC case, where both colliding cards are inside this sync's
+    * delta — deck S32 renames a column while two rows hold the byte-identical value and comes back
+    * `Ambiguous`, applying nothing. It cannot see a rival that simply STANDS: an unchanged live card is
+    * in neither `stranded` nor `unclaimed`, so nothing in the delta mentions it. That asymmetric shape
+    * is what the ruling was made about, and the first test below is it.
+    */
+  val definitionUnderKafkaAlone: CardSpec =
+    threeField(key("k1", "kafka", "definition"), "Kafka", "Definition", "A durable log.", "Kafka")
+
+  /** `NATS.md`'s own `## Definition`, with the byte-identical description: the same backward question
+    * answered by a different concept, standing and untouched.
+    */
+  val definitionUnderNatsAlone: CardSpec =
+    threeField(key("n1", "nats", "definition"), "NATS", "Definition", "A durable log.", "NATS")
+
+  test("a STANDING twin at the same (descriptor, description) breaks the claim, so nothing follows") {
+    // THE RULED SHAPE. `Kafka.md`'s `# Kafka` is relabelled `# Streaming`, which every gate before this
+    // one reads as an innocent rename: the substance agrees, the old subject stands nowhere, the
+    // cluster did not move, and the card declares its description identifying — so it followed. But
+    // `NATS.md` holds `## Definition` over the same description, so the claim that this description
+    // identifies its concept is false in the vault, and the card that rests on it may not be moved on
+    // its word.
+    val relabelled =
+      threeField(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafkaAlone, 1)),
+      Vector(sourced(relabelled)),
+      Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
+      Vector(observed(definitionUnderNatsAlone, 101)),
+    ) match
+      case Vector(MoveFinding.ClaimBroken(stranded, _, candidate, _, claim, alsoAnswered, _)) =>
+        assertEquals(stranded, definitionUnderKafkaAlone.key)
+        assertEquals(candidate, relabelled.key)
+        assertEquals(claim.descriptor, "definition")
+        assertEquals(claim.concept, "streaming")
+        // BOTH STANDING PLACES ARE NAMED, which is the whole of the remedy: without the twin's key the
+        // author is told their vault is inconsistent and left to find where.
+        assertEquals(alsoAnswered.toVector.map(_.at), Vector(definitionUnderNatsAlone.key))
+        assertEquals(alsoAnswered.head.concept, "nats")
+      case other =>
+        fail(s"a description answering two concepts may not vouch for anything: $other")
+  }
+
+  test("the SAME description under a DIFFERENT descriptor is innocent, and must not trip the veto") {
+    // THE NEGATIVE GUARD, and the reason the unit is the pair. Addition's `## Definition` and
+    // multiplication's `## Nature` may both read "a binary operation": each card's backward question
+    // is its own, each has exactly one true answer, and neither author has claimed anything false.
+    // Without this the veto would fire on ordinary text reuse and strand histories for nothing.
+    val natureUnderNats =
+      threeField(key("n1", "nats", "nature"), "NATS", "Nature", "A durable log.", "NATS")
+    val relabelled =
+      threeField(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
+    assertEquals(
+      natureUnderNats.fields.toMap.apply("Description"),
+      relabelled.fields.toMap.apply("Description"),
+      "the fixture must share the description for this guard to have a weapon",
+    )
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafkaAlone, 1)),
+      Vector(sourced(relabelled)),
+      Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
+      Vector(observed(natureUnderNats, 101)),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, relabelled.key)
+      case other => fail(s"a shared description under another descriptor is not a contradiction: $other")
+  }
+
+  test("a twin the SAME concept answers is no contradiction — one true answer, in two places") {
+    // THE OTHER HALF OF THE PAIR TEST, and it is not the same guard. Here the descriptor AND the
+    // description agree with the twin, and so does the CONCEPT: the backward card's answer is
+    // 'kafka' either way, so the author can answer it. What the vault has is one concept written in
+    // two places — the residual ambiguity slice 5 priced — and not a broken claim.
+    val twinInAnotherNote =
+      threeField(key("n1", "kafka", "definition"), "Kafka", "Definition", "A durable log.", "Kafka")
+    val reworded =
+      threeField(key("k1", "kafka", "formal definition"), "Kafka", "Formal definition", "A durable log.", "Kafka")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafkaAlone, 1)),
+      Vector(sourced(reworded)),
+      Map(noteIdOf("k1") -> Vector(Vector("kafka"), Vector("kafka", "formal definition"))),
+      Vector(observed(twinInAnotherNote, 101)),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, reworded.key)
+      case other => fail(s"one concept answering in two places is not a contradiction: $other")
+  }
+
+  test("a cdd/1way card is refused nothing by the veto, though its own fact still breaks others") {
+    // THE TWO QUESTIONS, KEPT APART. Whose claim can BREAK is a question about a declaration, so a
+    // `cdd/1way` card — which claims no backward reading at all — is never vetoed, even with a twin
+    // standing at its pair. Whether the question stands ANSWERED TWICE is a question about the world,
+    // so that same 1way card counts as a rival against a `/2way` card elsewhere. The second half is
+    // what the third assertion here pins.
+    val oneWayKafka =
+      threeFieldOneWay(key("k1", "kafka", "definition"), "Kafka", "Definition", "A durable log.", "Kafka")
+    val oneWayRelabelled =
+      threeFieldOneWay(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
+    val outline = Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition")))
+
+    // Its own claim cannot break, because it made none.
+    surveyDeclaring(
+      Vector(observed(oneWayKafka, 1)),
+      Vector(sourced(oneWayRelabelled)),
+      outline,
+      Vector(observed(definitionUnderNatsAlone, 101)),
+    ) match
+      case Vector(_: MoveFinding.Corroborated) => ()
+      case other => fail(s"a 1way card claims no backward reading, so it cannot break one: $other")
+
+    // But the fact it states stands, and it breaks a 2way card's claim just the same.
+    val oneWayNats =
+      threeFieldOneWay(key("n1", "nats", "definition"), "NATS", "Definition", "A durable log.", "NATS")
+    val twoWayRelabelled =
+      threeField(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafkaAlone, 1)),
+      Vector(sourced(twoWayRelabelled)),
+      outline,
+      Vector(observed(oneWayNats, 101)),
+    ) match
+      case Vector(b: MoveFinding.ClaimBroken) =>
+        assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(oneWayNats.key))
+      case other =>
+        fail(s"a standing fact contradicts a 2way claim whatever its own author declared: $other")
+  }
+
+  test("a rival the VAULT is creating this run breaks the claim too, not only a standing one") {
+    // THE OTHER SIDE OF THE POPULATION. The twin need not have stood for months: a section created in
+    // this very sync under another concept, with the same descriptor and description, makes the claim
+    // just as false. The specs the vault now produces are read alongside the live cards for that
+    // reason.
+    //
+    // THE RIVAL IS `cdd/3way` HERE FOR A MECHANICAL REASON WORTH KNOWING. A rival with the same
+    // descriptor and description would ordinarily also be a CANDIDATE for this stranded note — the
+    // comparison floor is substance agreement, which it meets — and two candidates make the finding
+    // `Ambiguous` before the claim is ever examined. A differing Setting field keeps the pairing
+    // unique: `3way` sets `ThreeWay` and `2way` does not, so the floor refuses that pairing while the
+    // card still stands, still answers the same backward question, and still claims it. Which is
+    // itself the point of the veto — the ambiguity guard only sees rivals that compete for the same
+    // note.
+    val relabelled =
+      threeField(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
+    val bornThisRun =
+      threeFieldAllWays(key("n1", "nats", "definition"), "NATS", "Definition", "A durable log.", "NATS")
+    val findings = surveyOver(
+      Vector(observed(definitionUnderKafkaAlone, 1)),
+      Vector(sourced(relabelled), sourced(bornThisRun)),
+      Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
+    )
+    assertEquals(findings.size, 1, s"only one note is stranded here: $findings")
+    findings.head match
+      case b: MoveFinding.ClaimBroken =>
+        assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(bornThisRun.key))
+      case other => fail(s"a rival created this run breaks the claim as well: $other")
   }
 
   test("a collection declaring the old subject answers even when the census could NOT be taken") {
