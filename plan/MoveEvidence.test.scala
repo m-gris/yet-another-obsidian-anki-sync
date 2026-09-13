@@ -1205,11 +1205,18 @@ class MoveEvidenceTest extends munit.FunSuite:
       case other => fail(s"a verbatim cross-note move inside one sync must follow: $other")
   }
 
-  test("a 1way orphan recreated in the SAME PLACE still follows — the location vouches") {
+  test("a 1way orphan recreated in the SAME NOTE still follows — the location vouches") {
     // Decision 5's shape, in the kind the deck does not cover: deck S14's own fixture is `2way`, so
     // the deck pins the DECLARATION route and this pins the LOCATION route. The card's own name
-    // changed and everything above it did not, so the place identifies it whatever its content
+    // changed and the note did not, so where it lives still identifies it whatever its content
     // declares.
+    //
+    // THE LOCATION IS READ AT NOTE GRANULARITY, which is the sheet's own axis ("cross-sync AND
+    // cross-note"). A sharper reading is available and deliberately not taken — a parked 1way
+    // re-parented under a different chain of the same note also has a changed location and goes on
+    // being reattached. That case is pinned further down by "a note ALREADY parked as an orphan is
+    // unflagged, unsuspended and reassigned", which has asserted it since the retroactive half of
+    // Decision 5 was ratified; nothing on the sheet refuses it.
     val reworded = twoField(key("add", "the nature of it"), "The nature of it", "A binary operation.", "Add")
     surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(reworded))) match
       case Vector(c: MoveFinding.Corroborated) =>

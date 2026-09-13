@@ -971,7 +971,7 @@ enum MoveFinding:
       s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
         s"says the same thing as '${candidate.path.render}' in ${candidate.noteId.value} " +
         s"(${where.describe}) — but nothing vouches that they are the same card: this content was " +
-        "declared not to identify what it is about, it is in a different place, and this note was " +
+        "declared not to identify what it is about, it is in a different note, and this note was " +
         "parked by an earlier run, so nothing is applied and the new card starts at zero" +
         (if divergences.isEmpty then ""
          else s"; ${divergences.map(_.describe).mkString(", ")}")
@@ -1437,16 +1437,7 @@ object MoveEvidence:
     val subjectMoved = subject != nameSegments(now, depth).dropRight(1)
 
     if !subjectMoved then
-      SurveyRead.Concluded(
-        MoveFinding.Corroborated(
-          card.key,
-          card.note.id,
-          spec.key,
-          spec.source,
-          card.note.noteType,
-          divergences,
-        )
-      )
+      SurveyRead.Concluded(underTheVoucherGate(card, spec, divergences))
     else
       SurveyRead.AwaitingSurvival(
         card,
@@ -1467,6 +1458,77 @@ object MoveEvidence:
         // description identifies nothing — see [[declaresItsConcept]] and [[underTheSurvivalCheck]].
         clusterMoved =
           was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId,
+      )
+
+  /** MAY AN ORPHANED NOTE BE EDITED ONTO THIS SECTION AT ALL? The last question between an agreed
+    * substance and a reassignment, and the one that is not about the cards but about what ENTITLES
+    * this run to say they are the same card.
+    *
+    * ═══ THE THREE VOUCHERS, ANY ONE OF WHICH SUFFICES ═══
+    *
+    * Resolved 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "no voucher, no edit") as
+    * entailed by the standing rulings. Each conjunct below is one voucher being absent:
+    *
+    *   - THE DECLARATION. [[SubstanceDeclaration.Identifying]] says the author expects to recall this
+    *     card from its content, so a byte-identical substance IS same-card evidence — and
+    *     [[SubstanceDeclaration.Unstated]] refuses nothing, because no ruling has: a cloze author was
+    *     never offered a direction to declare.
+    *   - THE LOCATION. The section reappeared in THE SAME NOTE, so where it lives still identifies it
+    *     whatever its content declares. That is the shape of Decision 5's fixture: a section deleted
+    *     and recreated later in the note it was deleted from.
+    *   - THE SINGLE EDIT. A note THIS RUN stranded vanished and reappeared in one edit, which is what
+    *     a verbatim cross-note move looks like (deck S05). An `orphaned::` tag says the opposite: an
+    *     earlier run parked this note, so the disappearance and the appearance are separate events
+    *     and their agreement is a coincidence until something else says otherwise.
+    *
+    * ═══ THE LOCATION IS READ AT NOTE GRANULARITY, AND THAT IS THE RULING'S OWN WORDING ═══
+    *
+    * The sheet's fourth row is "`/1way` cross-sync AND cross-note", and its rows for the same-sync
+    * case are drawn on the same axis — so the note is what this reads. A SHARPER reading is available
+    * and is deliberately not taken: a section parked in one sync and re-parented under a different
+    * chain of the SAME note in a later one has a location that also changed, and it goes on being
+    * reattached today. `plan/MoveEvidence.test.scala` has carried that exact case since the
+    * retroactive half of Decision 5 was ratified ("a note ALREADY parked as an orphan is unflagged,
+    * unsuspended and reassigned"), and nothing on the sheet refuses it. It is the adjacent question,
+    * not this rule's to answer.
+    *
+    * ═══ WHY THE ORPHAN FLAG IS THE RIGHT READING OF "IN ONE SYNC" ═══
+    *
+    * It is the only durable record of when the vault stopped accounting for a key, and it is one the
+    * tool wrote itself. No clock, no ledger and no git history is consulted — the same discipline the
+    * survival witnesses keep. `plan/Planner.scala` surveys the already-parked population
+    * deliberately, which is what makes the distinction available here at all.
+    *
+    * ═══ WHY IT IS ASKED HERE AND NOT OF THE RELABEL ROUTE ═══
+    *
+    * Because that route already demands MORE than this rule does: a relabel follows only when the
+    * declaration identifies or the place agreed ([[underTheSurvivalCheck]]), which is two of these
+    * three vouchers with the single-edit signature not admitted at all. So a corroboration minted
+    * there cannot be one this gate would refuse, and asking twice would only invite the two answers to
+    * drift. A card whose SUBJECT changed is also better described by that route's own words than by
+    * this one's.
+    */
+  private def underTheVoucherGate(
+      card: ObservedCard,
+      spec: SourcedSpec,
+      divergences: Vector[Divergence],
+  ): MoveFinding =
+    val contentVouchesForNothing = declarationOn(spec) match
+      case SubstanceDeclaration.NonIdentifying                              => true
+      case SubstanceDeclaration.Identifying | SubstanceDeclaration.Unstated => false
+
+    val crossedNotes = card.key.noteId != spec.key.noteId
+
+    if contentVouchesForNothing && crossedNotes && card.isFlaggedOrphan then
+      MoveFinding.NoVoucher(card.key, card.note.id, spec.key, spec.source, divergences)
+    else
+      MoveFinding.Corroborated(
+        card.key,
+        card.note.id,
+        spec.key,
+        spec.source,
+        card.note.noteType,
+        divergences,
       )
 
   /** WHAT THE AUTHOR DECLARED ABOUT THE CARD THE VAULT NOW PRODUCES — [[SubstanceDeclaration]] read
