@@ -371,7 +371,22 @@ object Planner:
           !accounting.accountsFor(card.key) && (card.isFlaggedOrphan || scan.canInferOrphans)
         }
         val unclaimed = scan.specs.filterNot(sourced => byKey.contains(sourced.key))
-        val evidence  = MoveEvidence.survey(stranded, unclaimed, census)
+
+        // ── AND WHAT THE COLLECTION ITSELF DECLARES, WHICH IS THE OTHER HALF OF THE SPLIT ──
+        //
+        // The complement of `stranded` under the SAME predicate, which is what makes the two
+        // disjoint by construction rather than by discipline: a note the vault still accounts for is
+        // one this run is not orphaning, so its `Concept` is a label the collection currently
+        // stands behind. `MoveEvidence.survey` refuses an overlap outright, and its docstring says
+        // what an overlap would silently cost.
+        //
+        // NOT THE COMPLEMENT OF `stranded` ITSELF, and the gap is deliberate. On a partial scan an
+        // unflagged note whose key is missing is in NEITHER population — nothing may be concluded
+        // from its absence, so it is neither explained nor allowed to witness.
+        val declared =
+          LiveDeclarations.of(observed.notes.filter(card => accounting.accountsFor(card.key)))
+
+        val evidence = MoveEvidence.survey(stranded, unclaimed, census, declared)
 
         val strandedByNoteId = stranded.map(card => card.note.id -> card).toMap
 

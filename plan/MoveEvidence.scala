@@ -424,8 +424,8 @@ enum Agreement:
     case PlaceAndSubstance => "a different name, in the same place"
     case SubstanceAlone   => "a different name, somewhere else"
 
-/** HOW THIS RUN KNOWS THE SUBJECT A CARD LEFT GOES ON EXISTING — the two witnesses the ruling of
-  * 2026-09-13 admits, and they are different claims rather than two strengths of one.
+/** HOW THIS RUN KNOWS THE SUBJECT A CARD LEFT GOES ON EXISTING — the three witnesses the rulings
+  * of 2026-09-13 admit, and they are different claims rather than three strengths of one.
   *
   * ═══ WHY THE SECOND ONE EXISTS ═══
   *
@@ -446,6 +446,21 @@ enum Agreement:
   * "'kafka' is still in the vault" is what a reader of a same-note survival needs; a reader whose
   * note holds no `# Kafka` at all — S24A's — would open it, find nothing, and conclude the tool
   * was lying. The second case names the pairing instead, which is the fact and is checkable.
+  *
+  * ═══ WHY THE THIRD ONE EXISTS: THE FIRST TWO BOTH EXPIRE AT THE SYNC BOUNDARY ═══
+  *
+  * The attack swarm split S24A over TWO RUNS, which is all it took. Run one carries `# Kafka` and
+  * `## Cost` into another note, and the corroboration onto `kafka / cost` happens THERE. Run two
+  * relabels the `# Kafka` this note no longer has to `# NATS` and re-parents `## Definition` under
+  * it — and now both of the first two witnesses answer "gone" honestly: the node is not in this
+  * note, and run two pairs nothing onto Kafka, because run one already finished that job. The
+  * descriptor's history follows a subject change the run cannot see it made.
+  *
+  * `docs/design/IDENTITY-DECISION-SHEET.md` records this as ENTAILED by the standing rulings
+  * rather than newly ruled: a live `cdd`/table card whose `Concept` is Kafka DECLARES that Kafka
+  * exists, declarations are contracts trusted absolutely, and no ruling anywhere says evidence
+  * expires. So the collection the run is looking at is itself the third witness — no clock, no
+  * ledger, no git, only labels Anki already holds. [[LiveDeclarations]] is the reading.
   */
 enum SubjectSurvival:
 
@@ -461,11 +476,101 @@ enum SubjectSurvival:
     */
   case CorroboratedOnto(concept: Vector[String], card: CardKey)
 
+  /** A card the collection ALREADY HOLDS, which no run of this tool is orphaning, declares
+    * `concept` — so the concept goes on existing whether or not anything happened to it in this
+    * run. `concept` is read the same way [[CorroboratedOnto]]'s is, and for the same reason.
+    */
+  case StillInTheCollection(concept: Vector[String], card: CardKey)
+
   def describe: String = this match
     case StillInTheNote(path) => s"'${path.mkString(" / ")}' is still in the vault"
     case CorroboratedOnto(concept, card) =>
       s"'${concept.mkString(" / ")}' goes on existing: this same run pairs " +
         s"'${card.path.render}' in ${card.noteId.value} onto it"
+    case StillInTheCollection(concept, card) =>
+      s"'${concept.mkString(" / ")}' goes on existing: the collection already holds " +
+        s"'${card.path.render}' in ${card.noteId.value} under it"
+
+/** WHICH CONCEPTS THE COLLECTION ITSELF DECLARES — the third witness of survival, read off the
+  * cards Anki already holds.
+  *
+  * ═══ WHAT COUNTS AS A DECLARATION, AND WHY IT IS PER-KIND ═══
+  *
+  * A card DECLARES a concept when its own kind makes the parent constitutive — which is exactly the
+  * distinction [[FieldRole.nameDepth]] already draws, so this asks THAT and never a note type's
+  * name. A window two segments wide has a subject above the card's own name; a window one segment
+  * wide has nothing above it, so `dropRight(1)` leaves the empty vector and the card witnesses
+  * nothing. That is not a coincidence to be tidied into a note-type check: `1way` filing under a
+  * heading is precisely the case the per-kind ruling already refused as a witness, because such a
+  * card's ancestor is FILING rather than a term of what the card asserts. A fifth note type would
+  * join the witnesses or not according to the roles it declares, in one place, rather than by
+  * somebody remembering to add its name here.
+  *
+  * A NOTE TYPE THIS TOOL DOES NOT DECLARE WITNESSES NOTHING EITHER, and for the same reason rather
+  * than as a precaution: it has no `Concept` field, so it declares no concept. That is where every
+  * note synced before this tool took note types of its own still sits, and
+  * [[MoveFinding.Incomparable]] is what the survey says about such a note when it is the one being
+  * explained.
+  *
+  * ═══ WHICH CARDS ARE "LIVE", WHICH IS THE CALLER'S ANSWER AND NOT THIS TYPE'S ═══
+  *
+  * `plan/Planner.scala` passes the notes whose keys the vault still accounts for — i.e. every note
+  * this run is NOT orphaning, a parked orphan whose key has come back included. Sheltered cards are
+  * among them: the vault could not read their section, so their label might be stale. Including
+  * them is the SAFE direction rather than an oversight, because a witness can only ever turn a
+  * follow into a park — it never licenses a reassignment — so the error it risks is a history left
+  * where it is, never a history moved onto the wrong card.
+  *
+  * ═══ WHAT IT COSTS, STATED RATHER THAN HIDDEN ═══
+  *
+  * The match is on the concept as the cards' own keys spell it, vault-wide and unscoped by note —
+  * unscoped BY NECESSITY, since the whole point is evidence that lives in another note. So two
+  * genuinely different concepts that share a name are one subject as far as this witness is
+  * concerned: a live `# Kafka` descriptor about the novelist blocks the message broker's rename
+  * from following. That is the "declarations are contracts" ruling of 2026-09-13 being paid for
+  * rather than a defect in the reading — the alternative is a confidence weight, which the same
+  * ruling refuses outright. The bounded cost is a history that stays put and is reported.
+  *
+  * ONE WITNESS PER CONCEPT, THE FIRST IN THE COLLECTION'S SORTED ORDER, because the report names it
+  * and two runs over an unchanged collection must name the same one.
+  */
+final class LiveDeclarations private (
+    private val byConcept: Map[Vector[String], CardKey],
+    /** The notes this was read from. Carried so that [[MoveEvidence.survey]] can refuse a caller
+      * that hands it a note as BOTH a stranded note and a live witness — see there for why that
+      * particular mistake is worth a hard error rather than a comment.
+      */
+    val noteIds: Set[AnkiNoteId],
+):
+
+  def witnessFor(concept: Vector[String]): Option[CardKey] = byConcept.get(concept)
+
+object LiveDeclarations:
+
+  def of(live: Vector[ObservedCard]): LiveDeclarations =
+    val declared = live
+      // SORTED HERE rather than relied on from the caller, so that the witness a report names is a
+      // function of the collection and not of the order somebody happened to build a vector in.
+      .sortBy(c => (c.key.noteId.value, c.key.path.render, c.note.id.value))
+      .flatMap { card =>
+        for
+          roles <- FieldRole.rolesFor(card.note.noteType)
+          concept = MoveEvidence
+            .nameSegments(MoveEvidence.segmentsOf(card.key.path), FieldRole.nameDepth(roles))
+            .dropRight(1)
+          if concept.nonEmpty
+        yield concept -> card.key
+      }
+    new LiveDeclarations(
+      declared.groupMap(_._1)(_._2).view.mapValues(_.head).toMap,
+      live.map(_.note.id).toSet,
+    )
+
+  /** A collection that declares nothing — for the callers and tests whose question does not involve
+    * one. NOT a default parameter anywhere: a survey run against no live cards at all is a
+    * different question from one run against a collection, and a call site has to say which.
+    */
+  val none: LiveDeclarations = new LiveDeclarations(Map.empty, Set.empty)
 
 /** WHY A SUBJECT CHANGE THAT LOOKS LIKE A RELABEL IS NOT FOLLOWED ANYWAY.
   *
@@ -953,12 +1058,38 @@ object MoveEvidence:
     * Ruled 2026-09-13, which is why this runs in two passes rather than one: a subject also counts
     * as going on existing when THIS SURVEY corroborated a card onto it, wherever in the vault that
     * card now sits. [[SurveyRead]] says why one pass could not express it.
+    *
+    * ═══ AND `declared` IS THE THIRD WITNESS, WHICH IS THE ONE THAT OUTLIVES THE RUN ═══
+    *
+    * The other two expire at the sync boundary; [[SubjectSurvival]] walks through the two-run shape
+    * that showed it. This one is the concepts the LIVE COLLECTION declares — the notes this run is
+    * not orphaning, read through [[LiveDeclarations]] — and it is the caller's to compute for the
+    * same reason `stranded` is: which notes count as live is a fact about the plan being built, not
+    * about this comparison.
+    *
+    * THE TWO POPULATIONS MUST BE DISJOINT AND THAT IS CHECKED, not assumed. A note that is both
+    * stranded and live would witness the survival of the very subject it is being orphaned from —
+    * and the consequence is not local: every innocent concept rename would stop following, because
+    * a renamed concept's OTHER descriptors are stranded by the same rename and would each declare
+    * it still alive. Silent, total, and in the direction that loses history by leaving it behind.
+    * `plan/Planner.scala` splits on `VaultAccounting.accountsFor`, so the two cannot overlap there;
+    * this refuses loudly rather than resting on that sentence staying true.
     */
   def survey(
       stranded: Vector[ObservedCard],
       unclaimed: Vector[SourcedSpec],
       census: NodeCensus,
+      declared: LiveDeclarations,
   ): Vector[MoveFinding] =
+    val bothSides = stranded.map(_.note.id).toSet.intersect(declared.noteIds)
+    if bothSides.nonEmpty then
+      sys.error(
+        "the move survey was given " +
+          bothSides.toVector.map(_.value).sorted.mkString(", ") +
+          " as BOTH a stranded note and a live witness — a note cannot declare that the subject " +
+          "it is being orphaned from goes on existing; see MoveEvidence.survey"
+      )
+
     // SORTED ONCE, AT THE TOP, so every list below inherits the order rather than each deciding
     // its own. The note id breaks a tie between two notes claiming one key — a state
     // `PlanError.DuplicateIdentityInAnki` refuses upstream, so it should not arrive, and a sort

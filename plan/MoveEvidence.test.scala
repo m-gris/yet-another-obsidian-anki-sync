@@ -280,11 +280,38 @@ class MoveEvidenceTest extends munit.FunSuite:
   ): Vector[MoveFinding] =
     surveyWith(stranded, unclaimed, HandBuiltCensus.of(VaultScan.from(unclaimed, Vector.empty)))
 
+  /** THE SURVEY OVER A COLLECTION THAT HOLDS NOTHING BUT THE STRANDED NOTES — which is what every
+    * test reaching this helper is about. The third witness of survival is the concepts a LIVE card
+    * declares, and a collection with no live card declares none; [[surveyDeclaring]] is where a
+    * test says otherwise. Stated by passing [[LiveDeclarations.none]] at every call rather than by a
+    * default, so that no test is silently about a collection it did not describe.
+    */
   def surveyWith(
       stranded: Vector[ObservedCard],
       unclaimed: Vector[SourcedSpec],
       census: NodeCensus,
-  ): Vector[MoveFinding] = MoveEvidence.survey(stranded, unclaimed, census)
+  ): Vector[MoveFinding] =
+    MoveEvidence.survey(stranded, unclaimed, census, LiveDeclarations.none)
+
+  /** THE SURVEY OVER A COLLECTION THAT STILL HOLDS LIVE CARDS, with the vault's heading tree stated
+    * outright — the two facts the third witness is a question about.
+    *
+    * `live` IS THE NOTES THIS RUN IS NOT ORPHANING, which is what `plan/Planner.scala` passes.
+    * Nothing here checks that against `stranded`, because [[MoveEvidence.survey]] refuses an overlap
+    * itself and one test below is about exactly that refusal.
+    */
+  def surveyDeclaring(
+      stranded: Vector[ObservedCard],
+      unclaimed: Vector[SourcedSpec],
+      outlines: NodeCensus.Outlines,
+      live: Vector[ObservedCard],
+  ): Vector[MoveFinding] =
+    MoveEvidence.survey(
+      stranded,
+      unclaimed,
+      NodeCensus.of(VaultScan.from(unclaimed, Vector.empty), outlines),
+      LiveDeclarations.of(live),
+    )
 
   def noteIdOf(id: String): NoteId =
     NoteId.fromFrontmatter(id).getOrElse(fail(s"unusable test note id '$id'"))
@@ -304,12 +331,17 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   /** THE SURVEY OVER A VAULT THIS RUN COULD NOT READ IN FULL — one file's frontmatter would not
     * parse, so no note's node tree may be relied on.
+    *
+    * `live` IS TAKEN EXPLICITLY rather than assumed empty, because the interesting question about a
+    * blind census is what happens when something ELSE can still answer: a collection holding a live
+    * card under the old subject establishes the survival the census could not look for.
     */
   def surveyBlind(
       stranded: Vector[ObservedCard],
       unclaimed: Vector[SourcedSpec],
+      live: Vector[ObservedCard],
   ): Vector[MoveFinding] =
-    surveyWith(
+    MoveEvidence.survey(
       stranded,
       unclaimed,
       NodeCensus.of(
@@ -319,6 +351,7 @@ class MoveEvidenceTest extends munit.FunSuite:
         ),
         Map.empty,
       ),
+      LiveDeclarations.of(live),
     )
 
   def onlyFinding(
@@ -652,7 +685,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // look must not be mistaken for a run that looked and found nothing — the argument
     // `MoveFinding.Incomparable` makes one level down.
     val now = definitionUnder("RabbitMQ", "n1", "top")
-    surveyBlind(Vector(observed(definitionUnderKafka, 1)), Vector(sourced(now))) match
+    surveyBlind(Vector(observed(definitionUnderKafka, 1)), Vector(sourced(now)), Vector.empty) match
       case Vector(MoveFinding.RelabelUnvouched(_, _, _, _, RelabelDoubt.CensusUnavailable(reason), _)) =>
         assert(reason.nonEmpty, "the report must be able to say WHY it declined")
       case other => fail(s"an unsurveyable census must not license a follow: $other")
@@ -816,6 +849,188 @@ class MoveEvidenceTest extends munit.FunSuite:
     findings.collectFirst { case c: MoveFinding.Corroborated => c } match
       case Some(c) => assertEquals(c.candidate, definitionNow.key)
       case None    => fail(s"the rename must still follow: $findings")
+  }
+
+  // ======== THE THIRD WITNESS OF SURVIVAL: WHAT THE LIVE COLLECTION ALREADY DECLARES ====
+
+  /** RESOLVED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "survival evidence has no sync
+    * boundary") as ENTAILED by the standing rulings rather than newly ruled.
+    *
+    * WHAT THE ATTACK WAS, BECAUSE IT IS THE ONLY THING THAT MAKES THIS SECTION LEGIBLE. Take the
+    * shape the second witness was built for — `# Kafka` leaves with `## Cost` for another note while
+    * `## Definition` re-parents under `# NATS` — and split it across TWO SYNCS. Run one moves Kafka
+    * and Cost; the corroboration onto `kafka / cost` happens there and is over. Run two relabels the
+    * heading Definition still hangs off and re-parents it. Both earlier witnesses now answer "gone"
+    * HONESTLY: the node is not in this note, and this run pairs nothing onto Kafka. The descriptor's
+    * history follows a subject change, which standing ruling R2 forbids.
+    *
+    * WHAT ANSWERS IT, AND WHY IT NEEDED NO NEW RULING. Run one left a card in the collection whose
+    * `Concept` is Kafka, and a card's kind is its author's declaration about its own content — so
+    * that card DECLARES the concept exists, and a declaration is a contract trusted absolutely. No
+    * ruling anywhere says evidence expires. The witness set therefore gains every LIVE card of a
+    * parent-constitutive kind whose declared concept is the old subject: no clock, no ledger, no
+    * git, only labels the collection already holds.
+    *
+    * THE TESTS COME IN PAIRS ON PURPOSE. Each positive case is followed by the negative that bounds
+    * it, because a witness that fires too widely does not merely report oddly — it stops innocent
+    * renames from following, silently, which is the loss this whole file exists to prevent.
+    */
+  val costUnderKafkaElsewhere: CardSpec =
+    threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
+
+  test("a concept a LIVE card still declares has survived, though THIS run pairs nothing onto it") {
+    // The two-run attack, as one survey: the collection is what run two is handed, and the card run
+    // one put under `# Kafka` in another note is still in it. The census answers honestly that this
+    // note's `kafka` node is gone, and there is no corroboration onto Kafka anywhere in this run —
+    // run one did that job. Without the third witness the descriptor's history follows.
+    val definitionNow = definitionUnder("NATS", "n1", "top")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(definitionNow)),
+      Map(noteIdOf("n1") -> treeWith("top", "nats")),
+      Vector(observed(costUnderKafkaElsewhere, 101)),
+    ) match
+      case Vector(MoveFinding.Reparented(stranded, _, candidate, _, survival, _)) =>
+        assertEquals(stranded, definitionUnderKafka.key)
+        assertEquals(candidate, definitionNow.key)
+        assertEquals(
+          survival,
+          SubjectSurvival.StillInTheCollection(Vector("kafka"), costUnderKafkaElsewhere.key),
+          "the report must name the card it read, which is the fact a reader can check",
+        )
+      case other =>
+        fail(s"a concept a live card declares must not be read as gone: $other")
+  }
+
+  test("a live card of a FILING kind declares nothing, so an innocent rename still follows") {
+    // THE NEGATIVE THAT BOUNDS THE WITNESS, and the shape is the one that makes the cost concrete:
+    // `# Kafka` the novelist, filed in somebody's reading notes, must not stop `# Kafka` the message
+    // broker being renamed. Both live cards here hang off a heading of that name and NEITHER
+    // declares a concept — a plain `1way` heading card and a table's row card both show ONE name
+    // field, so the window minus its last segment is empty. Their ancestor is filing, which the
+    // per-kind ruling already refused as a witness; this pins that the refusal falls out of the
+    // roles table rather than out of a note-type check somebody has to maintain.
+    val novelist =
+      twoField(key("n9", "franz kafka", "born"), "Born", "Prague, 1883.", "Reading notes")
+    val row = CardSpec.TableRow(key("n9", "kafka", "novels"), "Novels", "The Trial; The Castle.", "Reading notes")
+    assertEquals(
+      MoveEvidence.nameDepthOf(novelist.noteTypeName),
+      1,
+      "the fixture must be a one-name-field kind for this test to have a weapon",
+    )
+    assertEquals(MoveEvidence.nameDepthOf(row.noteTypeName), 1)
+
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
+      Vector(observed(novelist, 101), observed(row, 102)),
+    ) match
+      case Vector(_: MoveFinding.Corroborated) => ()
+      case other =>
+        fail(s"filing under a same-named heading must not block a rename: $other")
+  }
+
+  test("a live TABLE PAIR card declares its row concept, exactly as a heading's descriptor does") {
+    // THE OTHER HALF OF THE PER-KIND REACH. The sheet names `cdd/*` AND `table` as the
+    // parent-constitutive kinds, and a table's pair card is a concept-descriptor card whose concept
+    // is the row's first cell — so the same window, read the same way, and no second rule.
+    val pairCard = CardSpec.ThreeField(
+      key("n2", "comparison", "kafka", "throughput"),
+      "Kafka",
+      "Throughput",
+      body("Millions of messages a second."),
+      ThreeFieldDirections.Default,
+      "Comparison",
+      // The first column's header, which is what makes this a TABLE pair card rather than a
+      // heading's — `FieldRole.Setting`, and empty on the heading shape.
+      "System",
+    )
+    val definitionNow = definitionUnder("NATS", "n1", "top")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(definitionNow)),
+      Map(noteIdOf("n1") -> treeWith("top", "nats")),
+      Vector(observed(pairCard, 101)),
+    ) match
+      case Vector(r: MoveFinding.Reparented) =>
+        assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("kafka"), pairCard.key))
+      case other => fail(s"a table row's concept is a concept: $other")
+  }
+
+  test("a live card under some OTHER concept witnesses nothing about this one") {
+    // THE VACUITY GUARD ON THE THIRD WITNESS, the twin of the one the second witness carries.
+    // Without it, "does the collection declare anything at all" would pass every test above while
+    // blocking every rename in a collection that holds any concept-descriptor card — which is every
+    // real collection.
+    val zooKeeper =
+      threeField(key("n2", "top", "zookeeper", "cost"), "ZooKeeper", "Cost", "Ensembles are odd-sized.", "Top")
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
+      Vector(observed(zooKeeper, 101)),
+    ) match
+      case Vector(_: MoveFinding.Corroborated) => ()
+      case other => fail(s"an unrelated concept's live card must not block a rename: $other")
+  }
+
+  test("a collection declaring the old subject answers even when the census could NOT be taken") {
+    // "I could not look" may never outrank a positive declaration. With the census silenced this
+    // fixture used to become `RelabelUnvouched` on the honesty ground — and that ground does not
+    // apply here, because the survival is ESTABLISHED rather than inferred from an absence: a
+    // census that could not be taken cannot unestablish a card the collection is holding.
+    val now = definitionUnder("RabbitMQ", "n1", "top")
+    surveyBlind(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(now)),
+      Vector(observed(costUnderKafkaElsewhere, 101)),
+    ) match
+      case Vector(r: MoveFinding.Reparented) =>
+        assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("kafka"), costUnderKafkaElsewhere.key))
+      case other =>
+        fail(s"an unreadable vault does not unestablish what the collection holds: $other")
+  }
+
+  test("the card's OWN NOTE outranks the collection, so the report names what a reader will find") {
+    // WHICH WITNESS IS NAMED IS NOT ARBITRARY, and this is the pin on the order. Where the concept
+    // is still a node of the stranded card's own note, that is the most direct thing to say and the
+    // one a reader can verify by opening the file — so it is named even though a live card elsewhere
+    // would have answered too. Deck scenario S24's transcript line depends on this staying true.
+    val definitionNow = definitionUnder("NATS", "n1", "top")
+    surveyDeclaring(
+      Vector(observed(definitionUnderKafka, 1)),
+      Vector(sourced(definitionNow)),
+      Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
+      Vector(observed(costUnderKafkaElsewhere, 101)),
+    ) match
+      case Vector(r: MoveFinding.Reparented) =>
+        assertEquals(r.survival, SubjectSurvival.StillInTheNote(Vector("top", "kafka")))
+      case other => fail(s"the census's own answer must be the one reported: $other")
+  }
+
+  test("a note handed in as BOTH stranded and live is refused outright") {
+    // THE CONTRACT THAT KEEPS THE WITNESS FROM EATING ITSELF. A note being orphaned may not declare
+    // that the subject it is being orphaned FROM goes on existing — and the damage would not be
+    // local: a renamed concept's other descriptors are stranded by the very same rename, so each
+    // would vouch for the old name and no rename would ever follow again. `plan/Planner.scala`
+    // splits the collection on one predicate so the two cannot overlap; this refuses rather than
+    // trusting that sentence to stay true.
+    val card = observed(definitionUnderKafka, 1)
+    val thrown = intercept[RuntimeException] {
+      surveyDeclaring(
+        Vector(card),
+        Vector(sourced(definitionUnder("NATS", "n1", "top"))),
+        Map(noteIdOf("n1") -> treeWith("top", "nats")),
+        Vector(card),
+      )
+    }
+    assert(
+      thrown.getMessage.contains("1"),
+      s"the refusal must name the note that arrived on both sides: ${thrown.getMessage}",
+    )
   }
 
   test("a plain heading's own rewording is not a subject change, however deep its path") {

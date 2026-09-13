@@ -359,7 +359,14 @@ object WorldDeck:
       // THE CENSUS COMES FROM THE SAME `index` AS `unclaimed`, which is the AFTER state — the
       // question it answers is whether a subject the collection remembers is still in the vault
       // the run is planning against.
-      val findings = MoveEvidence.survey(stranded, unclaimed, index.census)
+      //
+      // AND THE LIVE HALF OF THE COLLECTION IS THE COMPLEMENT OF `stranded` UNDER THE SAME
+      // PREDICATE, exactly as `plan/Planner.scala` computes it — the cards this run is not
+      // orphaning, whose `Concept` the collection therefore still stands behind. This is what makes
+      // the deck able to show a two-run shape at all: run one's created card is in run two's
+      // collection, and it is the only thing that still knows the concept existed.
+      val declared = LiveDeclarations.of(collection.filter(c => accounting.accountsFor(c.key)))
+      val findings  = MoveEvidence.survey(stranded, unclaimed, index.census, declared)
 
       val decisions = findings.map { f =>
         val d = policy.decide(f)
