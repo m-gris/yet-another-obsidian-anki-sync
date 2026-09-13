@@ -2,7 +2,18 @@ package obsidiananki.plan
 
 import obsidiananki.model.{CardKey, CardPath, NoteId}
 
-/** WHICH NODES OF A NOTE THE VAULT STILL HOLDS — the one fact the move survey could not see.
+/** WHICH NODES OF A NOTE THE VAULT STILL HOLDS — a fact the move survey could not see, and the only
+  * witness of survival that can see a concept which kept nothing but prose.
+  *
+  * ══ ONE WITNESS OF TWO, SINCE 2026-09-13 ══
+  *
+  * This type was built as THE discriminator, and it is now the first of two: the ruling of
+  * 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`) also counts a concept as surviving when the
+  * same survey corroborated a card onto it — see `plan/MoveEvidence.scala`'s `SubjectSurvival`. That
+  * second witness exists because the question this type answers is about ONE NOTE'S TREE: a concept
+  * that left for another note, or that was re-nested under a new ancestor, is absent from the node
+  * paths of the note it left, and answering "gone" about it is truthful and not enough. Nothing
+  * about this type changed; what changed is that its answer is no longer the whole of the check.
   *
   * ══ THE QUESTION THIS ANSWERS, AND WHY NOTHING ELSE COULD ══
   *
@@ -17,10 +28,11 @@ import obsidiananki.model.{CardKey, CardPath, NoteId}
   *     card and history must never follow (standing ruling R2, deck scenario S24).
   *
   * The keys look the same in both: one segment inside the name window changed. What separates them
-  * is whether THE OLD CONCEPT'S PATH SURVIVES — and that is a fact about the vault's node tree, not
-  * about any card. The survey's two inputs cannot carry it. A concept heading that kept some cards
-  * shows up there only as the prefix of somebody else's key, and a concept heading that kept only
-  * PROSE shows up nowhere at all.
+  * is whether THE OLD CONCEPT GOES ON EXISTING — and the half of that answer this type holds is a
+  * fact about the vault's node tree, not about any card. The survey's two inputs cannot carry it. A
+  * concept heading that kept some cards shows up there only as the prefix of somebody else's key,
+  * and a concept heading that kept only PROSE shows up nowhere at all — which is deck scenario
+  * S24C, and the reason this type cannot be replaced by the witness of 2026-09-13.
   *
   * ══ WHAT A NODE IS HERE ══
   *

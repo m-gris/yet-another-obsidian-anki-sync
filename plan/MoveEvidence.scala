@@ -73,6 +73,11 @@ import obsidiananki.model.{CardKey, CardPath, Marker, OwnedTag}
  * call. A subject change that also moved, or one whose premise the run could not establish, comes
  * back as [[MoveFinding.RelabelUnvouched]] for the same reason.
  *
+ * The ruling of 2026-09-13 changed HOW "goes on existing" is established rather than what it
+ * licenses: a subject goes on existing when the node census finds it in the card's own note, OR
+ * when this same survey corroborated a card onto that subject. [[SubjectSurvival]] holds the
+ * argument, and [[SurveyRead]] holds what it costs the shape of [[survey]].
+ *
  * ══ THE STANDING RULE THIS OBEYS ══
  *
  * Identity remains a PURE FUNCTION OF THE VAULT — `oas-4ti`, ruled 2026-08-29. Nothing below
@@ -419,6 +424,49 @@ enum Agreement:
     case PlaceAndSubstance => "a different name, in the same place"
     case SubstanceAlone   => "a different name, somewhere else"
 
+/** HOW THIS RUN KNOWS THE SUBJECT A CARD LEFT GOES ON EXISTING — the two witnesses the ruling of
+  * 2026-09-13 admits, and they are different claims rather than two strengths of one.
+  *
+  * ═══ WHY THE SECOND ONE EXISTS ═══
+  *
+  * The first is a fact about the note's own tree, and it was the whole check until the final
+  * adversarial review found the two shapes it answers "gone" to while the concept plainly goes on:
+  * the concept MOVED TO ANOTHER NOTE with one of its descriptors (the reviewer's S24A), and the
+  * concept was RE-NESTED under a new ancestor so its node path changed (S24B). In both, the same
+  * run pairs the travelling descriptor onto a key that spells the concept out — and then reads the
+  * concept's absence from this note as its disappearance. One run, both halves of a contradiction.
+  *
+  * Marc ruled it on 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`): a concept counts as
+  * surviving when THIS SAME SURVEY corroborated a card onto it. The run's own conclusions are the
+  * witness, which makes the contradiction structurally impossible rather than merely unlikely.
+  *
+  * ═══ WHY THE DISTINCTION IS CARRIED RATHER THAN COLLAPSED ═══
+  *
+  * [[RelabelDoubt]]'s precedent: what the report says must match what the run actually established.
+  * "'kafka' is still in the vault" is what a reader of a same-note survival needs; a reader whose
+  * note holds no `# Kafka` at all — S24A's — would open it, find nothing, and conclude the tool
+  * was lying. The second case names the pairing instead, which is the fact and is checkable.
+  */
+enum SubjectSurvival:
+
+  /** The node census found the subject's path still in the stranded card's own note. `path` is
+    * addressed from the note's root, which is how a node is addressed.
+    */
+  case StillInTheNote(path: Vector[String])
+
+  /** This survey corroborated `card` onto `concept` — so the run itself puts a card under that
+    * subject, wherever in the vault it now sits. `concept` is the subject as a card's own fields
+    * show it, never a node address: it is compared between two cards, and matching node paths
+    * would miss exactly the two shapes that made this witness necessary.
+    */
+  case CorroboratedOnto(concept: Vector[String], card: CardKey)
+
+  def describe: String = this match
+    case StillInTheNote(path) => s"'${path.mkString(" / ")}' is still in the vault"
+    case CorroboratedOnto(concept, card) =>
+      s"'${concept.mkString(" / ")}' goes on existing: this same run pairs " +
+        s"'${card.path.render}' in ${card.noteId.value} onto it"
+
 /** WHY A SUBJECT CHANGE THAT LOOKS LIKE A RELABEL IS NOT FOLLOWED ANYWAY.
   *
   * TWO CASES, AND THEY ARE NOT TWO SEVERITIES OF ONE THING. The first is a fact about the vault —
@@ -553,8 +601,10 @@ enum MoveFinding:
     * `docs/design/REVIEW-QUEUE.md` exists for. Behind one name with a boolean they would be one
     * population with two remedies, which is the defect every world's policy confessed to.
     *
-    * `survivingParent` IS THE EVIDENCE, not a convenience: it is the node path the census found
-    * still in the vault, and without it the report can say "a different card" and not why.
+    * `survival` IS THE EVIDENCE, not a convenience: it is HOW this run knows the subject goes on
+    * existing — a node the census found in the note, or a card this same survey paired onto that
+    * subject (the ruling of 2026-09-13, see [[SubjectSurvival]]). Without it the report can say
+    * "a different card" and not why.
     *
     * IT CARRIES EVERY DIVERGENCE, like [[Corroborated]] and under the same ruling of 2026-09-04:
     * a run that will not act must still say what it saw.
@@ -564,7 +614,7 @@ enum MoveFinding:
       noteId: AnkiNoteId,
       candidate: CardKey,
       where: SourceRef,
-      survivingParent: Vector[String],
+      survival: SubjectSurvival,
       divergences: Vector[Divergence],
   )
 
@@ -668,10 +718,10 @@ enum MoveFinding:
         s"(${where.describe}) — but its name changed for a reason the key does not explain, so " +
         s"nothing is applied: ${unaccountedFor.toVector.map(_.describe).mkString(", ")}"
 
-    case Reparented(stranded, id, candidate, where, survivingParent, divergences) =>
+    case Reparented(stranded, id, candidate, where, survival, divergences) =>
       s"note ${id.value}, which held '${stranded.path.render}' in ${stranded.noteId.value}, " +
         s"says the same thing as '${candidate.path.render}' in ${candidate.noteId.value} " +
-        s"(${where.describe}) — but '${survivingParent.mkString(" / ")}' is still in the vault, so " +
+        s"(${where.describe}) — but ${survival.describe}, so " +
         s"this is a DIFFERENT card under a different subject and nothing is applied" +
         (if divergences.isEmpty then ""
          else s"; ${divergences.map(_.describe).mkString(", ")}")
@@ -789,6 +839,45 @@ object MoveFinding:
   */
 object MoveEvidence:
 
+  /** WHAT ONE PAIRING COMES TO AFTER THE SURVEY'S FIRST PASS — a finding, or the one question a
+    * pairing cannot answer about itself.
+    *
+    * ═══ WHY THERE ARE TWO PASSES AT ALL ═══
+    *
+    * The ruling of 2026-09-13 makes one card's verdict depend on what the run concluded about
+    * OTHER cards: a subject counts as surviving when this same survey corroborated a card onto it.
+    * A single pass cannot answer that — the witness may be a pairing the walk has not reached yet —
+    * and threading a mutable accumulator through the walk would make the answer depend on the order
+    * cards happen to be visited, which is precisely the property this file spent its determinism
+    * section establishing.
+    *
+    * So pass one decides everything a pairing can decide ALONE and carries the rest of the way the
+    * facts it computed while the segments were in hand; pass two reads the run's conclusions off
+    * pass one and resolves what waited. Order-independent, terminating, and readable in the order
+    * the ruling states.
+    */
+  private enum SurveyRead:
+
+    /** Nothing about the rest of the survey can change this. */
+    case Concluded(finding: MoveFinding)
+
+    /** The card's subject changed, so the verdict turns on whether the subject it left goes on
+      * existing — and one of the two witnesses of that is a fact about the whole survey.
+      *
+      * `subjectNode` is the node the card hung off, addressed from its note's root, which is what
+      * the census can be asked about. `subject` is the same subject as the card's own fields show
+      * it, which is what another card's pairing can be compared against. They differ exactly in
+      * the two shapes that made the second witness necessary.
+      */
+    case AwaitingSurvival(
+        card: ObservedCard,
+        spec: SourcedSpec,
+        divergences: Vector[Divergence],
+        subjectNode: Vector[String],
+        subject: Vector[String],
+        clusterMoved: Boolean,
+    )
+
   /** SURVEY BOTH SIDES AND REPORT ON EACH STRANDED NOTE.
     *
     * ═══ WHAT THE CALLER MUST PASS, AND WHY THAT IS THE INTERESTING PART ═══
@@ -853,11 +942,17 @@ object MoveEvidence:
     *
     * ═══ THE CENSUS IS THE AFTER VAULT'S NODE TREE, FROM THE SAME SCAN AS `unclaimed` ═══
     *
-    * It answers the one question the other two inputs cannot: whether the subject a card left is
-    * still in the vault. `unclaimed` is what the vault produces and `stranded` is what the
+    * It answers a question the other two inputs cannot: whether the subject a card left is still a
+    * node of that card's own note. `unclaimed` is what the vault produces and `stranded` is what the
     * collection holds, and a concept heading that kept only prose is in neither. A census taken
     * from a DIFFERENT scan would answer about a vault that is not the one being planned; nothing
     * here can check that, so both arrive from one [[obsidiananki.extract.VaultIndex]].
+    *
+    * ═══ AND THE SURVEY'S OWN CONCLUSIONS ARE THE OTHER WITNESS OF SURVIVAL ═══
+    *
+    * Ruled 2026-09-13, which is why this runs in two passes rather than one: a subject also counts
+    * as going on existing when THIS SURVEY corroborated a card onto it, wherever in the vault that
+    * card now sits. [[SurveyRead]] says why one pass could not express it.
     */
   def survey(
       stranded: Vector[ObservedCard],
@@ -891,13 +986,18 @@ object MoveEvidence:
         case (_, Left(_))              => Vector.empty
       }.groupMap(_._1)(_._2)
 
-    examined.map {
+    // ── PASS ONE: EVERYTHING ONE PAIRING CAN DECIDE ON ITS OWN ────────────────────────────
+    //
+    // Every arm below reaches a finding except the last, which reaches a question this pass
+    // cannot answer — see [[SurveyRead]] for why the answer has to wait, and `underTheSurvivalCheck`
+    // for what answers it.
+    val read: Vector[SurveyRead] = examined.map {
       case (card, Left(reason)) =>
-        MoveFinding.Incomparable(card.key, card.note.id, reason)
+        SurveyRead.Concluded(MoveFinding.Incomparable(card.key, card.note.id, reason))
 
       case (card, Right(candidates)) =>
         candidates match
-          case Vector() => MoveFinding.Unexplained(card.key, card.note.id)
+          case Vector() => SurveyRead.Concluded(MoveFinding.Unexplained(card.key, card.note.id))
 
           case Vector((spec, divergences)) =>
             // MUTUAL UNIQUENESS, WHICH IS THE HALF THAT IS EASY TO FORGET. One candidate from
@@ -918,36 +1018,108 @@ object MoveEvidence:
                   // same thing and that the key accounts for the difference in their faces. What
                   // the gate decides is whether the change the key made is a rewording or a change
                   // of SUBJECT — and a changed subject is a different card, not a moved one.
-                  case None => underTheSubjectGate(card, spec, divergences, census)
+                  case None => underTheSubjectGate(card, spec, divergences)
                   case Some(unexplained) =>
-                    MoveFinding.Unaccounted(
-                      card.key,
-                      card.note.id,
-                      spec.key,
-                      spec.source,
-                      unexplained,
+                    SurveyRead.Concluded(
+                      MoveFinding.Unaccounted(
+                        card.key,
+                        card.note.id,
+                        spec.key,
+                        spec.source,
+                        unexplained,
+                      )
                     )
 
               case others =>
                 // Non-empty by the arm above, and already in `orderedStranded`'s order because it
                 // was built by walking that vector.
-                MoveFinding.Contested(
-                  card.key,
-                  card.note.id,
-                  spec.key,
-                  NonEmptyVector.fromVectorUnsafe(others),
+                SurveyRead.Concluded(
+                  MoveFinding.Contested(
+                    card.key,
+                    card.note.id,
+                    spec.key,
+                    NonEmptyVector.fromVectorUnsafe(others),
+                  )
                 )
 
           // TWO OR MORE, by the two arms above. Named and not ranked: the evidence distinguishes
           // nothing between them, and picking the first would be a guess wearing an answer's
           // clothes.
           case several =>
-            MoveFinding.Ambiguous(
-              card.key,
-              card.note.id,
-              NonEmptyVector.fromVectorUnsafe(several.map(_._1.key)),
+            SurveyRead.Concluded(
+              MoveFinding.Ambiguous(
+                card.key,
+                card.note.id,
+                NonEmptyVector.fromVectorUnsafe(several.map(_._1.key)),
+              )
             )
     }
+
+    // ── PASS TWO: THE RUN'S OWN CONCLUSIONS, THEN THE PAIRINGS THAT WAITED ON THEM ────────
+    //
+    // The witnesses are read off pass one's findings and nothing else, which is what makes this
+    // terminate and makes it order-independent: no pairing resolved HERE can become a witness for
+    // another one resolved here, so there is no second round to run and no pair of cards that could
+    // each be the other's evidence. That restriction is not a convenience either — see
+    // [[conceptsCorroboratedOnto]] for why a relabel-follow is evidence about a NEW name rather
+    // than about a subject that survived.
+    val corroboratedConcepts = conceptsCorroboratedOnto(read)
+
+    read.map {
+      case SurveyRead.Concluded(finding) => finding
+      case SurveyRead.AwaitingSurvival(card, spec, divergences, subjectNode, subject, clusterMoved) =>
+        underTheSurvivalCheck(
+          card,
+          spec,
+          divergences,
+          subjectNode,
+          subject,
+          clusterMoved,
+          census,
+          corroboratedConcepts,
+        )
+    }
+
+  /** THE CONCEPTS THIS SURVEY ITSELF PUT A CARD UNDER — the second witness of survival, per the
+    * ruling of 2026-09-13.
+    *
+    * ═══ WHICH PAIRINGS COUNT, AND WHY IT IS NOT ALL OF THEM ═══
+    *
+    * A CORROBORATION AND NOT A CANDIDATE. The witness is what the survey CONCLUDED, not what it
+    * compared: a contested or ambiguous claim under `# Kafka` is a claim the run will not act on,
+    * and a run that has established nothing about Kafka may not spend it as a survival.
+    *
+    * A CORROBORATION FROM PASS ONE, so a pairing whose own subject moved is never a witness. That
+    * is the stratification the two passes buy, and the reason is semantic rather than mechanical:
+    * a pairing that follows a SUBJECT CHANGE says "what used to be called Kafka is now called
+    * RabbitMQ" — evidence that RabbitMQ is a new spelling, not that RabbitMQ was there before. Only
+    * a card the run puts back under an UNCHANGED subject witnesses that the subject goes on
+    * existing. It also keeps the rule well-defined: two such cards could otherwise each be the
+    * other's witness, with no determinate answer.
+    *
+    * ═══ THE SUBJECT AS A CARD'S FIELDS SHOW IT, NEVER A NODE ADDRESS ═══
+    *
+    * `nameSegments` minus its last is the same reading of a path [[underTheSubjectGate]] takes, so
+    * the two sides of the comparison are the same kind of thing. Matching node addresses instead
+    * would miss both shapes that made this witness necessary: the concept that moved to another
+    * note, and the concept re-nested under a new ancestor. AN EMPTY SUBJECT IS DROPPED — every note
+    * type but the concept-descriptor one shows a one-segment window, so its cards have no subject
+    * above their own name, and an empty witness would answer for all of them at once.
+    *
+    * ONE WITNESS PER CONCEPT, THE FIRST IN THE SURVEY'S ORDER, because the report names it and two
+    * runs over the same vault must name the same one.
+    */
+  private def conceptsCorroboratedOnto(read: Vector[SurveyRead]): Map[Vector[String], CardKey] =
+    read
+      .collect { case SurveyRead.Concluded(c: MoveFinding.Corroborated) =>
+        nameSegments(segmentsOf(c.candidate.path), nameDepthOf(c.noteType)).dropRight(1) ->
+          c.candidate
+      }
+      .filter((subject, _) => subject.nonEmpty)
+      .groupMap(_._1)(_._2)
+      .view
+      .mapValues(_.head)
+      .toMap
 
   /** IS THE CHANGE THE KEY RECORDS A REWORDING, OR A CHANGE OF SUBJECT? The last question between a
     * pairing and a reassignment.
@@ -967,30 +1139,17 @@ object MoveEvidence:
     *
     * `# Kafka` relabelled `# RabbitMQ` with its descriptors following, and `## Definition` carried
     * from under `# Kafka` to under `# NATS`, PRODUCE THE SAME TWO KEYS. What tells them apart is
-    * whether `# Kafka` is still in the vault, which is a fact about the note's node tree and about
-    * no card at all — see [[NodeCensus]] for why neither of this survey's other two inputs can
-    * hold it.
+    * whether `# Kafka` goes on existing — a fact about the note's node tree and about the rest of
+    * this survey, and about THIS pairing not at all. See [[NodeCensus]] for why neither of the
+    * survey's other two inputs can hold the first half of it, and [[SubjectSurvival]] for why the
+    * first half alone was not enough.
     *
-    * ═══ THE ROUTES, WHICH ARE THE RULINGS OF 2026-09-12 ═══
-    *
-    *   - THE SUBJECT DID NOT MOVE — [[MoveFinding.Corroborated]], exactly as before this gate
-    *     existed. Decisions 1 and 3: a card's own name, or a descriptor's label, changing over an
-    *     untouched subject is a rewording, and history follows.
-    *   - THE OLD SUBJECT IS STILL THERE — [[MoveFinding.Reparented]]. Ruling R2, deck scenario S24:
-    *     there are two cards here, not one that moved.
-    *   - IT IS GONE AND THE CLUSTER STAYED PUT — [[MoveFinding.Corroborated]]. Decision 2, revising
-    *     R3: "Least Element" became "Bottom", and the same cards keep their history.
-    *   - IT IS GONE AND SOMETHING ELSE MOVED TOO — [[MoveFinding.RelabelUnvouched]]. Decision 2
-    *     again: "the path weighs both ways — a name change combined with a move grades weaker and
-    *     becomes a question".
-    *   - THE CENSUS COULD NOT SAY — [[MoveFinding.RelabelUnvouched]], carrying the reason. "It is
-    *     gone" is the premise the follow rests on, and a run that could not look has not
-    *     established it.
-    *
-    * SURVIVAL IS ASKED BEFORE THE CLUSTER, AND THE ORDER IS LOAD-BEARING. A descriptor re-parented
-    * under a surviving concept is a different card whether or not it also moved; telling somebody
-    * "possibly renamed, but it moved as well" about one would invite them to pair what R2 has
-    * already refused.
+    * So this function answers only the half it can: THE SUBJECT DID NOT MOVE is
+    * [[MoveFinding.Corroborated]] outright, exactly as before the gate existed (Decisions 1 and 3
+    * of 2026-09-12: a card's own name, or a descriptor's label, changing over an untouched subject
+    * is a rewording, and history follows). A subject that DID move waits, carrying the facts read
+    * off the two paths while they are in hand — [[underTheSurvivalCheck]] holds the routes from
+    * there.
     *
     * ═══ WHY IT RUNS LAST, AFTER MUTUAL UNIQUENESS ═══
     *
@@ -1003,29 +1162,10 @@ object MoveEvidence:
       card: ObservedCard,
       spec: SourcedSpec,
       divergences: Vector[Divergence],
-      census: NodeCensus,
-  ): MoveFinding =
+  ): SurveyRead =
     val depth = nameDepthOf(card.note.noteType)
     val was   = segmentsOf(card.key.path)
     val now   = segmentsOf(spec.key.path)
-
-    def corroborated = MoveFinding.Corroborated(
-      card.key,
-      card.note.id,
-      spec.key,
-      spec.source,
-      card.note.noteType,
-      divergences,
-    )
-
-    def unvouched(cause: RelabelDoubt) = MoveFinding.RelabelUnvouched(
-      card.key,
-      card.note.id,
-      spec.key,
-      spec.source,
-      cause,
-      divergences,
-    )
 
     // THE NAME WINDOW MINUS ITS LAST SEGMENT IS THE SUBJECT, and asking it this way makes the gate
     // per-kind WITHOUT EVER ASKING THE KIND. Only the concept-descriptor note type declares a
@@ -1033,39 +1173,128 @@ object MoveEvidence:
     // leaves nothing — empty on both sides, equal, and the gate cannot fire. A note-type check
     // would say the same thing in a place where a fifth note type could contradict it; the two
     // guards in `plan/MoveEvidence.test.scala` pin the reach rather than the spelling.
-    val subjectMoved =
-      nameSegments(was, depth).dropRight(1) != nameSegments(now, depth).dropRight(1)
+    val subject      = nameSegments(was, depth).dropRight(1)
+    val subjectMoved = subject != nameSegments(now, depth).dropRight(1)
 
-    // THE NODE THE CARD HUNG OFF — its WHOLE path minus its own name, because that is how a node is
-    // addressed: from the note's root. A suffix of it would ask the census about a path that is not
-    // in it, and get "gone" for a subject standing in plain sight.
-    val oldSubject = was.dropRight(1)
-
-    if !subjectMoved then corroborated
+    if !subjectMoved then
+      SurveyRead.Concluded(
+        MoveFinding.Corroborated(
+          card.key,
+          card.note.id,
+          spec.key,
+          spec.source,
+          card.note.noteType,
+          divergences,
+        )
+      )
     else
-      census.nodesOf(card.key.noteId) match
-        case NodeCensus.Answer.Unsurveyable(reason) =>
-          unvouched(RelabelDoubt.CensusUnavailable(reason))
+      SurveyRead.AwaitingSurvival(
+        card,
+        spec,
+        divergences,
+        // THE NODE THE CARD HUNG OFF — its WHOLE path minus its own name, because that is how a node
+        // is addressed: from the note's root. A suffix of it would ask the census about a path that
+        // is not in it, and get "gone" for a subject standing in plain sight.
+        subjectNode = was.dropRight(1),
+        subject = subject,
+        // ⚠️ THE NOTE-ID HALF IS AN INTERPRETATION MARC HAS NOT BEEN ASKED ABOUT. Decision 2 follows
+        // a relabel when "the cluster stayed in place (the path agreed)", and a card key is A NOTE ID
+        // AND A PATH — so a card that crossed into another note is read here as a cluster that did
+        // not stay. No deck scenario exercises the combination; `plan/MoveEvidence.test.scala` is
+        // where it is pinned.
+        clusterMoved =
+          was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId,
+      )
 
-        case NodeCensus.Answer.Surveyed(nodes) =>
-          if nodes.contains(oldSubject) then
-            MoveFinding.Reparented(
+  /** DOES THE SUBJECT THE CARD LEFT GO ON EXISTING? The question pass one could not answer, because
+    * one of its two witnesses is a fact about the whole survey.
+    *
+    * ═══ THE TWO WITNESSES, AND WHY THE RUN'S OWN IS ASKED FIRST ═══
+    *
+    * The order is not an optimisation. The census has THREE answers, and one of them is "I could not
+    * look" — from which nothing may be concluded, which is why an unsurveyable census turns a
+    * relabel into a question. But a survival this run ESTABLISHED needs no census at all: the run
+    * itself put a card under that subject, and a census that could not be taken cannot unestablish
+    * it. Asking the census first would spend "I could not look" on a run that already knew.
+    *
+    * ═══ THE ROUTES, WHICH ARE THE RULINGS OF 2026-09-12 AND 2026-09-13 ═══
+    *
+    *   - THIS SURVEY CORROBORATED A CARD ONTO THE SUBJECT — [[MoveFinding.Reparented]]. Ruled
+    *     2026-09-13: the run's own conclusions are evidence the subject survives, wherever in the
+    *     vault it now sits (the reviewer's S24A and S24B).
+    *   - THE SUBJECT IS STILL A NODE OF THIS NOTE — [[MoveFinding.Reparented]] again. Ruling R2,
+    *     deck scenarios S24 and S24C: there are two cards here, not one that moved. This is the only
+    *     witness that can see a concept which kept nothing but prose.
+    *   - IT IS GONE AND THE CLUSTER STAYED PUT — [[MoveFinding.Corroborated]]. Decision 2, revising
+    *     R3: "Least Element" became "Bottom", and the same cards keep their history.
+    *   - IT IS GONE AND SOMETHING ELSE MOVED TOO — [[MoveFinding.RelabelUnvouched]]. Decision 2
+    *     again: "the path weighs both ways — a name change combined with a move grades weaker and
+    *     becomes a question".
+    *   - THE CENSUS COULD NOT SAY, AND THIS RUN ESTABLISHED NOTHING — [[MoveFinding.RelabelUnvouched]],
+    *     carrying the reason. "It is gone" is the premise the follow rests on, and a run that could
+    *     not look has not established it.
+    *
+    * SURVIVAL IS ASKED BEFORE THE CLUSTER, AND THE ORDER IS LOAD-BEARING. A descriptor re-parented
+    * under a surviving subject is a different card whether or not it also moved; telling somebody
+    * "possibly renamed, but it moved as well" about one would invite them to pair what R2 has
+    * already refused.
+    */
+  private def underTheSurvivalCheck(
+      card: ObservedCard,
+      spec: SourcedSpec,
+      divergences: Vector[Divergence],
+      subjectNode: Vector[String],
+      subject: Vector[String],
+      clusterMoved: Boolean,
+      census: NodeCensus,
+      corroboratedConcepts: Map[Vector[String], CardKey],
+  ): MoveFinding =
+    def reparented(survival: SubjectSurvival) = MoveFinding.Reparented(
+      card.key,
+      card.note.id,
+      spec.key,
+      spec.source,
+      survival,
+      divergences,
+    )
+
+    corroboratedConcepts.get(subject) match
+      case Some(witness) =>
+        reparented(SubjectSurvival.CorroboratedOnto(subject, witness))
+
+      case None =>
+        census.nodesOf(card.key.noteId) match
+          case NodeCensus.Answer.Unsurveyable(reason) =>
+            MoveFinding.RelabelUnvouched(
               card.key,
               card.note.id,
               spec.key,
               spec.source,
-              oldSubject,
+              RelabelDoubt.CensusUnavailable(reason),
               divergences,
             )
-          else
-            // ⚠️ THE NOTE-ID HALF IS AN INTERPRETATION AWAITING MARC'S CONFIRMATION, flagged here
-            // rather than buried. Decision 2 follows a relabel when "the cluster stayed in place
-            // (the path agreed)", and a card key is A NOTE ID AND A PATH — so a card that crossed
-            // into another note is read here as a cluster that did not stay. No deck scenario
-            // exercises the combination; `plan/MoveEvidence.test.scala` is where it is pinned.
-            val clusterMoved =
-              was.dropRight(depth) != now.dropRight(depth) || card.key.noteId != spec.key.noteId
-            if clusterMoved then unvouched(RelabelDoubt.ClusterMoved) else corroborated
+
+          case NodeCensus.Answer.Surveyed(nodes) =>
+            if nodes.contains(subjectNode) then
+              reparented(SubjectSurvival.StillInTheNote(subjectNode))
+            else if clusterMoved then
+              MoveFinding.RelabelUnvouched(
+                card.key,
+                card.note.id,
+                spec.key,
+                spec.source,
+                RelabelDoubt.ClusterMoved,
+                divergences,
+              )
+            else
+              MoveFinding.Corroborated(
+                card.key,
+                card.note.id,
+                spec.key,
+                spec.source,
+                card.note.noteType,
+                divergences,
+              )
 
   /** THE CANONICALISED SEGMENTS OF A PATH, OUTERMOST FIRST, so the last one is always the node the
     * card hangs off.

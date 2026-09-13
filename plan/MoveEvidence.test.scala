@@ -591,10 +591,13 @@ class MoveEvidenceTest extends munit.FunSuite:
       Vector(sourced(now)),
       Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
     ) match
-      case Vector(MoveFinding.Reparented(stranded, _, candidate, _, survivingParent, divergences)) =>
+      case Vector(MoveFinding.Reparented(stranded, _, candidate, _, survival, divergences)) =>
         assertEquals(stranded, definitionUnderKafka.key)
         assertEquals(candidate, now.key)
-        assertEquals(survivingParent, Vector("top", "kafka"))
+        // THE CENSUS IS THE WITNESS HERE, and the finding says so: `# Kafka` is still a node of
+        // this note. The other witness — a card this same run paired onto Kafka — is the ruling of
+        // 2026-09-13's, and the tests further down are where it is pinned.
+        assertEquals(survival, SubjectSurvival.StillInTheNote(Vector("top", "kafka")))
         assertEquals(divergences.map(_.field), Vector("Concept"))
       case other => fail(s"a re-parent under a surviving concept must never follow: $other")
   }
@@ -713,8 +716,13 @@ class MoveEvidenceTest extends munit.FunSuite:
     ) match
       // Findings come out in the stranded keys' order, so the descriptor that stayed under Kafka
       // ('… / cost') precedes the one that left ('… / definition').
-      case Vector(cost: MoveFinding.Corroborated, _: MoveFinding.Reparented) =>
+      case Vector(cost: MoveFinding.Corroborated, reparented: MoveFinding.Reparented) =>
         assertEquals(cost.candidate, costNow.key, "the witness is the pairing this run acts on")
+        assertEquals(
+          reparented.survival,
+          SubjectSurvival.CorroboratedOnto(Vector("kafka"), costNow.key),
+          "the report must name the pairing it read, not a note the reader will find empty",
+        )
       case other =>
         fail(s"a concept this run kept a card under must not be read as gone: $other")
   }
@@ -743,7 +751,13 @@ class MoveEvidenceTest extends munit.FunSuite:
         ))
       ),
     ) match
-      case Vector(_: MoveFinding.Corroborated, _: MoveFinding.Reparented) => ()
+      case Vector(_: MoveFinding.Corroborated, reparented: MoveFinding.Reparented) =>
+        // THE SUBJECT, NOT THE NODE: the node is now `top / archive / kafka`, and it is the concept
+        // as the paired card's own fields show it that the two sides are compared on.
+        assertEquals(
+          reparented.survival,
+          SubjectSurvival.CorroboratedOnto(Vector("kafka"), costNow.key),
+        )
       case other => fail(s"a re-nested concept is still a concept the run kept: $other")
   }
 
