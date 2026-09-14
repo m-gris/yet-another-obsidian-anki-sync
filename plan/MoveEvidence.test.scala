@@ -1274,12 +1274,13 @@ class MoveEvidenceTest extends munit.FunSuite:
     * which is what keeps "two notes holding the same chain" (above) the priced residual cost it was
     * ruled to be rather than something this block quietly widens.
     *
-    * WHAT IT COSTS WHEN IT IS WRONG, measured on the judge's `JN-*` fixtures: the message broker's
-    * `# Kafka` → `# NATS` relabel is a ruled FOLLOW (the sheet's "unchanged description + no old
-    * subject standing anywhere = the same concept respelled and rehomed"), and the novelist's
-    * namesake turned it into a park plus a new card at zero — stranding the review history and
-    * telling the author, as the run's stated reason, that a concept which no longer exists at that
-    * place goes on existing.
+    * ONE OF THE TWO VAULT-WIDE WITNESSES READS IT, AND THE SPLIT IS NOT TIDINESS. THIS RUN'S OWN
+    * PAIRINGS do: the ruling's bridge clause is "its own pairing moved it from P THIS RUN", a fact
+    * wholly inside the run, so a pairing out of `Novelist.md`'s root can be told from one out of
+    * `Broker.md`'s and the second test below is that. THE LIVE COLLECTION does not, because at this
+    * exact shape the same day's ruling that survival evidence has no sync boundary wants the opposite
+    * answer and deck scenario S24D pins it — the first test below carries that conflict in full and
+    * is flagged ⚠️ because it records an open question rather than a ruled one.
     */
   val brokerDefinitionAtRoot: CardSpec =
     threeField(
@@ -1322,21 +1323,46 @@ class MoveEvidenceTest extends munit.FunSuite:
     noteIdOf("n3") -> Vector(Vector("nats"), Vector("nats", "definition")),
   )
 
-  test("a LIVE namesake at ANOTHER NOTE'S ROOT is no witness, so the root relabel follows") {
-    // THE THIRD WITNESS AT THE FLAT SHAPE. `Novelist.md`'s live `## Origin` card declares the subject
-    // spelled `kafka`, and it stands at Novelist.md's root — not at Broker.md's, which is where this
-    // card's subject stood. Nothing bridges the two notes, so it testifies to nothing and the relabel
-    // follows exactly as the control does with no namesake in the vault at all.
+  test("⚠️ a LIVE namesake at ANOTHER NOTE'S ROOT still parks — two rulings disagree here") {
+    // ⚠️ THIS ASSERTS THE CURRENT ANSWER TO AN OPEN QUESTION, NOT A RULED ONE, and it is written down
+    // as a test rather than left in a docstring so that whoever rules it finds the fixture already
+    // built. Everything below is what the run does today; whether it is right is Marc's to say.
+    //
+    // WHAT THE JUDGE MEASURED, and it is a real cost. `Novelist.md`'s live `## Origin` card is about
+    // Franz Kafka. It declares a subject spelled `kafka` standing at Novelist.md's ROOT — not at
+    // Broker.md's, where the message broker's subject stood. By "a concept is its chain; namesakes at
+    // unrelated places are silence" it should testify to nothing, and the relabel should follow as
+    // the control above it does. Instead it parks, and the run TELLS THE AUTHOR that 'kafka' goes on
+    // existing under the place this card left — which is false about a concept that is gone.
+    //
+    // WHY IT IS NOT SIMPLY FIXED. The witness matching compares canonicalised chains, and at the flat
+    // shape — a note whose first heading IS its concept — the chain is one segment, so comparing
+    // chains is comparing bare names. Adding the note to the key at that shape, which is what the
+    // namesake ruling reads like, breaks deck scenario S24D: there a live `kafka / cost` in ANOTHER
+    // NOTE is the only thing that stops a re-parent following a subject change, and the sheet's
+    // "survival evidence has no sync boundary" entry ruled exactly that it must.
+    //
+    // AND THE TWO CASES ARE ISOMORPHIC. Stranded card left note X, candidate is in note Y, witness
+    // stands in note Z: the judge's JN-LIVE is X≠Y≠Z, S24D run 2 is X=Y, Z elsewhere. The only fact
+    // that differs is where the vault now produces the CARD — and the entailment of the same day took
+    // that out of a `/2way` card's claim. So no rule keyed on the witness can honour both.
+    //
+    // WHY THE UNRESOLVED STATE IS LEFT THIS WAY ROUND. Parking strands a history where it is;
+    // following moves one onto a card R2 calls a different card. The first is recoverable and
+    // reported, the second is the thing this whole gate exists to prevent.
     surveyDeclaring(
       Vector(observed(brokerDefinitionAtRoot, 1)),
       Vector(sourced(systemsDefinitionAtRoot)),
       afterTheRootRelabel,
       Vector(observed(novelistOriginAtRoot, 101)),
     ) match
-      case Vector(c: MoveFinding.Corroborated) =>
-        assertEquals(c.candidate, systemsDefinitionAtRoot.key)
+      case Vector(r: MoveFinding.Reparented) =>
+        assertEquals(
+          r.survival,
+          SubjectSurvival.StillInTheCollection(Vector("kafka"), novelistOriginAtRoot.key),
+        )
       case other =>
-        fail(s"another note's root-level namesake must not park a ruled relabel: $other")
+        fail(s"the flat-shape namesake question is open, and this is the answer on record: $other")
   }
 
   test("a PAIRING onto a namesake at ANOTHER NOTE'S ROOT is no bridge either") {

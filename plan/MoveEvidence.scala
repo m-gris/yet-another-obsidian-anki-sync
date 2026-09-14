@@ -2,7 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath}
-import obsidiananki.model.{CardKey, CardPath, Marker, OwnedTag}
+import obsidiananki.model.{CardKey, CardPath, Marker, NoteId, OwnedTag}
 
 /* WHAT THE EVIDENCE SAYS WHEN A CARD'S SOURCE MOVED, and — for one shape of evidence only —
  * what is done about it.
@@ -646,6 +646,76 @@ enum Agreement:
   * expires. So the collection the run is looking at is itself the third witness — no clock, no
   * ledger, no git, only labels Anki already holds. [[LiveDeclarations]] is the reading.
   */
+/** THE END A BRIDGE IS FASTENED TO — where a subject stood, as [[MoveEvidence.conceptsCorroboratedOnto]]
+  * has to be able to recognise it.
+  *
+  * ═══ WHY A CHAIN ALONE IS NOT THE ANSWER ═══
+  *
+  * _Added 2026-09-14._ "A subject is its chain" (the entailment of 2026-09-13) reads as a complete
+  * rule and is not one. A chain identifies a concept BY WHAT STANDS ABOVE IT — `Kafka.md`'s
+  * `## Performance` and `NATS.md`'s are two concepts because their parents differ — so a chain with
+  * NOTHING above the subject identifies the subject by its name and nothing else. Comparing two such
+  * chains is comparing two bare names, which is the very thing the ruling forbids, reached by a route
+  * that looks like obeying it.
+  *
+  * And it is not a corner: a note whose first heading is its concept — `Broker.md` opening on
+  * `# Kafka` — is the ordinary way to write one, and two notes about different things sharing a name
+  * is the commonest collision a vault has. The judge's `JN-BRIDGE` fixture is that pair with the
+  * namesake in motion: `Novelist.md`'s Franz Kafka verbatim-moves to `Writers.md` in the same sync,
+  * and before this type that pairing was read as a bridge for the message broker's subject.
+  *
+  * ═══ THE PLACE IS WHAT STANDS ABOVE THE SUBJECT, AND THE NOTE IS THE OUTERMOST OF THOSE ═══
+  *
+  * So the two cases below are one rule read to its end rather than a rule and an exception. Inside a
+  * note, what stands above a subject is its ancestor chain. When nothing stands above it the subject
+  * is at the note's ROOT, and the note is the only place-fact left — so the note joins the key there,
+  * and only there. A subject WITH ancestors goes on being matched across notes, which keeps the
+  * residual cost [[LiveDeclarations]] prices exactly where it was priced.
+  *
+  * ═══ THE BRIDGE STILL CROSSES NOTES, BECAUSE IT IS KEYED ON WHERE THE SUBJECT *WAS* ═══
+  *
+  * A pairing witnesses through its OLD key, and the old key's note is the note the subject stood in.
+  * So `# Kafka` leaving `Messaging.md` for `Queues.md` with one of its descriptors still bridges
+  * Messaging.md's root to wherever the card went — the reviewer's S24A and S24B, both of which are
+  * flat — while the novelist's cluster moving out of `Novelist.md` bridges NOVELIST.MD's root and
+  * says nothing about the broker's.
+  *
+  * ═══ WHY ONLY THIS WITNESS READS IT ═══
+  *
+  * The ruling's bridge clause is "its own pairing moved it from P THIS RUN", so what it matches is a
+  * fact wholly inside the run and this type can state it completely. The live-collection witness is
+  * matched on a chain still, and [[LiveDeclarations]] carries the flagged reason: at the flat shape
+  * the same-day ruling that survival evidence has no sync boundary wants the opposite answer, and
+  * which of the two governs is not this file's to decide.
+  */
+enum SubjectPlace:
+
+  /** The subject hung under at least one ancestor, and `chain` ends with the subject's own name. The
+    * ancestors identify it, so this is compared across the whole vault with no note attached.
+    */
+  case Under(chain: Vector[String])
+
+  /** The subject stood at `note`'s root, with nothing above it but the note itself. */
+  case AtTheRootOf(note: NoteId, name: String)
+
+object SubjectPlace:
+
+  /** Where the subject at the end of `chain` stood, in `note`.
+    *
+    * AN EMPTY CHAIN IS A DEFECT IN THIS TOOL RATHER THAN AN INPUT, so it is said so loudly instead
+    * of being given an answer. Every caller has already established that the card's name window
+    * holds a subject above the card's own name — which makes the path at least two segments long,
+    * and this chain, which is that path minus the card's name, at least one.
+    */
+  def of(note: NoteId, chain: Vector[String]): SubjectPlace = chain match
+    case Vector(name) => AtTheRootOf(note, name)
+    case Vector()     =>
+      sys.error(
+        s"a subject in note '${note.value}' was asked for its place with no chain at all, which " +
+          "means a witness was keyed for a card that declares no subject — see SubjectPlace.of"
+      )
+    case deeper => Under(deeper)
+
 enum SubjectSurvival:
 
   /** The node census found the subject's path still in the stranded card's own note. `path` is
@@ -721,14 +791,40 @@ enum SubjectSurvival:
   * witness must therefore stand at the chain the stranded card left, and a namesake at an unrelated
   * chain is silence. Marc, shown the pair: "you realize that there are no questions there?"
   *
-  * STILL UNSCOPED BY NOTE, AND THAT IS NOT AN OVERSIGHT. The chain is compared; the note id is not.
-  * It cannot be: the whole reason this witness exists is a concept that left for ANOTHER note in an
-  * earlier sync, so requiring the note to agree would retire the witness altogether — the two-run
-  * shape in [[SubjectSurvival]] is that case. What remains payable is narrow and worth naming: two
-  * notes that hold the same chain, `# Kafka` / `## Performance` in each, still testify about one
-  * another. That is a genuine ambiguity about where one concept lives rather than a namesake at an
-  * unrelated place, and it errs toward parking, which is the direction that keeps a history rather
-  * than moving it.
+  * UNSCOPED BY NOTE WHERE THE SUBJECT HAS AN ANCESTOR, AND THAT IS NOT AN OVERSIGHT. There the chain
+  * is compared and the note id is not. It cannot be: the whole reason this witness exists is a
+  * concept that left for ANOTHER note in an earlier sync, so requiring the note to agree would retire
+  * the witness altogether — the two-run shape in [[SubjectSurvival]] is that case. What remains
+  * payable is narrow and worth naming: two notes that hold the same chain, `# Kafka` / `##
+  * Performance` in each, still testify about one another. That is a genuine ambiguity about where one
+  * concept lives rather than a namesake at an unrelated place, and it errs toward parking, which is
+  * the direction that keeps a history rather than moving it.
+  *
+  * ⚠️ AT THE FLAT SHAPE THAT COST IS NOT MERELY NARROW, AND THE SHEET HAS NOT SETTLED IT. A note
+  * whose first heading IS its concept — `Broker.md` opening on `# Kafka` — leaves a ONE-SEGMENT
+  * chain, so comparing chains there is comparing bare names: `Novelist.md`'s Franz Kafka parks the
+  * message broker's ruled relabel, and the run's stated reason is a false claim about a concept that
+  * no longer exists at that place. The judge's `JN-LIVE` fixture is exactly that. It is NOT fixed
+  * here, and the reason is a conflict this file may not resolve:
+  *
+  *   - "a concept is its chain; namesakes at unrelated places are silence" says a witness vouches
+  *     for subject S at place P only if it STANDS AT P — and `Novelist.md`'s root is not
+  *     `Broker.md`'s root.
+  *   - "survival evidence has no sync boundary" says a live `kafka / cost` in ANOTHER NOTE is what
+  *     answers when the concept left in an EARLIER run, and deck scenario S24D is its named fixture.
+  *
+  * Both are rulings of 2026-09-13 and at this shape they are isomorphic: `JN-LIVE` and S24D run 2
+  * present the same three notes in the same relation, and the only fact that differs — which note
+  * the vault now produces the card in — is a fact about the CANDIDATE, which the same day's
+  * entailment removed from a `/2way` card's claim. Nothing else tells them apart, so honouring one
+  * ruling here breaks the other. Parking is the direction that keeps a history rather than moving it
+  * onto a card R2 says is a different one, which is why the unresolved state is left this way round
+  * and not the other. Marc's to rule; `plan/MoveEvidence.test.scala` pins the current answer under
+  * the same flag so the question is findable.
+  *
+  * THE PAIRING WITNESS HAS NO SUCH CONFLICT and was corrected: its bridge clause is "its own pairing
+  * moved it from P THIS RUN", a run-local fact with no sync boundary to outlive. See
+  * [[SubjectPlace]].
   *
   * ONE WITNESS PER CHAIN, THE FIRST IN THE COLLECTION'S SORTED ORDER, because the report names it and
   * two runs over an unchanged collection must name the same one.
@@ -1587,8 +1683,10 @@ object MoveEvidence:
     * this witness necessary". That was half right and the half it got wrong is this whole function's
     * subtlety: matching the candidate's NEW address would indeed miss them, since a concept that
     * relocated or was re-nested is not where it was. The pairing's OLD key is not the same thing. It
-    * is exactly where the subject STOOD, so it bridges the old chain to wherever the run has just put
-    * the card — which is what the ruling means by "its own pairing moved it from P".
+    * is exactly where the subject STOOD, so it bridges the old place to wherever the run has just put
+    * the card — which is what the ruling means by "its own pairing moved it from P". The old key's
+    * NOTE is part of that place for a root-level subject, and for the same reason: it is where the
+    * subject was. See [[SubjectPlace]].
     *
     * WHAT THE BARE NAME COST, and it is why the correction was forced: `Kafka.md`'s `## Performance`
     * and `NATS.md`'s `## Performance` are two concepts sharing a spelling, so a name-keyed witness had
@@ -1606,17 +1704,23 @@ object MoveEvidence:
     * non-empty for a plain heading's parent too, so dropping the window test would silently promote
     * every filing heading to a witness.
     *
-    * ONE WITNESS PER CHAIN, THE FIRST IN THE SURVEY'S ORDER, because the report names it and two
+    * ONE WITNESS PER PLACE, THE FIRST IN THE SURVEY'S ORDER, because the report names it and two
     * runs over the same vault must name the same one.
     */
-  private def conceptsCorroboratedOnto(read: Vector[SurveyRead]): Map[Vector[String], CardKey] =
+  private def conceptsCorroboratedOnto(read: Vector[SurveyRead]): Map[SubjectPlace, CardKey] =
     read
-      .collect { case SurveyRead.Concluded(c: MoveFinding.Corroborated) =>
+      .collect { case SurveyRead.Concluded(c: MoveFinding.Corroborated) => c }
+      .flatMap { c =>
         val was = segmentsOf(c.stranded.path)
-        (nameSegments(was, nameDepthOf(c.noteType)).dropRight(1), was.dropRight(1), c.candidate)
+        // THE WINDOW TEST GATES THE PLACE RATHER THAN RUNNING BESIDE IT, and the order is
+        // load-bearing now that a place is a value with a precondition: a note-itself card has no
+        // segments at all, so asking where its subject stood — before establishing that it has one —
+        // would reach [[SubjectPlace.of]]'s refusal on an input this function is meant to drop.
+        val declaresASubject = nameSegments(was, nameDepthOf(c.noteType)).dropRight(1)
+        Option.when(declaresASubject.nonEmpty)(
+          SubjectPlace.of(c.stranded.noteId, was.dropRight(1)) -> c.candidate
+        )
       }
-      .filter((declaresASubject, _, _) => declaresASubject.nonEmpty)
-      .map((_, stoodAt, card) => stoodAt -> card)
       .groupMap(_._1)(_._2)
       .view
       .mapValues(_.head)
@@ -1758,7 +1862,9 @@ object MoveEvidence:
         // is not in it, and get "gone" for a subject standing in plain sight. Since the entailment of
         // 2026-09-13 this is what ALL THREE witnesses are asked about, the two vault-wide ones
         // included: `subject` above decides WHETHER the subject changed, and this decides WHERE it
-        // stood, which is the only thing a witness may be matched on.
+        // stood, which is the only thing a witness may be matched on. This run's own pairings read it
+        // through [[SubjectPlace]], which adds the note when this chain has nothing above the subject
+        // — see there for why that is the same rule and not a second one.
         subjectNode = was.dropRight(1),
         // WHERE THE CARD SITS, WHICH IS A PATH AND A NOTE ID BOTH. A card key is both, so a card
         // that crossed into another note is a card whose cluster did not stay — the same answer the
@@ -1928,7 +2034,7 @@ object MoveEvidence:
   private def underTheSurvivalCheck(
       pairing: SurveyRead.AwaitingSurvival,
       census: NodeCensus,
-      corroboratedConcepts: Map[Vector[String], CardKey],
+      corroboratedConcepts: Map[SubjectPlace, CardKey],
       declared: LiveDeclarations,
   ): MoveFinding =
     // THE WAITING PAIRING TRAVELS AS ONE VALUE rather than as its fields, because a positional call
@@ -1937,12 +2043,18 @@ object MoveEvidence:
     val spec        = pairing.spec
     val divergences = pairing.divergences
 
-    // WHERE THE SUBJECT STOOD, WHICH IS WHAT EVERY WITNESS IS ASKED ABOUT. All three compare chains
-    // since the entailment of 2026-09-13: a subject is its chain, so a same-spelled subject standing
-    // somewhere unrelated is silence. The census asks it of this note's own tree, and the other two
-    // reach the whole vault — see this function's docstring for why the note is not part of the
-    // comparison for those.
+    // WHERE THE SUBJECT STOOD, WHICH IS WHAT EVERY WITNESS IS ASKED ABOUT. Since the entailment of
+    // 2026-09-13 no witness may be matched on a bare name: a same-spelled subject standing somewhere
+    // unrelated is silence.
+    //
+    // TWO SPELLINGS OF ONE FACT, AND THEY ARE NOT INTERCHANGEABLE. `stoodAt` is the chain addressed
+    // from the note's root: what the census reads, what the live collection is matched on, and what
+    // the finding REPORTS — a reader is told the concept, not a key. `stoodIn` is the same subject as
+    // a PLACE, which is what THIS RUN'S OWN PAIRINGS are matched on, and it carries the note when the
+    // chain has nothing above the subject to carry it instead. [[SubjectPlace]] is why, including why
+    // the third witness does not read it.
     val stoodAt = pairing.subjectNode
+    val stoodIn = SubjectPlace.of(card.key.noteId, stoodAt)
 
     def reparented(survival: SubjectSurvival) = MoveFinding.Reparented(
       card.key,
@@ -1976,7 +2088,7 @@ object MoveEvidence:
     // later one could contradict an earlier one, only one in which it would be named instead.
     val survived: Option[SubjectSurvival] =
       corroboratedConcepts
-        .get(stoodAt)
+        .get(stoodIn)
         .map(SubjectSurvival.CorroboratedOnto(stoodAt, _))
         .orElse(stillInTheNote)
         .orElse(declared.witnessFor(stoodAt).map(SubjectSurvival.StillInTheCollection(stoodAt, _)))
