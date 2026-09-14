@@ -68,11 +68,11 @@ class RetypingTest extends munit.FunSuite:
 
   def planOf(scan: VaultScan, anki: InMemoryAnki): Plan =
     Planner
-      .plan(scan, observe(anki), _ => defaultDeck, newNoteOf)
+      .plan(scan, observe(anki), _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"unexpected plan errors: ${errs.map(_.describe)}"), identity)
 
   def runReport(p: Plan, anki: InMemoryAnki, policy: RetypePolicy): ExecutionReport =
-    Executor.run(p, anki, policy, Set.empty).fold(e => fail(s"execution aborted entirely: $e"), identity)
+    Executor.run(p, anki, policy, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"execution aborted entirely: $e"), identity)
 
   /** A stand-in for Anki's stock `Basic`: one card template, not cloze, `Front` and `Back` and
     * no `Context`.
@@ -870,7 +870,7 @@ class RetypingTest extends munit.FunSuite:
 
   def runApproving(p: Plan, anki: InMemoryAnki, approved: Set[DecisionHandle]): ExecutionReport =
     Executor
-      .run(p, anki, RetypePolicy.Apply, approved)
+      .run(p, anki, RetypePolicy.Apply, approved, RecordedNowhere.ledger)
       .fold(e => fail(s"execution aborted entirely: $e"), identity)
 
   /** THE POINT OF THE WHOLE FEATURE: the author was shown a price and asked for that change by

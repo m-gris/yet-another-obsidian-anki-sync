@@ -398,3 +398,52 @@ class AsHtmlSuite extends munit.FunSuite:
     assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathInline(""))))), "")
     assertEquals(rendered(Vector(Block.Paragraph(Vector(Inline.MathDisplay(""))))), "")
   }
+
+  // ══════════════════════ READING A RENDERED FIELD BACK AT THE INLINE LEVEL ════
+  //
+  // ADDED 2026-09-14, for `plan/MoveEvidence.scala`'s duplicate-claim veto. One author sentence
+  // reaches a card's Description by two routes — a heading section renders BLOCKS and arrives
+  // inside a paragraph element, a table cell is INLINE and arrives as escaped characters alone —
+  // so a comparison of the two fields was comparing the note's layout rather than its prose.
+  // `Html.inlineReading` is the one thing that closes that gap, and these pin its edges, because
+  // the whole licence for it is that it undoes THIS RENDERER'S framing and nothing else.
+
+  test("one paragraph over the whole field reads as its inner content") {
+    assertEquals(Html.inlineReading(rendered(Vector(p("A durable log.")))), "A durable log.")
+  }
+
+  test("a field a table cell produced is already inline, and comes back unchanged") {
+    // The identity case, and it is the one that makes the two routes meet: the table side is what
+    // the heading side must be read down to.
+    assertEquals(Html.inlineReading("A durable log."), "A durable log.")
+  }
+
+  test("TWO paragraphs are not one paragraph, so the field is left alone") {
+    // The guard that stops this splicing two blocks into one string. Without it `<p>a</p><p>b</p>`
+    // would come back as `a</p><p>b`, which is neither field and compares equal to nothing.
+    val two = rendered(Vector(p("a"), p("b")))
+    assertEquals(two, "<p>a</p><p>b</p>")
+    assertEquals(Html.inlineReading(two), two)
+  }
+
+  test("a field that is not a paragraph at all is left alone, however it starts") {
+    assertEquals(Html.inlineReading(rendered(Vector(Block.Bullets(Vector(li("a")))))), "<ul><li>a</li></ul>")
+    val paragraphThenList = rendered(Vector(p("a"), Block.Bullets(Vector(li("b")))))
+    assertEquals(Html.inlineReading(paragraphThenList), paragraphThenList)
+  }
+
+  test("markup INSIDE the paragraph survives — this removes framing, it does not strip tags") {
+    assertEquals(
+      Html.inlineReading(rendered(Vector(Block.Paragraph(Vector(Inline.Strong(Vector(Inline.Text("bold")))))))),
+      "<strong>bold</strong>",
+    )
+  }
+
+  test("whitespace and entities inside the paragraph are returned byte for byte") {
+    // NOT A NORMALISER, pinned rather than asserted in prose. A no-break space the author typed and
+    // an escaped `<` are content; every comparison downstream rests on them surviving intact.
+    // SPELT OUT AS A CODE POINT: a literal no-break space here would be invisible to the next
+    // reader, and it is the whole subject of the assertion.
+    val authors = s"a${0x00a0.toChar}b &lt;c&gt;  d"
+    assertEquals(Html.inlineReading(s"<p>$authors</p>"), authors)
+  }

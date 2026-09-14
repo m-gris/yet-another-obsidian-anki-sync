@@ -1449,3 +1449,145 @@ class VaultWalkerTest extends munit.FunSuite:
       "an author who wrote a heading was told their note has none",
     )
   }
+
+  // ================================================ the node census ====
+
+  /** THE WALK'S READING OF A NOTE'S NODE TREE, asserted through the real walk rather than over
+    * hand-built chains.
+    *
+    * WHY THESE TESTS ARE HERE AND NOT BESIDE `NodeCensus` ITSELF. That suite pins what the census
+    * does with the material it is handed; this one pins that the material is the same tree the KEYS
+    * were derived from. A census that disagreed with the key derivation about what counts as a
+    * heading would answer "the old concept survives" about a document the keys never came from,
+    * and what follows from that answer is review history moved onto a different card.
+    */
+  def censusNodes(index: VaultIndex, id: String): Set[Vector[String]] =
+    val noteId = NoteId.fromFrontmatter(id).getOrElse(fail(s"unusable test id '$id'"))
+    index.census.nodesOf(noteId) match
+      case obsidiananki.plan.NodeCensus.Answer.Surveyed(nodes) => nodes
+      case obsidiananki.plan.NodeCensus.Answer.Unsurveyable(why) =>
+        fail(s"expected a surveyed census for '$id': $why")
+
+  test("an UNMARKED heading that makes no card is still a node of its note") {
+    // The half of the census no key can supply. `## Cost` carries prose and no marker, so nothing
+    // in the scan mentions it — and a concept heading that kept only such a section would look
+    // deleted to anything reading keys alone.
+    val index = scan(
+      "Kafka.md" -> note("k1", "# Kafka\n\n## Cost\n\nIt costs.\n\n## Definition #flashcard/cdd/2way\n\nA log.\n")
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+    assert(censusNodes(index, "k1").contains(Vector("kafka", "cost")), censusNodes(index, "k1"))
+  }
+
+  test("a MARKED heading's own key path is a node too, so the census and the keys agree") {
+    val index = scan(
+      "Kafka.md" -> note("k1", "# Kafka\n\n## Definition #flashcard/cdd/2way\n\nA log.\n")
+    )
+    assertEquals(
+      index.scan.specs.map(_.key.path.render),
+      Vector("kafka / definition"),
+      "the fixture's own key is not what this test assumes",
+    )
+    assert(censusNodes(index, "k1").contains(Vector("kafka", "definition")))
+  }
+
+  test("a table's ROW is a node, arriving from its pair cards rather than from any heading") {
+    val index = scan(
+      "T.md" -> note(
+        "t1",
+        "# Trade-offs\n\n## Cost / benefit #flashcard/table/3way\n\n" +
+          "| Pattern | Benefit |\n|---|---|\n| Queue | Decoupling |\n",
+      )
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+    assert(
+      censusNodes(index, "t1").contains(Vector("trade-offs", "cost / benefit", "queue")),
+      censusNodes(index, "t1"),
+    )
+  }
+
+  /** THE CANONICAL SEGMENTS OF A CARD'S PATH, so a test can compare what the census says about a row
+    * against what the KEY DERIVATION said about the same row. The comparison is the point: these are
+    * two readings of one table cell, and the census is worth nothing if they disagree.
+    */
+  def keySegments(key: CardKey): Vector[String] = key.path match
+    case CardPath.Headings(headings) => headings.segments.toVector.map(_.value)
+    case other => fail(s"the fixture must produce heading-path keys, not ${other.render}")
+
+  test("a table row whose value cells are ALL EMPTY is still a node, though no card is keyed under it") {
+    // RULED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "a standing table-row subject
+    // counts as the old subject standing"): the table analogue of the concept heading that kept only
+    // prose. Emptying a row's value cells destroys every card under it, so the row survives in no
+    // key anywhere — and the survival check would then read a value moved onto ANOTHER row as a
+    // rename of this one and move its review history. The same event written as headings parks
+    // (deck S24C); written as a table it followed.
+    val index = scan(
+      "T.md" -> note(
+        "t1",
+        "## Cost / benefit #flashcard/table\n\n" +
+          "| Pattern | Benefit | Cost |\n|---|---|---|\n" +
+          "| Queue |  |  |\n| Broker | Load absorption | Ops overhead |\n",
+      )
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+
+    // THE VACUITY GUARD, and without it this test would pass on the census half that already
+    // existed. A row that still has a card contributes its node as that card's key PREFIX; the
+    // whole question here is the row that has no card, so the fixture must contain no key that
+    // mentions it.
+    assert(
+      index.scan.specs.forall(s => !keySegments(s.key).contains("queue")),
+      s"the fixture must leave 'queue' in no key at all: ${index.scan.specs.map(_.key.path.render)}",
+    )
+
+    assert(
+      censusNodes(index, "t1").contains(Vector("cost / benefit", "queue")),
+      censusNodes(index, "t1"),
+    )
+  }
+
+  test("an emptied row's subject is canonicalised exactly as a keyed row's subject is") {
+    // TWO READINGS OF ONE KIND OF CELL, and they have to agree. The row that still has cards
+    // anchors what the KEY derivation makes of a subject cell; the emptied row is read by the
+    // census alone. Both cells here carry markup and mixed case, so a census reading the cell as a
+    // card FACE shows it — escaped, or with its markup left in — or one that skipped
+    // canonicalisation would disagree with the anchor and this test would say so.
+    val index = scan(
+      "T.md" -> note(
+        "t1",
+        "## Cost / benefit #flashcard/table\n\n" +
+          "| Pattern | Benefit | Cost |\n|---|---|---|\n" +
+          "| **Message Queue** |  |  |\n| *Shared Broker* | Load absorption | Ops overhead |\n",
+      )
+    )
+    assertEquals(index.scan.failures, Vector.empty)
+
+    val keyedRow = index.scan.specs
+      .map(s => keySegments(s.key))
+      .filter(_.length == 3)
+      .map(_.dropRight(1))
+      .distinct
+    assertEquals(keyedRow, Vector(Vector("cost / benefit", "shared broker")))
+
+    val nodes = censusNodes(index, "t1")
+    assert(nodes.contains(keyedRow.head), s"the keyed row's own parent is not a node: $nodes")
+    assert(nodes.contains(Vector("cost / benefit", "message queue")), nodes)
+  }
+
+  test("a note whose heading tree could not be derived has NO census answer, not an empty one") {
+    // A heading that extracts to nothing stops the key derivation and is reported
+    // `KeyUnderivableInFile`; a census read off that tree would be describing a different file.
+    val index = scan("N.md" -> note("n1", "# #flashcard/1way\n\nBody.\n"))
+    assert(
+      index.scan.failures.exists {
+        case _: BuildFailure.KeyUnderivableInFile => true
+        case _                                    => false
+      },
+      s"the fixture must make the note's keys underivable: ${index.scan.failures}",
+    )
+    val noteId = NoteId.fromFrontmatter("n1").getOrElse(fail("unusable id"))
+    index.census.nodesOf(noteId) match
+      case obsidiananki.plan.NodeCensus.Answer.Unsurveyable(_) => ()
+      case obsidiananki.plan.NodeCensus.Answer.Surveyed(nodes) =>
+        fail(s"a note whose keys are underivable was surveyed anyway: $nodes")
+  }

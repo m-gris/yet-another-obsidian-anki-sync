@@ -68,9 +68,9 @@ class DuplicateIdentityTest extends munit.FunSuite:
     val anki = InMemoryAnki()
     val scan = VaultScan.from(Vector(specOf(k, "the original")), Vector.empty)
     val plan = Planner
-      .plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf)
+      .plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(e => fail(s"setup plan failed: $e"), identity)
-    Executor.run(plan, anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"setup failed: $e"), identity)
+    Executor.run(plan, anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"setup failed: $e"), identity)
 
     anki
       .addNote(
@@ -100,7 +100,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
     val anki = collidingCollection()
     val scan = VaultScan.from(Vector(specOf(k, "the original")), Vector.empty)
 
-    Planner.plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf) match
+    Planner.plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan)) match
       case Left(errors) =>
         val described = errors.map(_.describe).mkString("\n")
         assert(
@@ -119,7 +119,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
     val ids  = Observer.observe(anki).toOption.get.notes.filter(_.key == k).map(_.note.id.value)
     val scan = VaultScan.from(Vector(specOf(k, "the original")), Vector.empty)
 
-    Planner.plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf) match
+    Planner.plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan)) match
       case Left(errors) =>
         val described = errors.map(_.describe).mkString("\n")
         ids.foreach(id => assert(described.contains(id.toString), s"note $id unnamed:\n$described"))
@@ -133,7 +133,7 @@ class DuplicateIdentityTest extends munit.FunSuite:
     val anki = InMemoryAnki()
     val scan = VaultScan.from(Vector(specOf(k, "the original")), Vector.empty)
     val plan = Planner
-      .plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf)
+      .plan(scan, Observer.observe(anki).toOption.get, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(e => fail(s"an ordinary collection was refused: ${e.map(_.describe)}"), identity)
     assertEquals(plan.actions.size, 1)
   }

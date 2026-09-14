@@ -208,6 +208,18 @@ object Planner:
       case VaultTag.Unusable(_, _) => Vector.empty
     }
 
+  /** The `src::` tags of a note written before the identity moved into a field.
+    *
+    * _Hoisted out of [[plan]] on 2026-09-05, where it was a local `def` beside the identity
+    * backfill. It has a second caller now: a reassignment writes an identity into the field and
+    * must clear these by the same action, for the same reason the backfill does — a note whose
+    * field says one key and whose tag says another is a note two readers can disagree about._
+    */
+  private def legacyTagsOn(card: ObservedCard): Vector[OwnedTag] =
+    card.note.tags
+      .filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.SrcPrefix}::"))
+      .map(OwnedTag.unsafeFromString)
+
   /** Reject a key derived by more than one source, before anything is written.
     *
     * The id half of the key is validated at construction and the path half by the encoding,
@@ -287,6 +299,11 @@ object Planner:
       observed: ObservedState,
       deckOf: CardKey => DeckPath,
       newNoteOf: (SourcedSpec, DeckPath, String) => NewNote,
+      // THE VAULT'S NODE TREE, PASSED THE WAY `deckOf` IS. Both are derived from the same walk
+      // and neither is a property of any spec, so both are the caller's to hand over — see
+      // `extract/VaultWalker.scala`'s `VaultIndex`. The move survey needs it to tell a relabelled
+      // subject from a re-parented card; nothing else here reads it.
+      census: NodeCensus,
   ): Either[Vector[PlanError], Plan] =
     // BOTH SIDES ARE CHECKED BEFORE EITHER IS REPORTED, so one run tells the author
     // everything that needs fixing rather than revealing the Anki-side collision only after
@@ -315,6 +332,78 @@ object Planner:
       case Left(collisions)                => Left(duplicates ++ collisions)
       case Right(_) if duplicates.nonEmpty => Left(duplicates)
       case Right(byKey) =>
+        // ── DOES THE VAULT STILL ACCOUNT FOR THIS KEY? ASKED ONCE ───────────────────────
+        //
+        // The four conditions and the heading-path shelter rule that used to sit inline in the
+        // orphan branch below are now one named value with two readers — that branch, and the
+        // move survey immediately after, which has to know which notes the vault has stopped
+        // claiming before it can say anything about where they went. Restating the rule in the
+        // second place is how two answers to one question come to disagree, and the answer this
+        // one gets wrong SUSPENDS LIVE CARDS.
+        val accounting = VaultAccounting.of(scan)
+
+        // ── WHAT MOVED, DECIDED BEFORE ANYTHING ELSE IS PLANNED ─────────────────────────
+        //
+        // WHY IT COMES FIRST. A moved heading is two events that look unrelated from either side
+        // — a key the vault no longer produces, and a key no note holds — and the plan for each
+        // half is written by a different branch below. Deciding the pairing up here is what lets
+        // the `Create` branch emit a reassignment INSTEAD of a create, and the orphan branch skip
+        // the note that was reassigned INSTEAD of flagging and suspending it. Computing it later
+        // would leave both halves already planned: the run would create a duplicate note at the
+        // new key and suspend the very card it had just reattached.
+        //
+        // BOTH POPULATIONS ARE SURVEYED — notes this run would newly flag, AND notes an earlier
+        // run already parked. The retroactive half is the caller's choice by design
+        // (`MoveEvidence.survey`), and it is taken because a parked orphan is the certain loss
+        // Marc's 2026-09-05 ruling weighs: it is suspended, its history is stranded, and no edit
+        // to the vault will free it. `docs/findings/EVOLVABILITY.md` §4A names working
+        // retroactively as the property that makes this approach worth more than a tag scheme.
+        //
+        // A PARKED NOTE WHOSE KEY HAS COME BACK IS NOT STRANDED, which `accountsFor` decides
+        // before either filter — the planner is about to unflag it, and offering it a pairing
+        // would invent a move out of a return.
+        //
+        // ON A PARTIAL SCAN ONLY THE ALREADY-PARKED HALF IS SURVEYED, for the reason orphan
+        // inference itself is suppressed: a key absent from a vault that was not read in full
+        // proves nothing, while a note's own `orphaned::` tag was written by a run that had read
+        // one.
+        val stranded = observed.notes.filter { card =>
+          !accounting.accountsFor(card.key) && (card.isFlaggedOrphan || scan.canInferOrphans)
+        }
+        val unclaimed = scan.specs.filterNot(sourced => byKey.contains(sourced.key))
+
+        // ── AND WHAT THE COLLECTION ITSELF DECLARES, WHICH IS THE OTHER HALF OF THE SPLIT ──
+        //
+        // The complement of `stranded` under the SAME predicate, which is what makes the two
+        // disjoint by construction rather than by discipline: a note the vault still accounts for is
+        // one this run is not orphaning, so its `Concept` is a label the collection currently
+        // stands behind. `MoveEvidence.survey` refuses an overlap outright, and its docstring says
+        // what an overlap would silently cost.
+        //
+        // NOT THE COMPLEMENT OF `stranded` ITSELF, and the gap is deliberate. On a partial scan an
+        // unflagged note whose key is missing is in NEITHER population — nothing may be concluded
+        // from its absence, so it is neither explained nor allowed to witness.
+        val declared =
+          LiveDeclarations.of(observed.notes.filter(card => accounting.accountsFor(card.key)))
+
+        val evidence = MoveEvidence.survey(stranded, unclaimed, census, declared)
+
+        val strandedByNoteId = stranded.map(card => card.note.id -> card).toMap
+
+        // ONLY THE CORROBORATED FINDINGS REACH THIS MAP, and the `collect` is the ONE place that
+        // is decided. Every other shape of evidence — ambiguous, contested, unaccounted-for,
+        // unexplained, incomparable — travels to the report on `Plan.moveEvidence` and changes
+        // nothing about the collection. The type refuses the mistake as well: `Reassign` carries
+        // a `MoveFinding.Corroborated`, so no other case can be widened into one.
+        //
+        // KEYED BY THE CANDIDATE, because that is the key the `Create` branch is about to ask
+        // about. Mutual uniqueness means no two findings name the same candidate, so nothing is
+        // lost by keying on it.
+        val reassignmentFor: Map[CardKey, MoveFinding.Corroborated] =
+          evidence.collect { case c: MoveFinding.Corroborated => c.candidate -> c }.toMap
+
+        val reassignedNotes: Set[AnkiNoteId] = reassignmentFor.values.map(_.noteId).toSet
+
         val perSpec = scan.specs.flatMap { sourced =>
           val key  = sourced.key
           val sha  = contentHash(sourced.spec)
@@ -322,7 +411,45 @@ object Planner:
 
           byKey.get(key) match
             case None =>
-              Vector(SyncAction.Create(key, newNoteOf(sourced, deck, sha)))
+              reassignmentFor.get(key) match
+                case None =>
+                  Vector(SyncAction.Create(key, newNoteOf(sourced, deck, sha)))
+
+                // A NOTE ALREADY HOLDS THIS CARD; IT SIMPLY DOES NOT KNOW IT YET. So no note is
+                // created — creating one is precisely the failure being fixed, and it would leave
+                // two notes saying the same thing on two schedules with nothing comparing them.
+                //
+                // UNFLAG FIRST, REASSIGN SECOND, and the order is the pessimistic one this file
+                // and the executor both use. Interrupted between them, the note is unsuspended
+                // and untagged while still claiming its OLD key — so the next run finds it
+                // stranded again, surveys it again, and does the whole thing again. The reverse
+                // order would leave the note claiming its NEW key while still carrying
+                // `orphaned::{old key}`, and no later run would ever clear that tag: the unflag
+                // the planner would then emit names the NEW key, which is not the tag that is
+                // there.
+                case Some(corroborated) =>
+                  val card = strandedByNoteId.getOrElse(
+                    corroborated.noteId,
+                    sys.error(
+                      s"the move survey corroborated Anki note ${corroborated.noteId.value}, " +
+                        "which is not in the stranded set it was given — this is a defect in " +
+                        "this tool"
+                    ),
+                  )
+                  Option
+                    .when(card.isFlaggedOrphan)(
+                      SyncAction.Unflag(corroborated.stranded, card.note.id)
+                    )
+                    .toVector :+
+                    corroborated.reassignment(
+                      sourced,
+                      carried(sourced.vaultTags),
+                      legacyTagsOn(card),
+                      // `None` MEANS THE NOTE IS ALREADY WHERE THE VAULT SAYS IT SHOULD BE, as it
+                      // does on `Retype` — a reassignment that issued a deck move changing
+                      // nothing would be a write nobody asked for.
+                      Option.when(!card.deck.contains(deck))(deck),
+                    )
 
             case Some(existing) =>
               // The note is on the wrong note type. NOT an Update: an ordinary field write
@@ -494,49 +621,27 @@ object Planner:
             // broken the tool cannot tell a deleted row from one it failed to read — and it
             // converges: the moment the section builds again, a genuinely absent card is flagged
             // as it always was.
-            val failed      = scan.failedKeys
-            val suppressed  = scan.suppressedNoteIds
-            val builtKeys   = scan.builtKeys
-
-            // SHELTERING IS A HEADING-PATH RELATION, and the other kinds are not "not yet
-            // handled" — they are outside the relation entirely.
+            // ASKED OF [[VaultAccounting]] RATHER THAN SPELLED OUT HERE, since 2026-09-05. The
+            // four conditions and the heading-path shelter rule that used to sit inline are one
+            // named value with two callers now — this, and the move survey above, which must
+            // know which notes the vault has stopped claiming before it can say anything about
+            // where they went. Restating the rule in the second place is how two answers to one
+            // question come to disagree, and the answer this one gets wrong suspends live cards.
             //
-            // The rule protects cards whose key extends the key of a section that failed to
-            // build, because a broken section must not read as a deleted one. A frontmatter
-            // property is not inside any section: it is read from the note's frontmatter, which
-            // parses independently of whether the body's markdown does. A section failing says
-            // nothing about it, so sheltering it would hide a genuinely deleted property. The
-            // same holds for the note-itself card.
-            def underAFailedSection(card: CardKey): Boolean =
-              (card.path match
-                case CardPath.Headings(cardPath) =>
-                  failed.exists { f =>
-                    f.noteId == card.noteId && (f.path match
-                      case CardPath.Headings(failedPath) =>
-                        failedPath.segments.length < cardPath.segments.length &&
-                          cardPath.segments.toVector.startsWith(failedPath.segments.toVector)
-                      case CardPath.Property(_) | CardPath.Note | CardPath.Block(_) => false)
-                  }
-
-                // ── A BLOCK CARD IS OUTSIDE THE RELATION, AND THAT IS A COST RATHER THAN A
-                // TIDY FIT. A property and the note-itself card genuinely sit outside any
-                // section. A BLOCK does not — it is inside one — but its key deliberately
-                // records no heading chain, because carrying one would make moving a paragraph
-                // between headings re-key its card, which is the fragility the `^blockid`
-                // anchor exists to remove.
-                //
-                // SO THE RELATION CANNOT BE COMPUTED FOR IT, and a block card inside a section
-                // that failed to build reads as deleted rather than as sheltered. That is a
-                // real gap, not a case awaiting an implementation, and it is the honest price
-                // of a location-independent identity. Filed rather than papered over.
-                case CardPath.Property(_) | CardPath.Note | CardPath.Block(_) => false)
-
+            // THE TWO CONDITIONS THAT STAY HERE ARE THE TWO THAT ARE NOT ABOUT THE VAULT.
+            // Whether a note is ALREADY flagged says nothing about what the markdown holds; it
+            // says this run has nothing left to do about it — and the survey deliberately wants
+            // those notes while this branch deliberately does not.
+            //
+            // AND A NOTE THIS RUN IS REASSIGNING MUST NOT BE FLAGGED, which is the whole point of
+            // deciding the pairing before the plan is written. Its key really is absent from the
+            // vault, so every condition above says "orphan" — but the card is about to be given
+            // the key the vault DOES produce, and flagging it would suspend the very card the run
+            // just reattached and then leave a stale `orphaned::` tag on a live note.
             val orphans = observed.notes.filter { card =>
-              !builtKeys.contains(card.key) &&
-              !failed.contains(card.key) &&
-              !underAFailedSection(card.key) &&
-              !suppressed.contains(card.key.noteId) &&
-              !card.isFlaggedOrphan
+              !accounting.accountsFor(card.key) &&
+              !card.isFlaggedOrphan &&
+              !reassignedNotes.contains(card.note.id)
             }
             (orphans.map(c => SyncAction.Flag(c.key, c.note.id)), OrphanInference.Computed)
 
@@ -576,14 +681,16 @@ object Planner:
         def fieldIsEmpty(card: ObservedCard): Boolean =
           !card.note.fields.exists((name, value) => name == Marker.IdentityField && value.nonEmpty)
 
-        def legacyTagsOn(card: ObservedCard): Vector[OwnedTag] =
-          card.note.tags
-            .filter(_.toLowerCase(java.util.Locale.ROOT).startsWith(s"${OwnedTag.SrcPrefix}::"))
-            .map(OwnedTag.unsafeFromString)
-
+        // AND A NOTE BEING REASSIGNED IS EXCLUDED BY ITS NOTE ID, WHICH `updatedKeys` CANNOT DO.
+        // Every other exclusion here is by KEY, and a reassigned note is the one case where the
+        // two sides disagree about what its key is: the observation says the OLD key, while the
+        // action about it is filed under the NEW one. So `updatedKeys` misses it — and the
+        // backfill would then write the OLD identity back into the field the reassignment had
+        // just set, undoing the whole thing in the same run, silently.
         val backfill = observed.notes.collect {
           case card
-              if !updatedKeys.contains(card.key) && canHoldTheField(card) &&
+              if !updatedKeys.contains(card.key) && !reassignedNotes.contains(card.note.id) &&
+                canHoldTheField(card) &&
                 (fieldIsEmpty(card) || legacyTagsOn(card).nonEmpty) =>
             SyncAction.CarryIdentity(
               card.key,
@@ -606,5 +713,10 @@ object Planner:
             inference,
             scan.failures,
             observed.parkedOrphans.map(_.key),
+            // EVERY FINDING, NOT ONLY THE ONES NOTHING WAS DONE ABOUT. The corroborated ones are
+            // the same values the `Reassign` actions carry; having the whole survey in one place
+            // is what lets a report answer "what did this run make of the notes that went
+            // missing" without subtracting one vector from another.
+            evidence,
           )
         )

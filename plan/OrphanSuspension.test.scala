@@ -79,9 +79,9 @@ class OrphanSuspensionTest extends munit.FunSuite:
 
   def runSync(anki: InMemoryAnki, scan: VaultScan): ExecutionReport =
     val plan = Planner
-      .plan(scan, observe(anki), _ => deck, newNoteOf)
+      .plan(scan, observe(anki), _ => deck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
-    Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty).fold(e => fail(s"run failed: $e"), identity)
+    Executor.run[Result](plan, anki, RetypePolicy.Apply, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"run failed: $e"), identity)
 
   def cardsOf(anki: InMemoryAnki): Vector[AnkiCardId] =
     val ids = anki.ownedNotes.fold(e => fail(s"$e"), identity)
@@ -418,7 +418,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
       Vector(BuildFailure.KeyKnown(section, SourceRef("Note.md", 1, SourceKind.Heading), "boom")),
     )
     val plan = Planner
-      .plan(broken, observe(anki), _ => deck, newNoteOf)
+      .plan(broken, observe(anki), _ => deck, newNoteOf, HandBuiltCensus.of(broken))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
     assertEquals(
@@ -444,7 +444,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
       Vector(BuildFailure.KeyKnown(broken, SourceRef("Other.md", 1, SourceKind.Heading), "boom")),
     )
     val plan = Planner
-      .plan(scan, observe(anki), _ => deck, newNoteOf)
+      .plan(scan, observe(anki), _ => deck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
     assert(
@@ -468,7 +468,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
       ),
     )
     val plan = Planner
-      .plan(scan, observe(anki), _ => deck, newNoteOf)
+      .plan(scan, observe(anki), _ => deck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
     assert(

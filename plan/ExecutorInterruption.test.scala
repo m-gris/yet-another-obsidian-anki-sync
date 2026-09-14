@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import obsidiananki.anki.*
 import obsidiananki.model.*
 import obsidiananki.plan.SectionChain.{NoRecall, NoSectionChain}
+import scala.collection.mutable.ListBuffer
 
 /** Interruption DURING a single action, which is the gap every other suite leaves open.
   *
@@ -37,8 +38,19 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     * The refusal is reported as [[AnkiError.UnsupportedOperation]] because that is exactly
     * what it means here — the call did not happen. `Executor.run` collects it as an
     * `ExecutionFailure` and carries on, which is the behaviour a real partial failure gets.
+    *
+    * IT ALSO NOTES EACH WRITE ON A SHARED `timeline`, which is how the ledger's ordering becomes
+    * observable without a second decorator. Every write in the algebra already funnels through the
+    * one `write` method below — that is what makes the budget trustworthy — so the same funnel
+    * serves to say WHEN a write happened relative to the append. A note is made only for a write
+    * that is actually performed: a refused call did not happen, and recording it would make an
+    * interrupted run look as though it had written more than it did.
     */
-  final class InterruptAfter(underlying: InMemoryAnki, budget: Int) extends Anki[Result]:
+  final class InterruptAfter(
+      underlying: InMemoryAnki,
+      budget: Int,
+      timeline: ListBuffer[String] = ListBuffer.empty,
+  ) extends Anki[Result]:
     private var writes = 0
 
     private def write[A](op: => Result[A]): Result[A] =
@@ -46,6 +58,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
         Left(AnkiError.UnsupportedOperation("interrupted", s"fault injected after $budget writes"))
       else
         writes += 1
+        timeline += "anki"
         op
 
     def noteTypeNames: Result[Vector[String]]                       = underlying.noteTypeNames
@@ -161,7 +174,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   def planOf(scan: VaultScan, anki: Anki[Result]): Plan =
     val observed = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     Planner
-      .plan(scan, observed, _ => defaultDeck, newNoteOf)
+      .plan(scan, observed, _ => defaultDeck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
   def storedBack(anki: InMemoryAnki): String =
@@ -188,7 +201,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
 
       // Establish the note with its original content, uninterrupted.
       val before = scanOf(k, "Temporal coupling", "OLD BODY.")
-      Executor.run(planOf(before, anki), anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"setup aborted: $e"), identity)
+      Executor.run(planOf(before, anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"setup aborted: $e"), identity)
       assertEquals(storedBack(anki), "OLD BODY.", s"[budget=$budget] setup did not take")
 
       // Now edit it, and interrupt the resulting Update after `budget` writes.
@@ -196,13 +209,13 @@ class ExecutorInterruptionTest extends munit.FunSuite:
       val interrupted = planOf(after, anki)
       assertEquals(interrupted.actions.size, 1, s"[budget=$budget] expected exactly one Update")
       Executor
-        .run(interrupted, InterruptAfter(anki, budget), RetypePolicy.Defer, Set.empty)
+        .run(interrupted, InterruptAfter(anki, budget), RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger)
         .fold(e => fail(s"[budget=$budget] execution aborted entirely: $e"), identity)
 
       // Recovery: whatever state the interruption left, a later run must repair it. Two
       // passes, because a single pass repairing it is a stronger claim than the law makes.
-      Executor.run(planOf(after, anki), anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"recovery aborted: $e"), identity)
-      Executor.run(planOf(after, anki), anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"recovery aborted: $e"), identity)
+      Executor.run(planOf(after, anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"recovery aborted: $e"), identity)
+      Executor.run(planOf(after, anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"recovery aborted: $e"), identity)
 
       assertEquals(
         storedBack(anki),
@@ -217,10 +230,10 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   test("CONTROL: with no interruption the update simply applies") {
     val anki = InMemoryAnki()
     val before = scanOf(k, "Temporal coupling", "OLD BODY.")
-    Executor.run(planOf(before, anki), anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"$e"), identity)
+    Executor.run(planOf(before, anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"$e"), identity)
 
     val after = scanOf(k, "Temporal coupling", "NEW BODY.")
-    val report = Executor.run(planOf(after, anki), anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"$e"), identity)
+    val report = Executor.run(planOf(after, anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"$e"), identity)
 
     assert(report.failures.isEmpty, s"an uninterrupted update reported failures: ${report.failures}")
     assertEquals(storedBack(anki), "NEW BODY.")
@@ -234,7 +247,7 @@ class ExecutorInterruptionTest extends munit.FunSuite:
   test("a note carrying TWO content hashes is treated as changed, and heals") {
     val anki = InMemoryAnki()
     val scan = scanOf(k, "Temporal coupling", "BODY.")
-    Executor.run(planOf(scan, anki), anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"$e"), identity)
+    Executor.run(planOf(scan, anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"$e"), identity)
 
     val id = Observer.observe(anki).toOption.get.notes.head.note.id
     anki.addTags(Vector(id), Vector(OwnedTag.sha("deadbeef"))).fold(e => fail(s"$e"), identity)
@@ -242,6 +255,79 @@ class ExecutorInterruptionTest extends munit.FunSuite:
     val plan = planOf(scan, anki)
     assert(plan.actions.nonEmpty, "a note with two content hashes was reported as up to date")
 
-    Executor.run(plan, anki, RetypePolicy.Defer, Set.empty).fold(e => fail(s"$e"), identity)
+    Executor.run(plan, anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"$e"), identity)
     assertEquals(planOf(scan, anki).actions, Vector.empty, "the ambiguity did not heal")
+  }
+
+  // ══════════════════════════ THE SAME LAW, ONE LAYER OUT: THE RUN LEDGER ════
+  //
+  // This suite exists for the rule that an interruption must leave work to be REDONE rather than
+  // BELIEVED DONE, and the ledger's ordering is that rule applied to the audit trail. Recorded
+  // before the first write, an interruption can leave a line whose reassignment never happened —
+  // visible, and undone by the next run finding the note still stranded. Written after, an
+  // interruption can move somebody's review history with nothing anywhere saying it happened, which
+  // Marc's ruling of 2026-09-12 forbids outright. The two tests below are those two halves.
+
+  /** The same card, one parent over: `## Temporal coupling` moved from under `# Coupling` to under
+    * `# Architecture`. Its own name, its body and its breadcrumb are untouched, so the pairing
+    * corroborates and the run plans a reassignment — which is the only action that earns a line.
+    */
+  val movedK: CardKey = key("n1", "Architecture", "Temporal coupling")
+
+  test("SAFETY: every ledger line is recorded BEFORE the first write reaches Anki") {
+    val anki = InMemoryAnki()
+    Executor
+      .run(planOf(scanOf(k, "Temporal coupling", "BODY."), anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger)
+      .fold(e => fail(s"setup aborted: $e"), identity)
+
+    val plan = planOf(scanOf(movedK, "Temporal coupling", "BODY."), anki)
+    assert(
+      plan.actions.exists { case _: SyncAction.Reassign => true; case _ => false },
+      s"the fixture was supposed to plan a reassignment: ${plan.actions}",
+    )
+
+    // ONE TIMELINE, SHARED, rather than two counters compared afterwards: the order is the claim, so
+    // the observation has to be of a single sequence.
+    val timeline = ListBuffer.empty[String]
+    val watched  = InterruptAfter(anki, budget = Int.MaxValue, timeline = timeline)
+    Executor
+      .run(plan, watched, RetypePolicy.Defer, Set.empty, RecordingLedger[Result](Right(()), timeline))
+      .fold(e => fail(s"execution aborted: $e"), identity)
+
+    assertEquals(timeline.headOption, Some("ledger"), s"the trail was not written first: $timeline")
+    // THE NON-VACUITY HALF, AND IT IS NOT OPTIONAL. Without it this passes on a run that wrote
+    // nothing at all, which is the shape of green that proves nothing — the assertion above would
+    // hold over a timeline of exactly one element.
+    assert(timeline.contains("anki"), s"nothing was ever written, so the order proves nothing: $timeline")
+  }
+
+  test("a ledger that cannot be appended to aborts the run, and NOTHING is written") {
+    val anki = InMemoryAnki()
+    Executor
+      .run(planOf(scanOf(k, "Temporal coupling", "BODY."), anki), anki, RetypePolicy.Defer, Set.empty, RecordedNowhere.ledger)
+      .fold(e => fail(s"setup aborted: $e"), identity)
+
+    val before = Observer.observe(anki).fold(e => fail(s"$e"), identity)
+    val plan   = planOf(scanOf(movedK, "Temporal coupling", "BODY."), anki)
+
+    val outcome = Executor.run(
+      plan,
+      anki,
+      RetypePolicy.Defer,
+      Set.empty,
+      // The refusal travels as an `AnkiError` only because that is the one channel this `F` has; in
+      // production it is an `IO` failure carrying `cli.LedgerUnwritable`. What is asserted below is
+      // the state of the collection, never which error came back.
+      RefusingLedger[Result](Left(AnkiError.UnsupportedOperation("record", "fault injected"))),
+    )
+
+    assert(outcome.isLeft, s"an unrecordable run reported success: $outcome")
+
+    // ASSERTED ON THE DATA, following this file's own header: the failure being hunted is a note
+    // that was changed anyway, and only the stored state can say. The note must still claim the key
+    // it had, which is precisely what the reassignment would have rewritten.
+    val after = Observer.observe(anki).fold(e => fail(s"$e"), identity)
+    assertEquals(after.notes.map(_.key), Vector(k), "the reassignment happened despite the refusal")
+    assertEquals(after.notes.map(_.note.fields), before.notes.map(_.note.fields))
+    assertEquals(after.notes.map(_.note.tags), before.notes.map(_.note.tags))
   }

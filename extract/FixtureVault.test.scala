@@ -152,7 +152,7 @@ class FixtureVaultTest extends munit.FunSuite:
     def planNow(): Plan =
       val observed = Observer.observe(anki).fold(e => fail(s"observe: $e"), identity)
       Planner
-        .plan(index.scan, observed, index.deckOf(deckRoot), newNoteOf)
+        .plan(index.scan, observed, index.deckOf(deckRoot), newNoteOf, index.census)
         .fold(errs => fail(s"plan errors: ${errs.map(_.describe).mkString("\n")}"), identity)
 
     val first = planNow()
@@ -161,7 +161,7 @@ class FixtureVaultTest extends munit.FunSuite:
     // ever DID arise here it would be attempted and reported, rather than quietly set aside
     // and then reappearing as a non-empty second plan with no explanation.
     val failures =
-      Executor.run(first, anki, RetypePolicy.Apply, Set.empty).fold(e => fail(s"execute: $e"), identity).failures
+      Executor.run(first, anki, RetypePolicy.Apply, Set.empty, RecordedNowhere.ledger).fold(e => fail(s"execute: $e"), identity).failures
 
     // Cloze sections are not implemented yet, so they arrive as build failures rather than
     // specs — which must not stop the rest of the vault from syncing.

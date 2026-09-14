@@ -367,6 +367,51 @@ object Html:
   def element(t: Tag, inner: Fragment): Fragment =
     s"<${name(t)}>$inner</${name(t)}>"
 
+  /** A RENDERED FIELD READ AT THE INLINE LEVEL — this renderer's own paragraph framing taken back
+    * off, and not one other byte touched.
+    *
+    * ═══ WHY ANYTHING NEEDS THIS ═══
+    *
+    * The same author sentence reaches a card's field by two routes. A heading section is a sequence
+    * of BLOCKS, so `AsHtml.plain` wraps one sentence of prose in a paragraph element
+    * (`extract/Extractor.scala`). A table cell is INLINE and has no block to render, so
+    * `extract/Tables.scala`'s `CellDisplay.Escaped` emits the escaped characters alone. Both are
+    * right at what they do, and the consequence is that one sentence has two field spellings
+    * according to how its author chose to lay the note out.
+    *
+    * Anything comparing two fields ACROSS those two shapes is therefore comparing the shapes rather
+    * than the sentences. `plan/MoveEvidence.scala`'s duplicate-claim veto is the case that forced
+    * this: it exists to catch one description answering two concepts, and between a heading card and
+    * a table card it could never fire.
+    *
+    * ═══ WHAT IT IS NOT ═══
+    *
+    * NOT A NORMALISER. It removes framing THIS OBJECT PUT ON and returns everything else verbatim —
+    * no trimming, no whitespace collapsing, no Unicode normalisation, no tag stripping. That is the
+    * discipline [[escape]] states for itself and for the same reason: two descriptions differing by a
+    * byte the AUTHOR wrote are two different descriptions, and every comparison in this project rests
+    * on that floor.
+    *
+    * NOT AN INVERSE OF [[render]] EITHER, and it does not pretend to be: a field holding several
+    * blocks, a list or a table comes back untouched. What it undoes is exactly one application of
+    * [[element]] with [[Tag.P]] over the WHOLE fragment, which is the one divergence the two routes
+    * above manufacture.
+    *
+    * ═══ WHY THE GUARD IS ENOUGH ═══
+    *
+    * A closing paragraph tag INSIDE the fragment means this is not one paragraph but two — or a
+    * paragraph followed by something else — so it is left alone. That test cannot be fooled by
+    * content: a `<` the author typed has already become `&lt;`, because [[escape]] is the only way
+    * into a [[Fragment]], so the literal characters `</p>` can only ever have been emitted by
+    * [[element]].
+    */
+  def inlineReading(rendered: String): String =
+    val open  = s"<${name(Tag.P)}>"
+    val close = s"</${name(Tag.P)}>"
+    val inner = rendered.stripPrefix(open).stripSuffix(close)
+    if rendered.startsWith(open) && rendered.endsWith(close) && !inner.contains(close) then inner
+    else rendered
+
   /** THE ONE VOID ELEMENT, which is why it is a value rather than a [[Tag]]. Every tag in that
     * enum is emitted by [[element]] as an open/close pair, and `<br></br>` is not HTML.
     */

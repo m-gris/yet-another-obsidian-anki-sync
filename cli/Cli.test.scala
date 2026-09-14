@@ -256,7 +256,7 @@ class CliTest extends munit.FunSuite:
 
   test("a plan with no actions says so rather than printing an empty list") {
     val lines =
-      Report.plan(Plan(Vector.empty, OrphanInference.Computed, Vector.empty, Vector.empty), RetypePolicy.Defer)
+      Report.plan(Plan(Vector.empty, OrphanInference.Computed, Vector.empty, Vector.empty, Vector.empty), RetypePolicy.Defer)
     assertEquals(lines, Vector("nothing to do"))
   }
 
@@ -284,7 +284,7 @@ class CliTest extends munit.FunSuite:
   // the rest are about the counting line, which does not vary with it.
   // ast-grep-ignore: default-parameter
   private def parkedLines(parked: Vector[CardKey], inference: OrphanInference = OrphanInference.Computed) =
-    Report.plan(Plan(Vector.empty, inference, Vector.empty, parked), RetypePolicy.Defer).mkString("\n")
+    Report.plan(Plan(Vector.empty, inference, Vector.empty, parked, Vector.empty), RetypePolicy.Defer).mkString("\n")
 
   test("a run with nothing to do still says how many notes are parked as orphaned") {
     val lines = parkedLines(Vector(parkedKey("n1", "Definition"), parkedKey("n2", "Cost")))
@@ -371,6 +371,7 @@ class CliTest extends munit.FunSuite:
         )
       ),
       OrphanInference.Computed,
+      Vector.empty,
       Vector.empty,
       Vector.empty,
     )
@@ -531,6 +532,7 @@ class CliTest extends munit.FunSuite:
         SyncAction.Update(key, AnkiNoteId(1L), NonEmptyVector.fromVectorUnsafe(changes.toVector))
       ),
       OrphanInference.Computed,
+      Vector.empty,
       Vector.empty,
       Vector.empty,
     )

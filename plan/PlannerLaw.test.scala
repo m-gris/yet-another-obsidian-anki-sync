@@ -128,7 +128,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
   def planOf(scan: VaultScan, anki: InMemoryAnki, deck: DeckPath = defaultDeck): Plan =
     val observed = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     Planner
-      .plan(scan, observed, _ => deck, newNoteOf)
+      .plan(scan, observed, _ => deck, newNoteOf, HandBuiltCensus.of(scan))
       .fold(errs => fail(s"plan errors: ${errs.map(_.describe)}"), identity)
 
   /** `RetypePolicy.Apply`, so that a generated scan which happens to move a note between note
@@ -138,7 +138,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
     */
   def runPlan(p: Plan, anki: InMemoryAnki): Vector[ExecutionFailure] =
     Executor
-      .run(p, anki, RetypePolicy.Apply, Set.empty)
+      .run(p, anki, RetypePolicy.Apply, Set.empty, RecordedNowhere.ledger)
       .fold(e => fail(s"execution aborted: $e"), identity)
       .failures
 
@@ -173,7 +173,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
       val full = planOf(scan, anki)
       val half = full.actions.take(full.actions.size / 2)
 
-      runPlan(Plan(half, full.orphanInference, Vector.empty, full.parked), anki)
+      runPlan(Plan(half, full.orphanInference, Vector.empty, full.parked, full.moveEvidence), anki)
       val resumed = planOf(scan, anki)
 
       // The remainder is no bigger than what was left, and finishing it converges.

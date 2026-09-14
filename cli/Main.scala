@@ -23,6 +23,8 @@ import obsidiananki.plan.{
   DecisionHandle,
   ExecutionReport,
   Executor,
+  HistoryMove,
+  Ledger,
   Observer,
   OrphanInference,
   Plan,
@@ -33,8 +35,10 @@ import obsidiananki.plan.{
 }
 import org.http4s.ember.client.EmberClientBuilder
 import java.io.IOException
-import java.nio.file.{Files, NoSuchFileException, Path, Paths}
+import java.nio.file.{Files, NoSuchFileException, Path, Paths, StandardOpenOption}
+import java.time.Instant
 import scala.jdk.CollectionConverters.*
+import scala.util.Random
 
 /** The imperative shell.
   *
@@ -652,14 +656,23 @@ object Main
       console <- IO(
         if System.console() == null then ConsolePresence.Absent else ConsolePresence.Present
       )
-      // `sys.props` APPLIED, not `get`: a JVM with no `user.home` is a broken JVM and should
-      // say so, loudly, rather than have a directory guessed for it.
-      home = Paths.get(sys.props("user.home"))
-      chosen <- chooseVault(selection, console, home, readRegistryFile, askOnConsole)
+      chosen <- chooseVault(selection, console, homeDirectory, readRegistryFile, askOnConsole)
       code <- chosen match
         case Right(root) => body(root)
         case Left(lines) => lines.traverse_(IO.println).as(ExitCode(2))
     yield code
+
+  /** THE ONE PLACE THIS FILE ASKS THE JVM WHERE HOME IS.
+    *
+    * `sys.props` APPLIED, not `get`: a JVM with no `user.home` is a broken JVM and should say so,
+    * loudly, rather than have a directory guessed for it.
+    *
+    * IT IS A `def` HERE AND A PARAMETER EVERYWHERE ELSE. Two things now hang off the home directory
+    * — Obsidian's registry and this tool's own ledger — and both [[VaultRegistry.locate]] and
+    * [[LedgerFile.locate]] take it as an argument so a test can displace it. Asking twice would be
+    * two answers that a `-Duser.home` between them could make differ.
+    */
+  private def homeDirectory: Path = Paths.get(sys.props("user.home"))
 
   /** Read the registry file and hand its bytes to the pure parser.
     *
@@ -678,6 +691,53 @@ object Main
         case _: NoSuchFileException => Left(RegistryError.NotFound(at))
         case failure: IOException   => Left(RegistryError.Unreadable(at, failure.toString))
     }
+
+  /** THE RUN LEDGER, WIRED TO A REAL FILE — the other half of this file's local-file dealings.
+    *
+    * ONE OPEN-APPEND-CLOSE PER RUN. `Executor` hands over a whole run's moves in a single call, so
+    * this makes a single write; closing the channel is what flushes it, so there is nothing else to
+    * order here. The directory is created first because the tool has never had one before, and a
+    * first run on a fresh machine must not fail for want of it.
+    *
+    * AN EMPTY BATCH TOUCHES NOTHING, DELIBERATELY. `Executor` calls this on every run, including
+    * runs that moved no history, and the rendering of no moves is the empty string — so the guard
+    * is not about avoiding a pointless write but about avoiding a pointless ARTIFACT: a person who
+    * has never had a card reassigned should not find a ledger file, because its existence is
+    * information.
+    *
+    * NO `try`/`catch`, AND THAT IS THE DESIGN RATHER THAN AN OVERSIGHT. A failure here raises in
+    * `IO`, propagates past the `AnkiError` channel that every collected failure travels in, and
+    * aborts the run — which is exactly what Marc's 2026-09-12 ruling demands, since an automatic
+    * action that cannot be recorded must not happen. The only thing done to the failure is to NAME
+    * it ([[LedgerUnwritable]]), because `AccessDeniedException: …/ledger.jsonl` tells a reader which
+    * file and not what the tool was doing, nor that their collection was left untouched. Catching it
+    * to carry on would be the logging-and-continuing this codebase forbids; note also that this adds
+    * no second `.attempt` over `IO`, so the gate comment above about there being exactly one stays
+    * true.
+    *
+    * UNLIKE THE REST OF THIS SECTION IT IS NOT WIRING THE SUITE INJECTS PAST, and that is deliberate:
+    * `to` is a parameter, so a test points it at a temporary directory and asserts on the bytes that
+    * land. The ruling this serves is about DURABILITY, and everything else about the ledger can be
+    * correct while nothing ever reaches a disk — so "a file appears, and a second run appends to it
+    * rather than replacing it" is the one claim that cannot be left to be exercised by running the
+    * tool. `private[cli]` for exactly that reason and no other.
+    */
+  private[cli] def appendingLedger(to: Path, at: Instant, run: RunId): Ledger[Refused] =
+    new Ledger[Refused]:
+      def record(moves: Vector[HistoryMove]): Refused[Unit] =
+        EitherT.liftF(IO.blocking {
+          if moves.nonEmpty then
+            try
+              Files.createDirectories(to.getParent)
+              Files.writeString(
+                to,
+                LedgerFile.document(moves, at, run),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND,
+              )
+              ()
+            catch case failure: IOException => throw LedgerUnwritable(to, failure)
+        })
 
   /** Show the list and read one line back — bound together as ONE act, deliberately.
     *
@@ -978,6 +1038,10 @@ object Main
     * The vault is read FIRST: a filesystem failure then aborts before the collection is read
     * at all, and a wrong `--deck-root` or vault path shows up as `notes: 0` on screen before
     * a plan full of orphan flags rather than after it.
+    *
+    * THE RUN'S IDENTITY IS MINTED HERE, BEFORE ANYTHING IS READ, because it names the run rather
+    * than anything the run found — and because every line the ledger appends carries it, so it has
+    * to exist before the first of them can be written.
     */
   private def sync(
       vault: VaultRoot,
@@ -990,6 +1054,17 @@ object Main
       anki: AnkiConnectClient[IO],
   ): IO[ExitCode] =
     for
+      startedAt <- IO.realTimeInstant
+      // SIX LOWERCASE HEX CHARACTERS, so the suffix is a fixed width with no case to get wrong
+      // when somebody reads one off a screen and types it into a `grep`. It distinguishes runs
+      // that start inside the same second and is asked to do nothing else — it is not a token,
+      // and nothing anywhere depends on it being unpredictable.
+      suffix <- IO(f"${Random.nextInt(1 << 24)}%06x")
+      ledger = appendingLedger(
+        LedgerFile.locate(homeDirectory),
+        startedAt,
+        RunId.of(startedAt, suffix),
+      )
       files <- readVault(vault)
       index = VaultWalker.scan(files, deckRoot, deckShape)
       // Aligned with inspect's value column. The gate has already printed `profile:` above.
@@ -1001,7 +1076,7 @@ object Main
         ),
         asJson,
       )
-      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, approved, asJson, anki)
+      outcome <- observeAndApply(index, deckRoot, dryRun, retypePolicy, approved, asJson, anki, ledger)
       result = verdict(outcome)
       _ <- emit(describeSyncOutcome(outcome) ++ describeVerdict(result), asJson)
     yield exitCodeFor(result)
@@ -1035,6 +1110,7 @@ object Main
       approved: Set[DecisionHandle],
       asJson: Boolean,
       anki: AnkiConnectClient[IO],
+      ledger: Ledger[Refused],
   ): IO[SyncOutcome] =
     NoteTypeAssets.all match
       case Left(errors) => IO.pure(SyncOutcome.NoteTypeDefinitionsUnreadable(errors))
@@ -1053,7 +1129,8 @@ object Main
           case Left(error)                    => IO.pure(SyncOutcome.CouldNotObserve(error))
           case Right(problems) if problems.nonEmpty =>
             IO.pure(SyncOutcome.NoteTypesNotReady(problems))
-          case Right(_) => reconcile(index, deckRoot, dryRun, retypePolicy, approved, asJson, anki)
+          case Right(_) =>
+            reconcile(index, deckRoot, dryRun, retypePolicy, approved, asJson, anki, ledger)
         }
 
   /** Observe, plan, and — unless this is a dry run — apply. The note types have already been
@@ -1067,11 +1144,20 @@ object Main
       approved: Set[DecisionHandle],
       asJson: Boolean,
       anki: AnkiConnectClient[IO],
+      ledger: Ledger[Refused],
   ): IO[SyncOutcome] =
     Observer.observe[Refused](anki).value.flatMap {
       case Left(error) => IO.pure(SyncOutcome.CouldNotObserve(error))
       case Right(observed) =>
-        Planner.plan(index.scan, observed, index.deckOf(deckRoot), Planner.newNoteFor) match
+        // THE CENSUS AND THE SCAN COME FROM ONE INDEX, which is all that keeps them talking about
+        // the same vault — see `Planner.plan`'s own note on that parameter.
+        Planner.plan(
+          index.scan,
+          observed,
+          index.deckOf(deckRoot),
+          Planner.newNoteFor,
+          index.census,
+        ) match
           case Left(errors) => IO.pure(SyncOutcome.RefusedInconsistent(errors))
           case Right(plan) =>
             emit(
@@ -1119,7 +1205,7 @@ object Main
                        ).as(SyncOutcome.PlannedOnly(plan))
                  }
                else
-                 Executor.run[Refused](plan, anki, retypePolicy, approved).value.flatTap {
+                 Executor.run[Refused](plan, anki, retypePolicy, approved, ledger).value.flatTap {
                    // THE REAL RUN ANSWERS AS DATA IN THE SAME SHAPE THE DRY RUN DOES, so a
                    // caller reads one format whichever it asked for. A run that aborted prints
                    // nothing here: there is no answer to give, and an empty document would say
@@ -1222,7 +1308,7 @@ object Main
                 // `HeadingPath.render` joins heading segments only and is file-independent,
                 // so two files sharing a heading chain would otherwise produce two identical
                 // and indistinguishable lines.
-                val k = keyOf(f.action)
+                val k = f.action.cardKey
                 s"  '${k.path.render}' (note '${k.noteId.value}'): ${f.error.toString}"
               } ++
               Vector(
@@ -1253,24 +1339,12 @@ object Main
           "collection then hold, so whatever was already applied is not applied twice.",
         )
 
-  /** The identity of the card an action is about.
-    *
-    * Only the KEY, with no verb. The verb would have to duplicate `Report.kindOf`'s wording,
-    * which is private — and a second copy of it here is exactly the second source of truth
-    * this file already refuses to create for `AnkiError`. Nothing is duplicated, so nothing
-    * can drift: the action counts `Report.plan` printed just above carry the verbs, and
-    * `AnkiError.Remote` and `AnkiError.UnsupportedOperation` name their own operation.
-    *
-    * The right home for this rendering is `Report.scala`; it is here only because that file
-    * is outside this change.
-    */
-  private def keyOf(a: SyncAction): CardKey = a match
-    case SyncAction.Create(key, _)                => key
-    case SyncAction.Update(key, _, _)             => key
-    case SyncAction.Retype(key, _, _, _, _, _, _, _) => key
-    case SyncAction.Flag(key, _)                  => key
-    case SyncAction.Unflag(key, _)                => key
-    case SyncAction.CarryIdentity(key, _, _, _)   => key
+  // A private `keyOf` sat here — a third copy of the same projection, whose own comment said it
+  // belonged elsewhere and was here only because that file was outside the change that added it.
+  // REMOVED 2026-09-05, when a sixth action arrived and this copy was the one place the compiler
+  // had to ask twice. `SyncAction.cardKey` is the definition, and its docstring named exactly
+  // this hazard: "a third copy would have been the point at which they could start disagreeing
+  // about a case added later". The caller above now asks the action.
 
   /** How the run is to be judged: ONE value, read by the exit code and by the last line on
     * screen alike.
