@@ -2,6 +2,7 @@ package obsidiananki.plan
 
 import cats.data.NonEmptyVector
 import obsidiananki.anki.{AnkiNoteId, DeckPath}
+import obsidiananki.content as C
 import obsidiananki.model.{CardKey, CardPath, Marker, NoteId, OwnedTag}
 
 /* WHAT THE EVIDENCE SAYS WHEN A CARD'S SOURCE MOVED, and — for one shape of evidence only —
@@ -444,8 +445,27 @@ object SubstanceDeclaration:
   *
   * The descriptor and the concept come from the card's key segments, so they are canonicalised —
   * bolding a heading must neither hide a contradiction nor invent one. The description is the
-  * Substance field verbatim, because the comparison floor everywhere else in this file is
-  * byte-identity and a description differing by a byte is a different claim.
+  * Substance field, read at the INLINE level and otherwise byte for byte, because the comparison
+  * floor everywhere else in this file is byte-identity and a description differing by a byte the
+  * author wrote is a different claim.
+  *
+  * ═══ WHY THE FIELD IS NOT TAKEN VERBATIM, WHICH IT WAS UNTIL 2026-09-14 ═══
+  *
+  * _Corrected._ The two authoring shapes named below render one author sentence into two different
+  * field values: a heading section is a sequence of BLOCKS and arrives wrapped in a paragraph
+  * element, a table cell is INLINE and arrives as the escaped characters alone. Taking the field
+  * verbatim therefore made the claims of the two shapes incomparable BY CONSTRUCTION — the veto fired
+  * between two headings and between two table rows, and never between one of each, which is
+  * precisely the collision it exists to catch.
+  *
+  * The reading is `content/AsHtml.scala`'s [[obsidiananki.content.Html.inlineReading]], which removes
+  * framing THIS TOOL added and no byte besides. That distinction is the whole licence for it. The
+  * sheet's "when that pair-collision is DETECTED" and principle (3)'s undetected false declaration
+  * describe a contradiction the census cannot see; here the census holds both cards, of one note
+  * type, over one author sentence, and only this tool's own rendering hid them from each other. A
+  * divergence the AUTHOR made — a no-break space against a space — goes on being two descriptions,
+  * which is what "trust is binary, never a sliding scale" requires and what the guard in
+  * `plan/MoveEvidence.test.scala` pins.
   *
   * ═══ WHICH CARDS HAVE ONE, AND WHY THE DECLARATION IS NOT ASKED HERE ═══
   *
@@ -510,7 +530,15 @@ object ReverseClaim:
                 "so what a card of it claims backward cannot be read as one description — see " +
                 "ReverseClaim.of"
             )
-        ReverseClaim(descriptor = window(1), description = description, concept = window(0), at = key)
+        ReverseClaim(
+          descriptor = window(1),
+          // READ AT THE INLINE LEVEL SO THAT THE TWO AUTHORING SHAPES CAN COLLIDE AT ALL — see this
+          // type's docstring, and `content/AsHtml.scala` for why undoing this tool's own block
+          // framing is not the start of a normaliser.
+          description = C.Html.inlineReading(description),
+          concept = window(0),
+          at = key,
+        )
       }
     }
 
