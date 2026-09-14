@@ -1256,6 +1256,152 @@ class MoveEvidenceTest extends munit.FunSuite:
       case other => fail(s"an unrelated concept's live card must not block a rename: $other")
   }
 
+  /** THE SAME RULING ONE LEVEL FLATTER — `docs/design/IDENTITY-DECISION-SHEET.md`, "a concept is its
+    * chain; namesakes at unrelated places are silence" — for the subject that has NO chain above it.
+    *
+    * WHY THE TESTS ABOVE DO NOT COVER IT, which is the whole reason this block exists. There the two
+    * namesakes sat under different parents (`kafka / performance` against `nats / performance`), so
+    * comparing chains told them apart on its own. THE COMMONEST VAULT SHAPE THERE IS has no parent at
+    * all: `Broker.md` opens on `# Kafka`, `Novelist.md` opens on its own `# Kafka` about Franz Kafka,
+    * and each chain is the single segment `kafka`. Compare those two chains and you are comparing
+    * bare names — which is exactly what the ruling forbids, arrived at by a route that looks like
+    * obeying it.
+    *
+    * WHAT THE PLACE IS WHEN THE CHAIN RUNS OUT. A subject's place is what stands above it. Inside a
+    * note that is its ancestor chain; with nothing above it, the subject stands at the note's ROOT,
+    * and the note is then the only place-fact there is. So a root-level subject is matched on its
+    * note as well as its name, and a subject with ancestors goes on being matched on those alone —
+    * which is what keeps "two notes holding the same chain" (above) the priced residual cost it was
+    * ruled to be rather than something this block quietly widens.
+    *
+    * WHAT IT COSTS WHEN IT IS WRONG, measured on the judge's `JN-*` fixtures: the message broker's
+    * `# Kafka` → `# NATS` relabel is a ruled FOLLOW (the sheet's "unchanged description + no old
+    * subject standing anywhere = the same concept respelled and rehomed"), and the novelist's
+    * namesake turned it into a park plus a new card at zero — stranding the review history and
+    * telling the author, as the run's stated reason, that a concept which no longer exists at that
+    * place goes on existing.
+    */
+  val brokerDefinitionAtRoot: CardSpec =
+    threeField(
+      key("n1", "kafka", "definition"),
+      "Kafka",
+      "Definition",
+      "A distributed event log with partitioned, replicated topics.",
+      "Broker",
+    )
+
+  /** The same card after the author respelled the concept and moved the note: `# NATS` in
+    * `Systems.md`, description byte-identical. The ruled follow.
+    */
+  val systemsDefinitionAtRoot: CardSpec =
+    threeField(
+      key("n3", "nats", "definition"),
+      "NATS",
+      "Definition",
+      "A distributed event log with partitioned, replicated topics.",
+      "Systems",
+    )
+
+  /** `Novelist.md`'s own root-level `# Kafka` — Franz Kafka, a different concept sharing a spelling,
+    * with its own descriptor and its own description so that nothing but the name can collide.
+    */
+  val novelistOriginAtRoot: CardSpec =
+    threeField(
+      key("n2", "kafka", "origin"),
+      "Kafka",
+      "Origin",
+      "Born in Prague in 1883, he became a major fiction writer.",
+      "Novelist",
+    )
+
+  /** `Broker.md` after the edit: prose only, so the concept the stranded card left is gone from the
+    * note it left, and `Systems.md` holds the respelled one.
+    */
+  val afterTheRootRelabel: NodeCensus.Outlines = Map(
+    noteIdOf("n1") -> Vector.empty,
+    noteIdOf("n3") -> Vector(Vector("nats"), Vector("nats", "definition")),
+  )
+
+  test("a LIVE namesake at ANOTHER NOTE'S ROOT is no witness, so the root relabel follows") {
+    // THE THIRD WITNESS AT THE FLAT SHAPE. `Novelist.md`'s live `## Origin` card declares the subject
+    // spelled `kafka`, and it stands at Novelist.md's root — not at Broker.md's, which is where this
+    // card's subject stood. Nothing bridges the two notes, so it testifies to nothing and the relabel
+    // follows exactly as the control does with no namesake in the vault at all.
+    surveyDeclaring(
+      Vector(observed(brokerDefinitionAtRoot, 1)),
+      Vector(sourced(systemsDefinitionAtRoot)),
+      afterTheRootRelabel,
+      Vector(observed(novelistOriginAtRoot, 101)),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, systemsDefinitionAtRoot.key)
+      case other =>
+        fail(s"another note's root-level namesake must not park a ruled relabel: $other")
+  }
+
+  test("a PAIRING onto a namesake at ANOTHER NOTE'S ROOT is no bridge either") {
+    // THE SECOND WITNESS AT THE FLAT SHAPE, and it needs its own test because it has its own bridge.
+    // Here the novelist's cluster does not merely stand — it verbatim-moves `Novelist.md` →
+    // `Writers.md` in this very run, so the survey corroborates a card whose subject is spelled
+    // `kafka`. That pairing bridges NOVELIST.MD'S root to wherever it went; Broker.md's root is not
+    // an end of it, and the message broker's relabel must follow regardless.
+    val novelistMoved =
+      threeField(
+        key("n4", "kafka", "origin"),
+        "Kafka",
+        "Origin",
+        "Born in Prague in 1883, he became a major fiction writer.",
+        "Writers",
+      )
+    val findings = surveyOver(
+      Vector(observed(brokerDefinitionAtRoot, 1), observed(novelistOriginAtRoot, 2)),
+      Vector(sourced(systemsDefinitionAtRoot), sourced(novelistMoved)),
+      afterTheRootRelabel ++ Map(
+        noteIdOf("n2") -> Vector.empty,
+        noteIdOf("n4") -> Vector(Vector("kafka"), Vector("kafka", "origin")),
+      ),
+    )
+    assert(
+      findings.exists {
+        case c: MoveFinding.Corroborated => c.candidate == novelistMoved.key
+        case _                           => false
+      },
+      s"the fixture must corroborate the novelist's move for this test to have a weapon: $findings",
+    )
+    findings.find(_.strandedNote == AnkiNoteId(1)) match
+      case Some(c: MoveFinding.Corroborated) =>
+        assertEquals(c.candidate, systemsDefinitionAtRoot.key)
+      case other =>
+        fail(s"a pairing out of another note's root must not park this one: $other")
+  }
+
+  test("the SAME note's root still witnesses, which is the bridge this must not break") {
+    // THE GUARD IN THE OTHER DIRECTION, and the reason the note is read rather than simply ignored at
+    // the flat shape. When `# Kafka` leaves Broker.md for another note WITH one of its descriptors,
+    // that pairing's old key is Broker.md's root — the very place this stranded card's subject stood —
+    // so it bridges, and the re-parent left behind must be refused. This is the reviewer's S24A with
+    // no ancestor heading above the concept.
+    val brokerCost =
+      threeField(key("n1", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Broker")
+    val costMovedOut =
+      threeField(key("n5", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Queues")
+    val findings = surveyOver(
+      Vector(observed(brokerDefinitionAtRoot, 1), observed(brokerCost, 2)),
+      Vector(sourced(systemsDefinitionAtRoot), sourced(costMovedOut)),
+      afterTheRootRelabel ++ Map(
+        noteIdOf("n5") -> Vector(Vector("kafka"), Vector("kafka", "cost"))
+      ),
+    )
+    findings.find(_.strandedNote == AnkiNoteId(1)) match
+      case Some(r: MoveFinding.Reparented) =>
+        assertEquals(
+          r.survival,
+          SubjectSurvival.CorroboratedOnto(Vector("kafka"), costMovedOut.key),
+        )
+      case other =>
+        fail(s"the subject's own note pairing it elsewhere is still the bridge: $other")
+  }
+
   // ==== THE PAIR VETO: A DECLARATION CAUGHT BREAKING IS REFUSED FOR THE CARDS INVOLVED ====
 
   /** RULED 2026-09-13 (`docs/design/IDENTITY-DECISION-SHEET.md`, "the duplicate veto fires on the
@@ -1427,6 +1573,116 @@ class MoveEvidenceTest extends munit.FunSuite:
       case b: MoveFinding.ClaimBroken =>
         assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(bornThisRun.key))
       case other => fail(s"a rival created this run breaks the claim as well: $other")
+  }
+
+  /** THE VETO ACROSS THE TWO AUTHORING SHAPES OF ONE CARD KIND — the population Decision 3 says is
+    * one ("a table column header is the descriptor position of every pair card in that column"), and
+    * the one the check could not see across.
+    *
+    * WHY THE BYTES DIVERGE WHEN THE AUTHOR'S SENTENCE DOES NOT. A concept-descriptor card is built two
+    * ways and its `Description` is rendered by two different routes. A heading section goes through
+    * `extract/Extractor.scala`'s `AsHtml.plain`, which renders BLOCKS, so one sentence of prose comes
+    * back inside a paragraph element. A table cell goes through `extract/Tables.scala`'s
+    * `CellDisplay.Escaped`, which escapes the cell's text and emits no block at all. Same author
+    * sentence, permanently different field bytes — and `ReverseClaim` compares that field verbatim, so
+    * the collision the ruling exists to catch could never be detected between the two shapes.
+    *
+    * WHY THE RULING'S "WHEN THAT PAIR-COLLISION IS DETECTED" DOES NOT EXCUSE IT. That conditional, and
+    * principle (3)'s undetected false declaration, describe a contradiction the census cannot see.
+    * Here the census holds BOTH cards, of one note type, over one author sentence; the divergence is
+    * manufactured by this tool's own rendering. The reading that fixes it removes exactly that framing
+    * and touches no byte the author wrote — which is what the last test in this block pins, because
+    * the line is only sharp while a difference the AUTHOR made goes on being a difference.
+    */
+  val durableLogFromAHeading: String = "<p>A durable log.</p>"
+
+  /** The same author sentence as `durableLogFromAHeading`, as a table cell renders it. */
+  val durableLogFromATable: String = "A durable log."
+
+  test("a TABLE twin at the same pair breaks a heading card's claim, framing or no framing") {
+    // THE JUDGE'S `TABLETWIN`. Every gate before the veto reads this as an innocent rename: substance
+    // agrees, the old subject stands nowhere, and the card declares its description identifying. But
+    // `Stores`' table answers the very same backward question — "which thing has this Definition with
+    // this description?" — under `nats`, so the claim the follow rests on is false in the vault.
+    assertNotEquals(
+      durableLogFromAHeading,
+      durableLogFromATable,
+      "the fixture must carry the two renderings for this test to have a weapon",
+    )
+    val strandedHeading =
+      threeField(key("h1", "kafka", "definition"), "Kafka", "Definition", durableLogFromAHeading, "Kafka")
+    val relabelled =
+      threeField(key("h1", "streaming", "definition"), "Streaming", "Definition", durableLogFromAHeading, "Kafka")
+    val tableTwin =
+      threeField(key("t1", "stores", "nats", "definition"), "NATS", "Definition", durableLogFromATable, "Stores")
+    surveyDeclaring(
+      Vector(observed(strandedHeading, 1)),
+      Vector(sourced(relabelled)),
+      Map(noteIdOf("h1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
+      Vector(observed(tableTwin, 101)),
+    ) match
+      case Vector(b: MoveFinding.ClaimBroken) =>
+        assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(tableTwin.key))
+        assertEquals(b.alsoAnswered.head.concept, "nats")
+      case other =>
+        fail(s"a table pair card answering the same question is the contradiction, not a stranger: $other")
+  }
+
+  test("a HEADING twin at the same pair breaks a table row card's claim — the mirror") {
+    // THE JUDGE'S `PV-REV`, and it is a separate test rather than a parameter because the blind spot
+    // was symmetric: each shape's veto worked among its own kind, so only running the pair both ways
+    // shows that the population is one. Here the row `Queue` becomes `Stream` with its value
+    // untouched, while `NATS.md`'s heading-built `## Definition` stands over the same sentence.
+    val strandedRow =
+      threeField(key("t1", "brokers", "queue", "definition"), "Queue", "Definition", durableLogFromATable, "Brokers")
+    val relabelledRow =
+      threeField(key("t1", "brokers", "stream", "definition"), "Stream", "Definition", durableLogFromATable, "Brokers")
+    val headingTwin =
+      threeField(key("n1", "nats", "definition"), "NATS", "Definition", durableLogFromAHeading, "NATS")
+    surveyDeclaring(
+      Vector(observed(strandedRow, 1)),
+      Vector(sourced(relabelledRow)),
+      Map(
+        noteIdOf("t1") -> Vector(
+          Vector("brokers"),
+          Vector("brokers", "stream"),
+          Vector("brokers", "stream", "definition"),
+        )
+      ),
+      Vector(observed(headingTwin, 101)),
+    ) match
+      case Vector(b: MoveFinding.ClaimBroken) =>
+        assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(headingTwin.key))
+        assertEquals(b.alsoAnswered.head.concept, "nats")
+      case other =>
+        fail(s"a heading card answering the same question breaks a row card's claim too: $other")
+  }
+
+  test("a byte the AUTHOR wrote differently is still a different description, not a framing") {
+    // THE BOUNDARY, AND IT IS WHAT KEEPS THE FIX HONEST. The two descriptions here differ by a
+    // NO-BREAK SPACE the author typed, which is a different sentence by the byte-identity floor this
+    // whole file compares on — "trust is binary, never a sliding scale". Removing the renderer's own
+    // paragraph framing must never become a whitespace or markup normaliser, so this must go on
+    // following: there is no contradiction here to refuse.
+    // SPELT OUT AS A CODE POINT ON PURPOSE: a literal no-break space in this source would be
+    // invisible to the next reader, and the whole point of the fixture is that one byte differs.
+    val noBreakSpace        = 0x00a0.toChar
+    val authorsNoBreakSpace = s"A durable${noBreakSpace}log."
+    val strandedHeading =
+      threeField(key("h1", "kafka", "definition"), "Kafka", "Definition", s"<p>$authorsNoBreakSpace</p>", "Kafka")
+    val relabelled =
+      threeField(key("h1", "streaming", "definition"), "Streaming", "Definition", s"<p>$authorsNoBreakSpace</p>", "Kafka")
+    val tableTwin =
+      threeField(key("t1", "stores", "nats", "definition"), "NATS", "Definition", durableLogFromATable, "Stores")
+    surveyDeclaring(
+      Vector(observed(strandedHeading, 1)),
+      Vector(sourced(relabelled)),
+      Map(noteIdOf("h1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
+      Vector(observed(tableTwin, 101)),
+    ) match
+      case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, relabelled.key)
+      case other =>
+        fail(s"a description the author wrote differently answers a different question: $other")
   }
 
   test("a collection declaring the old subject answers even when the census could NOT be taken") {
