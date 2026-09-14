@@ -57,7 +57,7 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   val where: SourceRef = SourceRef("System Design.md", 12, SourceKind.Heading)
 
-  def sourced(spec: CardSpec, at: SourceRef = where): SourcedSpec =
+  def sourced(spec: CardSpec, at: SourceRef): SourcedSpec =
     SourcedSpec(spec, at, NoSectionChain, NoRecall, Vector.empty)
 
   /** A two-field card. `context` is passed in rather than derived, because the breadcrumb is
@@ -136,7 +136,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     * whole mechanism reads what the last successful sync wrote, and the only faithful way to say
     * "this note is the old card" is to build it from the old card's own spec.
     */
-  def observed(spec: CardSpec, id: Long, tags: Vector[String] = Vector.empty): ObservedCard =
+  def observed(spec: CardSpec, id: Long, tags: Vector[String]): ObservedCard =
     ObservedCard(
       spec.key,
       ObservedNote(
@@ -153,7 +153,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     */
   def observedWith(spec: CardSpec, id: Long, overrides: (String, String)*): ObservedCard =
     val patched = overrides.toMap
-    val base    = observed(spec, id)
+    val base    = observed(spec, id, Vector.empty)
     base.copy(note =
       base.note.copy(fields = base.note.fields.map((n, v) => n -> patched.getOrElse(n, v)))
     )
@@ -416,14 +416,14 @@ class MoveEvidenceTest extends munit.FunSuite:
       case other                       => fail(s"expected a corroborated finding, got: ${other.describe}")
 
   test("a moved heading is corroborated against the key the vault now produces") {
-    val found = corroboration(Vector(observed(beforeMove, 1)), Vector(sourced(afterMove)))
+    val found = corroboration(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(afterMove, where)))
     assertEquals(found.stranded, strandedKey)
     assertEquals(found.candidate, movedKey)
     assertEquals(found.noteId, AnkiNoteId(1))
   }
 
   test("a moved heading grades as the same name somewhere else, and names the breadcrumb that changed") {
-    val found = corroboration(Vector(observed(beforeMove, 1)), Vector(sourced(afterMove)))
+    val found = corroboration(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(afterMove, where)))
     assertEquals(found.agreement, Agreement.NameAndSubstance)
     assertEquals(
       found.divergences,
@@ -441,7 +441,7 @@ class MoveEvidenceTest extends munit.FunSuite:
   test("a frontmatter id that changed while the heading tree did not grades as the whole path agreeing") {
     val was = twoField(key("old-id", "a", "coupling"), "Coupling", "Two things move together.", "A")
     val now = twoField(key("new-id", "a", "coupling"), "Coupling", "Two things move together.", "A")
-    val found = corroboration(Vector(observed(was, 1)), Vector(sourced(now)))
+    val found = corroboration(Vector(observed(was, 1, Vector.empty)), Vector(sourced(now, where)))
     assertEquals(found.agreement, Agreement.Total)
     assertEquals(found.divergences, Vector.empty)
   }
@@ -449,7 +449,7 @@ class MoveEvidenceTest extends munit.FunSuite:
   test("a heading reworded in place grades as a different name in the same place") {
     val was = twoField(key("n1", "a", "coupling"), "Coupling", "Two things move together.", "A")
     val now = twoField(key("n1", "a", "temporal coupling"), "Temporal coupling", "Two things move together.", "A")
-    val found = corroboration(Vector(observed(was, 1)), Vector(sourced(now)))
+    val found = corroboration(Vector(observed(was, 1, Vector.empty)), Vector(sourced(now, where)))
     assertEquals(found.agreement, Agreement.PlaceAndSubstance)
     assertEquals(found.divergences.map(_.field), Vector(Marker.BasicFields.Front))
   }
@@ -468,8 +468,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val now =
       threeFieldOneWay(key("n1", "other", "nats", "delivery"), "NATS", "Delivery", "At least once.", "Other")
     surveyOver(
-      Vector(observed(was, 1)),
-      Vector(sourced(now)),
+      Vector(observed(was, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> Vector(Vector("other"), Vector("other", "nats"))),
     ) match
       case Vector(MoveFinding.RelabelUnvouched(_, _, candidate, _, cause, divergences)) =>
@@ -493,8 +493,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val was = threeField(key("n1", "top", "kafka", "delivery"), "Kafka", "Delivery", "At least once.", "Top")
     val now = threeField(key("n1", "other", "nats", "delivery"), "NATS", "Delivery", "At least once.", "Other")
     surveyOver(
-      Vector(observed(was, 1)),
-      Vector(sourced(now)),
+      Vector(observed(was, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> Vector(Vector("other"), Vector("other", "nats"))),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
@@ -508,7 +508,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // proposal would make undetectable by construction.
     val was = twoField(key("source-note", "essential numbers", "scale"), "Scale", "10^9 users", "Source")
     val now = twoField(key("target-note", "essential numbers", "scale"), "Scale", "10^9 users", "Source")
-    val found = corroboration(Vector(observed(was, 1)), Vector(sourced(now)))
+    val found = corroboration(Vector(observed(was, 1, Vector.empty)), Vector(sourced(now, where)))
     assertEquals(found.candidate.noteId.value, "target-note")
     assertEquals(found.agreement, Agreement.Total)
   }
@@ -519,7 +519,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val was  = twoField(key("n1", "a", "one"), "One", "Same body.", "A")
     val alt1 = twoField(key("n1", "b", "one"), "One", "Same body.", "B")
     val alt2 = twoField(key("n1", "c", "one"), "One", "Same body.", "C")
-    onlyFinding(Vector(observed(was, 1)), Vector(sourced(alt1), sourced(alt2))) match
+    onlyFinding(Vector(observed(was, 1, Vector.empty)), Vector(sourced(alt1, where), sourced(alt2, where))) match
       case MoveFinding.Ambiguous(_, _, candidates) =>
         assertEquals(candidates.toVector.toSet, Set(alt1.key, alt2.key))
       case other => fail(s"expected ambiguity, got: ${other.describe}")
@@ -530,7 +530,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val two  = twoField(key("n1", "b", "two"), "Two", "Same body.", "B")
     val only = twoField(key("n1", "c", "three"), "Three", "Same body.", "C")
 
-    val findings = surveyOf(Vector(observed(one, 1), observed(two, 2)), Vector(sourced(only)))
+    val findings = surveyOf(Vector(observed(one, 1, Vector.empty), observed(two, 2, Vector.empty)), Vector(sourced(only, where)))
     assertEquals(findings.size, 2)
     assert(
       findings.forall {
@@ -546,7 +546,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       case CardSpec.TwoField(_, _, _, _, c) => c
       case _                                => fail("the fixture is a two-field card")
     })
-    onlyFinding(Vector(observed(beforeMove, 1)), Vector(sourced(edited))) match
+    onlyFinding(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(edited, where))) match
       case _: MoveFinding.Unexplained => ()
       case other                      => fail(s"an edited body is not evidence of a move: ${other.describe}")
   }
@@ -557,7 +557,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val heading = twoField(key("n1", "a", "one"), "One", "Same body.", "A")
     val row     = CardSpec.TableRow(key("n1", "b", "one"), "One", "Same body.", "B")
     assertEquals(heading.noteTypeName, row.noteTypeName, "the fixture must share a note type to be a test")
-    onlyFinding(Vector(observed(heading, 1)), Vector(sourced(row))) match
+    onlyFinding(Vector(observed(heading, 1, Vector.empty)), Vector(sourced(row, where))) match
       case _: MoveFinding.Unexplained => ()
       case other => fail(s"a differing marker field is not a move: ${other.describe}")
   }
@@ -565,7 +565,7 @@ class MoveEvidenceTest extends munit.FunSuite:
   test("two note types are never paired, however alike their content reads") {
     val basic = twoField(key("n1", "a", "one"), "One", "Same body.", "A")
     val cdd   = threeField(key("n1", "b", "one", "aspect"), "One", "Aspect", "Same body.", "B")
-    onlyFinding(Vector(observed(basic, 1)), Vector(sourced(cdd))) match
+    onlyFinding(Vector(observed(basic, 1, Vector.empty)), Vector(sourced(cdd, where))) match
       case _: MoveFinding.Unexplained => ()
       case other => fail(s"a cross-note-type pairing is no evidence at all: ${other.describe}")
   }
@@ -576,15 +576,15 @@ class MoveEvidenceTest extends munit.FunSuite:
     // name field, so the whole comparison would come down to substance, which agrees.
     val wholeNote = cloze(noteKey("n1"), "A {{c1::quorum}} is a majority.", "N1")
     val heading   = cloze(key("n2", "quorums"), "A {{c1::quorum}} is a majority.", "N1")
-    onlyFinding(Vector(observed(wholeNote, 1)), Vector(sourced(heading))) match
+    onlyFinding(Vector(observed(wholeNote, 1, Vector.empty)), Vector(sourced(heading, where))) match
       case _: MoveFinding.Unexplained => ()
       case other => fail(s"two kinds of anchor are not comparable: ${other.describe}")
   }
 
   test("a note on a note type this tool does not declare says so, rather than 'nothing matched'") {
     val spec   = twoField(strandedKey, "Scale", "10^9 users", "System design")
-    val legacy = observed(spec, 1).pipe(c => c.copy(note = c.note.copy(noteType = "Basic")))
-    onlyFinding(Vector(legacy), Vector(sourced(afterMove))) match
+    val legacy = observed(spec, 1, Vector.empty).pipe(c => c.copy(note = c.note.copy(noteType = "Basic")))
+    onlyFinding(Vector(legacy), Vector(sourced(afterMove, where))) match
       case MoveFinding.Incomparable(_, _, reason) =>
         assert(reason.contains("Basic"), s"the reason must name the note type: $reason")
       case other => fail(s"a stock note type cannot be compared: ${other.describe}")
@@ -593,10 +593,10 @@ class MoveEvidenceTest extends munit.FunSuite:
   test("a note whose fields are not its note type's says so, rather than comparing what it has") {
     // A subset comparison would agree MORE readily than a complete one — the evidence would be
     // strongest exactly where the collection is most damaged.
-    val damaged = observed(beforeMove, 1).pipe(c =>
+    val damaged = observed(beforeMove, 1, Vector.empty).pipe(c =>
       c.copy(note = c.note.copy(fields = c.note.fields.filterNot(_._1 == Marker.ContextField)))
     )
-    onlyFinding(Vector(damaged), Vector(sourced(afterMove))) match
+    onlyFinding(Vector(damaged), Vector(sourced(afterMove, where))) match
       case MoveFinding.Incomparable(_, _, reason) =>
         assert(reason.contains(Marker.ContextField), s"the reason must name the field: $reason")
       case other => fail(s"a damaged note cannot be compared: ${other.describe}")
@@ -616,7 +616,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // changed, and the reassignment writes the vault's fields, so Anki ends up showing the new
     // markup.
     val heldInAnki = observedWith(beforeMove, 1, Marker.BasicFields.Front -> "<b>Scale</b>")
-    onlyFinding(Vector(heldInAnki), Vector(sourced(afterMove))) match
+    onlyFinding(Vector(heldInAnki), Vector(sourced(afterMove, where))) match
       case c: MoveFinding.Corroborated =>
         assertEquals(c.candidate, movedKey)
         assertEquals(c.agreement, Agreement.NameAndSubstance)
@@ -633,7 +633,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // changes the field with nothing in the key to show for it.
     val was = threeField(key("n1", "aspect"), "Old File Name", "Aspect", "The value.", "")
     val now = threeField(key("n2", "aspect"), "New File Name", "Aspect", "The value.", "")
-    onlyFinding(Vector(observed(was, 1)), Vector(sourced(now))) match
+    onlyFinding(Vector(observed(was, 1, Vector.empty)), Vector(sourced(now, where))) match
       case MoveFinding.Unaccounted(_, _, _, _, unexplained) =>
         assertEquals(unexplained.toVector.map(_.field), Vector("Concept"))
       case other =>
@@ -678,8 +678,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // 3 of 2026-09-12 rules this a rewording and follows it.
     val now = threeField(key("n1", "top", "kafka", "contrast"), "Kafka", "Contrast", "A durable log.", "Top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> treeWith("top", "kafka")),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
@@ -693,8 +693,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // descriptor, or merely prose — and that is the fact the census supplies.
     val now = definitionUnder("NATS", "n1", "top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
     ) match
       case Vector(MoveFinding.Reparented(stranded, _, candidate, _, survival, divergences)) =>
@@ -713,8 +713,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // is unchanged and the cluster stayed where it was, so these are the same cards.
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
@@ -732,8 +732,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // non-question". The `/1way` twin below is where the question survives.
     val now = definitionUnder("RabbitMQ", "n1", "elsewhere")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> treeWith("elsewhere", "rabbitmq")),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
@@ -750,8 +750,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // relabel follows across notes or not, gated by the survival witnesses alone.
     val now = definitionUnder("RabbitMQ", "n2", "top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n2") -> treeWith("top", "rabbitmq")),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
@@ -770,8 +770,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val now =
       threeFieldOneWay(key("n2", "top", "rabbitmq", "definition"), "RabbitMQ", "Definition", "A durable log.", "Top")
     surveyOver(
-      Vector(observed(was, 1)),
-      Vector(sourced(now)),
+      Vector(observed(was, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n2") -> treeWith("top", "rabbitmq")),
     ) match
       case Vector(r: MoveFinding.RelabelUnvouched) => assertEquals(r.cause, RelabelDoubt.ClusterMoved)
@@ -785,8 +785,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // under a subject that still stands is a different card however far it travelled.
     val now = definitionUnder("NATS", "n2", "top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(
         noteIdOf("n1") -> Vector(Vector("top"), Vector("top", "kafka")),
         noteIdOf("n2") -> treeWith("top", "nats"),
@@ -803,7 +803,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // look must not be mistaken for a run that looked and found nothing — the argument
     // `MoveFinding.Incomparable` makes one level down.
     val now = definitionUnder("RabbitMQ", "n1", "top")
-    surveyBlind(Vector(observed(definitionUnderKafka, 1)), Vector(sourced(now)), Vector.empty) match
+    surveyBlind(Vector(observed(definitionUnderKafka, 1, Vector.empty)), Vector(sourced(now, where)), Vector.empty) match
       case Vector(MoveFinding.RelabelUnvouched(_, _, _, _, RelabelDoubt.CensusUnavailable(reason), _)) =>
         assert(reason.nonEmpty, "the report must be able to say WHY it declined")
       case other => fail(s"an unsurveyable census must not license a follow: $other")
@@ -822,8 +822,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     // the concept the run itself keeps a card under.
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(
         noteIdOf("n1") -> treeWith("top", "rabbitmq"),
         noteIdOf("n9") -> Vector(Vector("top"), Vector("top", "kafka")),
@@ -862,8 +862,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val costNow =
       threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1), observed(costUnderKafka, 2)),
-      Vector(sourced(definitionNow), sourced(costNow)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty), observed(costUnderKafka, 2, Vector.empty)),
+      Vector(sourced(definitionNow, where), sourced(costNow, where)),
       Map(
         noteIdOf("n1") -> treeWith("top", "nats"),
         noteIdOf("n2") -> Vector(Vector("top"), Vector("top", "kafka")),
@@ -897,8 +897,8 @@ class MoveEvidenceTest extends munit.FunSuite:
       "Top › Archive",
     )
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1), observed(costUnderKafka, 2)),
-      Vector(sourced(definitionNow), sourced(costNow)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty), observed(costUnderKafka, 2, Vector.empty)),
+      Vector(sourced(definitionNow, where), sourced(costNow, where)),
       Map(
         noteIdOf("n1") -> (treeWith("top", "nats") ++ Vector(
           Vector("top", "archive"),
@@ -927,8 +927,8 @@ class MoveEvidenceTest extends munit.FunSuite:
       threeField(key("n2", "top", "zookeeper", "cost"), "ZooKeeper", "Cost", "Ensembles are odd-sized.", "Top")
     val definitionNow = definitionUnder("RabbitMQ", "n1", "top")
     surveyOver(
-      Vector(observed(definitionUnderKafka, 1), observed(zooWas, 2)),
-      Vector(sourced(definitionNow), sourced(zooNow)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty), observed(zooWas, 2, Vector.empty)),
+      Vector(sourced(definitionNow, where), sourced(zooNow, where)),
       Map(
         noteIdOf("n1") -> treeWith("top", "rabbitmq"),
         noteIdOf("n2") -> Vector(Vector("top"), Vector("top", "zookeeper")),
@@ -952,8 +952,12 @@ class MoveEvidenceTest extends munit.FunSuite:
       threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
     val definitionNow = definitionUnder("RabbitMQ", "n1", "top")
     val findings = surveyOver(
-      Vector(observed(definitionUnderKafka, 1), observed(rivalHere, 2), observed(rivalElsewhere, 3)),
-      Vector(sourced(definitionNow), sourced(costNow)),
+      Vector(
+        observed(definitionUnderKafka, 1, Vector.empty),
+        observed(rivalHere, 2, Vector.empty),
+        observed(rivalElsewhere, 3, Vector.empty),
+      ),
+      Vector(sourced(definitionNow, where), sourced(costNow, where)),
       Map(
         noteIdOf("n1") -> treeWith("top", "rabbitmq"),
         noteIdOf("n2") -> Vector(Vector("top"), Vector("top", "kafka")),
@@ -1003,10 +1007,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     // run one did that job. Without the third witness the descriptor's history follows.
     val definitionNow = definitionUnder("NATS", "n1", "top")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(definitionNow)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(definitionNow, where)),
       Map(noteIdOf("n1") -> treeWith("top", "nats")),
-      Vector(observed(costUnderKafkaElsewhere, 101)),
+      Vector(observed(costUnderKafkaElsewhere, 101, Vector.empty)),
     ) match
       case Vector(MoveFinding.Reparented(stranded, _, candidate, _, survival, _)) =>
         assertEquals(stranded, definitionUnderKafka.key)
@@ -1040,10 +1044,10 @@ class MoveEvidenceTest extends munit.FunSuite:
 
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
-      Vector(observed(novelist, 101), observed(row, 102)),
+      Vector(observed(novelist, 101, Vector.empty), observed(row, 102, Vector.empty)),
     ) match
       case Vector(_: MoveFinding.Corroborated) => ()
       case other =>
@@ -1071,10 +1075,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     )
     val definitionNow = definitionUnder("NATS", "n1", "top")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(definitionNow)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(definitionNow, where)),
       Map(noteIdOf("n1") -> treeWith("top", "nats")),
-      Vector(observed(pairCard, 101)),
+      Vector(observed(pairCard, 101, Vector.empty)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
         assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("top", "kafka"), pairCard.key))
@@ -1161,10 +1165,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     // and the run proceeds exactly as if no namesake existed: the old subject is gone from this note,
     // the cluster stayed, and Decision 2 follows the relabel.
     surveyDeclaring(
-      Vector(observed(throughputUnderKafkaPerformance, 1)),
-      Vector(sourced(throughputUnderKafkaDurability)),
+      Vector(observed(throughputUnderKafkaPerformance, 1, Vector.empty)),
+      Vector(sourced(throughputUnderKafkaDurability, where)),
       afterTheReFiling,
-      Vector(observed(latencyUnderNatsPerformance, 101)),
+      Vector(observed(latencyUnderNatsPerformance, 101, Vector.empty)),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
         assertEquals(c.candidate, throughputUnderKafkaDurability.key)
@@ -1187,8 +1191,8 @@ class MoveEvidenceTest extends munit.FunSuite:
         "NATS",
       )
     val findings = surveyOver(
-      Vector(observed(throughputUnderKafkaPerformance, 1), observed(latencyUnderNatsPerformance, 2)),
-      Vector(sourced(throughputUnderKafkaDurability), sourced(latencyMoved)),
+      Vector(observed(throughputUnderKafkaPerformance, 1, Vector.empty), observed(latencyUnderNatsPerformance, 2, Vector.empty)),
+      Vector(sourced(throughputUnderKafkaDurability, where), sourced(latencyMoved, where)),
       afterTheReFiling ++ Map(
         noteIdOf("n2") -> Vector(Vector("nats"), Vector("nats", "performance"))
       ),
@@ -1224,10 +1228,10 @@ class MoveEvidenceTest extends munit.FunSuite:
       threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
-      Vector(observed(twinElsewhere, 101)),
+      Vector(observed(twinElsewhere, 101, Vector.empty)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
         assertEquals(
@@ -1247,10 +1251,10 @@ class MoveEvidenceTest extends munit.FunSuite:
       threeField(key("n2", "top", "zookeeper", "cost"), "ZooKeeper", "Cost", "Ensembles are odd-sized.", "Top")
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> treeWith("top", "rabbitmq")),
-      Vector(observed(zooKeeper, 101)),
+      Vector(observed(zooKeeper, 101, Vector.empty)),
     ) match
       case Vector(_: MoveFinding.Corroborated) => ()
       case other => fail(s"an unrelated concept's live card must not block a rename: $other")
@@ -1351,10 +1355,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     // following moves one onto a card R2 calls a different card. The first is recoverable and
     // reported, the second is the thing this whole gate exists to prevent.
     surveyDeclaring(
-      Vector(observed(brokerDefinitionAtRoot, 1)),
-      Vector(sourced(systemsDefinitionAtRoot)),
+      Vector(observed(brokerDefinitionAtRoot, 1, Vector.empty)),
+      Vector(sourced(systemsDefinitionAtRoot, where)),
       afterTheRootRelabel,
-      Vector(observed(novelistOriginAtRoot, 101)),
+      Vector(observed(novelistOriginAtRoot, 101, Vector.empty)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
         assertEquals(
@@ -1380,8 +1384,8 @@ class MoveEvidenceTest extends munit.FunSuite:
         "Writers",
       )
     val findings = surveyOver(
-      Vector(observed(brokerDefinitionAtRoot, 1), observed(novelistOriginAtRoot, 2)),
-      Vector(sourced(systemsDefinitionAtRoot), sourced(novelistMoved)),
+      Vector(observed(brokerDefinitionAtRoot, 1, Vector.empty), observed(novelistOriginAtRoot, 2, Vector.empty)),
+      Vector(sourced(systemsDefinitionAtRoot, where), sourced(novelistMoved, where)),
       afterTheRootRelabel ++ Map(
         noteIdOf("n2") -> Vector.empty,
         noteIdOf("n4") -> Vector(Vector("kafka"), Vector("kafka", "origin")),
@@ -1412,8 +1416,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val costMovedOut =
       threeField(key("n5", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Queues")
     val findings = surveyOver(
-      Vector(observed(brokerDefinitionAtRoot, 1), observed(brokerCost, 2)),
-      Vector(sourced(systemsDefinitionAtRoot), sourced(costMovedOut)),
+      Vector(observed(brokerDefinitionAtRoot, 1, Vector.empty), observed(brokerCost, 2, Vector.empty)),
+      Vector(sourced(systemsDefinitionAtRoot, where), sourced(costMovedOut, where)),
       afterTheRootRelabel ++ Map(
         noteIdOf("n5") -> Vector(Vector("kafka"), Vector("kafka", "cost"))
       ),
@@ -1471,10 +1475,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     val relabelled =
       threeField(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafkaAlone, 1)),
-      Vector(sourced(relabelled)),
+      Vector(observed(definitionUnderKafkaAlone, 1, Vector.empty)),
+      Vector(sourced(relabelled, where)),
       Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
-      Vector(observed(definitionUnderNatsAlone, 101)),
+      Vector(observed(definitionUnderNatsAlone, 101, Vector.empty)),
     ) match
       case Vector(MoveFinding.ClaimBroken(stranded, _, candidate, _, claim, alsoAnswered, _)) =>
         assertEquals(stranded, definitionUnderKafkaAlone.key)
@@ -1504,10 +1508,10 @@ class MoveEvidenceTest extends munit.FunSuite:
       "the fixture must share the description for this guard to have a weapon",
     )
     surveyDeclaring(
-      Vector(observed(definitionUnderKafkaAlone, 1)),
-      Vector(sourced(relabelled)),
+      Vector(observed(definitionUnderKafkaAlone, 1, Vector.empty)),
+      Vector(sourced(relabelled, where)),
       Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
-      Vector(observed(natureUnderNats, 101)),
+      Vector(observed(natureUnderNats, 101, Vector.empty)),
     ) match
       case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, relabelled.key)
       case other => fail(s"a shared description under another descriptor is not a contradiction: $other")
@@ -1523,10 +1527,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     val reworded =
       threeField(key("k1", "kafka", "formal definition"), "Kafka", "Formal definition", "A durable log.", "Kafka")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafkaAlone, 1)),
-      Vector(sourced(reworded)),
+      Vector(observed(definitionUnderKafkaAlone, 1, Vector.empty)),
+      Vector(sourced(reworded, where)),
       Map(noteIdOf("k1") -> Vector(Vector("kafka"), Vector("kafka", "formal definition"))),
-      Vector(observed(twinInAnotherNote, 101)),
+      Vector(observed(twinInAnotherNote, 101, Vector.empty)),
     ) match
       case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, reworded.key)
       case other => fail(s"one concept answering in two places is not a contradiction: $other")
@@ -1546,10 +1550,10 @@ class MoveEvidenceTest extends munit.FunSuite:
 
     // Its own claim cannot break, because it made none.
     surveyDeclaring(
-      Vector(observed(oneWayKafka, 1)),
-      Vector(sourced(oneWayRelabelled)),
+      Vector(observed(oneWayKafka, 1, Vector.empty)),
+      Vector(sourced(oneWayRelabelled, where)),
       outline,
-      Vector(observed(definitionUnderNatsAlone, 101)),
+      Vector(observed(definitionUnderNatsAlone, 101, Vector.empty)),
     ) match
       case Vector(_: MoveFinding.Corroborated) => ()
       case other => fail(s"a 1way card claims no backward reading, so it cannot break one: $other")
@@ -1560,10 +1564,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     val twoWayRelabelled =
       threeField(key("k1", "streaming", "definition"), "Streaming", "Definition", "A durable log.", "Kafka")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafkaAlone, 1)),
-      Vector(sourced(twoWayRelabelled)),
+      Vector(observed(definitionUnderKafkaAlone, 1, Vector.empty)),
+      Vector(sourced(twoWayRelabelled, where)),
       outline,
-      Vector(observed(oneWayNats, 101)),
+      Vector(observed(oneWayNats, 101, Vector.empty)),
     ) match
       case Vector(b: MoveFinding.ClaimBroken) =>
         assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(oneWayNats.key))
@@ -1590,8 +1594,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val bornThisRun =
       threeFieldAllWays(key("n1", "nats", "definition"), "NATS", "Definition", "A durable log.", "NATS")
     val findings = surveyOver(
-      Vector(observed(definitionUnderKafkaAlone, 1)),
-      Vector(sourced(relabelled), sourced(bornThisRun)),
+      Vector(observed(definitionUnderKafkaAlone, 1, Vector.empty)),
+      Vector(sourced(relabelled, where), sourced(bornThisRun, where)),
       Map(noteIdOf("k1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
     )
     assertEquals(findings.size, 1, s"only one note is stranded here: $findings")
@@ -1642,10 +1646,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     val tableTwin =
       threeField(key("t1", "stores", "nats", "definition"), "NATS", "Definition", durableLogFromATable, "Stores")
     surveyDeclaring(
-      Vector(observed(strandedHeading, 1)),
-      Vector(sourced(relabelled)),
+      Vector(observed(strandedHeading, 1, Vector.empty)),
+      Vector(sourced(relabelled, where)),
       Map(noteIdOf("h1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
-      Vector(observed(tableTwin, 101)),
+      Vector(observed(tableTwin, 101, Vector.empty)),
     ) match
       case Vector(b: MoveFinding.ClaimBroken) =>
         assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(tableTwin.key))
@@ -1666,8 +1670,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val headingTwin =
       threeField(key("n1", "nats", "definition"), "NATS", "Definition", durableLogFromAHeading, "NATS")
     surveyDeclaring(
-      Vector(observed(strandedRow, 1)),
-      Vector(sourced(relabelledRow)),
+      Vector(observed(strandedRow, 1, Vector.empty)),
+      Vector(sourced(relabelledRow, where)),
       Map(
         noteIdOf("t1") -> Vector(
           Vector("brokers"),
@@ -1675,7 +1679,7 @@ class MoveEvidenceTest extends munit.FunSuite:
           Vector("brokers", "stream", "definition"),
         )
       ),
-      Vector(observed(headingTwin, 101)),
+      Vector(observed(headingTwin, 101, Vector.empty)),
     ) match
       case Vector(b: MoveFinding.ClaimBroken) =>
         assertEquals(b.alsoAnswered.toVector.map(_.at), Vector(headingTwin.key))
@@ -1701,10 +1705,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     val tableTwin =
       threeField(key("t1", "stores", "nats", "definition"), "NATS", "Definition", durableLogFromATable, "Stores")
     surveyDeclaring(
-      Vector(observed(strandedHeading, 1)),
-      Vector(sourced(relabelled)),
+      Vector(observed(strandedHeading, 1, Vector.empty)),
+      Vector(sourced(relabelled, where)),
       Map(noteIdOf("h1") -> Vector(Vector("streaming"), Vector("streaming", "definition"))),
-      Vector(observed(tableTwin, 101)),
+      Vector(observed(tableTwin, 101, Vector.empty)),
     ) match
       case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, relabelled.key)
       case other =>
@@ -1718,9 +1722,9 @@ class MoveEvidenceTest extends munit.FunSuite:
     // census that could not be taken cannot unestablish a card the collection is holding.
     val now = definitionUnder("RabbitMQ", "n1", "top")
     surveyBlind(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(now)),
-      Vector(observed(costUnderKafkaElsewhere, 101)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(now, where)),
+      Vector(observed(costUnderKafkaElsewhere, 101, Vector.empty)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
         assertEquals(r.survival, SubjectSurvival.StillInTheCollection(Vector("top", "kafka"), costUnderKafkaElsewhere.key))
@@ -1735,10 +1739,10 @@ class MoveEvidenceTest extends munit.FunSuite:
     // would have answered too. Deck scenario S24's transcript line depends on this staying true.
     val definitionNow = definitionUnder("NATS", "n1", "top")
     surveyDeclaring(
-      Vector(observed(definitionUnderKafka, 1)),
-      Vector(sourced(definitionNow)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty)),
+      Vector(sourced(definitionNow, where)),
       Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
-      Vector(observed(costUnderKafkaElsewhere, 101)),
+      Vector(observed(costUnderKafkaElsewhere, 101, Vector.empty)),
     ) match
       case Vector(r: MoveFinding.Reparented) =>
         assertEquals(r.survival, SubjectSurvival.StillInTheNote(Vector("top", "kafka")))
@@ -1752,11 +1756,11 @@ class MoveEvidenceTest extends munit.FunSuite:
     // would vouch for the old name and no rename would ever follow again. `plan/Planner.scala`
     // splits the collection on one predicate so the two cannot overlap; this refuses rather than
     // trusting that sentence to stay true.
-    val card = observed(definitionUnderKafka, 1)
+    val card = observed(definitionUnderKafka, 1, Vector.empty)
     val thrown = intercept[RuntimeException] {
       surveyDeclaring(
         Vector(card),
-        Vector(sourced(definitionUnder("NATS", "n1", "top"))),
+        Vector(sourced(definitionUnder("NATS", "n1", "top"), where)),
         Map(noteIdOf("n1") -> treeWith("top", "nats")),
         Vector(card),
       )
@@ -1818,7 +1822,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       Marker.NoteTypes.Basic,
       "the fixture must be a 1way card for this test to have a weapon",
     )
-    surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(inMultiply))) match
+    surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(inMultiply, where))) match
       case Vector(MoveFinding.NoVoucher(stranded, _, candidate, _, _)) =>
         assertEquals(stranded, oneWayInAdd.key)
         assertEquals(candidate, inMultiply.key)
@@ -1831,7 +1835,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // keys alone: a note this run stranded vanished and reappeared in one edit, which is what a move
     // looks like. The fixture differs from the test above in nothing but the tag.
     val inMultiply = twoField(key("multiply", "nature"), "Nature", "A binary operation.", "Multiply")
-    surveyOf(Vector(observed(oneWayInAdd, 1)), Vector(sourced(inMultiply))) match
+    surveyOf(Vector(observed(oneWayInAdd, 1, Vector.empty)), Vector(sourced(inMultiply, where))) match
       case Vector(c: MoveFinding.Corroborated) =>
         assertEquals(c.candidate, inMultiply.key)
         assertEquals(c.agreement, Agreement.Total)
@@ -1851,7 +1855,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // unflagged, unsuspended and reassigned", which has asserted it since the retroactive half of
     // Decision 5 was ratified; nothing on the sheet refuses it.
     val reworded = twoField(key("add", "the nature of it"), "The nature of it", "A binary operation.", "Add")
-    surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(reworded))) match
+    surveyOf(Vector(parked(oneWayInAdd, 1)), Vector(sourced(reworded, where))) match
       case Vector(c: MoveFinding.Corroborated) =>
         assertEquals(c.agreement, Agreement.PlaceAndSubstance)
       case other => fail(s"a parked 1way recreated in place must follow: $other")
@@ -1864,7 +1868,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val was = twoFieldBothWays(key("add", "nature"), "Nature", "A binary operation.", "Add")
     val now = twoFieldBothWays(key("multiply", "nature"), "Nature", "A binary operation.", "Multiply")
     assertEquals(was.noteTypeName, Marker.NoteTypes.BasicAndReversed, "the fixture must be a 2way card")
-    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now, where))) match
       case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, now.key)
       case other => fail(s"a 2way declaration vouches across syncs and notes: $other")
   }
@@ -1874,7 +1878,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // description identifies its concept and the rule has no quarrel with it.
     val was = threeField(key("n1", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
     val now = threeField(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
-    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now, where))) match
       case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, now.key)
       case other => fail(s"a concept-recall declaration vouches: $other")
   }
@@ -1889,7 +1893,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val now =
       threeFieldOneWay(key("n2", "top", "kafka", "cost"), "Kafka", "Cost", "Operational complexity.", "Top")
     assertEquals(was.noteTypeName, now.noteTypeName, "the fixture must share the note type to be a test")
-    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now, where))) match
       case Vector(_: MoveFinding.NoVoucher) => ()
       case other => fail(s"a cdd/1way declaration vouches for nothing: $other")
   }
@@ -1902,7 +1906,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // whether a cloze passage should vouch for itself is an open question rather than this rule's.
     val was = cloze(key("n1", "layers"), "The ==<<epidermis>>== is outermost.", "One")
     val now = cloze(key("n2", "layers"), "The ==<<epidermis>>== is outermost.", "One")
-    surveyOf(Vector(parked(was, 1)), Vector(sourced(now))) match
+    surveyOf(Vector(parked(was, 1)), Vector(sourced(now, where))) match
       case Vector(c: MoveFinding.Corroborated) => assertEquals(c.candidate, now.key)
       case other => fail(s"an unstated declaration must change nothing: $other")
   }
@@ -1924,8 +1928,8 @@ class MoveEvidenceTest extends munit.FunSuite:
     val now =
       twoField(key("n1", "notes", "temporal coupling"), "Temporal coupling", "Two things move together.", "Notes")
     surveyOver(
-      Vector(observed(was, 1)),
-      Vector(sourced(now)),
+      Vector(observed(was, 1, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> Vector(Vector("notes"), Vector("notes", "temporal coupling"))),
     ) match
       case Vector(c: MoveFinding.Corroborated) =>
@@ -1966,7 +1970,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       0,
       "a cloze card must show no name field for this test to be about what it says it is",
     )
-    surveyOf(Vector(observed(was, 1)), Vector(sourced(now))) match
+    surveyOf(Vector(observed(was, 1, Vector.empty)), Vector(sourced(now, where))) match
       case Vector(c: MoveFinding.Corroborated) =>
         assertEquals(c.candidate, now.key)
         assertEquals(c.agreement, Agreement.NameAndSubstance)
@@ -1979,7 +1983,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // read a window one segment long. Deck S65 follows this, and the gate must not fire on it.
     val was = threeField(propertyKey("n1", "special-case-of"), "Function Space", "Special-Case-Of", "An exponential object.", "")
     val now = threeField(propertyKey("n1", "instance-of"), "Function Space", "Instance-Of", "An exponential object.", "")
-    surveyOver(Vector(observed(was, 1)), Vector(sourced(now)), Map.empty) match
+    surveyOver(Vector(observed(was, 1, Vector.empty)), Vector(sourced(now, where)), Map.empty) match
       case Vector(c: MoveFinding.Corroborated) =>
         assertEquals(c.agreement, Agreement.PlaceAndSubstance)
       case other => fail(s"a property has no subject segment above its name: $other")
@@ -1993,8 +1997,8 @@ class MoveEvidenceTest extends munit.FunSuite:
       threeField(key("n1", "top", "zookeeper", "definition"), "ZooKeeper", "Definition", "A durable log.", "Top")
     val now = definitionUnder("NATS", "n1", "top")
     val findings = surveyOver(
-      Vector(observed(definitionUnderKafka, 1), observed(alsoClaiming, 2)),
-      Vector(sourced(now)),
+      Vector(observed(definitionUnderKafka, 1, Vector.empty), observed(alsoClaiming, 2, Vector.empty)),
+      Vector(sourced(now, where)),
       Map(noteIdOf("n1") -> (treeWith("top", "nats") :+ Vector("top", "kafka"))),
     )
     assertEquals(findings.size, 2)
@@ -2011,12 +2015,12 @@ class MoveEvidenceTest extends munit.FunSuite:
     // CONSERVATION. A note that produced no finding is a note the reader never hears about,
     // which is the silent-nothing failure this project is built to prevent.
     val notes = Vector(
-      observed(beforeMove, 1),
-      observed(twoField(key("n9", "gone"), "Gone", "Deleted outright.", "N9"), 2),
-      observed(twoField(key("n8", "a", "one"), "One", "Shared body.", "A"), 3),
-      observed(twoField(key("n8", "b", "two"), "Two", "Shared body.", "B"), 4),
+      observed(beforeMove, 1, Vector.empty),
+      observed(twoField(key("n9", "gone"), "Gone", "Deleted outright.", "N9"), 2, Vector.empty),
+      observed(twoField(key("n8", "a", "one"), "One", "Shared body.", "A"), 3, Vector.empty),
+      observed(twoField(key("n8", "b", "two"), "Two", "Shared body.", "B"), 4, Vector.empty),
     )
-    val specs = Vector(sourced(afterMove), sourced(twoField(key("n8", "c", "three"), "Three", "Shared body.", "C")))
+    val specs = Vector(sourced(afterMove, where), sourced(twoField(key("n8", "c", "three"), "Three", "Shared body.", "C"), where))
     val findings = surveyOf(notes, specs)
     assertEquals(findings.map(_.strandedNote).toSet, notes.map(_.note.id).toSet)
     assertEquals(findings.size, notes.size)
@@ -2024,10 +2028,10 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   test("the survey is stable under the order its inputs arrive in") {
     val notes = Vector(
-      observed(beforeMove, 1),
-      observed(twoField(key("n9", "gone"), "Gone", "Deleted outright.", "N9"), 2),
+      observed(beforeMove, 1, Vector.empty),
+      observed(twoField(key("n9", "gone"), "Gone", "Deleted outright.", "N9"), 2, Vector.empty),
     )
-    val specs = Vector(sourced(afterMove), sourced(twoField(key("n0", "new"), "New", "Brand new.", "N0")))
+    val specs = Vector(sourced(afterMove, where), sourced(twoField(key("n0", "new"), "New", "Brand new.", "N0"), where))
     assertEquals(
       surveyOf(notes, specs).map(_.describe),
       surveyOf(notes.reverse, specs.reverse).map(_.describe),
@@ -2037,8 +2041,8 @@ class MoveEvidenceTest extends munit.FunSuite:
   // ================================================================ THE ACTION ====
 
   test("a reassignment writes the vault's whole field set, the new identity included") {
-    val found  = corroboration(Vector(observed(beforeMove, 1)), Vector(sourced(afterMove)))
-    val action = found.reassignment(sourced(afterMove), Vector.empty, Vector.empty, None)
+    val found  = corroboration(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(afterMove, where)))
+    val action = found.reassignment(sourced(afterMove, where), Vector.empty, Vector.empty, None)
     assertEquals(action.fields, afterMove.fields)
     val written = action.fields.toMap
     assertEquals(
@@ -2051,20 +2055,20 @@ class MoveEvidenceTest extends munit.FunSuite:
   }
 
   test("a reassignment refuses a spec that is not the card the evidence named") {
-    val found = corroboration(Vector(observed(beforeMove, 1)), Vector(sourced(afterMove)))
-    val other = sourced(twoField(key("n0", "somewhere", "else"), "Else", "Other body.", "N0"))
+    val found = corroboration(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(afterMove, where)))
+    val other = sourced(twoField(key("n0", "somewhere", "else"), "Else", "Other body.", "N0"), where)
     intercept[RuntimeException](found.reassignment(other, Vector.empty, Vector.empty, None))
   }
 
   test("the action a reassignment carries is about the key it moves TO") {
-    val found  = corroboration(Vector(observed(beforeMove, 1)), Vector(sourced(afterMove)))
-    val action = found.reassignment(sourced(afterMove), Vector.empty, Vector.empty, None)
+    val found  = corroboration(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(afterMove, where)))
+    val action = found.reassignment(sourced(afterMove, where), Vector.empty, Vector.empty, None)
     assertEquals((action: SyncAction).cardKey, movedKey)
   }
 
   test("a reassignment is attempted under every retype policy") {
-    val found  = corroboration(Vector(observed(beforeMove, 1)), Vector(sourced(afterMove)))
-    val action: SyncAction = found.reassignment(sourced(afterMove), Vector.empty, Vector.empty, None)
+    val found  = corroboration(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(afterMove, where)))
+    val action: SyncAction = found.reassignment(sourced(afterMove, where), Vector.empty, Vector.empty, None)
     assertEquals(action.dispositionUnder(RetypePolicy.Defer), Disposition.Attempt)
     assertEquals(action.dispositionUnder(RetypePolicy.Apply), Disposition.Attempt)
   }
@@ -2090,7 +2094,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     */
   def collectionHolding(spec: CardSpec, reviews: Int): (InMemoryAnki, AnkiNoteId, Vector[AnkiCardId]) =
     val anki = InMemoryAnki()
-    runPlan(planOf(scanOf(sourced(spec)), anki), anki)
+    runPlan(planOf(scanOf(sourced(spec, where)), anki), anki)
     val noteId = anki.ownedNotes.fold(e => fail(s"$e"), identity) match
       case Vector(only) => only
       case several      => fail(s"the fixture should have created exactly one note: $several")
@@ -2101,7 +2105,7 @@ class MoveEvidenceTest extends munit.FunSuite:
   test("a moved heading plans a reassignment instead of a create, and no orphan flag at all") {
     val (anki, noteId, _) = collectionHolding(beforeMove, reviews = 32)
 
-    val plan = planOf(scanOf(sourced(afterMove)), anki)
+    val plan = planOf(scanOf(sourced(afterMove, where)), anki)
 
     assert(
       plan.actions.exists {
@@ -2126,7 +2130,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // delete and recreate, because the review log is the one thing this tool cannot recompute.
     val (anki, noteId, cards) = collectionHolding(beforeMove, reviews = 32)
 
-    runPlan(planOf(scanOf(sourced(afterMove)), anki), anki)
+    runPlan(planOf(scanOf(sourced(afterMove, where)), anki), anki)
 
     assertEquals(anki.ownedNotes.fold(e => fail(s"$e"), identity), Vector(noteId))
     assertEquals(anki.cardsOf(Vector(noteId)).fold(e => fail(s"$e"), identity), cards)
@@ -2139,7 +2143,7 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   test("after a reassignment the note claims the key the vault now produces") {
     val (anki, _, _) = collectionHolding(beforeMove, reviews = 3)
-    runPlan(planOf(scanOf(sourced(afterMove)), anki), anki)
+    runPlan(planOf(scanOf(sourced(afterMove, where)), anki), anki)
 
     val state = Observer.observe(anki).fold(e => fail(s"observe failed: $e"), identity)
     assertEquals(state.notes.map(_.key), Vector(movedKey))
@@ -2153,8 +2157,8 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   test("a run that reassigns converges: the next run has nothing to do") {
     val (anki, _, _) = collectionHolding(beforeMove, reviews = 3)
-    runPlan(planOf(scanOf(sourced(afterMove)), anki), anki)
-    assertEquals(planOf(scanOf(sourced(afterMove)), anki).actions, Vector.empty)
+    runPlan(planOf(scanOf(sourced(afterMove, where)), anki), anki)
+    assertEquals(planOf(scanOf(sourced(afterMove, where)), anki).actions, Vector.empty)
   }
 
   test("a note ALREADY parked as an orphan is unflagged, unsuspended and reassigned, in that order") {
@@ -2167,7 +2171,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     runPlan(planOf(scanOf(), anki), anki)
     assert(cards.forall(anki.isSuspended), "the fixture did not actually park the note")
 
-    val plan = planOf(scanOf(sourced(afterMove)), anki)
+    val plan = planOf(scanOf(sourced(afterMove, where)), anki)
     val kinds = plan.actions.map {
       case _: SyncAction.Unflag   => "unflag"
       case _: SyncAction.Reassign => "reassign"
@@ -2181,7 +2185,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       anki.standingOf(cards).fold(e => fail(s"$e"), identity).map(_.reviews),
       cards.map(_ => 7),
     )
-    assertEquals(planOf(scanOf(sourced(afterMove)), anki).actions, Vector.empty)
+    assertEquals(planOf(scanOf(sourced(afterMove, where)), anki).actions, Vector.empty)
   }
 
   test("a LEGACY note keeps its new identity: the backfill does not write the old one back over it") {
@@ -2207,7 +2211,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       )
       .fold(e => fail(s"$e"), identity)
 
-    val plan = planOf(scanOf(sourced(afterMove)), anki)
+    val plan = planOf(scanOf(sourced(afterMove, where)), anki)
     assert(
       !plan.actions.exists { case _: SyncAction.CarryIdentity => true; case _ => false },
       s"the identity backfill would have overwritten the reassignment: ${plan.actions}",
@@ -2221,7 +2225,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       !state.notes.head.note.tags.exists(_.startsWith(s"${OwnedTag.SrcPrefix}::")),
       s"the stale legacy identity survived: ${state.notes.head.note.tags}",
     )
-    assertEquals(planOf(scanOf(sourced(afterMove)), anki).actions, Vector.empty)
+    assertEquals(planOf(scanOf(sourced(afterMove, where)), anki).actions, Vector.empty)
   }
 
   test("every corroborated finding on a plan has the reassignment that discharges it") {
@@ -2230,7 +2234,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // without its action. Pinned here rather than defended in the report, because the planner is
     // where the two are decided together.
     val (anki, _, _) = collectionHolding(beforeMove, reviews = 3)
-    val plan = planOf(scanOf(sourced(afterMove)), anki)
+    val plan = planOf(scanOf(sourced(afterMove, where)), anki)
 
     val corroborated = plan.moveEvidence.collect { case c: MoveFinding.Corroborated => c }
     val discharged   = plan.actions.collect { case SyncAction.Reassign(c, _, _, _, _, _) => c }
@@ -2244,7 +2248,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val alt2 = twoField(key("n1", "c", "one"), "One", "Same body.", "C")
 
     val (anki, noteId, _) = collectionHolding(was, reviews = 5)
-    val plan = planOf(scanOf(sourced(alt1), sourced(alt2)), anki)
+    val plan = planOf(scanOf(sourced(alt1, where), sourced(alt2, where)), anki)
 
     assertEquals(
       plan.actions.collect { case c: SyncAction.Create => c.key }.toSet,
@@ -2263,7 +2267,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     val alt2 = twoField(key("n1", "c", "one"), "One", "Same body.", "C")
 
     val (anki, noteId, _) = collectionHolding(was, reviews = 5)
-    val plan = planOf(scanOf(sourced(alt1), sourced(alt2)), anki)
+    val plan = planOf(scanOf(sourced(alt1, where), sourced(alt2, where)), anki)
 
     assertEquals(plan.moveEvidence.map(_.strandedNote), Vector(noteId))
     assert(
@@ -2280,7 +2284,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // inference already obeys. A note not yet parked is therefore not even surveyed.
     val (anki, _, _) = collectionHolding(beforeMove, reviews = 3)
     val partial = VaultScan.from(
-      Vector(sourced(afterMove)),
+      Vector(sourced(afterMove, where)),
       Vector(BuildFailure.FileUnreadable("Other.md", "could not be read")),
     )
     val plan = planOf(partial, anki)
@@ -2293,7 +2297,7 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   test("the run says what it did and what changed, because a silent history move is the failure") {
     val (anki, _, _) = collectionHolding(beforeMove, reviews = 3)
-    val plan  = planOf(scanOf(sourced(afterMove)), anki)
+    val plan  = planOf(scanOf(sourced(afterMove, where)), anki)
     val lines = obsidiananki.cli.Report.plan(plan, RetypePolicy.Apply).mkString("\n")
 
     assert(lines.contains("review history"), s"the report did not say what was preserved:\n$lines")
