@@ -333,6 +333,43 @@ self-witnessed facts (queued with the review-queue work, bead filed), and (2) ke
 evidence structurally extensible so a git-sourced fact could slot in later IF a concrete case
 ever demonstrates something self-recording cannot supply — the bar it has not cleared.
 
+## Ruled 2026-09-21 — the record of a move is evidence: the ledger becomes readable
+
+THE CONFLICT IT SETTLES, as `plan/MoveEvidence.test.scala`'s ⚠️ test states it: a live card under a
+same-spelled subject in another note is, to the survey, indistinguishable in two opposite cases —
+the judge's JN-LIVE (Franz Kafka's unrelated cards must not block relabelling the message broker's
+`# Kafka`; "a concept is its chain, namesakes elsewhere are silence") and deck scenario S24D (the
+message broker's own cluster, relocated by an earlier run, MUST block it; "survival evidence has
+no sync boundary"). The two are isomorphic except for which note the vault now produces the card
+in, and that fact was taken out of a `/2way` card's claim by the same day's entailment — so no
+rule keyed on the witness alone can honour both rulings, and the build parked both on the safe
+side under that ⚠️ test.
+
+THE DISTINGUISHING FACT IS LINEAGE, AND THE TOOL ALREADY WROTE IT DOWN: in S24D the witness card
+once stood at the very place being relabelled, and the run that moved it recorded that move; Franz
+Kafka's card never did. Marc ruled the ledger may be READ, so a live witness bridges only when a
+recorded move brought it from the place in question. This is the same-run bridge clause
+("its own pairing moved it from P this run") extended by the already-ruled "recorded declarations
+do not expire", and it is the first time the self-recorded facts elected over git evidence
+(2026-09-14) earn their keep.
+
+FOUR COMMITMENTS, all four part of the ruling and not one of them optional:
+
+1. **Readable.** A recorded move licenses a live witness's bridge; absent any record, a
+   same-spelled subject elsewhere testifies to nothing.
+2. **Observation-only entries.** Entries record what happened (note, from-key, to-key, grade,
+   when), never a judgment ("this was a legitimate rename"). Future rulings change what the facts
+   MEAN; they must never invalidate what was written. The is/ought separation, as a file format.
+3. **Versioned with a compatibility promise.** Once read, the entry shape is a contract with every
+   later version: old lines stay readable. The hand-written encoder exists for this reason; the
+   promise is now explicit.
+4. **The record must travel with the data it describes.** A machine-local file makes the decision
+   depend on WHICH machine syncs: move a cluster on the laptop, relabel on the desktop, and the
+   desktop has no record, so nothing bridges and the S24D shape follows wrongly. The reading side
+   is therefore a port with a swappable store, the cost is pinned by a test rather than left
+   implicit, and what a travelling store would take (a breadcrumb on the Anki note, which AnkiWeb
+   carries, versus keeping the file) is specified for a separate ruling.
+
 ## Ruled principle, 2026-09-13 — declarations are contracts, not hints
 
 Context: the card kind is the author's declaration about their content ("2way" = this description
