@@ -217,6 +217,9 @@ class InMemoryAnkiTest extends munit.FunSuite:
           "ValueOnly",
           // The card's identity, a field since 2026-08-28 — see `Marker.IdentityField`.
           "Identity",
+          // What the card is about — see `Marker.TopicsField`. Last, because AnkiConnect's
+          // `modelFieldAdd` appends and a repaired collection must be able to reach this order.
+          "Topics",
         )
       ),
     )

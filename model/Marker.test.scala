@@ -372,7 +372,7 @@ class MarkerTest extends munit.FunSuite:
     * holds a list. `CardSpec.Sequence` guarantees nothing of the kind — that is established by
     * a refusal in `extract/`, and the value below is hand-built.
     */
-  test("a sequence spec emits Title, Text, Context, Reveal and Identity, in that order") {
+  test("a sequence spec emits Title, Text, Context, Reveal, Identity and Topics, in that order") {
     val spec =
       CardSpec.Sequence(aKey("Anatomy", "Path"), "Path of blood", body("<ul><li>a</li></ul>"), "Anatomy", RevealOrder.DepthFirst)
     assertEquals(
@@ -388,6 +388,11 @@ class MarkerTest extends munit.FunSuite:
         // THE IDENTITY, WHICH EVERY CARD KIND CARRIES. It is the same string the `src::` tag
         // held before 2026-08-28 — this moved where an identity is stored, not what it is.
         "Identity" -> "src::fix-note::anatomy/path",
+        // EMPTY FOR THE SAME REASON `Reveal` IS, and for a second one on top of it. A note with
+        // no subject tags has nothing to say here, so empty is a legitimate steady state rather
+        // than a placeholder; and until the value is wired through it is empty for EVERY card,
+        // which is what keeps this field's arrival invisible to an existing collection's content.
+        "Topics" -> "",
       ),
     )
     assertEquals(spec.fields.map(_._1), Marker.FieldOrder.ClozeSequence)

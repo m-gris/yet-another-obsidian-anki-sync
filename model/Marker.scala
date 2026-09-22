@@ -389,6 +389,31 @@ object Marker:
     */
   val ContextField: String = "Context"
 
+  /** WHAT THE CARD IS ABOUT, shown on the card beside — and distinctly from — the breadcrumb.
+    *
+    * A GENERAL SUBJECT SLOT, NOT A TAGS FIELD, and the distinction is the reason it is not
+    * called `Tags`. Frontmatter subject tags fill it today; a later source would arrive as
+    * another INPUT to the same slot rather than as a second field, so that "what this card is
+    * about" has one home on the note type instead of one per source.
+    *
+    * WHY IT IS NOT THE BREADCRUMB. [[ContextField]] answers WHERE the card came from — an
+    * ordered chain, folders down to headings, and a filing address. This answers WHAT it is
+    * about — an unordered set of overlapping facets, where `Type Checker` is `CS` and `PLT` and
+    * `type-theory` at once. Joining them into one chain would assert a nesting the vault does
+    * not have, which is also why subject tags are not a deck level.
+    *
+    * WHAT IT IS FOR. A note at the vault ROOT has no folders, so its breadcrumb holds only the
+    * file name — and that is stripped whenever the card already shows it as a field. The
+    * breadcrumb then renders EMPTY and the card asks a question nothing on it can answer. 77 of
+    * the 92 notes in the reference vault are at the root (measured 2026-09-22), so this is the
+    * ordinary case rather than an edge one.
+    *
+    * THE VALUE MAY LEGITIMATELY BE EMPTY, exactly as [[ContextField]]'s may: a note with no
+    * subject tags has nothing to say here. The templates wrap it in `{{#Topics}}…{{/Topics}}`,
+    * so an empty value emits no markup rather than an empty rule and a gap.
+    */
+  val TopicsField: String = "Topics"
+
   /** Field order for [[NoteTypes.ConceptDescriptor]]'s FIRST THREE fields.
     *
     * RULED (B7): Concept, Descriptor, Description — matching the templates already on the
@@ -566,7 +591,14 @@ object Marker:
     */
   object FieldOrder:
     val Basic: Vector[String] =
-      Vector(BasicFields.Front, BasicFields.Back, ContextField, SameShapeField, IdentityField)
+      Vector(
+        BasicFields.Front,
+        BasicFields.Back,
+        ContextField,
+        SameShapeField,
+        IdentityField,
+        TopicsField,
+      )
 
     /** The same three names as [[Basic]] — see the note at [[BasicFields]] for why the two
       * types deliberately share a field list.
@@ -574,21 +606,21 @@ object Marker:
     val BasicAndReversed: Vector[String] = Basic
 
     val Cloze: Vector[String] =
-      Vector(ClozeFields.Text, ClozeFields.BackExtra, ContextField, IdentityField)
+      Vector(ClozeFields.Text, ClozeFields.BackExtra, ContextField, IdentityField, TopicsField)
 
     // APPENDED AFTER `Context`, WHICH IS FORCED RATHER THAN CHOSEN. Anki's `modelFieldAdd`
     // appends, so a field declared anywhere but last would leave every repaired collection
     // permanently reporting a field-order difference it can never fix. The same reasoning is
     // written at the concept-descriptor arm of `CardSpec.fields`.
     val ClozeSequence: Vector[String] =
-      ClozeSequenceFields :+ ContextField :+ RevealField :+ IdentityField
+      ClozeSequenceFields :+ ContextField :+ RevealField :+ IdentityField :+ TopicsField
 
     val ConceptDescriptor: Vector[String] =
       // NEW FIELDS GO LAST, in the order they were introduced: Anki's `modelFieldAdd` appends,
       // so any other position leaves a repaired collection permanently reporting a field-order
       // difference this tool declines to fix.
       ConceptDescriptorFields :+ ThreeWayField :+ ContextField :+ ConceptLabelField :+
-        ValueOnlyField :+ IdentityField
+        ValueOnlyField :+ IdentityField :+ TopicsField
 
     /** Keyed by note type name, so a consumer holding a `CardSpec` can ask
       * `FieldOrder.byNoteType(spec.noteTypeName)`.

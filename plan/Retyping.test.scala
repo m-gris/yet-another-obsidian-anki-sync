@@ -1131,6 +1131,11 @@ class RetypingTest extends munit.FunSuite:
         // identity, which the caller must therefore always name. That is the trap this test
         // exists to keep visible.
         Marker.IdentityField     -> "",
+        // BLANKED TOO, and it is the one field for which that is harmless rather than a trap:
+        // a move recomputes what the card is about from the vault on the next run, whereas a
+        // blanked identity makes the note unfindable. Listed so the destination's WHOLE field
+        // set stays visible here, which is what makes the trap above legible.
+        Marker.TopicsField       -> "",
       ),
       "the fake did not reproduce the blank-then-fill behaviour, so nothing here would catch it",
     )

@@ -322,7 +322,20 @@ object CardSpec:
       * where the identity is stored, not what it is.
       */
     def fields: Vector[(String, String)] =
-      perKindFields :+ (Marker.IdentityField -> TagCodec.encode(spec.key).value)
+      perKindFields :+ (Marker.IdentityField -> TagCodec.encode(spec.key).value) :+
+        // APPENDED ONCE HERE, FOR THE REASON THE IDENTITY IS. What a card is about is uniform
+        // across every card kind — unlike the breadcrumb, whose anti-spoiler rule differs per
+        // kind and which each arm therefore appends itself. Doing it at this level means a card
+        // kind added later cannot forget it and two kinds cannot disagree about it.
+        //
+        // EMPTY UNTIL `oas-ptm.9` WIRES THE VALUE THROUGH, and empty is a legitimate value
+        // afterwards too: a note with no subject tags has nothing to say here. The templates
+        // wrap it in `{{#Topics}}…{{/Topics}}`, so nothing is emitted rather than an empty rule.
+        //
+        // AFTER THE IDENTITY, which is forced rather than chosen: AnkiConnect's `modelFieldAdd`
+        // appends, so a field declared anywhere else would leave every repaired collection
+        // permanently reporting a field-order difference no repair can close.
+        (Marker.TopicsField -> "")
 
     private def perKindFields: Vector[(String, String)] = spec match
       case TwoField(_, front, back, _, context) =>

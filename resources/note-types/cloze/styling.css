@@ -32,6 +32,26 @@
 .context .deck { opacity: 0.75; }
 .context .sep  { opacity: 0.55; }
 
+/* WHAT the card is about, as opposed to WHERE it came from — kept visually distinct on
+   purpose. The breadcrumb is an ORDERED PATH and these are an UNORDERED SET of overlapping
+   facets: a note is `CS` and `PLT` and `type-theory` at once. Rendering them as more
+   breadcrumb would assert a nesting the vault does not have, which is the same reason
+   subject tags are not a deck level.
+
+   The chip rule targets `.topic` children so the field MAY carry one span per subject; a
+   field holding plain text still renders, just without the chips. */
+.context .topics { margin-left: 0.6em; }
+.context .topic {
+  display: inline-block;
+  font-size: 0.85em;
+  line-height: 1.5;
+  padding: 0 0.45em;
+  margin-right: 0.3em;
+  border: 1px solid #d8d8d8;
+  border-radius: 0.9em;
+}
+.nightMode .context .topic, .night_mode .context .topic { border-color: #4a4a4a; }
+
 /* A LABELLED VALUE: what it is, then what it says. The label is the column a table cell came
    from, or the header over the column that names the rows. Uppercased in CSS rather than in
    the data, so the stored value stays exactly what the author typed and a change of mind here

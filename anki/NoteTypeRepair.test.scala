@@ -51,10 +51,16 @@ class NoteTypeRepairTest extends munit.FunSuite:
       // place while stripping the three around it would put the repaired fields AFTER it, in an
       // order the declaration does not have — so the repair would close every membership
       // difference and still, correctly, report itself unclean on order.
+      // `Topics` JOINED ON 2026-09-22 and had to for the SAME reason, which is why that
+      // paragraph is a rule rather than a note about one field: it is declared AFTER
+      // `Identity`, so leaving it in place while stripping the four before it would put every
+      // repaired field ahead of it — membership closed, order permanently wrong, repair
+      // correctly reporting itself unclean forever.
       fields = NonEmptyVector.fromVectorUnsafe(
         ours.fields.toVector.filterNot(f =>
           f == Marker.ContextField || f == Marker.ConceptLabelField ||
-            f == Marker.ValueOnlyField || f == Marker.IdentityField
+            f == Marker.ValueOnlyField || f == Marker.IdentityField ||
+            f == Marker.TopicsField
         )
       ),
       templates = ours.templates.map { (templateName, template) =>
@@ -150,6 +156,7 @@ class NoteTypeRepairTest extends munit.FunSuite:
         Marker.ConceptLabelField,
         Marker.ValueOnlyField,
         Marker.IdentityField,
+        Marker.TopicsField,
       ),
       s"plan was ${plan.actions.map(_.describe)}",
     )

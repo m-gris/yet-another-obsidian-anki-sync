@@ -414,8 +414,14 @@ class NoteTypeInstallTest extends munit.FunSuite:
           // BOTH FIELDS THE FIXTURE OMITS. `Reveal` joined the note type on 2026-08-28; this
           // asserts the readiness check names EVERY missing field rather than the first, which
           // is what makes the run's message actionable in one pass.
-          // EVERY field the fixture omits, not the first. `Identity` joined on 2026-08-28.
-          NonEmptyVector.of(Marker.ContextField, Marker.RevealField, Marker.IdentityField),
+          // EVERY field the fixture omits, not the first. `Identity` joined on 2026-08-28,
+          // `Topics` on 2026-09-22.
+          NonEmptyVector.of(
+            Marker.ContextField,
+            Marker.RevealField,
+            Marker.IdentityField,
+            Marker.TopicsField,
+          ),
         )
       ),
       s"a missing Context field did not stop the run: ${readinessOf(anki)}",

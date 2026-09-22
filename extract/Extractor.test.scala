@@ -1276,6 +1276,9 @@ class ExtractorTest extends munit.FunSuite:
         "Reveal"  -> "",
         // The card's identity, a field rather than a tag since 2026-08-28.
         "Identity" -> "src::n1::b/path%20of%20blood",
+        // WHAT THE CARD IS ABOUT, empty because this fixture note declares no frontmatter
+        // subject tags. Empty is the steady state for such a note, not a placeholder.
+        "Topics" -> "",
       ),
     )
   }
@@ -1429,6 +1432,9 @@ class ExtractorTest extends munit.FunSuite:
         "Reveal"  -> "",
         // The card's identity, a field rather than a tag since 2026-08-28.
         "Identity" -> "src::n1::b/path%20of%20blood",
+        // WHAT THE CARD IS ABOUT, empty because this fixture note declares no frontmatter
+        // subject tags. Empty is the steady state for such a note, not a placeholder.
+        "Topics" -> "",
       ),
     )
   }

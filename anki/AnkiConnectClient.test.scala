@@ -415,7 +415,7 @@ class AnkiConnectClientTest extends munit.FunSuite:
       moved.fields,
       Vector(
         "Front" -> "Term", "Back" -> "definition", "Context" -> "Coupling", "SameShape" -> "",
-        "Identity" -> "src::n1::term",
+        "Identity" -> "src::n1::term", "Topics" -> "",
       ),
     )
     assertEquals(moved.tags.sorted, Vector("leech", "sha::feedface", "src::n1::term"))
@@ -445,7 +445,10 @@ class AnkiConnectClientTest extends munit.FunSuite:
 
     assertEquals(
       state.notes(id).fields,
-      Vector("Front" -> "Term", "Back" -> "", "Context" -> "", "SameShape" -> "", "Identity" -> ""),
+      Vector(
+        "Front" -> "Term", "Back" -> "", "Context" -> "", "SameShape" -> "",
+        "Identity" -> "", "Topics" -> "",
+      ),
       "the wire fake did not reproduce blank-then-fill, so nothing here would catch the trap",
     )
   }

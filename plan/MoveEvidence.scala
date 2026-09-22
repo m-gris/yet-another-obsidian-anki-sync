@@ -230,6 +230,17 @@ object FieldRole:
       Marker.ClozeFields.BackExtra -> Substance,
       Marker.ContextField          -> Bearing,
       Marker.IdentityField         -> Identity,
+      // BEARING, THE SAME ROLE THE BREADCRUMB HAS, and every other role is actively wrong.
+      // Substance and Setting are the comparison FLOOR - they must agree byte-for-byte before a
+      // pairing is admitted at all - so an author retagging a note would block move recovery
+      // entirely and the stranded note would read as Unexplained rather than weakly explained.
+      // Anchor is the display of a KEY PATH segment and carries an index the contiguity check
+      // validates, which a subject has none of. Identity is the key.
+      //
+      // A subject is not evidence of a move: it changes when the author retags, which says
+      // nothing about where the card came from. Bearing is exactly that - recorded and
+      // reported, never blocking - so a divergence here adds a line to a report and no more.
+      Marker.TopicsField           -> Bearing,
     ),
     Marker.NoteTypes.ClozeSequence -> Map(
       "Title"              -> Anchor(0),
@@ -237,6 +248,7 @@ object FieldRole:
       Marker.ContextField  -> Bearing,
       Marker.RevealField   -> Setting,
       Marker.IdentityField -> Identity,
+      Marker.TopicsField   -> Bearing,
     ),
     Marker.NoteTypes.ConceptDescriptor -> Map(
       // THE DESCRIPTOR IS THE MARKED HEADING AND THE CONCEPT IS ITS PARENT, so the two indices
@@ -252,6 +264,7 @@ object FieldRole:
       Marker.ConceptLabelField -> Setting,
       Marker.ValueOnlyField    -> Setting,
       Marker.IdentityField     -> Identity,
+      Marker.TopicsField       -> Bearing,
     ),
   )
 
@@ -272,6 +285,7 @@ object FieldRole:
     Marker.ContextField      -> Bearing,
     Marker.SameShapeField    -> Setting,
     Marker.IdentityField     -> Identity,
+    Marker.TopicsField       -> Bearing,
   )
 
   /** The roles for one note type, or `None` for a note type this tool does not declare.

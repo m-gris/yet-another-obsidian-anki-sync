@@ -10,7 +10,8 @@
     "Context",
     "ConceptLabel",
     "ValueOnly",
-    "Identity"
+    "Identity",
+    "Topics"
   ],
   "styling": "styling.css",
   "templates": [

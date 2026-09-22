@@ -32,6 +32,7 @@ card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/running%20the%20test%20suite⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -40,6 +41,7 @@ card ⟦src::fix-body-shapes::body%20shapes/running%20the%20test%20suite⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/running%20the%20test%20suite⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -51,6 +53,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ConceptLabel⟧ ⟦Bone⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/anterior%20border⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/posterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -62,6 +65,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ConceptLabel⟧ ⟦Bone⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal/posterior%20border⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal⟧
   note ⟦Obsidian Basic⟧
@@ -70,6 +74,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Cranial bones and their sutures⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/frontal⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/anterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -81,6 +86,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ConceptLabel⟧ ⟦Bone⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/anterior%20border⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/posterior%20border⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -92,6 +98,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦ConceptLabel⟧ ⟦Bone⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal/posterior%20border⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal⟧
   note ⟦Obsidian Basic⟧
@@ -100,6 +107,7 @@ card ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutu
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Cranial bones and their sutures⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/cranial%20bones%20and%20their%20sutures/parietal⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
   note ⟦Obsidian Cloze⟧
@@ -107,6 +115,7 @@ card ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › The three layers, blanked⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/the%20three%20layers%2c%20blanked⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20forearm⟧
   note ⟦Obsidian Cloze⟧
@@ -114,6 +123,7 @@ card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20forearm⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Bones of the forearm⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20forearm⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20two%20parts⟧
   note ⟦Obsidian Cloze⟧
@@ -121,6 +131,7 @@ card ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20tw
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Body shapes › Bones of the hand, in two parts⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/bones%20of%20the%20hand%2c%20in%20two%20parts⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -129,6 +140,7 @@ card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%2
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20and%20volume%20of%20a%20sphere⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20of%20radius%20r⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -137,6 +149,7 @@ card ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20o
   field ⟦Context⟧ ⟦Anatomy › Body shapes⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-body-shapes::body%20shapes/surface%20area%20of%20a%20sphere%20of%20radius%20r⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
   note ⟦Obsidian Cloze⟧
@@ -144,6 +157,7 @@ card ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Bones › Anatomy of a long bone⟧
   field ⟦Identity⟧ ⟦src::fix-bones::bones/anatomy%20of%20a%20long%20bone⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
   note ⟦Obsidian Cloze⟧
@@ -151,6 +165,7 @@ card ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Bones › Cells that remodel bone⟧
   field ⟦Identity⟧ ⟦src::fix-bones::bones/cells%20that%20remodel%20bone⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-bones::/b/marrow-sites⟧
   note ⟦Obsidian Cloze⟧
@@ -158,6 +173,7 @@ card ⟦src::fix-bones::/b/marrow-sites⟧
   field ⟦Back Extra⟧ ⟦⟧
   field ⟦Context⟧ ⟦Anatomy › Bones › Where marrow sits⟧
   field ⟦Identity⟧ ⟦src::fix-bones::/b/marrow-sites⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%20heart⟧
   note ⟦Obsidian Cloze Sequence⟧
@@ -166,6 +182,7 @@ card ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%
   field ⟦Context⟧ ⟦Anatomy › Sequences⟧
   field ⟦Reveal⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%20heart⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -177,6 +194,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/bene
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/benefit⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -188,6 +206,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/cost⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
   note ⟦Obsidian Basic⟧
@@ -196,6 +215,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
   field ⟦Context⟧ ⟦Patterns › Messaging › Messaging Patterns › Cost / benefit⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -207,6 +227,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/benefit⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -218,6 +239,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub/cost⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub⟧
   note ⟦Obsidian Basic⟧
@@ -226,6 +248,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub�
   field ⟦Context⟧ ⟦Patterns › Messaging › Messaging Patterns › Cost / benefit⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/pub%2fsub⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -237,6 +260,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/benefit⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -248,6 +272,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦ConceptLabel⟧ ⟦Pattern⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response/cost⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response⟧
   note ⟦Obsidian Basic⟧
@@ -256,6 +281,7 @@ card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-re
   field ⟦Context⟧ ⟦Patterns › Messaging › Messaging Patterns › Cost / benefit⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/request-response⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f⟧
   note ⟦Obsidian Basic⟧
@@ -264,6 +290,7 @@ card ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20yo
   field ⟦Context⟧ ⟦Patterns › Nested › Deep › Quorums⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-quorums::quorums/what%20does%20w%20%2b%20r%20%3e%20n%20buy%20you%3f⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-quorums::quorums/why%20do%20sloppy%20quorums%20weaken%20consistency%3f⟧
   note ⟦Obsidian Basic⟧
@@ -272,6 +299,7 @@ card ⟦src::fix-quorums::quorums/why%20do%20sloppy%20quorums%20weaken%20consist
   field ⟦Context⟧ ⟦Patterns › Nested › Deep › Quorums⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-quorums::quorums/why%20do%20sloppy%20quorums%20weaken%20consistency%3f⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -283,6 +311,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -294,6 +323,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
@@ -302,6 +332,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Context⟧ ⟦Patterns › Table Edge Cases › Duplicate row concepts⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -313,6 +344,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/purpose⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -324,6 +356,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry/failure%20mode⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
   note ⟦Obsidian Basic⟧
@@ -332,6 +365,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/re
   field ⟦Context⟧ ⟦Patterns › Table Edge Cases › Duplicate row concepts⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/retry⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/purpose⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -343,6 +377,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/purpose⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -354,6 +389,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦ConceptLabel⟧ ⟦Mechanism⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout/failure%20mode⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout⟧
   note ⟦Obsidian Basic⟧
@@ -362,6 +398,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/ti
   field ⟦Context⟧ ⟦Patterns › Table Edge Cases › Duplicate row concepts⟧
   field ⟦SameShape⟧ ⟦1⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/duplicate%20row%20concepts/timeout⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/range%20partitioning/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -373,6 +410,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/range%20partitioning/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/hash%20partitioning/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -384,6 +422,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/hash%20partitioning/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/consistent%20hashing/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -395,6 +434,7 @@ card ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20
   field ⟦ConceptLabel⟧ ⟦Partitioning strategy⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-table-edges::table%20edge%20cases/exactly%20one%20descriptor%20column/consistent%20hashing/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -406,6 +446,7 @@ card ⟦src::fix-consistency::consistency/definition⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-consistency::consistency/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -417,6 +458,7 @@ card ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-consistency::consistency/why%20it%20is%20a%20spectrum⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -428,6 +470,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -439,6 +482,7 @@ card ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-consistency::consistency/session%20guarantees/monotonic%20reads/failure%20mode⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -447,6 +491,7 @@ card ⟦src::fix-coupling::coupling/temporal%20coupling⟧
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/temporal%20coupling⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/afferent%20coupling⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -455,6 +500,7 @@ card ⟦src::fix-coupling::coupling/afferent%20coupling⟧
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/afferent%20coupling⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20make%20a%20module%20fragile%3f⟧
   note ⟦Obsidian Basic⟧
@@ -463,6 +509,7 @@ card ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20ma
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/why%20does%20high%20efferent%20coupling%20make%20a%20module%20fragile%3f⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-coupling::coupling/why%20is%20connascence%20of%20meaning%20harder%20to%20maintain%20than%20connascence%20of%20name%3f⟧
   note ⟦Obsidian Basic⟧
@@ -471,6 +518,7 @@ card ⟦src::fix-coupling::coupling/why%20is%20connascence%20of%20meaning%20hard
   field ⟦Context⟧ ⟦System-Design › Coupling⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-coupling::coupling/why%20is%20connascence%20of%20meaning%20harder%20to%20maintain%20than%20connascence%20of%20name%3f⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -482,6 +530,7 @@ card ⟦src::fix-linearizability::linearizability/definition⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-linearizability::linearizability/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/cost⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -493,6 +542,7 @@ card ⟦src::fix-linearizability::linearizability/cost⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-linearizability::linearizability/cost⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -504,6 +554,7 @@ card ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%2
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-linearizability::linearizability/contrast%20with%20sequential%20consistency⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -515,6 +566,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-multi-topic::multi-topic/cap%20theorem/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -526,6 +578,7 @@ card ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-multi-topic::multi-topic/cap%20theorem/failure%20mode⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -537,6 +590,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-multi-topic::multi-topic/quorum/definition⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   note ⟦Obsidian Concept-Descriptor⟧
@@ -548,6 +602,7 @@ card ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
   field ⟦ConceptLabel⟧ ⟦⟧
   field ⟦ValueOnly⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-multi-topic::multi-topic/quorum/failure%20mode⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication%20trade%20availability%20for%20durability%3f⟧
   note ⟦Obsidian Basic⟧
@@ -556,6 +611,7 @@ card ⟦src::fix-replication::replication/why%20does%20synchronous%20replication
   field ⟦Context⟧ ⟦System-Design › Replication⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-replication::replication/why%20does%20synchronous%20replication%20trade%20availability%20for%20durability%3f⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
   note ⟦Obsidian Basic (and reversed card)⟧
@@ -564,6 +620,7 @@ card ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
   field ⟦Context⟧ ⟦System-Design › Replication⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-replication::replication/read-your-writes%20consistency⟧
+  field ⟦Topics⟧ ⟦⟧
 
 card ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up%20after%20a%20network%20partition%3f⟧
   note ⟦Obsidian Basic⟧
@@ -572,6 +629,7 @@ card ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up
   field ⟦Context⟧ ⟦System-Design › Replication⟧
   field ⟦SameShape⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-replication::replication/how%20does%20a%20follower%20catch%20up%20after%20a%20network%20partition%3f⟧
+  field ⟦Topics⟧ ⟦⟧
 
 fail ⟦KeyKnown⟧ ⟦src::fix-shallow-nesting::shallow%20nesting/why%20is%20a%20sloppy%20quorum%20weaker%20than%20a%20strict%20one%3f⟧
 fail ⟦KeyKnown⟧ ⟦src::fix-table-edges::table%20edge%20cases/concept%20column%20only%2c%20no%20descriptor%20columns⟧

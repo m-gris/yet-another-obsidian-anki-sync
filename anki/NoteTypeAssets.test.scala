@@ -164,14 +164,20 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     * repaired collection permanently reporting a field-order difference this tool declines to
     * fix. New fields therefore go LAST in the manifest, in the order they were introduced.
     */
-  test("no note type sorts by a derived field, and every one declares Context") {
-    val derived = Set(Marker.ContextField, Marker.ConceptLabelField)
+  test("no note type sorts by a derived field, and every one declares Context and Topics") {
+    // `Topics` IS DERIVED TOO — it is composed from the note's frontmatter, never typed into
+    // Anki by hand — so it belongs in this set for the same reason `Context` does.
+    val derived = Set(Marker.ContextField, Marker.ConceptLabelField, Marker.TopicsField)
     assets.foreach { asset =>
       val fields = asset.spec.fields.toVector
-      assert(
-        fields.contains(Marker.ContextField),
-        s"'${asset.spec.name}' has no ${Marker.ContextField} field",
-      )
+      // NAMED ONE BY ONE RATHER THAN LOOPED OVER `derived`, because the two are required of
+      // every note type while `ConceptLabel` is not — a loop would quietly demand it everywhere.
+      Vector(Marker.ContextField, Marker.TopicsField).foreach { required =>
+        assert(
+          fields.contains(required),
+          s"'${asset.spec.name}' has no $required field",
+        )
+      }
       assert(
         !derived.contains(fields.head),
         s"'${asset.spec.name}' sorts by '${fields.head}', a field this tool derives — Anki's " +
@@ -526,14 +532,20 @@ class NoteTypeAssetsTest extends munit.FunSuite:
     * answer. Told after the fact that the question meant the frontal BONE, you have already
     * answered the wrong question.
     */
-  test("every template's FRONT renders the Context field, not just one template per note type") {
+  test("every template's FRONT renders Context and Topics, not just one template per note type") {
+    // BOTH FIELDS, FOR ONE REASON. Each answers half of "what is this card about" — where it
+    // came from, and what subject it belongs to — and a card at the vault root frequently has
+    // an EMPTY breadcrumb, which is precisely when the subjects are the only context there is.
+    // Checking only `Context` would let the subjects vanish from every face and stay green.
     assets.foreach { asset =>
       asset.spec.templates.toVector.foreach { (templateName, template) =>
-        assert(
-          fieldsIn(template.front).contains(Marker.ContextField),
-          s"'${asset.spec.name}' template '$templateName' does not render " +
-            s"${Marker.ContextField} on its front, so that card shows no breadcrumb",
-        )
+        Vector(Marker.ContextField, Marker.TopicsField).foreach { field =>
+          assert(
+            fieldsIn(template.front).contains(field),
+            s"'${asset.spec.name}' template '$templateName' does not render " +
+              s"$field on its front, so that card shows no $field",
+          )
+        }
       }
     }
   }
@@ -673,10 +685,16 @@ class NoteTypeAssetsTest extends munit.FunSuite:
         s"'${gate.noteType}' template '${gate.template}' has content after its ${gate.field} " +
           s"gate closes, which generates a card for every note: $front",
       )
-      assert(
-        fieldsIn(front).contains(Marker.ContextField),
-        s"'${gate.noteType}' template '${gate.template}' does not render the breadcrumb",
-      )
+      // INSIDE THE GATE, BOTH OF THEM. Anything rendered OUTSIDE it makes the front non-empty
+      // for every note — `{{Deck}}` is never empty — and Anki then mints a card for every note
+      // the gate exists to exclude. The check above proves nothing follows the gate's close;
+      // this proves the two fields are within it rather than merely present somewhere.
+      Vector(Marker.ContextField, Marker.TopicsField).foreach { field =>
+        assert(
+          fieldsIn(front).contains(field),
+          s"'${gate.noteType}' template '${gate.template}' does not render $field inside its gate",
+        )
+      }
     }
   }
 
