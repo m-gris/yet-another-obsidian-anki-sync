@@ -7,7 +7,8 @@ import io.circe.{Decoder, Json}
 import io.circe.syntax.*
 import obsidiananki.anki.AnkiConnect.given
 import obsidiananki.model.{CardSearch, OwnedTag}
-import org.http4s.{Method, Request, Uri}
+import org.http4s.{Header, Method, Request, Uri}
+import org.typelevel.ci.CIString
 import org.http4s.circe.jsonEncoder
 import org.http4s.client.Client
 
@@ -42,8 +43,38 @@ final class AnkiConnectClient[F[_]: Concurrent](client: Client[F], baseUri: Uri)
   private type Result[A] = EitherT[F, AnkiError, A]
 
   /** One request/response exchange, with the envelope decoded into the payload type. */
+  /** ONE CONNECTION PER REQUEST, ASKED FOR EXPLICITLY, BECAUSE ANKICONNECT PROMISES OTHERWISE
+    * AND THEN BREAKS THE PROMISE.
+    *
+    * The add-on answers `HTTP/1.1 200 OK` and sends NO `Connection` header. Under HTTP/1.1 that
+    * means the connection is persistent — a client is entitled to send its next request on the
+    * same socket. AnkiConnect then closes it anyway, immediately after the response.
+    *
+    * MEASURED 2026-09-22, on a raw socket rather than inferred: two requests written to one
+    * connection gave `HTTP/1.1 200 OK` and 179 bytes for the first, and end-of-file for the
+    * second. `curl` and Python's `urllib` never notice — the first reconnects on detecting the
+    * close, the second opens a fresh connection per call — which is why the same traffic driven
+    * by hand succeeds and made the fault look like it belonged to this tool.
+    *
+    * WHAT IT COST BEFORE THIS HEADER. Ember pools connections, so it returned each socket to the
+    * pool on the server's word and then wrote the next request into one the server had already
+    * closed: `java.net.SocketException: Connection reset`, partway through `Executor.observe`,
+    * which asks about the cards of one note at a time and so makes roughly two requests per
+    * owned note. A run against a collection of 193 notes died before planning anything, with
+    * nothing written and nothing reported. Small commands survived because they never reused.
+    *
+    * WHY THE HEADER RATHER THAN A POOL SETTING. This states the truth about the other end:
+    * the connection is not persistent. A pool tuned to expire sockets quickly would still be
+    * racing the server, and would hide the reason in a number nobody could justify. The cost is
+    * a TCP connection per request — the same thing `curl` does, measured at 10 seconds for the
+    * 386 requests that enumeration makes.
+    */
+  private val NotPersistent: Header.Raw = Header.Raw(CIString("Connection"), "close")
+
   private def call[A: Decoder](action: String, params: Json): Result[A] =
-    val request = Request[F](Method.POST, baseUri).withEntity(AnkiConnect.request(action, params))
+    val request = Request[F](Method.POST, baseUri)
+      .withEntity(AnkiConnect.request(action, params))
+      .putHeaders(NotPersistent)
     EitherT(client.expect[String](request).map(AnkiConnect.decodeAs[A](action, _)))
 
   /** For actions that answer `null` on success, with that asserted rather than assumed.
