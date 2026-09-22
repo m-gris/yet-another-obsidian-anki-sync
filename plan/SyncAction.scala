@@ -430,7 +430,7 @@ enum PlanError:
   case AmbiguousIdentityInAnki(
         noteId: AnkiNoteId,
         tags: NonEmptyVector[String],
-        looksLike: Option[CardKey],
+        looksLike: IdentityRecovery,
       )
 
   /** An Anki note's identity tag cannot be DECODED, so the note cannot be placed at all.
@@ -448,7 +448,7 @@ enum PlanError:
         noteId: AnkiNoteId,
         tag: String,
         reason: String,
-        looksLike: Option[CardKey],
+        looksLike: IdentityRecovery,
       )
 
   def describe: String = this match
@@ -483,15 +483,41 @@ enum PlanError:
     * review history between cards, silently and irreversibly, on the strength of the tool's own
     * reading of an ambiguous situation. That is a person's decision.
     *
-    * SILENT WHEN THERE IS NOTHING TO SAY. No candidate, or several, prints nothing at all rather
-    * than a hedge: a list of maybes is how a report stops being read.
+    * NO LIST OF MAYBES, EVER. A hedge is how a report stops being read, so nothing here prints
+    * candidates for a reader to choose between — one card is named, or none is.
+    *
+    * ⚠️ BUT SILENCE WAS NOT THE SAME THING, AND IT USED TO BE THE BEHAVIOUR. This took an
+    * `Option[CardKey]` and printed NOTHING whenever it was `None` — which was three different
+    * conclusions wearing one face: no fingerprint to compare with, a fingerprint matching no card
+    * the vault produces, and a fingerprint several cards share. The reader was told "unreadable
+    * identity, no suggestion" in all three, so they could not tell whether to go and look at the
+    * note, at the vault, or at neither. Saying WHY nothing is offered is not a hedge: it names no
+    * candidate and asks for no choice. See [[obsidiananki.plan.IdentityRecovery]], and note that
+    * this silence is what would have made the `Topics`-field fingerprint break invisible.
     */
-  private def suggestionText(looksLike: Option[CardKey]): String =
-    looksLike.fold("") { key =>
+  private def suggestionText(looksLike: IdentityRecovery): String = looksLike match
+    case IdentityRecovery.LooksLike(key) =>
       s". Its content still matches the card '${key.path.render}' in note " +
         s"'${key.noteId.value}', so it is most likely that card — if you agree, the tag it " +
         s"should carry is: ${TagCodec.encode(key).value}"
-    }
+
+    case IdentityRecovery.NoUsableFingerprint =>
+      ". This tool has nothing to compare against — the note records no single usable content " +
+        "fingerprint, either because it carries no `sha::` tag or because it carries more than " +
+        "one — so no candidate can be offered"
+
+    case IdentityRecovery.FingerprintMatchedNothing(sha) =>
+      s". The note records the content fingerprint '$sha', and no card this vault produces " +
+        "today has it — so its content has changed since that fingerprint was written, and no " +
+        "candidate can be offered"
+
+    // NAMES THE COUNT, NOT THE CARDS, which is the whole of the no-list-of-maybes ruling above.
+    // A reader who wants to see them has a fingerprint to search on; a reader who does not is
+    // spared a menu they have no basis for choosing from.
+    case IdentityRecovery.FingerprintMatchedSeveral(sha, keys) =>
+      s". The note records the content fingerprint '$sha', and ${keys.length} cards this vault " +
+        "produces today share it — so which of them this note is cannot be decided, and naming " +
+        "one would move review history onto a card picked by coin toss"
 
 /** Whether orphans were computed, and if not, why not. Reported rather than silent: a run
   * that could not look for orphans must not be mistaken for a run that found none.

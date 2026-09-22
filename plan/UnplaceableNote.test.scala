@@ -210,7 +210,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
     val error = Planner.identityErrorFor(observe(anki).unresolved.head, Vector(spec))
     error match
       case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) =>
-        assertEquals(looksLike, Some(k1), "the content hash did not identify the card")
+        assertEquals(looksLike, IdentityRecovery.LooksLike(k1), "the content hash did not identify the card")
       case other => fail(s"wrong error: $other")
 
     // AND THE MESSAGE HANDS OVER THE FINISHED TAG. Nobody can type one of these by hand — the
@@ -250,8 +250,12 @@ class UnplaceableNoteTest extends munit.FunSuite:
 
     val error = Planner.identityErrorFor(observe(anki).unresolved.head, Vector(specOf(k1, "edited")))
     error match
-      case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) => assertEquals(looksLike, None)
-      case other                                                  => fail(s"wrong error: $other")
+      // NOT MERELY "NOTHING" — the recorded fingerprint is named, and the recovery says it
+      // matched no card rather than that it had nothing to work with. Those were one answer
+      // until 2026-09-22; see [[IdentityRecovery]] for what that cost.
+      case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) =>
+        assertEquals(looksLike, IdentityRecovery.FingerprintMatchedNothing("0000000000000000"))
+      case other => fail(s"wrong error: $other")
     assert(!error.describe.toLowerCase.contains("looks like"), error.describe)
   }
 
@@ -263,8 +267,9 @@ class UnplaceableNoteTest extends munit.FunSuite:
     // Only k2 remains in the vault, so the note is most likely k2's.
     val error = Planner.identityErrorFor(observe(anki).unresolved.head, Vector(specOf(k2, "back")))
     error match
-      case PlanError.AmbiguousIdentityInAnki(_, _, looksLike) => assertEquals(looksLike, Some(k2))
-      case other                                              => fail(s"wrong error: $other")
+      case PlanError.AmbiguousIdentityInAnki(_, _, looksLike) =>
+        assertEquals(looksLike, IdentityRecovery.LooksLike(k2))
+      case other => fail(s"wrong error: $other")
   }
 
   test("when BOTH claimed keys still exist, nothing is suggested") {
@@ -275,7 +280,16 @@ class UnplaceableNoteTest extends munit.FunSuite:
     )
     error match
       case PlanError.AmbiguousIdentityInAnki(_, _, looksLike) =>
-        assertEquals(looksLike, None, "picked one of two live candidates")
+        // WHICH SILENCE THIS IS, NAMED. Both claimed keys are live, so the vault cannot pick
+        // between them and the question falls through to the hash — which is the fixture's
+        // placeholder `aaaa` and matches neither card. The answer is still "no candidate"; what
+        // this now pins is that the report says WHY, rather than being mute in the same way it
+        // would be for a note that recorded no fingerprint at all.
+        assertEquals(
+          looksLike,
+          IdentityRecovery.FingerprintMatchedNothing("aaaa"),
+          "picked one of two live candidates",
+        )
       case other => fail(s"wrong error: $other")
   }
 
@@ -304,7 +318,14 @@ class UnplaceableNoteTest extends munit.FunSuite:
 
     Planner.identityErrorFor(observe(anki).unresolved.head, Vector(spec, twin)) match
       case PlanError.UnreadableIdentityInAnki(_, _, _, looksLike) =>
-        assertEquals(looksLike, None, "picked one of two cards with the same content")
+        assertEquals(
+          looksLike,
+          IdentityRecovery.FingerprintMatchedSeveral(
+            Planner.contentHash(spec.spec),
+            NonEmptyVector.of(k1, k2),
+          ),
+          "picked one of two cards with the same content",
+        )
       case other => fail(s"wrong error: $other")
   }
 

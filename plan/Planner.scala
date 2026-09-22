@@ -15,6 +15,74 @@ enum IdentityProblem:
   case Ambiguous(tags: NonEmptyVector[String])
   case Unreadable(tag: String, reason: String)
 
+/** WHAT THE PLANNER COULD MAKE OF AN UNPLACEABLE NOTE — INCLUDING THE WAYS IT MADE NOTHING.
+  *
+  * A SUM TYPE RATHER THAN AN `Option[CardKey]`, for the reason [[obsidiananki.model.VaultTag]]
+  * gives for being one: a recovery that found nothing is not merely absent. `None` collapsed
+  * three different conclusions — no fingerprint to compare, a fingerprint matching no card the
+  * vault produces, and a fingerprint several cards share — into one silence, and the run then
+  * reported "unreadable identity, no suggestion" in every case. A reader could not tell whether
+  * the evidence was missing, stale, or merely not decisive, so there was no way to know which of
+  * them to go and fix.
+  *
+  * ⚠️ THAT SILENCE IS ALSO WHAT WOULD HAVE HIDDEN THE `Topics` HAZARD. When the field was added
+  * on 2026-09-22 every fingerprint recorded before it stopped being reproducible (see
+  * [[Planner.preTopicsContentHash]]), so EVERY older note would have recovered as `None` — and
+  * the report would have said exactly what it says for a note whose content was simply edited.
+  * A defect that changes a report from one true sentence to a different true-looking sentence is
+  * invisible; this is what makes it visible.
+  *
+  * ═══ FOUR CASES OVER FIVE SITUATIONS, AND THE MERGE IS DELIBERATE ═══
+  *
+  * [[NoUsableFingerprint]] covers two: a note carrying no `sha::` tag at all, and a note carrying
+  * SEVERAL. They are one answer here because the producer cannot tell them apart and must not —
+  * [[ObservedCard.recordedSha]] reports `None` for both on purpose, since two hashes make "has
+  * this changed?" unanswerable and answering it anyway would skip a note that needs writing.
+  * Splitting this into two cases would therefore require inventing a distinction the observation
+  * does not carry, which is how an unanswerable question comes to have a confident answer.
+  *
+  * Said here rather than left for a reader to rediscover: a merge with a reason is a decision, a
+  * merge nobody wrote down is how the `Option` this replaces came to exist.
+  */
+enum IdentityRecovery:
+
+  /** The one conclusion worth acting on: exactly one card the vault produces today has the
+    * fingerprint this note recorded. Sixty-four bits agree, which is the same assumption
+    * "nothing to do" already rests on for every note in the collection.
+    */
+  case LooksLike(key: CardKey)
+
+  /** Nothing to compare against — the note records no single usable content fingerprint.
+    *
+    * BOTH SITUATIONS, AND THEY MUST STAY ONE CASE. No `sha::` tag at all (a note created before
+    * the hash was written, or one whose tag was cleared by hand) and more than one `sha::` tag
+    * (an interrupted tag write) both arrive here, because [[ObservedCard.recordedSha]] deliberately
+    * refuses to pick between two hashes. See the enum's docstring for why that refusal is right
+    * and why this case must not be "fixed" into two.
+    *
+    * IT IS NOT CALLED `NoFingerprintRecorded`, and the name was chosen rather than settled on: a
+    * note carrying two hashes HAS recorded fingerprints, so that name would assert a fact the
+    * value does not carry — a small instance of exactly the silent-wrongness this enum exists to
+    * remove.
+    */
+  case NoUsableFingerprint
+
+  /** The note records a fingerprint and no card the vault produces today has it, so the content
+    * has changed since the fingerprint was written. The fingerprint travels so the report can
+    * show it: it is the difference between "we have no idea" and "we looked, with this, and the
+    * body has moved on".
+    */
+  case FingerprintMatchedNothing(sha: String)
+
+  /** Several cards the vault produces today share the recorded fingerprint, so which one this
+    * note is cannot be decided.
+    *
+    * THE REFUSAL IS THE POINT AND IS UNCHANGED — naming one would move review history onto a card
+    * chosen by coin toss. What changes is that the refusal now SAYS SO, instead of being
+    * indistinguishable from having found nothing at all.
+    */
+  case FingerprintMatchedSeveral(sha: String, keys: NonEmptyVector[CardKey])
+
 /** A note the identity search found and nothing could place.
   *
   * `recordedSha` is carried because it is the strongest evidence available for what this note
@@ -154,11 +222,81 @@ object Planner:
     * belongs outside.
     */
   def contentHash(spec: CardSpec): String =
+    digestOf(spec.noteTypeName, spec.fields.filterNot((name, _) => name == Marker.IdentityField))
+
+  /** The fingerprint this tool WOULD HAVE WRITTEN for this card before the `Topics` field
+    * existed — offered to [[identityErrorFor]]'s recovery and to nothing else.
+    *
+    * ═══ WHY A SECOND DIGEST IS NEEDED AT ALL ═══
+    *
+    * [[contentHash]] hashes field NAMES as well as values, deliberately, so that a field
+    * reordering or a note-type change shows up as a difference. On 2026-09-22 a sixth field
+    * named `Topics` was added to all five owned note types (see
+    * `model/Marker.scala`'s `FieldOrder`), so every fingerprint computed from that moment on
+    * differs from every fingerprint recorded before it — for every card, whether or not the
+    * card has any topics to show, because the NAME alone changes the canonical string.
+    *
+    * That is harmless for change detection, which compares a recorded fingerprint against a
+    * freshly computed one and concludes "changed": the note is rewritten once and records the
+    * new fingerprint. It is NOT harmless for recovery. `byRecordedHash` compares a RECORDED
+    * fingerprint against fingerprints computed FRESH FROM THE VAULT, and for a note recorded
+    * before the field arrived the two can never agree — so the one piece of evidence that can
+    * identify a note whose identity is unreadable is silently worth nothing.
+    *
+    * ═══ WHY IT IS NOT MERELY A MIGRATION WINDOW ═══
+    *
+    * Measured, from a read-only census of the reference collection on 2026-09-22: 193 notes sit
+    * on note types this tool owns, and every one of them has a well-formed identity — so no note
+    * is in the at-risk state TODAY, and this guard protects against a state that has not
+    * occurred yet rather than repairing one that has.
+    *
+    * 29 OF THOSE 193 ARE ORPHANED, AND THAT IS THE HALF THAT DOES NOT PASS. An orphan has no
+    * vault source, so there is no spec to write from, so no run ever rewrites it — see the
+    * backfill pass at the foot of [[plan]], which exists because "an orphan is never updated".
+    * Such a note therefore keeps its pre-`Topics` fingerprint PERMANENTLY rather than until the
+    * next sync touches it. Break its identity tag by hand a year from now and, without this,
+    * the report would say "no suggestion" about a note whose content still matches the vault
+    * exactly.
+    *
+    * ═══ WHAT THIS IS NOT ═══
+    *
+    * NOT A VERSIONED-FINGERPRINT SCHEME — recording which shape of digest a tag holds, so any
+    * number of future field additions are absorbed. That is the right long-term answer and it
+    * is somebody else's slice; this is the transitional one, and it is written to be deleted.
+    *
+    * NOT AVAILABLE TO CHANGE DETECTION, which is the mistake to avoid rather than an oversight.
+    * `fieldsDiffer` in [[plan]] must go on comparing against [[contentHash]] ALONE: accepting a
+    * pre-`Topics` fingerprint there would make a note recorded before the field look unchanged,
+    * so it would never be rewritten and its `Topics` field would never be filled — exactly the
+    * "skip it forever and the field never arrives" failure the identity migration beside it
+    * already names.
+    *
+    * ═══ WHEN TO DELETE IT ═══
+    *
+    * When no note in a synced collection still carries a pre-`Topics` fingerprint. That is
+    * checkable rather than a matter of judgement: for every note on an owned note type, its
+    * recorded `sha::` should equal [[contentHash]] of the spec its key names, and a note whose
+    * recorded fingerprint equals THIS digest instead is one still waiting. Note that the 29
+    * orphans above will never satisfy it on their own — releasing them, by restoring their
+    * source or by pruning them, is part of the condition rather than separate from it.
+    */
+  private[plan] def preTopicsContentHash(spec: CardSpec): String =
+    digestOf(
+      spec.noteTypeName,
+      spec.fields.filterNot((name, _) =>
+        name == Marker.IdentityField || name == Marker.TopicsField
+      ),
+    )
+
+  /** The digest itself, shared by the two callers above so they CANNOT disagree about how a
+    * fingerprint is formed — which matters here more than it usually does, since the whole
+    * point of the second caller is that its answer is compared against the first's.
+    */
+  private def digestOf(noteTypeName: String, fields: Vector[(String, String)]): String =
     // Fields are joined with a unit-separator control character, which cannot occur in
     // field content. Plain concatenation would let ("ab","c") and ("a","bc") hash alike.
-    val sep = "\u001f"
-    val content = spec.fields.filterNot((name, _) => name == Marker.IdentityField)
-    val parts   = spec.noteTypeName +: content.flatMap { case (n, v) => Vector(n, v) }
+    val sep       = "\u001f"
+    val parts     = noteTypeName +: fields.flatMap { case (n, v) => Vector(n, v) }
     val canonical = parts.mkString(sep)
     val digest = java.security.MessageDigest
       .getInstance("SHA-256")
@@ -262,12 +400,39 @@ object Planner:
       note: UnplaceableNote,
       specs: Vector[SourcedSpec],
   ): PlanError =
-    def byRecordedHash: Option[CardKey] =
-      note.recordedSha.flatMap { sha =>
-        specs.filter(s => contentHash(s.spec) == sha) match
-          case Vector(only) => Some(only.key)
-          case _            => None // none matched, or several did: say nothing rather than pick
-      }
+    // EACH SPEC IS FINGERPRINTED BOTH WAYS, AND EITHER ANSWER IS ACCEPTED. A note recorded
+    // before the `Topics` field was added on 2026-09-22 holds a fingerprint no present-day
+    // computation can reproduce, so without the second digest the recorded hash would be
+    // compared only against values it can never equal — and the recovery would report "no
+    // suggestion" for a note whose content still matches the vault exactly. See
+    // [[preTopicsContentHash]] for the measurements, for why orphans make this permanent
+    // rather than transitional, and for the condition under which it can be deleted.
+    //
+    // THE REFUSAL TO PICK IS UNCHANGED, and widening the comparison does not weaken it: if two
+    // different specs match — even one by each digest — that is still "several", and several
+    // still means say nothing.
+    def byRecordedHash: IdentityRecovery =
+      note.recordedSha match
+        case None => IdentityRecovery.NoUsableFingerprint
+        case Some(sha) =>
+          val matched =
+            specs.filter(s => contentHash(s.spec) == sha || preTopicsContentHash(s.spec) == sha)
+
+          // EACH EMPTY-HANDED OUTCOME NAMED, WHERE ALL THREE USED TO BE ONE `None`. The advice is
+          // the same in every case — say nothing rather than pick — but the REASON differs, and
+          // the reason is what tells a reader whether to go and look at the note, at the vault,
+          // or at neither. See [[IdentityRecovery]].
+          //
+          // SPLIT ON `NonEmptyVector.fromVector` RATHER THAN ON `Vector(one)` / `head +: tail`,
+          // which is not a style choice: the compiler cannot prove a match over those two
+          // patterns plus the empty one is exhaustive, so it reports one — and the obvious
+          // remedy, a catch-all `case _`, would quietly absorb a fourth outcome that a later
+          // change introduced. This shape is total by construction instead.
+          NonEmptyVector.fromVector(matched.map(_.key)) match
+            case None => IdentityRecovery.FingerprintMatchedNothing(sha)
+            case Some(keys) =>
+              if keys.length == 1 then IdentityRecovery.LooksLike(keys.head)
+              else IdentityRecovery.FingerprintMatchedSeveral(sha, keys)
 
     note.problem match
       case IdentityProblem.Unreadable(tag, reason) =>
@@ -277,7 +442,7 @@ object Planner:
         val live = specs.map(_.key).toSet
         val claimed = tags.toVector.flatMap(TagCodec.decode(_).toOption).filter(live.contains).distinct
         val suggestion = claimed match
-          case Vector(only) => Some(only)
+          case Vector(only) => IdentityRecovery.LooksLike(only)
           case _            => byRecordedHash
         PlanError.AmbiguousIdentityInAnki(note.id, tags, suggestion)
 
