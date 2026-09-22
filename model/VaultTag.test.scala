@@ -7,8 +7,14 @@ package obsidiananki.model
   */
 class VaultTagTest extends munit.FunSuite:
 
+  /** What ANKI would store. */
   private def carried(raw: String): String = VaultTag.read(raw) match
-    case VaultTag.Carried(t)     => t.value
+    case VaultTag.Carried(t, _)  => t.value
+    case VaultTag.Unusable(_, w) => fail(s"'$raw' was refused: $w")
+
+  /** What the AUTHOR wrote, which is a different question with a different answer. */
+  private def asWritten(raw: String): String = VaultTag.read(raw) match
+    case VaultTag.Carried(_, w)  => w
     case VaultTag.Unusable(_, w) => fail(s"'$raw' was refused: $w")
 
   private def refused(raw: String): String = VaultTag.read(raw) match
@@ -36,6 +42,26 @@ class VaultTagTest extends munit.FunSuite:
     */
   test("case is folded, because Anki folds it") {
     assertEquals(carried("Backend/Scala"), "obsidian::backend::scala")
+  }
+
+  /** THE AUTHOR'S SPELLING SURVIVES ALONGSIDE THE FOLDED TAG, and the two assertions here are
+    * one test on purpose: the point is not that the spelling is kept but that keeping it changed
+    * NOTHING about what Anki receives. Asserted on `CS` because that is the case that motivated
+    * it — an acronym, which `cs` is not.
+    */
+  test("the author's own spelling is kept, and what Anki stores is unaffected") {
+    assertEquals(asWritten("CS"), "CS")
+    assertEquals(carried("CS"), "obsidian::cs")
+    assertEquals(asWritten("Backend/Scala"), "Backend/Scala")
+    assertEquals(carried("Backend/Scala"), "obsidian::backend::scala")
+  }
+
+  /** THE `#` AND THE PADDING ARE NOT PART OF THE SPELLING. They are how Obsidian writes a tag in
+    * a body rather than anything the author chose to say, so the kept form drops them — a card
+    * face printing `#CS` would be showing markup.
+    */
+  test("the kept spelling excludes the leading hash and surrounding space") {
+    assertEquals(asWritten("  #PLT  "), "PLT")
   }
 
   /** TOLERATED RATHER THAN REQUIRED. Obsidian writes a tag bare in frontmatter and with a `#` in

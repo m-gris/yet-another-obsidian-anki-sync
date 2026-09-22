@@ -204,7 +204,10 @@ object Planner:
     */
   private def carried(read: Vector[VaultTag]): Vector[OwnedTag] =
     read.flatMap {
-      case VaultTag.Carried(t)     => Vector(t)
+      // THE AUTHOR'S OWN SPELLING IS DELIBERATELY IGNORED HERE. `Carried` carries it for the
+      // card face; what Anki stores is the folded form and only that, or the tag set would stop
+      // being a function of the vault.
+      case VaultTag.Carried(t, _)  => Vector(t)
       case VaultTag.Unusable(_, _) => Vector.empty
     }
 

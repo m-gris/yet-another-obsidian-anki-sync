@@ -16,8 +16,24 @@ package obsidiananki.model
   */
 enum VaultTag:
 
-  /** Carried into Anki under this tool's namespace. */
-  case Carried(tag: OwnedTag)
+  /** Carried into Anki under this tool's namespace.
+    *
+    * TWO READINGS OF ONE TAG, AND THE SECOND USED TO BE DESTROYED HERE. `tag` is what Anki
+    * stores — namespaced and case-folded, because Anki folds tag case and two spellings would be
+    * one tag it cannot tell apart. `asWritten` is the author's own spelling, with the leading
+    * `#` and surrounding space removed and nothing else touched.
+    *
+    * THE FOLDING IS CORRECT AND THE LOSS WAS NOT. Until 2026-09-22 this case held only the
+    * Anki-facing value, so `CS` arrived as `obsidian::cs` and the author's spelling was gone at
+    * the moment of reading — with nothing downstream able to recover it. That was invisible
+    * while the only consumer was the tag writer, for which the folded form is exactly right.
+    * It stopped being invisible when a card face wanted to PRINT the subject: `CS` is an
+    * acronym, `cs` reads as a typo, and `PLT` lowercased reads as noise.
+    *
+    * So the folding is now a property of the ANKI TAG DERIVED FROM a frontmatter tag, rather
+    * than a property of the frontmatter tag itself. Nothing about what reaches Anki changed.
+    */
+  case Carried(tag: OwnedTag, asWritten: String)
 
   /** Anki cannot hold this tag, so it is not carried and the author is told which one.
     *
@@ -63,7 +79,10 @@ object VaultTag:
     else if trimmed.contains("::") then
       Unusable(raw, "'::' is Anki's nesting separator — write '/' to nest an Obsidian tag")
 
-    else Carried(namespaced(trimmed))
+    // BOTH READINGS FROM THE SAME STRING, so they cannot disagree about which tags exist.
+    // `trimmed` is the author's spelling with the `#` and the padding gone and nothing else
+    // changed; `namespaced` folds and prefixes it for Anki. See [[Carried]] for why both.
+    else Carried(namespaced(trimmed), trimmed)
 
   /** NAMESPACED RATHER THAN CARRIED VERBATIM, AND THAT IS NOT TIDINESS. A verbatim `scala` in
     * Anki is indistinguishable from a `scala` somebody added by hand, so removing a tag deleted
