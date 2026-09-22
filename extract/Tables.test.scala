@@ -118,6 +118,13 @@ class TablesTest extends munit.FunSuite:
   /** Collected CONCRETELY and non-recursively — `case s: Section`, never a trait. Depth two is
     * all these fixtures need: a top-level `#` heading with the marked `##` beneath it.
     */
+  /** NO SUBJECT TAGS, SAID RATHER THAN LEFT BLANK. These tests drive `Tables.fromSection`
+    * directly to pin how a table becomes cards, and a note's frontmatter tags are no part of
+    * that question. Naming the value keeps the call sites saying what they mean instead of
+    * carrying an empty vector nobody chose.
+    */
+  private val noTags: Vector[VaultTag] = Vector.empty
+
   private def sectionOf(markdown: String): Section =
     val root = ObsidianSyntax.markupParser.parse(markdown).fold(e => fail(s"parse: $e"), _.content)
     val sections = root.content
@@ -152,7 +159,7 @@ class TablesTest extends munit.FunSuite:
       scope: TableScope = TableScope.Both,
   ): Vector[(CardSpec, RowSource)] =
     Tables
-      .fromSection(baseKey, section, display, Vector("T", "Grid"), directions, scope)
+      .fromSection(baseKey, section, display, Vector("T", "Grid"), noTags, directions, scope)
       .fold(e => fail(s"fromSection: $e"), identity)
 
   /** The mirror of `cardsOf` for the sections that must be REFUSED.
@@ -174,7 +181,7 @@ class TablesTest extends munit.FunSuite:
       scope: TableScope = TableScope.Both,
   ): SpecError =
     Tables
-      .fromSection(baseKey, section, display, Vector("T", "Grid"), directions, scope)
+      .fromSection(baseKey, section, display, Vector("T", "Grid"), noTags, directions, scope)
       .fold(identity, cards => fail(s"expected a refusal, got ${cards.size} card(s): $cards"))
 
   /** The hostile display projection.

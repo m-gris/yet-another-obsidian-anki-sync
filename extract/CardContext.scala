@@ -131,11 +131,30 @@ object CardContext:
     * stem is recognised as the same word as its spaced title. Nothing here can reach a key.
     */
   private def withoutRepeats(segments: Vector[String]): Vector[String] =
-    def word(s: String): String = TagCodec.canonical(s.replace('-', ' ').replace('_', ' '))
-    val forms = segments.map(word)
+    val forms = segments.map(loosely)
     segments.zipWithIndex.collect {
       case (seg, i) if !forms.drop(i + 1).contains(forms(i)) => seg
     }
+
+  /** TWO PIECES OF AUTHOR TEXT, REDUCED TO THE SAME STRING WHEN THEY NAME THE SAME THING.
+    *
+    * `TagCodec.canonical` — NFC, trimmed, whitespace-collapsed, case-folded — is what card KEYS
+    * are built on and must never move. This adds hyphens and underscores as word separators on
+    * top of it, purely so a kebab-cased or snake-cased form is recognised as the same word as
+    * its spaced one: a file stem `Body-Shapes` beside a heading `Body shapes`, or a frontmatter
+    * tag `type-theory` beside a heading `Type theory`.
+    *
+    * LOOSER THAN IDENTITY WILL EVER BE, AND DELIBERATELY SEPARATE FROM IT. Nothing here can
+    * reach a key. It exists for one job: deciding whether printing both of two strings would
+    * merely say one thing twice.
+    *
+    * SHARED WITH [[CardTopics]] RATHER THAN COPIED, and the copy is the thing being avoided
+    * rather than the keystrokes. Both files ask the same question of the same kind of text; two
+    * definitions would be free to drift, and the drift would show as a spoiler leaking on one
+    * side and not the other — a difference nobody would think to look for.
+    */
+  def loosely(text: String): String =
+    TagCodec.canonical(text.replace('-', ' ').replace('_', ' '))
 
   /** `" › "` — space, U+203A SINGLE RIGHT-POINTING ANGLE QUOTATION MARK, space.
     *

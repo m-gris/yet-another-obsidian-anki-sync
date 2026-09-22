@@ -40,7 +40,7 @@ class VaultTagSyncTest extends munit.FunSuite:
   /** A note carrying whichever frontmatter tags the test is about. */
   private def noteTagged(tags: String*): SourcedSpec =
     SourcedSpec(
-      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, "Coupling"),
+      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("Coupling")),
       SourceRef("Note.md", 1, SourceKind.Heading),
       Vector.empty,
       RecallText.none,

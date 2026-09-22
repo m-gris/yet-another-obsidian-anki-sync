@@ -30,7 +30,7 @@ class LocateTest extends munit.FunSuite:
   def body(s: String): Body = Body.fromExtracted(s).getOrElse(fail("empty test body"))
 
   def spec(k: CardKey): CardSpec =
-    CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, "Context")
+    CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("Context"))
 
   /** A scan holding exactly these cards at exactly these lines. Completeness is irrelevant on
     * this path — see `Locate.anchor` — so every fixture is a complete one.

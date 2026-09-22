@@ -40,7 +40,7 @@ class PlannerTest extends munit.FunSuite:
   val testContext: String = "Coupling"
 
   def twoFieldSpec(k: CardKey, front: String, back: String): CardSpec =
-    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, testContext)
+    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, Bearings.breadcrumbOnly(testContext))
 
   // Fixture defaults for a source reference. These tests are about planning rather than about
   // where a card came from; a wrong file or line would show up in the key being asserted.
@@ -151,7 +151,7 @@ class PlannerTest extends munit.FunSuite:
           "Definition",
           body("Operations appear instantaneous."),
           ThreeFieldDirections.All,
-          testContext,
+          Bearings.breadcrumbOnly(testContext),
           // Built from headings, so nothing names the concept's kind.
           "",
         )
@@ -253,7 +253,7 @@ class PlannerTest extends munit.FunSuite:
     // Any other pair is refused, the run fails loudly, and the test would prove nothing about
     // decks because nothing would have moved.
     val moved   = deck("Obsidian", "Patterns")
-    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext, RevealOrder.DepthFirst)
+    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), Bearings.breadcrumbOnly(testContext), RevealOrder.DepthFirst)
     val afterRetag = scanOf(sourced(retyped))
     val plan = Planner
       .plan(afterRetag, observe(anki), _ => moved, newNoteOf, HandBuiltCensus.of(afterRetag))
@@ -280,7 +280,7 @@ class PlannerTest extends munit.FunSuite:
     val k    = key("n1", "A", "B")
     runPlan(planOf(scanOf(sourced(twoFieldSpec(k, "f", "body"))), observe(anki)), anki)
 
-    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), testContext, RevealOrder.DepthFirst)
+    val retyped = CardSpec.Sequence(k, "f", body("<ul><li>body</li></ul>"), Bearings.breadcrumbOnly(testContext), RevealOrder.DepthFirst)
     planOf(scanOf(sourced(retyped)), observe(anki)).actions match
       case Vector(r: SyncAction.Retype) =>
         assertEquals(r.deck, None, "a deck move was planned for a note that never moved")
@@ -295,7 +295,7 @@ class PlannerTest extends munit.FunSuite:
 
     // ...then retagged as 2way, which shares field names with Basic. An ordinary update
     // would SUCCEED here and the reverse card would never exist.
-    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
+    val reversed = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, Bearings.breadcrumbOnly(testContext))
     planOf(scanOf(sourced(reversed)), observe(anki)).actions match
       case Vector(SyncAction.Retype(_, _, from, to, _, _, _, _)) =>
         assertEquals(from, Marker.NoteTypes.Basic)
@@ -536,7 +536,7 @@ class PlannerTest extends munit.FunSuite:
     assertNotEquals(
       Planner.contentHash(base),
       Planner.contentHash(
-        CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both, testContext)
+        CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both, Bearings.breadcrumbOnly(testContext))
       ),
     )
   }
@@ -562,7 +562,7 @@ class PlannerTest extends munit.FunSuite:
     // on a note type that cannot generate its ordinal.
     val anki = InMemoryAnki()
     val k    = key("n1", "A", "Term")
-    val both = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, testContext)
+    val both = CardSpec.TwoField(k, "Term", body("def"), TwoFieldDirections.Both, Bearings.breadcrumbOnly(testContext))
     runPlan(planOf(scanOf(sourced(both)), observe(anki)), anki)
 
     // REPORTED AS WAITING SINCE 2026-08-27, NOT AS A FAILURE. What this test is about has not
@@ -605,7 +605,7 @@ class PlannerTest extends munit.FunSuite:
     // below, because narrowing is the direction the gate still refuses.
     runPlan(
       planOf(
-        scanOf(sourced(CardSpec.TwoField(bad, "Term", body("def"), TwoFieldDirections.Both, testContext))),
+        scanOf(sourced(CardSpec.TwoField(bad, "Term", body("def"), TwoFieldDirections.Both, Bearings.breadcrumbOnly(testContext)))),
         observe(anki),
       ),
       anki,

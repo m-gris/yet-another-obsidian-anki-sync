@@ -51,7 +51,7 @@ object Cloze:
   def fromLowered(
       key: CardKey,
       blocks: Vector[C.Block],
-      context: String,
+      bearings: Bearings,
   ): Either[SpecError, CardSpec] =
     val where = key.path.render
 
@@ -111,7 +111,7 @@ object Cloze:
             body <- Body
               .fromExtracted(render(blocks, perOccurrence, where))
               .toRight(SpecError.EmptyBody(where))
-          yield CardSpec.Cloze(key, body, deletions, context)
+          yield CardSpec.Cloze(key, body, deletions, bearings)
 
   /** The body as Anki must receive it: `{{cN::…}}` where the author wrote a highlight.
     *

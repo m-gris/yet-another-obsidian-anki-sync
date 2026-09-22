@@ -201,6 +201,59 @@ enum SpecError:
   * key is possible in principle and is caught by the set-level uniqueness check that runs
   * before any write.
   */
+/** WHAT SITUATES A CARD — the values it shows that were DERIVED rather than authored.
+  *
+  * Two of them, and they answer different halves of one question. [[breadcrumb]] says WHERE the
+  * card came from: an ordered chain of folders, file name and headings, which is a filing
+  * address. [[topics]] says WHAT it is about: an unordered set of overlapping subjects, where
+  * one note is `CS` and `PLT` and `type-theory` at once.
+  *
+  * ==Why they are ONE value and not two fields side by side==
+  *
+  * BECAUSE THEY SHARE A SECOND OPERAND, and that is the whole reason this type exists. Each is
+  * its own source MINUS WHAT THE CARD ALREADY SHOWS — a term on the question side is redundant,
+  * one on the answer side is a spoiler. Computed apart, the two would each need their own answer
+  * to "what does this card display", and two independently derived answers to one question are
+  * free to drift. They would agree on the day they were written; the symptom of their drifting
+  * is a spoiler leaking into one field and not the other, which nobody would notice unless they
+  * were already looking for it. Held together, they are built from one vector at one place and
+  * CANNOT disagree.
+  *
+  * A "late" design that joined the subjects to the card where the Anki note is assembled was
+  * rejected on exactly this ground, and not on cost: it would have forced the card to RE-DERIVE
+  * what it displays, because the extractor knows that explicitly and then discards it.
+  *
+  * ==Why the name==
+  *
+  * `plan/MoveEvidence.scala` sorts every field of every note type into one of five roles, and
+  * `Bearing` is the one meaning: rendered on the face, free to change, evidence of nothing.
+  * `Context` and `Topics` are the only two fields that carry it. That category already governs
+  * how the move survey treats them; until now it existed in that table and nowhere in the
+  * types. This is the same category, said in the type system.
+  *
+  * ==Both may legitimately be empty==
+  *
+  * A heading sitting directly under its note's H1 has no breadcrumb above what its card already
+  * shows; a note with no subject tags has no topics. The note types wrap each field in its own
+  * `{{#…}}` guard, so an empty value emits no markup rather than an empty rule and a gap.
+  */
+final case class Bearings(breadcrumb: String, topics: String)
+
+object Bearings:
+
+  /** Neither — for a card with nothing above it and nothing tagging it. */
+  val none: Bearings = Bearings("", "")
+
+  /** A breadcrumb and no subjects.
+    *
+    * A NAMED CONSTRUCTOR RATHER THAN A DEFAULT ARGUMENT, and the difference is the point.
+    * `rules/no-default-parameters.yml` refuses a default because it is "a decision with no
+    * author" — a caller that omits an argument cannot be told apart from one that considered it.
+    * This says the thing out loud instead: a test written before subjects existed, or one that
+    * is simply not about them, states that rather than passing a blank that means nothing.
+    */
+  def breadcrumbOnly(breadcrumb: String): Bearings = Bearings(breadcrumb, topics = "")
+
 enum CardSpec:
   /** `#flashcard/1way` and `#flashcard/2way`. */
   case TwoField(
@@ -208,7 +261,7 @@ enum CardSpec:
       front: String,
       back: Body,
       directions: TwoFieldDirections,
-      context: String,
+      bearings: Bearings,
   )
 
   /** `#flashcard/3way` and `#flashcard/3way/all`, and a table's pair cards. */
@@ -218,7 +271,7 @@ enum CardSpec:
       descriptor: String,
       description: Body,
       directions: ThreeFieldDirections,
-      context: String,
+      bearings: Bearings,
       conceptLabel: String,
   )
 
@@ -229,7 +282,7 @@ enum CardSpec:
       key: CardKey,
       text: Body,
       deletions: NonEmptyVector[ClozeDeletion],
-      context: String,
+      bearings: Bearings,
   )
 
   /** A table's row card: the concept, with all its descriptors together.
@@ -242,7 +295,7 @@ enum CardSpec:
       key: CardKey,
       blanked: String,
       filled: String,
-      context: String,
+      bearings: Bearings,
   )
 
   /** `#flashcard/sequence` — ONE note whose list items are revealed one at a time, on ONE
@@ -267,7 +320,7 @@ enum CardSpec:
     *     `content/` bypasses the opaque `Fragment` and reopens the hole that type was
     *     introduced to shut.
     */
-  case Sequence(key: CardKey, title: String, text: Body, context: String, reveal: RevealOrder)
+  case Sequence(key: CardKey, title: String, text: Body, bearings: Bearings, reveal: RevealOrder)
 
 object CardSpec:
 
@@ -279,6 +332,20 @@ object CardSpec:
       case Cloze(k, _, _, _)            => k
       case TableRow(k, _, _, _)         => k
       case Sequence(k, _, _, _, _)      => k
+
+    /** What situates this card — see [[Bearings]].
+      *
+      * MATCHED RATHER THAN DECLARED ON THE ENUM, exactly as [[key]] is. Every variant carries
+      * the field, so a common accessor looks tempting; writing it as a match keeps the
+      * compiler's exhaustiveness check over the family, which is what forces a card kind added
+      * later to say what situates it rather than inheriting an answer nobody chose.
+      */
+    def bearings: Bearings = spec match
+      case TwoField(_, _, _, _, b)         => b
+      case ThreeField(_, _, _, _, _, b, _) => b
+      case Cloze(_, _, _, b)               => b
+      case TableRow(_, _, _, b)            => b
+      case Sequence(_, _, _, b, _)         => b
 
     /** The Anki note type this spec creates. Behaviour on the sum type: the consumer asks,
       * the variant answers, rather than the consumer branching on which variant it holds.
@@ -328,27 +395,27 @@ object CardSpec:
         // kind and which each arm therefore appends itself. Doing it at this level means a card
         // kind added later cannot forget it and two kinds cannot disagree about it.
         //
-        // EMPTY UNTIL `oas-ptm.9` WIRES THE VALUE THROUGH, and empty is a legitimate value
-        // afterwards too: a note with no subject tags has nothing to say here. The templates
-        // wrap it in `{{#Topics}}…{{/Topics}}`, so nothing is emitted rather than an empty rule.
+        // MAY LEGITIMATELY BE EMPTY: a note with no subject tags, or one whose only tag the
+        // card already shows. The templates wrap it in `{{#Topics}}…{{/Topics}}`, so nothing is
+        // emitted rather than an empty rule and a gap.
         //
         // AFTER THE IDENTITY, which is forced rather than chosen: AnkiConnect's `modelFieldAdd`
         // appends, so a field declared anywhere else would leave every repaired collection
         // permanently reporting a field-order difference no repair can close.
-        (Marker.TopicsField -> "")
+        (Marker.TopicsField -> spec.bearings.topics)
 
     private def perKindFields: Vector[(String, String)] = spec match
-      case TwoField(_, front, back, _, context) =>
+      case TwoField(_, front, back, _, bearings) =>
         Vector(
           Marker.BasicFields.Front -> front,
           Marker.BasicFields.Back  -> back.value,
-          Marker.ContextField      -> context,
+          Marker.ContextField      -> bearings.breadcrumb,
           // EMPTY: a heading's question and its answer are different things, so the answer
           // belongs BENEATH the question in the ordinary way.
           Marker.SameShapeField -> "",
         )
 
-      case ThreeField(_, concept, descriptor, description, directions, context, conceptLabel) =>
+      case ThreeField(_, concept, descriptor, description, directions, bearings, conceptLabel) =>
         val threeWay = directions match
           case ThreeFieldDirections.All       => "1"
           case ThreeFieldDirections.Default   => ""
@@ -359,11 +426,11 @@ object CardSpec:
           case ThreeFieldDirections.All       => ""
         Marker.ConceptDescriptorFields.zip(Vector(concept, descriptor, description.value)) :+
           (Marker.ThreeWayField -> threeWay) :+
-          (Marker.ContextField -> context) :+
+          (Marker.ContextField -> bearings.breadcrumb) :+
           (Marker.ConceptLabelField -> conceptLabel) :+
           (Marker.ValueOnlyField -> valueOnly)
 
-      case Cloze(_, text, _, context) =>
+      case Cloze(_, text, _, bearings) =>
         // The body ALREADY CARRIES its `{{cN::…}}` deletions: `Cloze.renderWithDeletions`
         // puts them in when the spec is built, so there is nothing to apply here. One note
         // holds all of a section's deletions, and Anki makes one card per distinct `cN`.
@@ -375,10 +442,10 @@ object CardSpec:
         Vector(
           Marker.ClozeFields.Text      -> text.value,
           Marker.ClozeFields.BackExtra -> "",
-          Marker.ContextField          -> context,
+          Marker.ContextField          -> bearings.breadcrumb,
         )
 
-      case TableRow(_, blanked, filled, context) =>
+      case TableRow(_, blanked, filled, bearings) =>
         // TWO RENDERINGS OF ONE TABLE — the same shape with and without its answers — so the
         // question and the answer differ only by what is filled in. Nothing reflows between
         // sides, which is the whole reason a row card is a table rather than a list.
@@ -392,7 +459,7 @@ object CardSpec:
         Vector(
           Marker.BasicFields.Front -> blanked,
           Marker.BasicFields.Back  -> filled,
-          Marker.ContextField      -> context,
+          Marker.ContextField      -> bearings.breadcrumb,
           // The two sides ARE one table, so the answer REPLACES the question rather than
           // appearing beneath it. Last, matching the declared order — new fields are appended,
           // because Anki's `modelFieldAdd` appends and any other position leaves a repaired
@@ -400,13 +467,13 @@ object CardSpec:
           Marker.SameShapeField -> "1",
         )
 
-      case Sequence(_, title, text, context, reveal) =>
+      case Sequence(_, title, text, bearings, reveal) =>
         // The zip form, exactly as the three-field arm above: the constant is the single
         // source of field ORDER for the two fields it names, so a reordering of THOSE happens
         // in one place rather than two. Context is appended, never zipped — see the note on
         // this function.
         Marker.ClozeSequenceFields.zip(Vector(title, text.value)) :+
-          (Marker.ContextField -> context) :+
+          (Marker.ContextField -> bearings.breadcrumb) :+
           // EMPTY FOR DEPTH-FIRST, so a note written before this field existed and a note
           // explicitly asking for depth-first are byte-identical — which is what makes the
           // field's arrival invisible to every existing card.

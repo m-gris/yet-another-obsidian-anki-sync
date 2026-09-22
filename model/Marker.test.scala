@@ -221,7 +221,7 @@ class MarkerTest extends munit.FunSuite:
   test("only the one-direction variant sets the gate that hides the concept card") {
     def valueOnlyOf(d: ThreeFieldDirections): String =
       val spec = CardSpec.ThreeField(
-        aKey("T", "Row"), "c", "d", body("v"), d, "ctx", "Kind",
+        aKey("T", "Row"), "c", "d", body("v"), d, Bearings.breadcrumbOnly("ctx"), "Kind",
       )
       spec.fields.toMap.apply(Marker.ValueOnlyField)
 
@@ -319,7 +319,7 @@ class MarkerTest extends munit.FunSuite:
         "Temporal coupling",
         body("All parties must be up."),
         TwoFieldDirections.Both,
-        context = "Coupling",
+        bearings = Bearings.breadcrumbOnly("Coupling"),
       )
     assertEquals(spec.key, k)
   }
@@ -328,16 +328,16 @@ class MarkerTest extends munit.FunSuite:
     import Marker.NoteTypes
     val k = aKey("A", "B")
     assertEquals(
-      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Forward, "ctx").noteTypeName,
+      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("ctx")).noteTypeName,
       NoteTypes.Basic,
     )
     assertEquals(
-      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Both, "ctx").noteTypeName,
+      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Both, Bearings.breadcrumbOnly("ctx")).noteTypeName,
       NoteTypes.BasicAndReversed,
     )
     assertEquals(
       CardSpec
-        .ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, "ctx", "Bone")
+        .ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, Bearings.breadcrumbOnly("ctx"), "Bone")
         .noteTypeName,
       NoteTypes.ConceptDescriptor,
     )
@@ -347,7 +347,7 @@ class MarkerTest extends munit.FunSuite:
           k,
           body("text"),
           NonEmptyVector.of(ClozeDeletion(1, ClozeGroup.Unlabelled("x"), Vector("x"))),
-          "ctx",
+          Bearings.breadcrumbOnly("ctx"),
         )
         .noteTypeName,
       NoteTypes.Cloze,
@@ -355,12 +355,12 @@ class MarkerTest extends munit.FunSuite:
     // The row card is a plain Basic: concept on the front, all descriptors on the back.
     assertEquals(
       CardSpec
-        .TableRow(k, "<table><tr><th>P</th></tr><tr><td>Queue</td></tr></table>", "<table></table>", "ctx")
+        .TableRow(k, "<table><tr><th>P</th></tr><tr><td>Queue</td></tr></table>", "<table></table>", Bearings.breadcrumbOnly("ctx"))
         .noteTypeName,
       NoteTypes.Basic,
     )
     assertEquals(
-      CardSpec.Sequence(k, "Path of blood", body("<ul><li>a</li></ul>"), "ctx", RevealOrder.DepthFirst).noteTypeName,
+      CardSpec.Sequence(k, "Path of blood", body("<ul><li>a</li></ul>"), Bearings.breadcrumbOnly("ctx"), RevealOrder.DepthFirst).noteTypeName,
       NoteTypes.ClozeSequence,
     )
   }
@@ -374,7 +374,7 @@ class MarkerTest extends munit.FunSuite:
     */
   test("a sequence spec emits Title, Text, Context, Reveal, Identity and Topics, in that order") {
     val spec =
-      CardSpec.Sequence(aKey("Anatomy", "Path"), "Path of blood", body("<ul><li>a</li></ul>"), "Anatomy", RevealOrder.DepthFirst)
+      CardSpec.Sequence(aKey("Anatomy", "Path"), "Path of blood", body("<ul><li>a</li></ul>"), Bearings.breadcrumbOnly("Anatomy"), RevealOrder.DepthFirst)
     assertEquals(
       spec.fields,
       Vector(
@@ -405,7 +405,7 @@ class MarkerTest extends munit.FunSuite:
       descriptor = "Definition",
       description = body("Operations appear instantaneous."),
       directions = directions,
-      context = "System design",
+      bearings = Bearings.breadcrumbOnly("System design"),
       // A card built from HEADINGS, so nothing names the concept's kind. The table-built
       // sibling in `Tables.test.scala` is where a real label is asserted.
       conceptLabel = "",
@@ -445,7 +445,7 @@ class MarkerTest extends munit.FunSuite:
       descriptor = "Benefit",
       description = body("Load absorption."),
       directions = ThreeFieldDirections.Default,
-      context = "Messaging \u203a Cost / benefit",
+      bearings = Bearings.breadcrumbOnly("Messaging \u203a Cost / benefit"),
       // FROM A TABLE, so the first column\'s header names what the concept is.
       conceptLabel = "Pattern",
     )
@@ -482,18 +482,18 @@ class MarkerTest extends munit.FunSuite:
   test("every spec's field NAMES are exactly its note type's declared field order") {
     val k = aKey("A", "B")
     val representatives: Vector[CardSpec] = Vector(
-      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Forward, "ctx"),
-      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Both, "ctx"),
-      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, "ctx", "Bone"),
-      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.All, "ctx", "Bone"),
+      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("ctx")),
+      CardSpec.TwoField(k, "f", body("b"), TwoFieldDirections.Both, Bearings.breadcrumbOnly("ctx")),
+      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.Default, Bearings.breadcrumbOnly("ctx"), "Bone"),
+      CardSpec.ThreeField(k, "c", "d", body("desc"), ThreeFieldDirections.All, Bearings.breadcrumbOnly("ctx"), "Bone"),
       CardSpec.Cloze(
         k,
         body("text"),
         NonEmptyVector.of(ClozeDeletion(1, ClozeGroup.Unlabelled("x"), Vector("x"))),
-        "ctx",
+        Bearings.breadcrumbOnly("ctx"),
       ),
-      CardSpec.TableRow(k, "<table></table>", "<table></table>", "ctx"),
-      CardSpec.Sequence(k, "Title", body("<ul><li>a</li></ul>"), "ctx", RevealOrder.DepthFirst),
+      CardSpec.TableRow(k, "<table></table>", "<table></table>", Bearings.breadcrumbOnly("ctx")),
+      CardSpec.Sequence(k, "Title", body("<ul><li>a</li></ul>"), Bearings.breadcrumbOnly("ctx"), RevealOrder.DepthFirst),
     )
 
     representatives.foreach { spec =>

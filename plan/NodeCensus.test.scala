@@ -63,7 +63,7 @@ class NodeCensusTest extends munit.FunSuite:
         "Front",
         Body.fromExtracted("Back.").getOrElse(fail("empty test body")),
         TwoFieldDirections.Forward,
-        "Context",
+        Bearings.breadcrumbOnly("Context"),
       ),
       where,
       NoSectionChain,

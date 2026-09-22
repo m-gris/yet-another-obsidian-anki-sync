@@ -101,7 +101,7 @@ object Edges:
               // THE SAME BREADCRUMB RULE AS A HEADING CARD: the whole location, minus whatever
               // this card already carries as a field. Both the subject and the predicate are
               // fields, so neither may be shown twice.
-              CardContext.compose(location, Vector(noteName, rawName)),
+              CardBearings.of(location, vaultTags, Vector(noteName, rawName)),
               "",
             ),
             source,

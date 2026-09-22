@@ -56,7 +56,7 @@ class UnplaceableNoteTest extends munit.FunSuite:
 
   def specOf(k: CardKey, back: String): SourcedSpec =
     SourcedSpec(
-      CardSpec.TwoField(k, "front", body(back), TwoFieldDirections.Forward, "Coupling"),
+      CardSpec.TwoField(k, "front", body(back), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("Coupling")),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,

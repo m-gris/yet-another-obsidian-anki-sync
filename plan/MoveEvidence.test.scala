@@ -65,7 +65,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     * on the same side of the question.
     */
   def twoField(k: CardKey, front: String, back: String, context: String): CardSpec =
-    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, context)
+    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, Bearings.breadcrumbOnly(context))
 
   def threeField(
       k: CardKey,
@@ -74,7 +74,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       description: String,
       context: String,
   ): CardSpec =
-    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.Default, context, "")
+    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.Default, Bearings.breadcrumbOnly(context), "")
 
   /** A TWO-FIELD CARD DECLARED `#flashcard/2way` — the body recalled from the heading AND the
     * heading from the body, which is the author declaring that this body identifies its heading.
@@ -85,7 +85,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     * decides whether an orphan may be reattached on content alone.
     */
   def twoFieldBothWays(k: CardKey, front: String, back: String, context: String): CardSpec =
-    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Both, context)
+    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Both, Bearings.breadcrumbOnly(context))
 
   /** THE SAME CARD SHAPE DECLARED `#flashcard/cdd/1way` — the description recalled and NOTHING
     * ELSE, so the author has declared that this description does NOT identify its concept.
@@ -102,7 +102,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       description: String,
       context: String,
   ): CardSpec =
-    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.ValueOnly, context, "")
+    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.ValueOnly, Bearings.breadcrumbOnly(context), "")
 
   /** THE SAME CARD SHAPE DECLARED `#flashcard/cdd/3way` — every direction, so it claims the backward
     * reading exactly as `cdd/2way` does and differs from it only in the `ThreeWay` Setting field.
@@ -119,14 +119,14 @@ class MoveEvidenceTest extends munit.FunSuite:
       description: String,
       context: String,
   ): CardSpec =
-    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.All, context, "")
+    CardSpec.ThreeField(k, concept, descriptor, body(description), ThreeFieldDirections.All, Bearings.breadcrumbOnly(context), "")
 
   def cloze(k: CardKey, text: String, context: String): CardSpec =
     CardSpec.Cloze(
       k,
       body(text),
       NonEmptyVector.one(ClozeDeletion(1, ClozeGroup.Labelled(1), Vector("x"))),
-      context,
+      Bearings.breadcrumbOnly(context),
     )
 
   /** The Anki note this tool WOULD have written for a spec — the note type it asks for, its
@@ -543,7 +543,7 @@ class MoveEvidenceTest extends munit.FunSuite:
 
   test("a body edited in the same commit as the move is unexplained, not paired") {
     val edited = twoField(movedKey, "Scale", "10^9 users, give or take", afterMove match {
-      case CardSpec.TwoField(_, _, _, _, c) => c
+      case CardSpec.TwoField(_, _, _, _, c) => c.breadcrumb
       case _                                => fail("the fixture is a two-field card")
     })
     onlyFinding(Vector(observed(beforeMove, 1, Vector.empty)), Vector(sourced(edited, where))) match
@@ -555,7 +555,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // `SameShape` is empty on a heading's two-field card and "1" on a table's row card, so this
     // is what stops a heading card being paired with a table card that happens to read alike.
     val heading = twoField(key("n1", "a", "one"), "One", "Same body.", "A")
-    val row     = CardSpec.TableRow(key("n1", "b", "one"), "One", "Same body.", "B")
+    val row     = CardSpec.TableRow(key("n1", "b", "one"), "One", "Same body.", Bearings.breadcrumbOnly("B"))
     assertEquals(heading.noteTypeName, row.noteTypeName, "the fixture must share a note type to be a test")
     onlyFinding(Vector(observed(heading, 1, Vector.empty)), Vector(sourced(row, where))) match
       case _: MoveFinding.Unexplained => ()
@@ -1034,7 +1034,7 @@ class MoveEvidenceTest extends munit.FunSuite:
     // roles table rather than out of a note-type check somebody has to maintain.
     val novelist =
       twoField(key("n9", "franz kafka", "born"), "Born", "Prague, 1883.", "Reading notes")
-    val row = CardSpec.TableRow(key("n9", "kafka", "novels"), "Novels", "The Trial; The Castle.", "Reading notes")
+    val row = CardSpec.TableRow(key("n9", "kafka", "novels"), "Novels", "The Trial; The Castle.", Bearings.breadcrumbOnly("Reading notes"))
     assertEquals(
       MoveEvidence.nameDepthOf(novelist.noteTypeName),
       1,
@@ -1068,7 +1068,7 @@ class MoveEvidenceTest extends munit.FunSuite:
       "Throughput",
       body("Millions of messages a second."),
       ThreeFieldDirections.Default,
-      "Comparison",
+      Bearings.breadcrumbOnly("Comparison"),
       // The first column's header, which is what makes this a TABLE pair card rather than a
       // heading's — `FieldRole.Setting`, and empty on the heading shape.
       "System",

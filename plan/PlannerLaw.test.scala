@@ -75,7 +75,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
         f <- Gen.oneOf("front", "Front", "term")
         b <- genBody
         d <- Gen.oneOf(TwoFieldDirections.Forward, TwoFieldDirections.Both)
-      yield CardSpec.TwoField(k, f, b, d, "Coupling"),
+      yield CardSpec.TwoField(k, f, b, d, Bearings.breadcrumbOnly("Coupling")),
       for
         b <- genBody
         d <- Gen.oneOf(ThreeFieldDirections.Default, ThreeFieldDirections.All)
@@ -83,7 +83,7 @@ class PlannerLawTest extends munit.ScalaCheckSuite:
         // TABLE carries the header naming what kind of thing its concept is, and one built
         // from HEADINGS has nothing to put there.
         l <- Gen.oneOf("", "Bone", "Pattern")
-      yield CardSpec.ThreeField(k, "Concept", "Descriptor", b, d, "Coupling", l),
+      yield CardSpec.ThreeField(k, "Concept", "Descriptor", b, d, Bearings.breadcrumbOnly("Coupling"), l),
     )
 
   val genSourced: Gen[SourcedSpec] =

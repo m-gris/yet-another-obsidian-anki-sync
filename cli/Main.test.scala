@@ -1109,7 +1109,7 @@ class MainTest extends munit.FunSuite:
     VaultScan.from(
       Vector(
         SourcedSpec(
-          CardSpec.TwoField(k, "f", Body.fromExtracted("b").get, TwoFieldDirections.Forward, "C"),
+          CardSpec.TwoField(k, "f", Body.fromExtracted("b").get, TwoFieldDirections.Forward, Bearings.breadcrumbOnly("C")),
           SourceRef("Note.md", line, SourceKind.Heading),
           SectionChain.NoSectionChain,
           SectionChain.NoRecall,

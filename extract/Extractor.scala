@@ -172,6 +172,7 @@ object Extractor:
           section,
           fileName,
           foldersOf(filePath),
+          vaultTags,
         ) match
           case Left(err) => ExtractedNote(Vector.empty, Vector(BuildFailure.KeyKnown(key, ref, describe(err))))
           case Right(built) =>
@@ -275,7 +276,7 @@ object Extractor:
             val built =
               for
                 lowered <- bodyBlocks(key.path.render, Vector(found.block))
-                spec    <- Cloze.fromLowered(key, lowered, CardContext.compose(location, Vector.empty))
+                spec    <- Cloze.fromLowered(key, lowered, CardBearings.of(location, vaultTags, Vector.empty))
               yield spec
             built match
               case Left(err)   => failures += BuildFailure.KeyKnown(key, ref, describe(err))
@@ -376,7 +377,17 @@ object Extractor:
                         s"the heading itself holds ${refusals.toVector.map(_.describe).mkString(", ")}",
                       )
                     case Right(shownAs) =>
-                      buildSpecs(key, marker, title, shownAs, ancestorTitles, section, fileName, folders) match
+                      buildSpecs(
+                        key,
+                        marker,
+                        title,
+                        shownAs,
+                        ancestorTitles,
+                        section,
+                        fileName,
+                        folders,
+                        vaultTags,
+                      ) match
                         case Right(built) => built.foreach { case (spec, src) =>
                             specs += SourcedSpec(
                               spec,
@@ -574,12 +585,18 @@ object Extractor:
       section: Section,
       fileName: String,
       folders: Vector[String],
+      // THE NOTE'S OWN TAGS, WHICH THIS FUNCTION COULD NOT SEE UNTIL 2026-09-22. It is a member
+      // of `object Extractor` rather than a local definition inside `fromDocument`, so unlike
+      // `walk` it closes over nothing — and a card's subjects need the same `shownOnCard` vector
+      // its breadcrumb does. Passed explicitly; `CardBearings.of` is then what guarantees the
+      // two are built from that one vector.
+      vaultTags: Vector[VaultTag],
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
     val where = key.path.render
 
     // EVERYWHERE THIS CARD CAME FROM, in the order the parts nest. Each arm below hands this
-    // to `CardContext.compose` together with the strings ITS OWN card already carries as
-    // fields, and compose removes them — a segment on the question side being redundant and
+    // to `CardBearings.of` together with the strings ITS OWN card already carries as
+    // fields, and both halves remove them — a segment on the question side being redundant and
     // one on the answer side being a spoiler.
     //
     // THE FILE NAME IS IN HERE, which it never used to be, and that is the whole fix: a note
@@ -733,7 +750,7 @@ object Extractor:
                 shownAs.render,
                 body,
                 directions,
-                CardContext.compose(location, Vector(title)),
+                CardBearings.of(location, vaultTags, Vector(title)),
               ) -> RowSource.heading
             )
           )
@@ -789,7 +806,7 @@ object Extractor:
                 // which is the marked heading. Both are excluded by value rather than by
                 // position, which is what makes the file-name case work: when the concept came
                 // from the file name, naming it removes it wherever it sits.
-                CardContext.compose(location, Vector(concept, title)),
+                CardBearings.of(location, vaultTags, Vector(concept, title)),
                 // EMPTY, AND THAT IS NOT AN OMISSION. The label names what KIND of thing the
                 // concept is, and only a table has anywhere to say it: its first column's header.
                 // Here the concept is an ancestor HEADING, which names the thing itself and never
@@ -819,7 +836,7 @@ object Extractor:
             // is not: a cloze card is about the author's PROSE. Pinning it to the body means
             // a marker added later that redefines `blocks` cannot silently change what a
             // cloze card is made of.
-            .fromLowered(key, lowered, CardContext.compose(location, Vector.empty))
+            .fromLowered(key, lowered, CardBearings.of(location, vaultTags, Vector.empty))
             .map(c => Vector(c -> RowSource.heading))
 
         // THE ONE AND ONLY CALL SITE, and a demonstration of this project's own thesis.
@@ -835,7 +852,15 @@ object Extractor:
         // `Default, Both` and retire every `/1way`, `/3way`, `/cells` and `/rows` token the
         // README advertises, with no test to notice.
         case Marker.Table(directions, scope) =>
-          Tables.fromSection(key, section, CellDisplay.Escaped, tableContextTitles, directions, scope)
+          Tables.fromSection(
+            key,
+            section,
+            CellDisplay.Escaped,
+            tableContextTitles,
+            vaultTags,
+            directions,
+            scope,
+          )
 
         // ── A HEADING'S SUBHEADINGS AS THE SEQUENCE — NOT BUILT ─────────────────────────
         //
@@ -978,7 +1003,7 @@ object Extractor:
                   body,
                   // The marked heading IS a field here — the template renders `{{Title}}` above
                   // the list — so it is excluded and everything above it kept.
-                  CardContext.compose(location, Vector(title)),
+                  CardBearings.of(location, vaultTags, Vector(title)),
                   reveal,
                 ) -> RowSource.heading
               )

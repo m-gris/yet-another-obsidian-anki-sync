@@ -87,7 +87,7 @@ class LedgerTest extends munit.FunSuite:
     SourcedSpec(spec, where, NoSectionChain, NoRecall, Vector.empty)
 
   def twoField(k: CardKey, front: String, back: String, context: String): CardSpec =
-    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, context)
+    CardSpec.TwoField(k, front, body(back), TwoFieldDirections.Forward, Bearings.breadcrumbOnly(context))
 
   def scanOf(specs: SourcedSpec*): VaultScan = VaultScan.from(specs.toVector, Vector.empty)
 

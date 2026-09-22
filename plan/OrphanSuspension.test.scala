@@ -52,7 +52,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     */
   def specOf(k: CardKey): SourcedSpec =
     SourcedSpec(
-      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both, "Coupling"),
+      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Both, Bearings.breadcrumbOnly("Coupling")),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,
@@ -292,7 +292,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
 
     // A one-way card: ONE Anki card, on `Obsidian Basic`.
     val oneWay = SourcedSpec(
-      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, "Coupling"),
+      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("Coupling")),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,
@@ -306,7 +306,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
 
     // It comes back as a SEQUENCE — same key, same one-template shape, different note type.
     val sequence = SourcedSpec(
-      CardSpec.Sequence(k, "front", body("first item"), "Coupling", RevealOrder.DepthFirst),
+      CardSpec.Sequence(k, "front", body("first item"), Bearings.breadcrumbOnly("Coupling"), RevealOrder.DepthFirst),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,
@@ -350,7 +350,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     val anki = InMemoryAnki()
 
     val oneWay = SourcedSpec(
-      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, "Coupling"),
+      CardSpec.TwoField(k, "front", body("back"), TwoFieldDirections.Forward, Bearings.breadcrumbOnly("Coupling")),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,
@@ -363,7 +363,7 @@ class OrphanSuspensionTest extends munit.FunSuite:
     anki.suspend(byHand).fold(e => fail(s"$e"), identity)
 
     val sequence = SourcedSpec(
-      CardSpec.Sequence(k, "front", body("first item"), "Coupling", RevealOrder.DepthFirst),
+      CardSpec.Sequence(k, "front", body("first item"), Bearings.breadcrumbOnly("Coupling"), RevealOrder.DepthFirst),
       SourceRef("Note.md", 1, SourceKind.Heading),
       NoSectionChain,
       NoRecall,

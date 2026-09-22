@@ -180,6 +180,7 @@ object Tables:
       section: Section,
       display: CellDisplay,
       contextTitles: Vector[String],
+      vaultTags: Vector[VaultTag],
       directions: ThreeFieldDirections,
       scope: TableScope,
   ): Either[SpecError, Vector[(CardSpec, RowSource)]] =
@@ -187,7 +188,11 @@ object Tables:
     // ALREADY COMPOSED BY THE CALLER, which is the one that knows which fields this card
     // carries — `Extractor.buildSpecs` hands over the location with nothing excluded, because a
     // table card's fields come from CELLS rather than from where the note sits.
-    val context = CardContext.compose(contextTitles, Vector.empty)
+    // NOTHING EXCLUDED, for both halves. A table card's fields come from CELLS rather than
+    // from where the note sits or what it is tagged, so there is nothing the card already shows
+    // for either value to subtract — which is why the empty vector is passed once, to the one
+    // function that feeds both.
+    val bearings = CardBearings.of(contextTitles, vaultTags, Vector.empty)
     firstTable(section).toRight(SpecError.TableWithoutTable(where)).flatMap { table =>
       val headerRow = rowCells(table.head.content).headOption.getOrElse(Vector.empty)
       val bodyRows  = rowCells(table.body.content)
@@ -229,7 +234,7 @@ object Tables:
         Left(SpecError.TableWithoutDescriptors(where, what))
       else
         val cards = bodyRows.zipWithIndex.flatMap((row, i) =>
-          cardsForRow(key, descriptorColumns, row, i + 1, display, context, conceptLabel, conceptLabelRaw, directions, scope)
+          cardsForRow(key, descriptorColumns, row, i + 1, display, bearings, conceptLabel, conceptLabelRaw, directions, scope)
         )
 
         // ASKED FOR ROW CARDS AND GOT NONE. Reported rather than returned empty: an explicit
@@ -351,7 +356,7 @@ object Tables:
       row: Vector[Cell],
       rowNumber: Int,
       display: CellDisplay,
-      context: String,
+      bearings: Bearings,
       conceptLabel: String,
       conceptLabelRaw: String,
       directions: ThreeFieldDirections,
@@ -424,7 +429,7 @@ object Tables:
               d.header,
               body,
               directions,
-              context,
+              bearings,
               conceptLabel,
             ) -> RowSource.table(SourceKind.TablePair, rowNumber)
           }
@@ -457,7 +462,7 @@ object Tables:
                     Some(rowConceptRaw) +: pairs.map(d => Some(d.valueRaw)),
                   )
                   .render,
-                context,
+                bearings,
               ) -> RowSource.table(SourceKind.TableRow, rowNumber)
             )
 

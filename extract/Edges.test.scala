@@ -191,7 +191,7 @@ class EdgesTest extends munit.FunSuite:
       vaultTags = Vector.empty,
     )
     val card = specs.head.spec.asInstanceOf[CardSpec.ThreeField]
-    assert(!card.context.contains("Function Space"), s"the subject is repeated in: '${card.context}'")
-    assert(!card.context.contains("special-case-of"), s"the predicate is repeated in: '${card.context}'")
-    assert(card.context.contains("Maths"), s"the folder was lost from: '${card.context}'")
+    assert(!card.bearings.breadcrumb.contains("Function Space"), s"the subject is repeated in: '${card.bearings.breadcrumb}'")
+    assert(!card.bearings.breadcrumb.contains("special-case-of"), s"the predicate is repeated in: '${card.bearings.breadcrumb}'")
+    assert(card.bearings.breadcrumb.contains("Maths"), s"the folder was lost from: '${card.bearings.breadcrumb}'")
   }
