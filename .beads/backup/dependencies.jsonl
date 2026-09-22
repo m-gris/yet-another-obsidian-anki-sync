@@ -29,6 +29,8 @@
 {"created_at":"2026-09-22T10:14:44Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm.7","issue_id":"oas-ptm.11","metadata":"{}","type":"blocks"}
 {"created_at":"2026-09-22T10:14:44Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm.8","issue_id":"oas-ptm.11","metadata":"{}","type":"blocks"}
 {"created_at":"2026-09-22T10:14:44Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm.9","issue_id":"oas-ptm.11","metadata":"{}","type":"blocks"}
+{"created_at":"2026-09-22T11:10:53Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm","issue_id":"oas-ptm.12","metadata":"{}","type":"parent-child"}
+{"created_at":"2026-09-22T11:10:53Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm.1","issue_id":"oas-ptm.12","metadata":"{}","type":"blocks"}
 {"created_at":"2026-09-22T10:13:26Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm","issue_id":"oas-ptm.2","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-09-22T10:13:49Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm","issue_id":"oas-ptm.3","metadata":"{}","type":"parent-child"}
 {"created_at":"2026-09-22T10:13:49Z","created_by":"Marc GRIS","depends_on_id":"oas-ptm.1","issue_id":"oas-ptm.3","metadata":"{}","type":"blocks"}
