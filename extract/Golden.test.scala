@@ -594,7 +594,7 @@ class GoldenTest extends munit.FunSuite:
     assert(index.scan.specs.nonEmpty, "the live scan produced NO specs at all")
 
     // Against the LIVE scan, not the golden.
-    assertEquals(index.scan.specs.size, 58, "the fixture vault no longer produces 58 specs")
+    assertEquals(index.scan.specs.size, 60, "the fixture vault no longer produces 60 specs")
 
     // TWO expected failures now, and they are different KINDS of expected. The first is a table
     // with a concept column and no descriptor columns. The second belongs to
@@ -692,7 +692,19 @@ class GoldenTest extends munit.FunSuite:
     * reappeared; zero alone would pass if extraction stopped emitting cards. If either
     * genuinely moves, change the literal BY HAND and say here which fixture caused it.
     */
-  test("no card has an empty Context, and every card carries a real breadcrumb") {
+  /** RESTATED 2026-09-22, AND THE OLD FORM WAS TOO STRONG RATHER THAN MERELY OUT OF DATE.
+    *
+    * This asserted that NO card has an empty breadcrumb. That held only because every fixture
+    * note lived in a folder: a note at the vault ROOT has no folders, so its breadcrumb is the
+    * file name and the headings, and a concept-descriptor card whose concept falls back to the
+    * file name removes both — leaving nothing. `Bijection.md` is exactly that card, and it is in
+    * the vault deliberately, because it is the defect the `Topics` field was added to answer.
+    *
+    * THE REAL INVARIANT IS WEAKER AND TRUER: no card ships with NO context at all. A card may
+    * have no breadcrumb, provided it says what it is about instead. Asserted over both fields
+    * together, since either alone would now be satisfiable while a card said nothing.
+    */
+  test("no card ships with neither a breadcrumb nor a subject") {
     // Looked up BY NAME and FAILING when absent, never defaulting. A lookup with a fallback
     // would report "empty" for a card that has no Context field at all, and those are different
     // failures that must not collapse into one. (Positional until 2026-08-22 — see the test
@@ -703,9 +715,31 @@ class GoldenTest extends munit.FunSuite:
         .getOrElse(fail(s"card ⟦${c.tag}⟧ has no ${Marker.ContextField} field"))
       c.tag -> value
     }
+    val topics = golden.cards.map { c =>
+      val value = c.fields
+        .collectFirst { case (name, v) if name == escape(Marker.TopicsField) => v }
+        .getOrElse(fail(s"card ⟦${c.tag}⟧ has no ${Marker.TopicsField} field"))
+      c.tag -> value
+    }.toMap
+
     val (empty, nonEmpty) = contexts.partition(_._2.isEmpty)
 
-    assertEquals(empty.size, 0, s"a card lost its breadcrumb: ${empty.map(_._1)}")
+    // THE INVARIANT. A card with no breadcrumb must say what it is about instead.
+    val silent = empty.filter((tag, _) => topics.getOrElse(tag, "").isEmpty)
+    assertEquals(
+      silent.map(_._1),
+      Vector.empty,
+      "a card ships with neither a breadcrumb nor a subject, so it says nothing about itself",
+    )
+
+    // THE TWO THAT HAVE NO BREADCRUMB, NAMED. Both come from `Bijection.md` at the vault root,
+    // whose concept falls back to the file name and is therefore removed from its own
+    // breadcrumb. Named rather than counted so that a THIRD such card has to be looked at.
+    assertEquals(
+      empty.map(_._1).sorted,
+      Vector("src::fix-bijection::definition", "src::fix-bijection::notation"),
+      "a card lost its breadcrumb, or a new rootless card appeared",
+    )
     assertEquals(nonEmpty.size, 58, "the number of cards carrying a real breadcrumb has changed")
 
     // THE FIVE THAT USED TO SAY NOTHING, NAMED AND ASSERTED POSITIVELY. This listed them as the

@@ -46,16 +46,25 @@ class FixtureVaultTest extends munit.FunSuite:
       .filterNot(f => exclude(f.relativePath))
       .sortBy(_.relativePath)
 
+  /** THE PRODUCTION NOTE BUILDER, NAMED RATHER THAN MIRRORED.
+    *
+    * `Planner.plan` takes its builder as a parameter so a test CAN substitute one, and this file
+    * used to. The copy was written to mirror production and then silently stopped doing so: vault
+    * tags began travelling into Anki on 2026-08-29 and the copy went on writing only the content
+    * hash, for twenty-four days, while the idempotence law below passed throughout.
+    *
+    * IT PASSED BECAUSE NOTHING EXERCISED IT. No note in the fixture vault carried a frontmatter
+    * tag until 2026-09-22, so the drift had no observable consequence here — a green that could
+    * not have been red. Adding one tagged note turned the law red immediately, reporting the
+    * same `TagsChanged` on every run because the note was created without the tags the next plan
+    * then wanted.
+    *
+    * The lesson is the one the 2026-08-29 commit already wrote down for this exact helper: a
+    * test asserting about tags against its own double is asserting about itself. Delegating
+    * removes the second definition rather than repairing it, so it cannot drift again.
+    */
   def newNoteOf(s: SourcedSpec, d: DeckPath, sha: String): NewNote =
-    NewNote(
-      noteType = s.spec.noteTypeName,
-      deck = d,
-      fields = s.spec.fields,
-      // MIRRORS PRODUCTION, which stopped writing the identity tag on 2026-08-29: a note this
-      // tool creates carries its identity in a field. A helper still writing the tag would make
-      // every fixture a note that needs migrating, and the convergence law would never hold.
-      tags = NonEmptyVector.one(OwnedTag.sha(sha)),
-    )
+    Planner.newNoteFor(s, d, sha)
 
   // The table fixture deliberately contains two identical row concepts, so the whole vault
   // is SUPPOSED to be rejected. Excluded where the subject is the planner rather than the gate.

@@ -22,7 +22,7 @@
 # Every emitted value is wrapped in U+27E6/U+27E7 brackets so that leading and trailing
 # whitespace is visible BY POSITION, and escaped so that an invisible character is visible
 # at all. Escaping is one-way: nothing ever unescapes this file.
-specs 58
+specs 60
 failures 2
 
 card ⟦src::fix-body-shapes::body%20shapes/layers%20of%20the%20epidermis⟧
@@ -183,6 +183,30 @@ card ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%
   field ⟦Reveal⟧ ⟦⟧
   field ⟦Identity⟧ ⟦src::fix-sequences::sequences/path%20of%20blood%20through%20the%20right%20heart⟧
   field ⟦Topics⟧ ⟦⟧
+
+card ⟦src::fix-bijection::definition⟧
+  note ⟦Obsidian Concept-Descriptor⟧
+  field ⟦Concept⟧ ⟦Bijection⟧
+  field ⟦Descriptor⟧ ⟦Definition⟧
+  field ⟦Description⟧ ⟦<p>A function that is both injective and surjective, so every element of the codomain is<br>hit exactly once.</p>⟧
+  field ⟦ThreeWay⟧ ⟦⟧
+  field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
+  field ⟦Identity⟧ ⟦src::fix-bijection::definition⟧
+  field ⟦Topics⟧ ⟦<span class="topic">math</span><span class="topic">CS</span>⟧
+
+card ⟦src::fix-bijection::notation⟧
+  note ⟦Obsidian Concept-Descriptor⟧
+  field ⟦Concept⟧ ⟦Bijection⟧
+  field ⟦Descriptor⟧ ⟦Notation⟧
+  field ⟦Description⟧ ⟦<p>\\(f \\colon A \\xrightarrow&#123;\\sim&#125; B\\)</p>⟧
+  field ⟦ThreeWay⟧ ⟦⟧
+  field ⟦Context⟧ ⟦⟧
+  field ⟦ConceptLabel⟧ ⟦⟧
+  field ⟦ValueOnly⟧ ⟦⟧
+  field ⟦Identity⟧ ⟦src::fix-bijection::notation⟧
+  field ⟦Topics⟧ ⟦<span class="topic">math</span><span class="topic">CS</span>⟧
 
 card ⟦src::fix-messaging::messaging%20patterns/cost%20%2f%20benefit/queue/benefit⟧
   note ⟦Obsidian Concept-Descriptor⟧

@@ -19,8 +19,8 @@ Obsidian body syntax.
 
 ⚠️ **It is NOT wholly a happy path, and this paragraph used to claim it was.** _Amended
 2026-08-21, from a run of `inspect --vault-path dummy-vault` rather than from memory._ Two
-of its twelve notes are deliberate traps that a well-meaning tidy-up would silently retire,
-so the vault as it stands **cannot be synced at all** — the run reports 12 files, 58 notes,
+of its thirteen notes are deliberate traps that a well-meaning tidy-up would silently retire,
+so the vault as it stands **cannot be synced at all** — the run reports 13 files, 60 notes,
 **2 expected failures** and **3 deliberate duplicate keys**, and exits 2:
 
 - `Patterns/Shallow-Nesting.md` — its two-space list indentation IS the fixture. Re-indent
@@ -71,15 +71,20 @@ not a deck level.
 
 ## `dummy-vault/` — the positive corpus, two deliberate failures included
 
-Expected decks: `Anatomy`, `Patterns`, `Patterns::Nested::Deep`, `System-Design` — confirmed
-by an `inspect` run, which prints them under the `Obsidian::` root and reports the per-deck
-counts 17 / 21 / 2 / 18.
+Expected decks: the bare root, `Anatomy`, `Patterns`, `Patterns::Nested::Deep`,
+`System-Design` — confirmed by an `inspect` run, which prints them under the `Obsidian::`
+root and reports the per-deck counts 2 / 17 / 21 / 2 / 18.
 
-All twelve notes are listed. _Three were missing from this table until 2026-08-21:
+**The bare root is a deck, and that is the point of `Bijection.md`.** A note at the vault
+root has no folders to derive a deck from, so its cards land in `Obsidian` itself. Decks
+were `17 / 21 / 2 / 18` under four named decks until 2026-09-22, when that note was added.
+
+All thirteen notes are listed. _Three were missing from this table until 2026-08-21:
 `Anatomy/Body-Shapes.md`, `Anatomy/Sequences.md` and `Patterns/Shallow-Nesting.md`._
 
 | File | `id:` | Markers | The case it exists to prove |
 | --- | --- | --- | --- |
+| `Bijection.md` | `fix-bijection` | 2 × `cdd/2way` | **The only note at the vault ROOT, and the only note carrying frontmatter tags.** Both firsts, and both deliberate. A root note has no folders, so its cards land in the bare `Obsidian` deck and its breadcrumb is built from the file name alone — which a concept-descriptor card then removes, because its concept falls back to that same file name. Both of its cards therefore ship with an **empty `Context`**, which is the defect the `Topics` field answers: they say `math` and `CS` instead. Its tag list also carries `flashcard/1way`, which is NOT a subject but an instruction to this tool that leaked into the frontmatter — five notes in the vault this tool is developed against do the same — so the fixture proves markers are excluded from what a card shows. Until this note was added on 2026-09-22 the corpus had no root-level note and no tagged note at all, so neither the tag-carrying path nor the empty-breadcrumb case reached the golden file. |
 | `Anatomy/Body-Shapes.md` | `fix-body-shapes` | 4 × `2way`, 3 × `cloze`, 1 × `table` | **The body-CONTENT corpus: one section per construct a card body may hold** — a bullet list, a fenced code block, a table, a plain-prose cloze, a labelled-group cloze, and a cloze whose body is several blocks. Its own prose gives the reason: until 2026-08-20 four of those reached Anki as *nothing at all*, with the card created and looking correct, so the note exists to make that visible in the fixture and not only in a unit test. Two further sole instances live here. (a) The card that motivated the `Context` field — `## Cranial bones and their sutures` yields `Frontal` / `Anterior border`, which on the concept-descriptor note type's second template is the whole question and cannot be answered without knowing whether "Frontal" is a bone, a lobe or a cortex; the worked example is at `extract/CardContext.scala`. (b) `## Bones of the hand, in two parts` is the only cloze section in the corpus whose body is **more than one block**, so it is the only fixture that reaches the separator joining one block to the next. |
 | `Anatomy/Bones.md` | `fix-bones` | 2 × `cloze`, 1 × block cloze | The first of the two notes outside the `System-Design` / `Patterns` trees. Proves (a) several `==<<…>>==` deletions inside one card body, (b) a second top-level folder becoming a second deck root, (c) **a block cloze no marker asked for** — `## Where marrow sits` carries no marker and its paragraph is a card anyway, keyed by the `^marrow-sites` its author wrote. Without (c) the vault contained no `^blockid` at all and the golden pinned no block-anchored card, so a whole shipped card kind had no end-to-end coverage. Its subject matter is deliberately not distributed systems: the tool must not be coupled to one domain. |
 | `Anatomy/Sequences.md` | `fix-sequences` | 1 × `sequence` | The **only `#flashcard/sequence` note in the whole corpus** — one card whose list items are revealed one at a time, on one schedule. It also demonstrates the shape that *works*, and the demonstration is the point: everything in the body that is not a list item is printed on the QUESTION side, so a lead-in line is a gift and a sentence written after the list is a spoiler. That inversion is not refused by the tool, only documented (`model/Marker.scala`, `case Sequence`), which is why a fixture has to carry it. |
