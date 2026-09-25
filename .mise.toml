@@ -1,0 +1,4 @@
+# This project's beads database was upgraded to bd 1.3.0 on 2026-09-25.
+# An older bd (e.g. Homebrew's 0.62.0) must not open it, so bd is pinned here.
+[tools]
+"github:gastownhall/beads" = "1.3.0"
